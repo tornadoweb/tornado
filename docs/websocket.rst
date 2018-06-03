@@ -16,6 +16,8 @@
    .. automethod:: WebSocketHandler.on_message
    .. automethod:: WebSocketHandler.on_close
    .. automethod:: WebSocketHandler.select_subprotocol
+   .. autoattribute:: WebSocketHandler.selected_subprotocol
+   .. automethod:: WebSocketHandler.on_ping
 
    Output
    ------

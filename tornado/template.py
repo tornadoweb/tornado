@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # Copyright 2009 Facebook
 #
@@ -19,13 +18,13 @@
 Basic usage looks like::
 
     t = template.Template("<html>{{ myvalue }}</html>")
-    print t.generate(myvalue="XXX")
+    print(t.generate(myvalue="XXX"))
 
 `Loader` is a class that loads templates from a root directory and caches
 the compiled templates::
 
     loader = template.Loader("/home/btaylor")
-    print loader.load("test.html").generate(myvalue="XXX")
+    print(loader.load("test.html").generate(myvalue="XXX"))
 
 We compile all templates to raw Python. Error-reporting is currently... uh,
 interesting. Syntax for the templates::
@@ -196,7 +195,7 @@ if you need to include a literal ``{{``, ``{%``, or ``{#`` in the output.
     `filter_whitespace` for available options. New in Tornado 4.3.
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import datetime
 import linecache
@@ -260,9 +259,8 @@ class Template(object):
         :arg str template_string: the contents of the template file.
         :arg str name: the filename from which the template was loaded
             (used for error message).
-        :arg tornado.template.BaseLoader loader: the `~tornado.template.BaseLoader` responsible for this template,
-            used to resolve ``{% include %}`` and ``{% extend %}``
-            directives.
+        :arg tornado.template.BaseLoader loader: the `~tornado.template.BaseLoader` responsible
+            for this template, used to resolve ``{% include %}`` and ``{% extend %}`` directives.
         :arg bool compress_whitespace: Deprecated since Tornado 4.3.
             Equivalent to ``whitespace="single"`` if true and
             ``whitespace="all"`` if false.

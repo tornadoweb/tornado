@@ -1,35 +1,36 @@
-#!/usr/bin/env python
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 from tornado import gen
+from tornado.ioloop import IOLoop
 from tornado.log import app_log
 from tornado.stack_context import (StackContext, wrap, NullContext, StackContextInconsistentError,
                                    ExceptionStackContext, run_with_stack_context, _state)
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
-from tornado.test.util import unittest
+from tornado.test.util import unittest, ignore_deprecation
 from tornado.web import asynchronous, Application, RequestHandler
 import contextlib
 import functools
 import logging
+import warnings
 
 
 class TestRequestHandler(RequestHandler):
-    def __init__(self, app, request, io_loop):
+    def __init__(self, app, request):
         super(TestRequestHandler, self).__init__(app, request)
-        self.io_loop = io_loop
 
-    @asynchronous
-    def get(self):
-        logging.debug('in get()')
-        # call self.part2 without a self.async_callback wrapper.  Its
-        # exception should still get thrown
-        self.io_loop.add_callback(self.part2)
+    with ignore_deprecation():
+        @asynchronous
+        def get(self):
+            logging.debug('in get()')
+            # call self.part2 without a self.async_callback wrapper.  Its
+            # exception should still get thrown
+            IOLoop.current().add_callback(self.part2)
 
     def part2(self):
         logging.debug('in part2()')
         # Go through a third layer to make sure that contexts once restored
         # are again passed on to future callbacks
-        self.io_loop.add_callback(self.part3)
+        IOLoop.current().add_callback(self.part3)
 
     def part3(self):
         logging.debug('in part3()')
@@ -44,13 +45,13 @@ class TestRequestHandler(RequestHandler):
 
 class HTTPStackContextTest(AsyncHTTPTestCase):
     def get_app(self):
-        return Application([('/', TestRequestHandler,
-                             dict(io_loop=self.io_loop))])
+        return Application([('/', TestRequestHandler)])
 
     def test_stack_context(self):
         with ExpectLog(app_log, "Uncaught exception GET /"):
-            self.http_client.fetch(self.get_url('/'), self.handle_response)
-            self.wait()
+            with ignore_deprecation():
+                self.http_client.fetch(self.get_url('/'), self.handle_response)
+                self.wait()
         self.assertEqual(self.response.code, 500)
         self.assertTrue(b'got expected exception' in self.response.body)
 
@@ -63,6 +64,13 @@ class StackContextTest(AsyncTestCase):
     def setUp(self):
         super(StackContextTest, self).setUp()
         self.active_contexts = []
+        self.warning_catcher = warnings.catch_warnings()
+        self.warning_catcher.__enter__()
+        warnings.simplefilter('ignore', DeprecationWarning)
+
+    def tearDown(self):
+        self.warning_catcher.__exit__(None, None, None)
+        super(StackContextTest, self).tearDown()
 
     @contextlib.contextmanager
     def context(self, name):
@@ -283,6 +291,7 @@ class StackContextTest(AsyncTestCase):
             StackContext(functools.partial(self.context, 'c1')),
             f1)
         self.assertEqual(self.active_contexts, [])
+
 
 if __name__ == '__main__':
     unittest.main()

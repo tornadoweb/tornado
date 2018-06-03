@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # Copyright 2009 Facebook
 #
@@ -60,7 +59,8 @@ class BaseHandler(tornado.web.RequestHandler):
     """Implements Google Accounts authentication methods."""
     def get_current_user(self):
         user = users.get_current_user()
-        if user: user.administrator = users.is_current_user_admin()
+        if user:
+            user.administrator = users.is_current_user_admin()
         return user
 
     def get_login_url(self):
@@ -86,7 +86,8 @@ class HomeHandler(BaseHandler):
 class EntryHandler(BaseHandler):
     def get(self, slug):
         entry = db.Query(Entry).filter("slug =", slug).get()
-        if not entry: raise tornado.web.HTTPError(404)
+        if not entry:
+            raise tornado.web.HTTPError(404)
         self.render("entry.html", entry=entry)
 
 
@@ -125,7 +126,8 @@ class ComposeHandler(BaseHandler):
                 "ascii", "ignore")
             slug = re.sub(r"[^\w]+", " ", slug)
             slug = "-".join(slug.lower().strip().split())
-            if not slug: slug = "entry"
+            if not slug:
+                slug = "entry"
             while True:
                 existing = db.Query(Entry).filter("slug =", slug).get()
                 if not existing or str(existing.key()) == key:

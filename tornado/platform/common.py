@@ -1,10 +1,27 @@
 """Lowest-common-denominator implementations of platform functionality."""
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import errno
 import socket
+import time
 
 from tornado.platform import interface
+from tornado.util import errno_from_exception
+
+
+def try_close(f):
+    # Avoid issue #875 (race condition when using the file in another
+    # thread).
+    for i in range(10):
+        try:
+            f.close()
+        except IOError:
+            # Yield to another thread
+            time.sleep(1e-3)
+        else:
+            break
+    # Try a last time and let raise
+    f.close()
 
 
 class Waker(interface.Waker):
@@ -15,10 +32,12 @@ class Waker(interface.Waker):
     and Jython.
     """
     def __init__(self):
+        from .auto import set_close_exec
         # Based on Zope select_trigger.py:
         # https://github.com/zopefoundation/Zope/blob/master/src/ZServer/medusa/thread/select_trigger.py
 
         self.writer = socket.socket()
+        set_close_exec(self.writer.fileno())
         # Disable buffering -- pulling the trigger sends 1 byte,
         # and we want that sent immediately, to wake up ASAP.
         self.writer.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -37,6 +56,7 @@ class Waker(interface.Waker):
             # http://mail.zope.org/pipermail/zope/2005-July/160433.html
             # for hideous details.
             a = socket.socket()
+            set_close_exec(a.fileno())
             a.bind(("127.0.0.1", 0))
             a.listen(1)
             connect_address = a.getsockname()  # assigned (host, port) pair
@@ -45,7 +65,7 @@ class Waker(interface.Waker):
                 break    # success
             except socket.error as detail:
                 if (not hasattr(errno, 'WSAEADDRINUSE') or
-                        detail[0] != errno.WSAEADDRINUSE):
+                        errno_from_exception(detail) != errno.WSAEADDRINUSE):
                     # "Address already in use" is the only error
                     # I've seen on two WinXP Pro SP2 boxes, under
                     # Pythons 2.3.5 and 2.4.1.
@@ -61,6 +81,7 @@ class Waker(interface.Waker):
                 a.close()
 
         self.reader, addr = a.accept()
+        set_close_exec(self.reader.fileno())
         self.reader.setblocking(0)
         self.writer.setblocking(0)
         a.close()
@@ -75,7 +96,7 @@ class Waker(interface.Waker):
     def wake(self):
         try:
             self.writer.send(b"x")
-        except (IOError, socket.error):
+        except (IOError, socket.error, ValueError):
             pass
 
     def consume(self):
@@ -89,4 +110,4 @@ class Waker(interface.Waker):
 
     def close(self):
         self.reader.close()
-        self.writer.close()
+        try_close(self.writer)

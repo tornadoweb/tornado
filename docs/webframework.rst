@@ -5,6 +5,7 @@ Web framework
 
    web
    template
+   routing
    escape
    locale
    websocket

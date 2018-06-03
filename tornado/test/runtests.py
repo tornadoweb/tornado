@@ -1,12 +1,13 @@
-#!/usr/bin/env python
+from __future__ import absolute_import, division, print_function
 
-from __future__ import absolute_import, division, print_function, with_statement
 import gc
+import io
 import locale  # system locale module, not tornado.locale
 import logging
 import operator
 import textwrap
 import sys
+
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
@@ -25,6 +26,7 @@ TEST_MODULES = [
     'tornado.util.doctests',
     'tornado.test.asyncio_test',
     'tornado.test.auth_test',
+    'tornado.test.autoreload_test',
     'tornado.test.concurrent_test',
     'tornado.test.curl_httpclient_test',
     'tornado.test.escape_test',
@@ -43,6 +45,7 @@ TEST_MODULES = [
     'tornado.test.options_test',
     'tornado.test.process_test',
     'tornado.test.queues_test',
+    'tornado.test.routing_test',
     'tornado.test.simple_httpclient_test',
     'tornado.test.stack_context_test',
     'tornado.test.tcpclient_test',
@@ -53,6 +56,7 @@ TEST_MODULES = [
     'tornado.test.util_test',
     'tornado.test.web_test',
     'tornado.test.websocket_test',
+    'tornado.test.windows_test',
     'tornado.test.wsgi_test',
 ]
 
@@ -61,16 +65,21 @@ def all():
     return unittest.defaultTestLoader.loadTestsFromNames(TEST_MODULES)
 
 
-class TornadoTextTestRunner(unittest.TextTestRunner):
-    def run(self, test):
-        result = super(TornadoTextTestRunner, self).run(test)
-        if result.skipped:
-            skip_reasons = set(reason for (test, reason) in result.skipped)
-            self.stream.write(textwrap.fill(
-                "Some tests were skipped because: %s" %
-                ", ".join(sorted(skip_reasons))))
-            self.stream.write("\n")
-        return result
+def test_runner_factory(stderr):
+    class TornadoTextTestRunner(unittest.TextTestRunner):
+        def __init__(self, *args, **kwargs):
+            super(TornadoTextTestRunner, self).__init__(*args, stream=stderr, **kwargs)
+
+        def run(self, test):
+            result = super(TornadoTextTestRunner, self).run(test)
+            if result.skipped:
+                skip_reasons = set(reason for (test, reason) in result.skipped)
+                self.stream.write(textwrap.fill(
+                    "Some tests were skipped because: %s" %
+                    ", ".join(sorted(skip_reasons))))
+                self.stream.write("\n")
+            return result
+    return TornadoTextTestRunner
 
 
 class LogCounter(logging.Filter):
@@ -78,14 +87,29 @@ class LogCounter(logging.Filter):
     def __init__(self, *args, **kwargs):
         # Can't use super() because logging.Filter is an old-style class in py26
         logging.Filter.__init__(self, *args, **kwargs)
-        self.warning_count = self.error_count = 0
+        self.info_count = self.warning_count = self.error_count = 0
 
     def filter(self, record):
         if record.levelno >= logging.ERROR:
             self.error_count += 1
         elif record.levelno >= logging.WARNING:
             self.warning_count += 1
+        elif record.levelno >= logging.INFO:
+            self.info_count += 1
         return True
+
+
+class CountingStderr(io.IOBase):
+    def __init__(self, real):
+        self.real = real
+        self.byte_count = 0
+
+    def write(self, data):
+        self.byte_count += len(data)
+        return self.real.write(data)
+
+    def flush(self):
+        return self.real.flush()
 
 
 def main():
@@ -113,13 +137,18 @@ def main():
     # 2.7 and 3.2
     warnings.filterwarnings("ignore", category=DeprecationWarning,
                             message="Please use assert.* instead")
-    # unittest2 0.6 on py26 reports these as PendingDeprecationWarnings
-    # instead of DeprecationWarnings.
     warnings.filterwarnings("ignore", category=PendingDeprecationWarning,
                             message="Please use assert.* instead")
     # Twisted 15.0.0 triggers some warnings on py3 with -bb.
     warnings.filterwarnings("ignore", category=BytesWarning,
                             module=r"twisted\..*")
+    if (3,) < sys.version_info < (3, 6):
+        # Prior to 3.6, async ResourceWarnings were rather noisy
+        # and even
+        # `python3.4 -W error -c 'import asyncio; asyncio.get_event_loop()'`
+        # would generate a warning.
+        warnings.filterwarnings("ignore", category=ResourceWarning,  # noqa: F821
+                                module=r"asyncio\..*")
 
     logging.getLogger("tornado.access").setLevel(logging.CRITICAL)
 
@@ -155,6 +184,12 @@ def main():
     add_parse_callback(
         lambda: logging.getLogger().handlers[0].addFilter(log_counter))
 
+    # Certain errors (especially "unclosed resource" errors raised in
+    # destructors) go directly to stderr instead of logging. Count
+    # anything written by anything but the test runner as an error.
+    orig_stderr = sys.stderr
+    sys.stderr = CountingStderr(orig_stderr)
+
     import tornado.testing
     kwargs = {}
     if sys.version_info >= (3, 2):
@@ -164,17 +199,21 @@ def main():
         # suppresses this behavior, although this looks like an implementation
         # detail.  http://bugs.python.org/issue15626
         kwargs['warnings'] = False
-    kwargs['testRunner'] = TornadoTextTestRunner
+    kwargs['testRunner'] = test_runner_factory(orig_stderr)
     try:
         tornado.testing.main(**kwargs)
     finally:
-        # The tests should run clean; consider it a failure if they logged
-        # any warnings or errors. We'd like to ban info logs too, but
-        # we can't count them cleanly due to interactions with LogTrapTestCase.
-        if log_counter.warning_count > 0 or log_counter.error_count > 0:
-            logging.error("logged %d warnings and %d errors",
-                          log_counter.warning_count, log_counter.error_count)
+        # The tests should run clean; consider it a failure if they
+        # logged anything at info level or above.
+        if (log_counter.info_count > 0 or
+                log_counter.warning_count > 0 or
+                log_counter.error_count > 0 or
+                sys.stderr.byte_count > 0):
+            logging.error("logged %d infos, %d warnings, %d errors, and %d bytes to stderr",
+                          log_counter.info_count, log_counter.warning_count,
+                          log_counter.error_count, sys.stderr.byte_count)
             sys.exit(1)
+
 
 if __name__ == '__main__':
     main()

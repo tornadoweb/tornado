@@ -16,5 +16,6 @@ include tornado/test/static_foo.txt
 include tornado/test/templates/utf8.html
 include tornado/test/test.crt
 include tornado/test/test.key
+include LICENSE
 include README.rst
 include runtests.sh

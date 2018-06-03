@@ -1,38 +1,56 @@
 # https://travis-ci.org/tornadoweb/tornado
+dist: trusty
+
+# Use containers instead of full VMs for faster startup.
+sudo: false
+
+matrix:
+    fast_finish: true
+
 language: python
+# For a list of available versions, run
+#     aws s3 ls s3://travis-python-archives/binaries/ubuntu/14.04/x86_64/
 python:
-    - 2.7.8
     - 2.7
-    - pypy
-    - 3.3
+    - pypy2.7-5.8.0
     - 3.4
     - 3.5
+    - 3.6
     - nightly
-    - pypy3
+    - pypy3.5-5.8.0
 
 install:
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then travis_retry pip install futures mock monotonic trollius; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 'pypy' ]]; then travis_retry pip install futures mock; fi
+    # On nightly, upgrade setuptools first to work around
+    # https://github.com/pypa/setuptools/issues/1257
+    - if [[ $TRAVIS_PYTHON_VERSION == 'nightly' ]]; then travis_retry pip install -U setuptools; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then travis_retry pip install mock monotonic; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 'pypy' ]]; then travis_retry pip install mock; fi
     # TODO(bdarnell): pycares tests are currently disabled on travis due to ipv6 issues.
     #- if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then travis_retry pip install pycares; fi
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then travis_retry pip install pycurl; fi
     # Twisted runs on 2.x and 3.3+, but is flaky on pypy.
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then travis_retry pip install Twisted; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' || $TRAVIS_PYTHON_VERSION == '3.5' ]]; then travis_retry pip install sphinx sphinx_rtd_theme; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then travis_retry pip install sphinx sphinx_rtd_theme; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then travis_retry pip install flake8; fi
     # On travis the extension should always be built
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then export TORNADO_EXTENSION=1; fi
     - travis_retry python setup.py install
-    - travis_retry pip install codecov
+    - travis_retry pip install codecov virtualenv
     # Create a separate no-dependencies virtualenv to make sure all imports
     # of optional-dependencies are guarded.
-    - virtualenv ./nodeps
-    - ./nodeps/bin/python setup.py install
+    - virtualenv /tmp/nodeps
+    - /tmp/nodeps/bin/python -VV
+    - /tmp/nodeps/bin/python setup.py install
     - curl-config --version; pip freeze
 
 script:
-    # Get out of the source directory before running tests to avoid PYTHONPATH
-    # confusion.  This is necessary to ensure that the speedups module can
-    # be found in the installation directory.
+    # Run the tests once from the source directory to detect issues
+    # involving relative __file__ paths; see
+    # https://github.com/tornadoweb/tornado/issues/1780
+    - unset TORNADO_EXTENSION && python -m tornado.test
+    # For all other test variants, get out of the source directory before
+    # running tests to ensure that we get the installed speedups module
+    # instead of the source directory which doesn't have it.
     - cd maint
     # Copy the coveragerc down so coverage.py can find it.
     - cp ../.coveragerc .
@@ -44,38 +62,28 @@ script:
     # We use "python -m coverage" instead of the "bin/coverage" script
     # so we can pass additional arguments to python.
     # coverage needs a function that was removed in python 3.6 so we can't
-    # run it with nightly cpython.
-    - if [[ $TRAVIS_PYTHON_VERSION != nightly ]]; then export TARGET="-m coverage run $TARGET"; fi
+    # run it with nightly cpython. Coverage is very slow on pypy.
+    - if [[ $TRAVIS_PYTHON_VERSION != nightly && $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then export RUN_COVERAGE=1; fi
+    - if [[ "$RUN_COVERAGE" == 1 ]]; then export TARGET="-m coverage run $TARGET"; fi
     - python $TARGET
-    - python $TARGET --ioloop=tornado.platform.select.SelectIOLoop
+    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --ioloop=tornado.platform.select.SelectIOLoop; fi
     - python -O $TARGET
     - LANG=C python $TARGET
     - LANG=en_US.utf-8 python $TARGET
     - if [[ $TRAVIS_PYTHON_VERSION == 3* ]]; then python -bb $TARGET; fi
-    - if [[ $TRAVIS_PYTHON_VERSION != pypy* ]]; then python $TARGET --resolver=tornado.netutil.ThreadedResolver; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --httpclient=tornado.curl_httpclient.CurlAsyncHTTPClient; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --ioloop_time_monotonic; fi
-    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then python $TARGET --ioloop=tornado.platform.twisted.TwistedIOLoop; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 3.4 || $TRAVIS_PYTHON_VERSION == 3.5 ]]; then python $TARGET --ioloop=tornado.platform.asyncio.AsyncIOLoop; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --ioloop=tornado.platform.asyncio.AsyncIOLoop; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --ioloop=tornado.platform.twisted.TwistedIOLoop; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --resolver=tornado.platform.twisted.TwistedResolver; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --ioloop=tornado.ioloop.PollIOLoop --ioloop_time_monotonic; fi
     #- if [[ $TRAVIS_PYTHON_VERSION != pypy* ]]; then python $TARGET --resolver=tornado.platform.caresresolver.CaresResolver; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 3* ]]; then python $TARGET --ioloop_time_monotonic; fi
-    - ../nodeps/bin/python -m tornado.test.runtests
+    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy3' ]]; then /tmp/nodeps/bin/python -m tornado.test.runtests; fi
     # make coverage reports for Codecov to find
-    - if [[ $TRAVIS_PYTHON_VERSION != nightly ]]; then coverage xml; fi
+    - if [[ "$RUN_COVERAGE" == 1 ]]; then coverage xml; fi
     - export TORNADO_EXTENSION=0
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.5' ]]; then cd ../docs && mkdir sphinx-out && sphinx-build -E -n -W -b html . sphinx-out; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' || $TRAVIS_PYTHON_VERSION == '3.5' ]]; then cd ../docs && mkdir sphinx-doctest-out && sphinx-build -E -n -b doctest . sphinx-out; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 3.6 ]]; then cd ../docs && mkdir sphinx-out && sphinx-build -E -n -W -b html . sphinx-out; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 3.6 ]]; then cd ../docs && mkdir sphinx-doctest-out && sphinx-build -E -n -b doctest . sphinx-out; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then cd .. && flake8; fi
 
 after_success:
     # call codecov from project root
-    - if [[ $TRAVIS_PYTHON_VERSION != nightly ]]; then cd ../ && codecov; fi
-
-# This reportedly works around an issue downloading packages from pypi on
-# travis.  Consider removing this after the underlying issue is fixed.
-# https://github.com/travis-ci/travis-ci/issues/2389
-sudo: false
-
-matrix:
-    fast_finish: true
+    - if [[ "$RUN_COVERAGE" == 1 ]]; then cd ../ && codecov; fi

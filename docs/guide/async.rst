@@ -27,11 +27,7 @@ hundreds of milliseconds of CPU time, far more than a typical network
 or disk access).
 
 A function can be blocking in some respects and non-blocking in
-others.  For example, `tornado.httpclient` in the default
-configuration blocks on DNS resolution but not on other network access
-(to mitigate this use `.ThreadedResolver` or a
-``tornado.curl_httpclient`` with a properly-configured build of
-``libcurl``).  In the context of Tornado we generally talk about
+others.  In the context of Tornado we generally talk about
 blocking in the context of network I/O, although all kinds of blocking
 are to be minimized.
 
@@ -57,6 +53,12 @@ transparent to its callers (systems like `gevent
 comparable to asynchronous systems, but they do not actually make
 things asynchronous).
 
+Asynchronous operations in Tornado generally return placeholder
+objects (``Futures``), with the exception of some low-level components
+like the `.IOLoop` that use callbacks. ``Futures`` are usually
+transformed into their result with the ``await`` or ``yield``
+keywords.
+
 Examples
 ~~~~~~~~
 
@@ -74,65 +76,59 @@ Here is a sample synchronous function:
 .. testoutput::
    :hide:
 
-And here is the same function rewritten to be asynchronous with a
-callback argument:
+And here is the same function rewritten asynchronously as a native coroutine:
 
 .. testcode::
 
-    from tornado.httpclient import AsyncHTTPClient
+   from tornado.httpclient import AsyncHTTPClient
 
-    def asynchronous_fetch(url, callback):
-        http_client = AsyncHTTPClient()
-        def handle_response(response):
-            callback(response.body)
-        http_client.fetch(url, callback=handle_response)
+   async def asynchronous_fetch(url):
+       http_client = AsyncHTTPClient()
+       response = await http_client.fetch(url)
+       return response.body
 
 .. testoutput::
    :hide:
 
-And again with a `.Future` instead of a callback:
+Or for compatibility with older versions of Python, using the `tornado.gen` module:
+
+..  testcode::
+
+    from tornado.httpclient import AsyncHTTPClient
+    from tornado import gen
+
+    @gen.coroutine
+    def async_fetch_gen(url):
+        http_client = AsyncHTTPClient()
+        response = yield http_client.fetch(url)
+        raise gen.Return(response.body)
+
+Coroutines are a little magical, but what they do internally is something like this:
 
 .. testcode::
 
     from tornado.concurrent import Future
 
-    def async_fetch_future(url):
+    def async_fetch_manual(url):
         http_client = AsyncHTTPClient()
         my_future = Future()
         fetch_future = http_client.fetch(url)
-        fetch_future.add_done_callback(
-            lambda f: my_future.set_result(f.result()))
+        def on_fetch(f):
+            my_future.set_result(f.result().body)
+        fetch_future.add_done_callback(on_fetch)
         return my_future
 
 .. testoutput::
    :hide:
 
-The raw `.Future` version is more complex, but ``Futures`` are
-nonetheless recommended practice in Tornado because they have two
-major advantages.  Error handling is more consistent since the
-`.Future.result` method can simply raise an exception (as opposed to
-the ad-hoc error handling common in callback-oriented interfaces), and
-``Futures`` lend themselves well to use with coroutines.  Coroutines
-will be discussed in depth in the next section of this guide.  Here is
-the coroutine version of our sample function, which is very similar to
-the original synchronous version:
+Notice that the coroutine returns its `.Future` before the fetch is
+done. This is what makes coroutines *asynchronous*.
 
-.. testcode::
-
-    from tornado import gen
-
-    @gen.coroutine
-    def fetch_coroutine(url):
-        http_client = AsyncHTTPClient()
-        response = yield http_client.fetch(url)
-        raise gen.Return(response.body)
-
-.. testoutput::
-   :hide:
-
-The statement ``raise gen.Return(response.body)`` is an artifact of
-Python 2, in which generators aren't allowed to return
-values. To overcome this, Tornado coroutines raise a special kind of
-exception called a `.Return`. The coroutine catches this exception and
-treats it like a returned value. In Python 3.3 and later, a ``return
-response.body`` achieves the same result.
+Anything you can do with coroutines you can also do by passing
+callback objects around, but coroutines provide an important
+simplification by letting you organize your code in the same way you
+would if it were synchronous. This is especially important for error
+handling, since ``try``/``except`` blocks work as you would expect in
+coroutines while this is difficult to achieve with callbacks.
+Coroutines will be discussed in depth in the next section of this
+guide.

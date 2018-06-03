@@ -28,14 +28,13 @@ No matter what the real code is doing, to achieve concurrency blocking
 code must be replaced with non-blocking equivalents. This means one of three things:
 
 1. *Find a coroutine-friendly equivalent.* For `time.sleep`, use
-   `tornado.gen.sleep` instead::
+   `tornado.gen.sleep` (or `asyncio.sleep`) instead::
 
     class CoroutineSleepHandler(RequestHandler):
-        @gen.coroutine
-        def get(self):
+        async def get(self):
             for i in range(5):
                 print(i)
-                yield gen.sleep(1)
+                await gen.sleep(1)
 
    When this option is available, it is usually the best approach.
    See the `Tornado wiki <https://github.com/tornadoweb/tornado/wiki/Links>`_
@@ -44,16 +43,16 @@ code must be replaced with non-blocking equivalents. This means one of three thi
 2. *Find a callback-based equivalent.* Similar to the first option,
    callback-based libraries are available for many tasks, although they
    are slightly more complicated to use than a library designed for
-   coroutines. These are typically used with `tornado.gen.Task` as an
-   adapter::
+   coroutines. Adapt the callback-based function into a future::
 
     class CoroutineTimeoutHandler(RequestHandler):
-        @gen.coroutine
-        def get(self):
+        async def get(self):
             io_loop = IOLoop.current()
             for i in range(5):
                 print(i)
-                yield gen.Task(io_loop.add_timeout, io_loop.time() + 1)
+                f = tornado.concurrent.Future()
+                do_something_with_callback(f.set_result)
+                result = await f
 
    Again, the
    `Tornado wiki <https://github.com/tornadoweb/tornado/wiki/Links>`_
@@ -65,14 +64,11 @@ code must be replaced with non-blocking equivalents. This means one of three thi
    that can be used for any blocking function whether an asynchronous
    counterpart exists or not::
 
-    executor = concurrent.futures.ThreadPoolExecutor(8)
-
     class ThreadPoolHandler(RequestHandler):
-        @gen.coroutine
-        def get(self):
+        async def get(self):
             for i in range(5):
                 print(i)
-                yield executor.submit(time.sleep, 1)
+                await IOLoop.current().run_in_executor(None, time.sleep, 1)
 
 See the :doc:`Asynchronous I/O <guide/async>` chapter of the Tornado
 user's guide for more on blocking and asynchronous functions.

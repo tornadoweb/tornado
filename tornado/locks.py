@@ -12,12 +12,13 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import collections
+from concurrent.futures import CancelledError
 
 from tornado import gen, ioloop
-from tornado.concurrent import Future
+from tornado.concurrent import Future, future_set_result_unless_cancelled
 
 __all__ = ['Condition', 'Event', 'Semaphore', 'BoundedSemaphore', 'Lock']
 
@@ -60,22 +61,19 @@ class Condition(_TimeoutGarbageCollector):
 
         condition = Condition()
 
-        @gen.coroutine
-        def waiter():
+        async def waiter():
             print("I'll wait right here")
-            yield condition.wait()  # Yield a Future.
+            await condition.wait()
             print("I'm done waiting")
 
-        @gen.coroutine
-        def notifier():
+        async def notifier():
             print("About to notify")
             condition.notify()
             print("Done notifying")
 
-        @gen.coroutine
-        def runner():
-            # Yield two Futures; wait for waiter() and notifier() to finish.
-            yield [waiter(), notifier()]
+        async def runner():
+            # Wait for waiter() and notifier() in parallel
+            await gen.multi([waiter(), notifier()])
 
         IOLoop.current().run_sync(runner)
 
@@ -92,15 +90,19 @@ class Condition(_TimeoutGarbageCollector):
         io_loop = IOLoop.current()
 
         # Wait up to 1 second for a notification.
-        yield condition.wait(timeout=io_loop.time() + 1)
+        await condition.wait(timeout=io_loop.time() + 1)
 
     ...or a `datetime.timedelta` for a timeout relative to the current time::
 
         # Wait up to 1 second.
-        yield condition.wait(timeout=datetime.timedelta(seconds=1))
+        await condition.wait(timeout=datetime.timedelta(seconds=1))
 
-    The method raises `tornado.gen.TimeoutError` if there's no notification
-    before the deadline.
+    The method returns False if there's no notification before the deadline.
+
+    .. versionchanged:: 5.0
+       Previously, waiters could be notified synchronously from within
+       `notify`. Now, the notification will always be received on the
+       next iteration of the `.IOLoop`.
     """
 
     def __init__(self):
@@ -123,7 +125,8 @@ class Condition(_TimeoutGarbageCollector):
         self._waiters.append(waiter)
         if timeout:
             def on_timeout():
-                waiter.set_result(False)
+                if not waiter.done():
+                    future_set_result_unless_cancelled(waiter, False)
                 self._garbage_collect()
             io_loop = ioloop.IOLoop.current()
             timeout_handle = io_loop.add_timeout(timeout, on_timeout)
@@ -141,7 +144,7 @@ class Condition(_TimeoutGarbageCollector):
                 waiters.append(waiter)
 
         for waiter in waiters:
-            waiter.set_result(True)
+            future_set_result_unless_cancelled(waiter, True)
 
     def notify_all(self):
         """Wake all waiters."""
@@ -164,22 +167,19 @@ class Event(object):
 
         event = Event()
 
-        @gen.coroutine
-        def waiter():
+        async def waiter():
             print("Waiting for event")
-            yield event.wait()
+            await event.wait()
             print("Not waiting this time")
-            yield event.wait()
+            await event.wait()
             print("Done")
 
-        @gen.coroutine
-        def setter():
+        async def setter():
             print("About to set the event")
             event.set()
 
-        @gen.coroutine
-        def runner():
-            yield [waiter(), setter()]
+        async def runner():
+            await gen.multi([waiter(), setter()])
 
         IOLoop.current().run_sync(runner)
 
@@ -191,7 +191,8 @@ class Event(object):
         Done
     """
     def __init__(self):
-        self._future = Future()
+        self._value = False
+        self._waiters = set()
 
     def __repr__(self):
         return '<%s %s>' % (
@@ -199,34 +200,48 @@ class Event(object):
 
     def is_set(self):
         """Return ``True`` if the internal flag is true."""
-        return self._future.done()
+        return self._value
 
     def set(self):
         """Set the internal flag to ``True``. All waiters are awakened.
 
         Calling `.wait` once the flag is set will not block.
         """
-        if not self._future.done():
-            self._future.set_result(None)
+        if not self._value:
+            self._value = True
+
+            for fut in self._waiters:
+                if not fut.done():
+                    fut.set_result(None)
 
     def clear(self):
         """Reset the internal flag to ``False``.
 
         Calls to `.wait` will block until `.set` is called.
         """
-        if self._future.done():
-            self._future = Future()
+        self._value = False
 
     def wait(self, timeout=None):
         """Block until the internal flag is true.
 
-        Returns a Future, which raises `tornado.gen.TimeoutError` after a
+        Returns a Future, which raises `tornado.util.TimeoutError` after a
         timeout.
         """
+        fut = Future()
+        if self._value:
+            fut.set_result(None)
+            return fut
+        self._waiters.add(fut)
+        fut.add_done_callback(lambda fut: self._waiters.remove(fut))
         if timeout is None:
-            return self._future
+            return fut
         else:
-            return gen.with_timeout(timeout, self._future)
+            timeout_fut = gen.with_timeout(timeout, fut, quiet_exceptions=(CancelledError,))
+            # This is a slightly clumsy workaround for the fact that
+            # gen.with_timeout doesn't cancel its futures. Cancelling
+            # fut will remove it from the waiters list.
+            timeout_fut.add_done_callback(lambda tf: fut.cancel() if not fut.done() else None)
+            return timeout_fut
 
 
 class _ReleasingContextManager(object):
@@ -269,10 +284,11 @@ class Semaphore(_TimeoutGarbageCollector):
        # Ensure reliable doctest output: resolve Futures one at a time.
        futures_q = deque([Future() for _ in range(3)])
 
-       @gen.coroutine
-       def simulator(futures):
+       async def simulator(futures):
            for f in futures:
-               yield gen.moment
+               # simulate the asynchronous passage of time
+               await gen.sleep(0)
+               await gen.sleep(0)
                f.set_result(None)
 
        IOLoop.current().add_callback(simulator, list(futures_q))
@@ -288,20 +304,18 @@ class Semaphore(_TimeoutGarbageCollector):
 
         sem = Semaphore(2)
 
-        @gen.coroutine
-        def worker(worker_id):
-            yield sem.acquire()
+        async def worker(worker_id):
+            await sem.acquire()
             try:
                 print("Worker %d is working" % worker_id)
-                yield use_some_resource()
+                await use_some_resource()
             finally:
                 print("Worker %d is done" % worker_id)
                 sem.release()
 
-        @gen.coroutine
-        def runner():
+        async def runner():
             # Join all workers.
-            yield [worker(i) for i in range(3)]
+            await gen.multi([worker(i) for i in range(3)])
 
         IOLoop.current().run_sync(runner)
 
@@ -317,7 +331,18 @@ class Semaphore(_TimeoutGarbageCollector):
     Workers 0 and 1 are allowed to run concurrently, but worker 2 waits until
     the semaphore has been released once, by worker 0.
 
-    `.acquire` is a context manager, so ``worker`` could be written as::
+    The semaphore can be used as an async context manager::
+
+        async def worker(worker_id):
+            async with sem:
+                print("Worker %d is working" % worker_id)
+                await use_some_resource()
+
+            # Now the semaphore has been released.
+            print("Worker %d is done" % worker_id)
+
+    For compatibility with older versions of Python, `.acquire` is a
+    context manager, so ``worker`` could also be written as::
 
         @gen.coroutine
         def worker(worker_id):
@@ -328,19 +353,9 @@ class Semaphore(_TimeoutGarbageCollector):
             # Now the semaphore has been released.
             print("Worker %d is done" % worker_id)
 
-    In Python 3.5, the semaphore itself can be used as an async context
-    manager::
-
-        async def worker(worker_id):
-            async with sem:
-                print("Worker %d is working" % worker_id)
-                await use_some_resource()
-
-            # Now the semaphore has been released.
-            print("Worker %d is done" % worker_id)
-
     .. versionchanged:: 4.3
        Added ``async with`` support in Python 3.5.
+
     """
     def __init__(self, value=1):
         super(Semaphore, self).__init__()
@@ -388,7 +403,8 @@ class Semaphore(_TimeoutGarbageCollector):
             self._waiters.append(waiter)
             if timeout:
                 def on_timeout():
-                    waiter.set_exception(gen.TimeoutError())
+                    if not waiter.done():
+                        waiter.set_exception(gen.TimeoutError())
                     self._garbage_collect()
                 io_loop = ioloop.IOLoop.current()
                 timeout_handle = io_loop.add_timeout(timeout, on_timeout)
@@ -440,26 +456,24 @@ class Lock(object):
 
     Releasing an unlocked lock raises `RuntimeError`.
 
-    `acquire` supports the context manager protocol in all Python versions:
+    A Lock can be used as an async context manager with the ``async
+    with`` statement:
 
-    >>> from tornado import gen, locks
+    >>> from tornado import locks
     >>> lock = locks.Lock()
     >>>
-    >>> @gen.coroutine
-    ... def f():
-    ...    with (yield lock.acquire()):
+    >>> async def f():
+    ...    async with lock:
     ...        # Do something holding the lock.
     ...        pass
     ...
     ...    # Now the lock is released.
 
-    In Python 3.5, `Lock` also supports the async context manager
-    protocol. Note that in this case there is no `acquire`, because
-    ``async with`` includes both the ``yield`` and the ``acquire``
-    (just as it does with `threading.Lock`):
+    For compatibility with older versions of Python, the `.acquire`
+    method asynchronously returns a regular context manager:
 
-    >>> async def f():  # doctest: +SKIP
-    ...    async with lock:
+    >>> async def f2():
+    ...    with (yield lock.acquire()):
     ...        # Do something holding the lock.
     ...        pass
     ...
@@ -480,7 +494,7 @@ class Lock(object):
     def acquire(self, timeout=None):
         """Attempt to lock. Returns a Future.
 
-        Returns a Future, which raises `tornado.gen.TimeoutError` after a
+        Returns a Future, which raises `tornado.util.TimeoutError` after a
         timeout.
         """
         return self._block.acquire(timeout)

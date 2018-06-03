@@ -1,4 +1,4 @@
-``tornado.gen`` --- Simplify asynchronous code
+``tornado.gen`` --- Generator-based coroutines
 ==============================================
 
 .. testsetup::
@@ -21,7 +21,6 @@
    .. autoexception:: Return
 
    .. autofunction:: with_timeout
-   .. autoexception:: TimeoutError
 
    .. autofunction:: sleep
 
@@ -35,20 +34,11 @@
 
    .. autofunction:: multi_future
 
-   .. autofunction:: Task
-
-   .. class:: Arguments
-
-      The result of a `Task` or `Wait` whose callback had more than one
-      argument (or keyword arguments).
-
-      The `Arguments` object is a `collections.namedtuple` and can be
-      used either as a tuple ``(args, kwargs)`` or an object with attributes
-      ``args`` and ``kwargs``.
-
    .. autofunction:: convert_yielded
 
    .. autofunction:: maybe_future
+
+   .. autofunction:: is_coroutine_function
 
    Legacy interface
    ----------------
@@ -69,3 +59,18 @@
    .. autoclass:: WaitAll
 
    .. autoclass:: MultiYieldPoint
+
+   .. autofunction:: Task
+
+   .. class:: Arguments
+
+      The result of a `Task` or `Wait` whose callback had more than one
+      argument (or keyword arguments).
+
+      The `Arguments` object is a `collections.namedtuple` and can be
+      used either as a tuple ``(args, kwargs)`` or an object with attributes
+      ``args`` and ``kwargs``.
+
+      .. deprecated:: 5.1
+
+         This class will be removed in 6.0.

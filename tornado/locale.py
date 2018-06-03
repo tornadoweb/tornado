@@ -1,5 +1,5 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+#
 # Copyright 2009 Facebook
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -19,7 +19,7 @@
 To load a locale and generate a translated string::
 
     user_locale = tornado.locale.get("es_LA")
-    print user_locale.translate("Sign out")
+    print(user_locale.translate("Sign out"))
 
 `tornado.locale.get()` returns the closest matching locale, not necessarily the
 specific locale you requested. You can support pluralization with
@@ -28,7 +28,7 @@ additional arguments to `~Locale.translate()`, e.g.::
     people = [...]
     message = user_locale.translate(
         "%(list)s is online", "%(list)s are online", len(people))
-    print message % {"list": user_locale.list(people)}
+    print(message % {"list": user_locale.list(people)})
 
 The first string is chosen if ``len(people) == 1``, otherwise the second
 string is chosen.
@@ -39,7 +39,7 @@ supported by `gettext` and related tools).  If neither method is called,
 the `Locale.translate` method will simply return the original string.
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import codecs
 import csv
@@ -187,7 +187,7 @@ def load_gettext_translations(directory, domain):
 
         {directory}/{lang}/LC_MESSAGES/{domain}.mo
 
-    Three steps are required to have you app translated:
+    Three steps are required to have your app translated:
 
     1. Generate POT translation file::
 

@@ -7,22 +7,26 @@ import thor
 import threading
 from tornado import gen
 from tornado.options import parse_command_line
-from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
+from tornado.testing import AsyncHTTPTestCase
 from tornado.web import RequestHandler, Application, asynchronous
 import unittest
+
 
 class HelloHandler(RequestHandler):
     def get(self):
         self.write("Hello world")
 
+
 class RedirectHandler(RequestHandler):
     def get(self, path):
         self.redirect(path, status=int(self.get_argument('status', '302')))
+
 
 class PostHandler(RequestHandler):
     def post(self):
         assert self.get_argument('foo') == 'bar'
         self.redirect('/hello', status=303)
+
 
 class ChunkedHandler(RequestHandler):
     @asynchronous
@@ -34,12 +38,14 @@ class ChunkedHandler(RequestHandler):
         yield gen.Task(self.flush)
         self.finish()
 
+
 class CacheHandler(RequestHandler):
     def get(self, computed_etag):
         self.write(computed_etag)
 
     def compute_etag(self):
         return self._write_buffer[0]
+
 
 class TestMixin(object):
     def get_handlers(self):
@@ -49,7 +55,7 @@ class TestMixin(object):
             ('/post', PostHandler),
             ('/chunked', ChunkedHandler),
             ('/cache/(.*)', CacheHandler),
-            ]
+        ]
 
     def get_app_kwargs(self):
         return dict(static_path='.')
@@ -62,7 +68,7 @@ class TestMixin(object):
             # For our small test responses the Content-Encoding header
             # wipes out any gains from compression
             rs.CONNEG_GZIP_BAD,
-            ]
+        ]
 
     def get_allowed_errors(self):
         return []
@@ -109,10 +115,12 @@ class TestMixin(object):
     def run_redbot(self, url, method, body, headers):
         red = HttpResource(url, method=method, req_body=body,
                            req_hdrs=headers)
+
         def work():
             red.run(thor.stop)
             thor.run()
             self.io_loop.add_callback(self.stop)
+
         thread = threading.Thread(target=work)
         thread.start()
         self.wait()
@@ -229,11 +237,13 @@ class TestMixin(object):
             headers=[('If-None-Match', etags)],
             expected_status=200)
 
-class DefaultHTTPTest(AsyncHTTPTestCase, LogTrapTestCase, TestMixin):
+
+class DefaultHTTPTest(AsyncHTTPTestCase, TestMixin):
     def get_app(self):
         return Application(self.get_handlers(), **self.get_app_kwargs())
 
-class GzipHTTPTest(AsyncHTTPTestCase, LogTrapTestCase, TestMixin):
+
+class GzipHTTPTest(AsyncHTTPTestCase, TestMixin):
     def get_app(self):
         return Application(self.get_handlers(), gzip=True, **self.get_app_kwargs())
 
@@ -245,7 +255,8 @@ class GzipHTTPTest(AsyncHTTPTestCase, LogTrapTestCase, TestMixin):
             # it doesn't seem likely to cause any problems as long as we're
             # using the correct Vary header.
             rs.VARY_ETAG_DOESNT_CHANGE,
-            ]
+        ]
+
 
 if __name__ == '__main__':
     parse_command_line()

@@ -1,16 +1,15 @@
-#!/usr/bin/env python
-
-from __future__ import absolute_import, division, print_function, with_statement
+# -*- coding: utf-8 -*-
+from __future__ import absolute_import, division, print_function
 
 import base64
 import binascii
 from contextlib import closing
 import copy
-import functools
 import sys
 import threading
 import datetime
 from io import BytesIO
+import unicodedata
 
 from tornado.escape import utf8, native_str
 from tornado import gen
@@ -22,7 +21,7 @@ from tornado.log import gen_log
 from tornado import netutil
 from tornado.stack_context import ExceptionStackContext, NullContext
 from tornado.testing import AsyncHTTPTestCase, bind_unused_port, gen_test, ExpectLog
-from tornado.test.util import unittest, skipOnTravis
+from tornado.test.util import unittest, skipOnTravis, ignore_deprecation
 from tornado.web import Application, RequestHandler, url
 from tornado.httputil import format_timestamp, HTTPHeaders
 
@@ -192,10 +191,15 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         # over several ioloop iterations, but the connection is already closed.
         sock, port = bind_unused_port()
         with closing(sock):
-            def write_response(stream, request_data):
+            @gen.coroutine
+            def accept_callback(conn, address):
+                # fake an HTTP server using chunked encoding where the final chunks
+                # and connection close all happen at once
+                stream = IOStream(conn)
+                request_data = yield stream.read_until(b"\r\n\r\n")
                 if b"HTTP/1." not in request_data:
                     self.skipTest("requires HTTP/1.x")
-                stream.write(b"""\
+                yield stream.write(b"""\
 HTTP/1.1 200 OK
 Transfer-Encoding: chunked
 
@@ -205,17 +209,10 @@ Transfer-Encoding: chunked
 2
 0
 
-""".replace(b"\n", b"\r\n"), callback=stream.close)
-
-            def accept_callback(conn, address):
-                # fake an HTTP server using chunked encoding where the final chunks
-                # and connection close all happen at once
-                stream = IOStream(conn, io_loop=self.io_loop)
-                stream.read_until(b"\r\n\r\n",
-                                  functools.partial(write_response, stream))
-            netutil.add_accept_handler(sock, accept_callback, self.io_loop)
-            self.http_client.fetch("http://127.0.0.1:%d/" % port, self.stop)
-            resp = self.wait()
+""".replace(b"\n", b"\r\n"))
+                stream.close()
+            netutil.add_accept_handler(sock, accept_callback)
+            resp = self.fetch("http://127.0.0.1:%d/" % port)
             resp.rethrow()
             self.assertEqual(resp.body, b"12")
             self.io_loop.remove_handler(sock.fileno())
@@ -233,14 +230,16 @@ Transfer-Encoding: chunked
             if chunk == b'qwer':
                 1 / 0
 
-        with ExceptionStackContext(error_handler):
-            self.fetch('/chunk', streaming_callback=streaming_cb)
+        with ignore_deprecation():
+            with ExceptionStackContext(error_handler):
+                self.fetch('/chunk', streaming_callback=streaming_cb)
 
         self.assertEqual(chunks, [b'asdf', b'qwer'])
         self.assertEqual(1, len(exc_info))
         self.assertIs(exc_info[0][0], ZeroDivisionError)
 
     def test_basic_auth(self):
+        # This test data appears in section 2 of RFC 7617.
         self.assertEqual(self.fetch("/auth", auth_username="Aladdin",
                                     auth_password="open sesame").body,
                          b"Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==")
@@ -251,16 +250,30 @@ Transfer-Encoding: chunked
                                     auth_mode="basic").body,
                          b"Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==")
 
+    def test_basic_auth_unicode(self):
+        # This test data appears in section 2.1 of RFC 7617.
+        self.assertEqual(self.fetch("/auth", auth_username="test",
+                                    auth_password="123£").body,
+                         b"Basic dGVzdDoxMjPCow==")
+
+        # The standard mandates NFC. Give it a decomposed username
+        # and ensure it is normalized to composed form.
+        username = unicodedata.normalize("NFD", u"josé")
+        self.assertEqual(self.fetch("/auth",
+                                    auth_username=username,
+                                    auth_password="səcrət").body,
+                         b"Basic am9zw6k6c8mZY3LJmXQ=")
+
     def test_unsupported_auth_mode(self):
         # curl and simple clients handle errors a bit differently; the
         # important thing is that they don't fall back to basic auth
         # on an unknown mode.
         with ExpectLog(gen_log, "uncaught exception", required=False):
             with self.assertRaises((ValueError, HTTPError)):
-                response = self.fetch("/auth", auth_username="Aladdin",
-                                      auth_password="open sesame",
-                                      auth_mode="asdf")
-                response.rethrow()
+                self.fetch("/auth", auth_username="Aladdin",
+                           auth_password="open sesame",
+                           auth_mode="asdf",
+                           raise_error=True)
 
     def test_follow_redirect(self):
         response = self.fetch("/countdown/2", follow_redirects=False)
@@ -274,8 +287,7 @@ Transfer-Encoding: chunked
 
     def test_credentials_in_url(self):
         url = self.get_url("/auth").replace("http://", "http://me:secret@")
-        self.http_client.fetch(url, self.stop)
-        response = self.wait()
+        response = self.fetch(url)
         self.assertEqual(b"Basic " + base64.b64encode(b"me:secret"),
                          response.body)
 
@@ -350,19 +362,20 @@ Transfer-Encoding: chunked
             if header_line.lower().startswith('content-type:'):
                 1 / 0
 
-        with ExceptionStackContext(error_handler):
-            self.fetch('/chunk', header_callback=header_callback)
+        with ignore_deprecation():
+            with ExceptionStackContext(error_handler):
+                self.fetch('/chunk', header_callback=header_callback)
         self.assertEqual(len(exc_info), 1)
         self.assertIs(exc_info[0][0], ZeroDivisionError)
 
+    @gen_test
     def test_configure_defaults(self):
         defaults = dict(user_agent='TestDefaultUserAgent', allow_ipv6=False)
         # Construct a new instance of the configured client class
-        client = self.http_client.__class__(self.io_loop, force_instance=True,
+        client = self.http_client.__class__(force_instance=True,
                                             defaults=defaults)
         try:
-            client.fetch(self.get_url('/user_agent'), callback=self.stop)
-            response = self.wait()
+            response = yield client.fetch(self.get_url('/user_agent'))
             self.assertEqual(response.body, b'TestDefaultUserAgent')
         finally:
             client.close()
@@ -387,23 +400,22 @@ Transfer-Encoding: chunked
         # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.2
         sock, port = bind_unused_port()
         with closing(sock):
-            def write_response(stream, request_data):
+            @gen.coroutine
+            def accept_callback(conn, address):
+                stream = IOStream(conn)
+                request_data = yield stream.read_until(b"\r\n\r\n")
                 if b"HTTP/1." not in request_data:
                     self.skipTest("requires HTTP/1.x")
-                stream.write(b"""\
+                yield stream.write(b"""\
 HTTP/1.1 200 OK
 X-XSS-Protection: 1;
 \tmode=block
 
-""".replace(b"\n", b"\r\n"), callback=stream.close)
+""".replace(b"\n", b"\r\n"))
+                stream.close()
 
-            def accept_callback(conn, address):
-                stream = IOStream(conn, io_loop=self.io_loop)
-                stream.read_until(b"\r\n\r\n",
-                                  functools.partial(write_response, stream))
-            netutil.add_accept_handler(sock, accept_callback, self.io_loop)
-            self.http_client.fetch("http://127.0.0.1:%d/" % port, self.stop)
-            resp = self.wait()
+            netutil.add_accept_handler(sock, accept_callback)
+            resp = self.fetch("http://127.0.0.1:%d/" % port)
             resp.rethrow()
             self.assertEqual(resp.headers['X-XSS-Protection'], "1; mode=block")
             self.io_loop.remove_handler(sock.fileno())
@@ -433,8 +445,9 @@ X-XSS-Protection: 1;
             self.stop()
         self.io_loop.handle_callback_exception = handle_callback_exception
         with NullContext():
-            self.http_client.fetch(self.get_url('/hello'),
-                                   lambda response: 1 / 0)
+            with ignore_deprecation():
+                self.http_client.fetch(self.get_url('/hello'),
+                                       lambda response: 1 / 0)
         self.wait()
         self.assertEqual(exc_info[0][0], ZeroDivisionError)
 
@@ -485,8 +498,7 @@ X-XSS-Protection: 1;
         # These methods require a body.
         for method in ('POST', 'PUT', 'PATCH'):
             with self.assertRaises(ValueError) as context:
-                resp = self.fetch('/all_methods', method=method)
-                resp.rethrow()
+                self.fetch('/all_methods', method=method, raise_error=True)
             self.assertIn('must not be None', str(context.exception))
 
             resp = self.fetch('/all_methods', method=method,
@@ -496,16 +508,14 @@ X-XSS-Protection: 1;
         # These methods don't allow a body.
         for method in ('GET', 'DELETE', 'OPTIONS'):
             with self.assertRaises(ValueError) as context:
-                resp = self.fetch('/all_methods', method=method, body=b'asdf')
-                resp.rethrow()
+                self.fetch('/all_methods', method=method, body=b'asdf', raise_error=True)
             self.assertIn('must be None', str(context.exception))
 
             # In most cases this can be overridden, but curl_httpclient
             # does not allow body with a GET at all.
             if method != 'GET':
-                resp = self.fetch('/all_methods', method=method, body=b'asdf',
-                                  allow_nonstandard_methods=True)
-                resp.rethrow()
+                self.fetch('/all_methods', method=method, body=b'asdf',
+                           allow_nonstandard_methods=True, raise_error=True)
                 self.assertEqual(resp.code, 200)
 
     # This test causes odd failures with the combination of
@@ -582,22 +592,20 @@ class HTTPResponseTestCase(unittest.TestCase):
 
 class SyncHTTPClientTest(unittest.TestCase):
     def setUp(self):
-        if IOLoop.configured_class().__name__ in ('TwistedIOLoop',
-                                                  'AsyncIOMainLoop'):
+        if IOLoop.configured_class().__name__ == 'TwistedIOLoop':
             # TwistedIOLoop only supports the global reactor, so we can't have
             # separate IOLoops for client and server threads.
-            # AsyncIOMainLoop doesn't work with the default policy
-            # (although it could with some tweaks to this test and a
-            # policy that created loops for non-main threads).
             raise unittest.SkipTest(
-                'Sync HTTPClient not compatible with TwistedIOLoop or '
-                'AsyncIOMainLoop')
+                'Sync HTTPClient not compatible with TwistedIOLoop')
         self.server_ioloop = IOLoop()
 
-        sock, self.port = bind_unused_port()
-        app = Application([('/', HelloWorldHandler)])
-        self.server = HTTPServer(app, io_loop=self.server_ioloop)
-        self.server.add_socket(sock)
+        @gen.coroutine
+        def init_server():
+            sock, self.port = bind_unused_port()
+            app = Application([('/', HelloWorldHandler)])
+            self.server = HTTPServer(app)
+            self.server.add_socket(sock)
+        self.server_ioloop.run_sync(init_server)
 
         self.server_thread = threading.Thread(target=self.server_ioloop.start)
         self.server_thread.start()
@@ -607,12 +615,20 @@ class SyncHTTPClientTest(unittest.TestCase):
     def tearDown(self):
         def stop_server():
             self.server.stop()
-            # Delay the shutdown of the IOLoop by one iteration because
+            # Delay the shutdown of the IOLoop by several iterations because
             # the server may still have some cleanup work left when
-            # the client finishes with the response (this is noticable
+            # the client finishes with the response (this is noticeable
             # with http/2, which leaves a Future with an unexamined
             # StreamClosedError on the loop).
-            self.server_ioloop.add_callback(self.server_ioloop.stop)
+
+            @gen.coroutine
+            def slow_stop():
+                # The number of iterations is difficult to predict. Typically,
+                # one is sufficient, although sometimes it needs more.
+                for i in range(5):
+                    yield
+                self.server_ioloop.stop()
+            self.server_ioloop.add_callback(slow_stop)
         self.server_ioloop.add_callback(stop_server)
         self.server_thread.join()
         self.http_client.close()

@@ -24,7 +24,7 @@ Backwards-compatibility notes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * `.HTTPServer` now calls ``start_request`` with the correct
-  arguments.  This change is backwards-incompatible, afffecting any
+  arguments.  This change is backwards-incompatible, affecting any
   application which implemented `.HTTPServerConnectionDelegate` by
   following the example of `.Application` instead of the documented
   method signatures.

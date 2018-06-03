@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # Copyright 2011 Facebook
 #
@@ -21,7 +20,7 @@ for other tornado.platform modules.  Most code should import the appropriate
 implementation from `tornado.platform.auto`.
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 
 def set_close_exec(fd):
@@ -61,6 +60,7 @@ class Waker(object):
     def close(self):
         """Closes the waker's file descriptor(s)."""
         raise NotImplementedError()
+
 
 def monotonic_time():
     raise NotImplementedError()

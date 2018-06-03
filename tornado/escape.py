@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # Copyright 2009 Facebook
 #
@@ -20,7 +19,7 @@ Also includes a few other miscellaneous string manipulation functions that
 have crept in over time.
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import json
 import re
@@ -199,6 +198,7 @@ def utf8(value):
         )
     return value.encode("utf-8")
 
+
 _TO_UNICODE_TYPES = (unicode_type, type(None))
 
 
@@ -215,6 +215,7 @@ def to_unicode(value):
             "Expected bytes, unicode, or None; got %r" % type(value)
         )
     return value.decode("utf-8")
+
 
 # to_unicode was previously named _unicode not because it was private,
 # but to avoid conflicts with the built-in unicode() function/type
@@ -264,6 +265,7 @@ def recursive_unicode(obj):
     else:
         return obj
 
+
 # I originally used the regex from
 # http://daringfireball.net/2010/07/improved_regex_for_matching_urls
 # but it gets all exponential on certain patterns (such as too many trailing
@@ -271,7 +273,9 @@ def recursive_unicode(obj):
 # This regex should avoid those problems.
 # Use to_unicode instead of tornado.util.u - we don't want backslashes getting
 # processed as escapes.
-_URL_RE = re.compile(to_unicode(r"""\b((?:([\w-]+):(/{1,3})|www[.])(?:(?:(?:[^\s&()]|&amp;|&quot;)*(?:[^!"#$%&'()*+,.:;<=>?@\[\]^`{|}~\s]))|(?:\((?:[^\s&()]|&amp;|&quot;)*\)))+)"""))
+_URL_RE = re.compile(to_unicode(
+    r"""\b((?:([\w-]+):(/{1,3})|www[.])(?:(?:(?:[^\s&()]|&amp;|&quot;)*(?:[^!"#$%&'()*+,.:;<=>?@\[\]^`{|}~\s]))|(?:\((?:[^\s&()]|&amp;|&quot;)*\)))+)"""  # noqa: E501
+))
 
 
 def linkify(text, shorten=False, extra_params="",
@@ -286,24 +290,24 @@ def linkify(text, shorten=False, extra_params="",
     * ``shorten``: Long urls will be shortened for display.
 
     * ``extra_params``: Extra text to include in the link tag, or a callable
-        taking the link as an argument and returning the extra text
-        e.g. ``linkify(text, extra_params='rel="nofollow" class="external"')``,
-        or::
+      taking the link as an argument and returning the extra text
+      e.g. ``linkify(text, extra_params='rel="nofollow" class="external"')``,
+      or::
 
-            def extra_params_cb(url):
-                if url.startswith("http://example.com"):
-                    return 'class="internal"'
-                else:
-                    return 'class="external" rel="nofollow"'
-            linkify(text, extra_params=extra_params_cb)
+          def extra_params_cb(url):
+              if url.startswith("http://example.com"):
+                  return 'class="internal"'
+              else:
+                  return 'class="external" rel="nofollow"'
+          linkify(text, extra_params=extra_params_cb)
 
     * ``require_protocol``: Only linkify urls which include a protocol. If
-        this is False, urls such as www.facebook.com will also be linkified.
+      this is False, urls such as www.facebook.com will also be linkified.
 
     * ``permitted_protocols``: List (or set) of protocols which should be
-        linkified, e.g. ``linkify(text, permitted_protocols=["http", "ftp",
-        "mailto"])``. It is very unsafe to include protocols such as
-        ``javascript``.
+      linkified, e.g. ``linkify(text, permitted_protocols=["http", "ftp",
+      "mailto"])``. It is very unsafe to include protocols such as
+      ``javascript``.
     """
     if extra_params and not callable(extra_params):
         extra_params = " " + extra_params.strip()
@@ -390,5 +394,6 @@ def _build_unicode_map():
     for name, value in htmlentitydefs.name2codepoint.items():
         unicode_map[name] = unichr(value)
     return unicode_map
+
 
 _HTML_UNICODE_MAP = _build_unicode_map()

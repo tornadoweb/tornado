@@ -1,4 +1,4 @@
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import collections
 from contextlib import closing
@@ -11,26 +11,29 @@ import socket
 import ssl
 import sys
 
-from tornado.escape import to_unicode
+from tornado.escape import to_unicode, utf8
 from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders, ResponseStartLine
 from tornado.ioloop import IOLoop
+from tornado.iostream import UnsatisfiableReadError
+from tornado.locks import Event
 from tornado.log import gen_log
 from tornado.concurrent import Future
 from tornado.netutil import Resolver, bind_sockets
-from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler, RedirectHandler
+from tornado.simple_httpclient import SimpleAsyncHTTPClient, HTTPStreamClosedError, HTTPTimeoutError
+from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler, RedirectHandler  # noqa: E501
 from tornado.test import httpclient_test
-from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
-from tornado.test.util import skipOnTravis, skipIfNoIPv6, refusing_port, unittest, skipBefore35, exec_test
-from tornado.web import RequestHandler, Application, asynchronous, url, stream_request_body
+from tornado.testing import (AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase,
+                             ExpectLog, gen_test)
+from tornado.test.util import (skipOnTravis, skipIfNoIPv6, refusing_port, skipBefore35,
+                               exec_test, ignore_deprecation)
+from tornado.web import RequestHandler, Application, url, stream_request_body
 
 
 class SimpleHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
     def get_http_client(self):
-        client = SimpleAsyncHTTPClient(io_loop=self.io_loop,
-                                       force_instance=True)
+        client = SimpleAsyncHTTPClient(force_instance=True)
         self.assertTrue(isinstance(client, SimpleAsyncHTTPClient))
         return client
 
@@ -40,24 +43,33 @@ class TriggerHandler(RequestHandler):
         self.queue = queue
         self.wake_callback = wake_callback
 
-    @asynchronous
+    @gen.coroutine
     def get(self):
         logging.debug("queuing trigger")
         self.queue.append(self.finish)
         if self.get_argument("wake", "true") == "true":
             self.wake_callback()
+        never_finish = Event()
+        yield never_finish.wait()
 
 
 class HangHandler(RequestHandler):
-    @asynchronous
+    @gen.coroutine
     def get(self):
-        pass
+        never_finish = Event()
+        yield never_finish.wait()
 
 
 class ContentLengthHandler(RequestHandler):
     def get(self):
-        self.set_header("Content-Length", self.get_argument("value"))
-        self.write("ok")
+        self.stream = self.detach()
+        IOLoop.current().spawn_callback(self.write_response)
+
+    @gen.coroutine
+    def write_response(self):
+        yield self.stream.write(utf8("HTTP/1.0 200 OK\r\nContent-Length: %s\r\n\r\nok" %
+                                     self.get_argument("value")))
+        self.stream.close()
 
 
 class HeadHandler(RequestHandler):
@@ -73,10 +85,8 @@ class OptionsHandler(RequestHandler):
 
 class NoContentHandler(RequestHandler):
     def get(self):
-        if self.get_argument("error", None):
-            self.set_header("Content-Length", "5")
-            self.write("hello")
         self.set_status(204)
+        self.finish()
 
 
 class SeeOtherPostHandler(RequestHandler):
@@ -100,13 +110,12 @@ class HostEchoHandler(RequestHandler):
 
 
 class NoContentLengthHandler(RequestHandler):
-    @asynchronous
     def get(self):
         if self.request.version.startswith('HTTP/1'):
             # Emulate the old HTTP/1.0 behavior of returning a body with no
             # content-length.  Tornado handles content-length at the framework
             # level so we have to go around it.
-            stream = self.request.connection.detach()
+            stream = self.detach()
             stream.write(b"HTTP/1.0 200 OK\r\n\r\n"
                          b"hello")
             stream.close()
@@ -152,16 +161,16 @@ class SimpleHTTPClientTestMixin(object):
 
     def test_singleton(self):
         # Class "constructor" reuses objects on the same IOLoop
-        self.assertTrue(SimpleAsyncHTTPClient(self.io_loop) is
-                        SimpleAsyncHTTPClient(self.io_loop))
+        self.assertTrue(SimpleAsyncHTTPClient() is
+                        SimpleAsyncHTTPClient())
         # unless force_instance is used
-        self.assertTrue(SimpleAsyncHTTPClient(self.io_loop) is not
-                        SimpleAsyncHTTPClient(self.io_loop,
-                                              force_instance=True))
+        self.assertTrue(SimpleAsyncHTTPClient() is not
+                        SimpleAsyncHTTPClient(force_instance=True))
         # different IOLoops use different objects
         with closing(IOLoop()) as io_loop2:
-            self.assertTrue(SimpleAsyncHTTPClient(self.io_loop) is not
-                            SimpleAsyncHTTPClient(io_loop2))
+            client1 = self.io_loop.run_sync(gen.coroutine(SimpleAsyncHTTPClient))
+            client2 = io_loop2.run_sync(gen.coroutine(SimpleAsyncHTTPClient))
+            self.assertTrue(client1 is not client2)
 
     def test_connection_limit(self):
         with closing(self.create_client(max_clients=2)) as client:
@@ -170,8 +179,8 @@ class SimpleHTTPClientTestMixin(object):
             # Send 4 requests.  Two can be sent immediately, while the others
             # will be queued
             for i in range(4):
-                client.fetch(self.get_url("/trigger"),
-                             lambda response, i=i: (seen.append(i), self.stop()))
+                client.fetch(self.get_url("/trigger")).add_done_callback(
+                    lambda fut, i=i: (seen.append(i), self.stop()))
             self.wait(condition=lambda: len(self.triggers) == 2)
             self.assertEqual(len(client.queue), 2)
 
@@ -190,12 +199,12 @@ class SimpleHTTPClientTestMixin(object):
             self.assertEqual(set(seen), set([0, 1, 2, 3]))
             self.assertEqual(len(self.triggers), 0)
 
+    @gen_test
     def test_redirect_connection_limit(self):
         # following redirects should not consume additional connections
         with closing(self.create_client(max_clients=1)) as client:
-            client.fetch(self.get_url('/countdown/3'), self.stop,
-                         max_redirects=3)
-            response = self.wait()
+            response = yield client.fetch(self.get_url('/countdown/3'),
+                                          max_redirects=3)
             response.rethrow()
 
     def test_gzip(self):
@@ -239,6 +248,7 @@ class SimpleHTTPClientTestMixin(object):
             self.assertEqual("POST", response.request.method)
 
     @skipOnTravis
+    @gen_test
     def test_connect_timeout(self):
         timeout = 0.1
         timeout_min, timeout_max = 0.099, 1.0
@@ -248,13 +258,14 @@ class SimpleHTTPClientTestMixin(object):
                 return Future()  # never completes
 
         with closing(self.create_client(resolver=TimeoutResolver())) as client:
-            client.fetch(self.get_url('/hello'), self.stop,
-                         connect_timeout=timeout)
-            response = self.wait()
-            self.assertEqual(response.code, 599)
-            self.assertTrue(timeout_min < response.request_time < timeout_max,
-                            response.request_time)
-            self.assertEqual(str(response.error), "HTTP 599: Timeout while connecting")
+            with ignore_deprecation():
+                response = yield client.fetch(self.get_url('/hello'),
+                                              connect_timeout=timeout,
+                                              raise_error=False)
+                self.assertEqual(response.code, 599)
+                self.assertTrue(timeout_min < response.request_time < timeout_max,
+                                response.request_time)
+                self.assertEqual(str(response.error), "Timeout while connecting")
 
     @skipOnTravis
     def test_request_timeout(self):
@@ -264,47 +275,40 @@ class SimpleHTTPClientTestMixin(object):
             timeout = 0.5
             timeout_min, timeout_max = 0.4, 0.6
 
-        response = self.fetch('/trigger?wake=false', request_timeout=timeout)
-        self.assertEqual(response.code, 599)
+        with ignore_deprecation():
+            response = self.fetch('/trigger?wake=false', request_timeout=timeout)
+            self.assertEqual(response.code, 599)
         self.assertTrue(timeout_min < response.request_time < timeout_max,
                         response.request_time)
-        self.assertEqual(str(response.error), "HTTP 599: Timeout during request")
+        self.assertEqual(str(response.error), "Timeout during request")
         # trigger the hanging request to let it clean up after itself
         self.triggers.popleft()()
 
     @skipIfNoIPv6
     def test_ipv6(self):
-        try:
-            [sock] = bind_sockets(None, '::1', family=socket.AF_INET6)
-            port = sock.getsockname()[1]
-            self.http_server.add_socket(sock)
-        except socket.gaierror as e:
-            if e.args[0] == socket.EAI_ADDRFAMILY:
-                # python supports ipv6, but it's not configured on the network
-                # interface, so skip this test.
-                return
-            raise
+        [sock] = bind_sockets(None, '::1', family=socket.AF_INET6)
+        port = sock.getsockname()[1]
+        self.http_server.add_socket(sock)
         url = '%s://[::1]:%d/hello' % (self.get_protocol(), port)
 
         # ipv6 is currently enabled by default but can be disabled
-        self.http_client.fetch(url, self.stop, allow_ipv6=False)
-        response = self.wait()
-        self.assertEqual(response.code, 599)
+        with self.assertRaises(Exception):
+            self.fetch(url, allow_ipv6=False, raise_error=True)
 
-        self.http_client.fetch(url, self.stop)
-        response = self.wait()
+        response = self.fetch(url)
         self.assertEqual(response.body, b"Hello world!")
 
-    def xtest_multiple_content_length_accepted(self):
+    def test_multiple_content_length_accepted(self):
         response = self.fetch("/content_length?value=2,2")
         self.assertEqual(response.body, b"ok")
         response = self.fetch("/content_length?value=2,%202,2")
         self.assertEqual(response.body, b"ok")
 
-        response = self.fetch("/content_length?value=2,4")
-        self.assertEqual(response.code, 599)
-        response = self.fetch("/content_length?value=2,%202,3")
-        self.assertEqual(response.code, 599)
+        with ExpectLog(gen_log, ".*Multiple unequal Content-Lengths"):
+            with self.assertRaises(HTTPStreamClosedError):
+                self.fetch("/content_length?value=2,4", raise_error=True)
+            with self.assertRaises(HTTPStreamClosedError):
+                self.fetch("/content_length?value=2,%202,3", raise_error=True)
 
     def test_head_request(self):
         response = self.fetch("/head", method="HEAD")
@@ -322,34 +326,27 @@ class SimpleHTTPClientTestMixin(object):
     def test_no_content(self):
         response = self.fetch("/no_content")
         self.assertEqual(response.code, 204)
-        # 204 status doesn't need a content-length, but tornado will
-        # add a zero content-length anyway.
+        # 204 status shouldn't have a content-length
         #
-        # A test without a content-length header is included below
+        # Tests with a content-length header are included below
         # in HTTP204NoContentTestCase.
-        self.assertEqual(response.headers["Content-length"], "0")
-
-        # 204 status with non-zero content length is malformed
-        with ExpectLog(gen_log, "Malformed HTTP message"):
-            response = self.fetch("/no_content?error=1")
-        self.assertEqual(response.code, 599)
+        self.assertNotIn("Content-Length", response.headers)
 
     def test_host_header(self):
-        host_re = re.compile(b"^localhost:[0-9]+$")
+        host_re = re.compile(b"^127.0.0.1:[0-9]+$")
         response = self.fetch("/host_echo")
         self.assertTrue(host_re.match(response.body))
 
         url = self.get_url("/host_echo").replace("http://", "http://me:secret@")
-        self.http_client.fetch(url, self.stop)
-        response = self.wait()
+        response = self.fetch(url)
         self.assertTrue(host_re.match(response.body), response.body)
 
     def test_connection_refused(self):
         cleanup_func, port = refusing_port()
         self.addCleanup(cleanup_func)
         with ExpectLog(gen_log, ".*", required=False):
-            self.http_client.fetch("http://127.0.0.1:%d/" % port, self.stop)
-            response = self.wait()
+            with ignore_deprecation():
+                response = self.fetch("http://127.0.0.1:%d/" % port)
         self.assertEqual(599, response.code)
 
         if sys.platform != 'cygwin':
@@ -365,20 +362,24 @@ class SimpleHTTPClientTestMixin(object):
                             response.error)
 
     def test_queue_timeout(self):
-        with closing(self.create_client(max_clients=1)) as client:
-            client.fetch(self.get_url('/trigger'), self.stop,
-                         request_timeout=10)
-            # Wait for the trigger request to block, not complete.
-            self.wait()
-            client.fetch(self.get_url('/hello'), self.stop,
-                         connect_timeout=0.1)
-            response = self.wait()
+        with ignore_deprecation():
+            with closing(self.create_client(max_clients=1)) as client:
+                # Wait for the trigger request to block, not complete.
+                fut1 = client.fetch(self.get_url('/trigger'),
+                                    request_timeout=10, raise_error=False)
+                self.wait()
+                fut2 = client.fetch(self.get_url('/hello'),
+                                    connect_timeout=0.1, raise_error=False)
+                fut2.add_done_callback(self.stop)
+                response = self.wait().result()
 
-            self.assertEqual(response.code, 599)
-            self.assertTrue(response.request_time < 1, response.request_time)
-            self.assertEqual(str(response.error), "HTTP 599: Timeout in request queue")
-            self.triggers.popleft()()
-            self.wait()
+                self.assertEqual(response.code, 599)
+                self.assertTrue(response.request_time < 1, response.request_time)
+                self.assertEqual(str(response.error), "Timeout in request queue")
+                self.triggers.popleft()()
+                fut1.add_done_callback(self.stop)
+                self.wait()
+                fut1.result()
 
     def test_no_content_length(self):
         response = self.fetch("/no_content_length")
@@ -394,7 +395,7 @@ class SimpleHTTPClientTestMixin(object):
     @gen.coroutine
     def async_body_producer(self, write):
         yield write(b'1234')
-        yield gen.Task(IOLoop.current().add_callback)
+        yield gen.moment
         yield write(b'5678')
 
     def test_sync_body_producer_chunked(self):
@@ -428,7 +429,8 @@ class SimpleHTTPClientTestMixin(object):
         namespace = exec_test(globals(), locals(), """
         async def body_producer(write):
             await write(b'1234')
-            await gen.Task(IOLoop.current().add_callback)
+            import asyncio
+            await asyncio.sleep(0)
             await write(b'5678')
         """)
         response = self.fetch("/echo_post", method="POST",
@@ -441,7 +443,8 @@ class SimpleHTTPClientTestMixin(object):
         namespace = exec_test(globals(), locals(), """
         async def body_producer(write):
             await write(b'1234')
-            await gen.Task(IOLoop.current().add_callback)
+            import asyncio
+            await asyncio.sleep(0)
             await write(b'5678')
         """)
         response = self.fetch("/echo_post", method="POST",
@@ -489,8 +492,7 @@ class SimpleHTTPClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPTestCase):
         self.http_client = self.create_client()
 
     def create_client(self, **kwargs):
-        return SimpleAsyncHTTPClient(self.io_loop, force_instance=True,
-                                     **kwargs)
+        return SimpleAsyncHTTPClient(force_instance=True, **kwargs)
 
 
 class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
@@ -499,7 +501,7 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
         self.http_client = self.create_client()
 
     def create_client(self, **kwargs):
-        return SimpleAsyncHTTPClient(self.io_loop, force_instance=True,
+        return SimpleAsyncHTTPClient(force_instance=True,
                                      defaults=dict(validate_cert=False),
                                      **kwargs)
 
@@ -507,8 +509,6 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
         resp = self.fetch("/hello", ssl_options={})
         self.assertEqual(resp.body, b"Hello world!")
 
-    @unittest.skipIf(not hasattr(ssl, 'SSLContext'),
-                     'ssl.SSLContext not present')
     def test_ssl_context(self):
         resp = self.fetch("/hello",
                           ssl_options=ssl.SSLContext(ssl.PROTOCOL_SSLv23))
@@ -517,27 +517,25 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
     def test_ssl_options_handshake_fail(self):
         with ExpectLog(gen_log, "SSL Error|Uncaught exception",
                        required=False):
-            resp = self.fetch(
-                "/hello", ssl_options=dict(cert_reqs=ssl.CERT_REQUIRED))
-        self.assertRaises(ssl.SSLError, resp.rethrow)
+            with self.assertRaises(ssl.SSLError):
+                self.fetch(
+                    "/hello", ssl_options=dict(cert_reqs=ssl.CERT_REQUIRED),
+                    raise_error=True)
 
-    @unittest.skipIf(not hasattr(ssl, 'SSLContext'),
-                     'ssl.SSLContext not present')
     def test_ssl_context_handshake_fail(self):
         with ExpectLog(gen_log, "SSL Error|Uncaught exception"):
             ctx = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
             ctx.verify_mode = ssl.CERT_REQUIRED
-            resp = self.fetch("/hello", ssl_options=ctx)
-        self.assertRaises(ssl.SSLError, resp.rethrow)
+            with self.assertRaises(ssl.SSLError):
+                self.fetch("/hello", ssl_options=ctx, raise_error=True)
 
     def test_error_logging(self):
         # No stack traces are logged for SSL errors (in this case,
         # failure to validate the testing self-signed cert).
         # The SSLError is exposed through ssl.SSLError.
         with ExpectLog(gen_log, '.*') as expect_log:
-            response = self.fetch("/", validate_cert=True)
-            self.assertEqual(response.code, 599)
-            self.assertIsInstance(response.error, ssl.SSLError)
+            with self.assertRaises(ssl.SSLError):
+                self.fetch("/", validate_cert=True, raise_error=True)
         self.assertFalse(expect_log.logged_stack)
 
 
@@ -552,24 +550,22 @@ class CreateAsyncHTTPClientTestCase(AsyncTestCase):
 
     def test_max_clients(self):
         AsyncHTTPClient.configure(SimpleAsyncHTTPClient)
-        with closing(AsyncHTTPClient(
-                self.io_loop, force_instance=True)) as client:
+        with closing(AsyncHTTPClient(force_instance=True)) as client:
             self.assertEqual(client.max_clients, 10)
         with closing(AsyncHTTPClient(
-                self.io_loop, max_clients=11, force_instance=True)) as client:
+                max_clients=11, force_instance=True)) as client:
             self.assertEqual(client.max_clients, 11)
 
         # Now configure max_clients statically and try overriding it
         # with each way max_clients can be passed
         AsyncHTTPClient.configure(SimpleAsyncHTTPClient, max_clients=12)
-        with closing(AsyncHTTPClient(
-                self.io_loop, force_instance=True)) as client:
+        with closing(AsyncHTTPClient(force_instance=True)) as client:
             self.assertEqual(client.max_clients, 12)
         with closing(AsyncHTTPClient(
-                self.io_loop, max_clients=13, force_instance=True)) as client:
+                max_clients=13, force_instance=True)) as client:
             self.assertEqual(client.max_clients, 13)
         with closing(AsyncHTTPClient(
-                self.io_loop, max_clients=14, force_instance=True)) as client:
+                max_clients=14, force_instance=True)) as client:
             self.assertEqual(client.max_clients, 14)
 
 
@@ -582,14 +578,16 @@ class HTTP100ContinueTestCase(AsyncHTTPTestCase):
             request.connection.finish()
             return
         self.request = request
-        self.request.connection.stream.write(
-            b"HTTP/1.1 100 CONTINUE\r\n\r\n",
-            self.respond_200)
+        with ignore_deprecation():
+            self.request.connection.stream.write(
+                b"HTTP/1.1 100 CONTINUE\r\n\r\n",
+                self.respond_200)
 
     def respond_200(self):
-        self.request.connection.stream.write(
-            b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA",
-            self.request.connection.stream.close)
+        with ignore_deprecation():
+            self.request.connection.stream.write(
+                b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA",
+                self.request.connection.stream.close)
 
     def get_app(self):
         # Not a full Application, but works as an HTTPServer callback
@@ -611,16 +609,20 @@ class HTTP204NoContentTestCase(AsyncHTTPTestCase):
                                              HTTPHeaders())
             request.connection.finish()
             return
+
         # A 204 response never has a body, even if doesn't have a content-length
-        # (which would otherwise mean read-until-close).  Tornado always
-        # sends a content-length, so we simulate here a server that sends
-        # no content length and does not close the connection.
+        # (which would otherwise mean read-until-close).  We simulate here a
+        # server that sends no content length and does not close the connection.
         #
-        # Tests of a 204 response with a Content-Length header are included
+        # Tests of a 204 response with no Content-Length header are included
         # in SimpleHTTPClientTestMixin.
         stream = request.connection.detach()
-        stream.write(
-            b"HTTP/1.1 204 No content\r\n\r\n")
+        stream.write(b"HTTP/1.1 204 No content\r\n")
+        if request.arguments.get("error", [False])[-1]:
+            stream.write(b"Content-Length: 5\r\n")
+        else:
+            stream.write(b"Content-Length: 0\r\n")
+        stream.write(b"\r\n")
         stream.close()
 
     def get_app(self):
@@ -633,12 +635,22 @@ class HTTP204NoContentTestCase(AsyncHTTPTestCase):
         self.assertEqual(resp.code, 204)
         self.assertEqual(resp.body, b'')
 
+    def test_204_invalid_content_length(self):
+        # 204 status with non-zero content length is malformed
+        with ExpectLog(gen_log, ".*Response with code 204 should not have body"):
+            with ignore_deprecation():
+                response = self.fetch("/?error=1")
+            if not self.http1:
+                self.skipTest("requires HTTP/1.x")
+            if self.http_client.configured_class != SimpleAsyncHTTPClient:
+                self.skipTest("curl client accepts invalid headers")
+            self.assertEqual(response.code, 599)
+
 
 class HostnameMappingTestCase(AsyncHTTPTestCase):
     def setUp(self):
         super(HostnameMappingTestCase, self).setUp()
         self.http_client = SimpleAsyncHTTPClient(
-            self.io_loop,
             hostname_mapping={
                 'www.example.com': '127.0.0.1',
                 ('foo.example.com', 8000): ('127.0.0.1', self.get_http_port()),
@@ -648,37 +660,35 @@ class HostnameMappingTestCase(AsyncHTTPTestCase):
         return Application([url("/hello", HelloWorldHandler), ])
 
     def test_hostname_mapping(self):
-        self.http_client.fetch(
-            'http://www.example.com:%d/hello' % self.get_http_port(), self.stop)
-        response = self.wait()
+        response = self.fetch(
+            'http://www.example.com:%d/hello' % self.get_http_port())
         response.rethrow()
         self.assertEqual(response.body, b'Hello world!')
 
     def test_port_mapping(self):
-        self.http_client.fetch('http://foo.example.com:8000/hello', self.stop)
-        response = self.wait()
+        response = self.fetch('http://foo.example.com:8000/hello')
         response.rethrow()
         self.assertEqual(response.body, b'Hello world!')
 
 
 class ResolveTimeoutTestCase(AsyncHTTPTestCase):
     def setUp(self):
-        # Dummy Resolver subclass that never invokes its callback.
+        # Dummy Resolver subclass that never finishes.
         class BadResolver(Resolver):
+            @gen.coroutine
             def resolve(self, *args, **kwargs):
-                pass
+                yield Event().wait()
 
         super(ResolveTimeoutTestCase, self).setUp()
         self.http_client = SimpleAsyncHTTPClient(
-            self.io_loop,
             resolver=BadResolver())
 
     def get_app(self):
         return Application([url("/hello", HelloWorldHandler), ])
 
     def test_resolve_timeout(self):
-        response = self.fetch('/hello', connect_timeout=0.1)
-        self.assertEqual(response.code, 599)
+        with self.assertRaises(HTTPTimeoutError):
+            self.fetch('/hello', connect_timeout=0.1, raise_error=True)
 
 
 class MaxHeaderSizeTest(AsyncHTTPTestCase):
@@ -697,7 +707,7 @@ class MaxHeaderSizeTest(AsyncHTTPTestCase):
                             ('/large', LargeHeaders)])
 
     def get_http_client(self):
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop, max_header_size=1024)
+        return SimpleAsyncHTTPClient(max_header_size=1024)
 
     def test_small_headers(self):
         response = self.fetch('/small')
@@ -706,8 +716,8 @@ class MaxHeaderSizeTest(AsyncHTTPTestCase):
 
     def test_large_headers(self):
         with ExpectLog(gen_log, "Unsatisfiable read"):
-            response = self.fetch('/large')
-        self.assertEqual(response.code, 599)
+            with self.assertRaises(UnsatisfiableReadError):
+                self.fetch('/large', raise_error=True)
 
 
 class MaxBodySizeTest(AsyncHTTPTestCase):
@@ -724,7 +734,7 @@ class MaxBodySizeTest(AsyncHTTPTestCase):
                             ('/large', LargeBody)])
 
     def get_http_client(self):
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop, max_body_size=1024 * 64)
+        return SimpleAsyncHTTPClient(max_body_size=1024 * 64)
 
     def test_small_body(self):
         response = self.fetch('/small')
@@ -733,8 +743,8 @@ class MaxBodySizeTest(AsyncHTTPTestCase):
 
     def test_large_body(self):
         with ExpectLog(gen_log, "Malformed HTTP message from None: Content-Length too long"):
-            response = self.fetch('/large')
-        self.assertEqual(response.code, 599)
+            with self.assertRaises(HTTPStreamClosedError):
+                self.fetch('/large', raise_error=True)
 
 
 class MaxBufferSizeTest(AsyncHTTPTestCase):
@@ -748,7 +758,7 @@ class MaxBufferSizeTest(AsyncHTTPTestCase):
 
     def get_http_client(self):
         # 100KB body with 64KB buffer
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop, max_body_size=1024 * 100, max_buffer_size=1024 * 64)
+        return SimpleAsyncHTTPClient(max_body_size=1024 * 100, max_buffer_size=1024 * 64)
 
     def test_large_body(self):
         response = self.fetch('/large')
@@ -774,5 +784,5 @@ class ChunkedWithContentLengthTest(AsyncHTTPTestCase):
         # Make sure the invalid headers are detected
         with ExpectLog(gen_log, ("Malformed HTTP message from None: Response "
                                  "with both Transfer-Encoding and Content-Length")):
-            response = self.fetch('/chunkwithcl')
-        self.assertEqual(response.code, 599)
+            with self.assertRaises(HTTPStreamClosedError):
+                self.fetch('/chunkwithcl', raise_error=True)

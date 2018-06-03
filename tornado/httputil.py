@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # Copyright 2009 Facebook
 #
@@ -20,7 +19,7 @@ This module also defines the `HTTPServerRequest` class which is exposed
 via `tornado.web.RequestHandler.request`.
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import calendar
 import collections
@@ -30,19 +29,22 @@ import email.utils
 import numbers
 import re
 import time
+import unicodedata
+import warnings
 
 from tornado.escape import native_str, parse_qs_bytes, utf8
 from tornado.log import gen_log
-from tornado.util import ObjectDict, PY3
+from tornado.util import ObjectDict, PY3, unicode_type
 
 if PY3:
     import http.cookies as Cookie
     from http.client import responses
-    from urllib.parse import urlencode
+    from urllib.parse import urlencode, urlparse, urlunparse, parse_qsl
 else:
     import Cookie
     from httplib import responses
     from urllib import urlencode
+    from urlparse import urlparse, urlunparse, parse_qsl
 
 
 # responses is unused in this file, but we re-export it to other files.
@@ -60,7 +62,7 @@ except ImportError:
     SSLError = _SSLError  # type: ignore
 
 try:
-    import typing
+    import typing  # noqa: F401
 except ImportError:
     pass
 
@@ -97,6 +99,7 @@ class _NormalizedHeaderCache(dict):
             old_key = self.queue.popleft()
             del self[old_key]
         return normalized
+
 
 _normalized_headers = _NormalizedHeaderCache(1000)
 
@@ -182,11 +185,16 @@ class HTTPHeaders(collections.MutableMapping):
         """
         if line[0].isspace():
             # continuation of a multi-line header
+            if self._last_key is None:
+                raise HTTPInputError("first header line cannot start with whitespace")
             new_part = ' ' + line.lstrip()
             self._as_list[self._last_key][-1] += new_part
             self._dict[self._last_key] += new_part
         else:
-            name, value = line.split(":", 1)
+            try:
+                name, value = line.split(":", 1)
+            except ValueError:
+                raise HTTPInputError("no colon in header line")
             self.add(name, value.strip())
 
     @classmethod
@@ -196,6 +204,12 @@ class HTTPHeaders(collections.MutableMapping):
         >>> h = HTTPHeaders.parse("Content-Type: text/html\\r\\nContent-Length: 42\\r\\n")
         >>> sorted(h.items())
         [('Content-Length', '42'), ('Content-Type', 'text/html')]
+
+        .. versionchanged:: 5.1
+
+           Raises `HTTPInputError` on malformed headers instead of a
+           mix of `KeyError`, and `ValueError`.
+
         """
         h = cls()
         for line in _CRLF_RE.split(headers):
@@ -233,6 +247,14 @@ class HTTPHeaders(collections.MutableMapping):
     # This makes shallow copies one level deeper, but preserves
     # the appearance that HTTPHeaders is a single container.
     __copy__ = copy
+
+    def __str__(self):
+        lines = []
+        for name, value in self.get_all():
+            lines.append("%s: %s\n" % (name, value))
+        return "".join(lines)
+
+    __unicode__ = __str__
 
 
 class HTTPServerRequest(object):
@@ -329,7 +351,7 @@ class HTTPServerRequest(object):
     """
     def __init__(self, method=None, uri=None, version="HTTP/1.0", headers=None,
                  body=None, host=None, files=None, connection=None,
-                 start_line=None):
+                 start_line=None, server_connection=None):
         if start_line is not None:
             method, uri, version = start_line
         self.method = method
@@ -344,8 +366,10 @@ class HTTPServerRequest(object):
         self.protocol = getattr(context, 'protocol', "http")
 
         self.host = host or self.headers.get("Host") or "127.0.0.1"
+        self.host_name = split_host_and_port(self.host.lower())[0]
         self.files = files or {}
         self.connection = connection
+        self.server_connection = server_connection
         self._start_time = time.time()
         self._finish_time = None
 
@@ -358,10 +382,15 @@ class HTTPServerRequest(object):
         """Returns True if this request supports HTTP/1.1 semantics.
 
         .. deprecated:: 4.0
-           Applications are less likely to need this information with the
-           introduction of `.HTTPConnection`.  If you still need it, access
-           the ``version`` attribute directly.
+
+           Applications are less likely to need this information with
+           the introduction of `.HTTPConnection`. If you still need
+           it, access the ``version`` attribute directly. This method
+           will be removed in Tornado 6.0.
+
         """
+        warnings.warn("supports_http_1_1() is deprecated, use request.version instead",
+                      DeprecationWarning)
         return self.version == "HTTP/1.1"
 
     @property
@@ -371,10 +400,18 @@ class HTTPServerRequest(object):
             self._cookies = Cookie.SimpleCookie()
             if "Cookie" in self.headers:
                 try:
-                    self._cookies.load(
-                        native_str(self.headers["Cookie"]))
+                    parsed = parse_cookie(self.headers["Cookie"])
                 except Exception:
-                    self._cookies = {}
+                    pass
+                else:
+                    for k, v in parsed.items():
+                        try:
+                            self._cookies[k] = v
+                        except Exception:
+                            # SimpleCookie imposes some restrictions on keys;
+                            # parse_cookie does not. Discard any cookies
+                            # with disallowed keys.
+                            pass
         return self._cookies
 
     def write(self, chunk, callback=None):
@@ -382,8 +419,10 @@ class HTTPServerRequest(object):
 
         .. deprecated:: 4.0
            Use ``request.connection`` and the `.HTTPConnection` methods
-           to write the response.
+           to write the response. This method will be removed in Tornado 6.0.
         """
+        warnings.warn("req.write deprecated, use req.connection.write and write_headers instead",
+                      DeprecationWarning)
         assert isinstance(chunk, bytes)
         assert self.version.startswith("HTTP/1."), \
             "deprecated interface only supported in HTTP/1.x"
@@ -394,8 +433,10 @@ class HTTPServerRequest(object):
 
         .. deprecated:: 4.0
            Use ``request.connection`` and the `.HTTPConnection` methods
-           to write the response.
+           to write the response. This method will be removed in Tornado 6.0.
         """
+        warnings.warn("req.finish deprecated, use req.connection.finish instead",
+                      DeprecationWarning)
         self.connection.finish()
         self._finish_time = time.time()
 
@@ -447,8 +488,7 @@ class HTTPServerRequest(object):
     def __repr__(self):
         attrs = ("protocol", "host", "method", "uri", "version", "remote_ip")
         args = ", ".join(["%s=%r" % (n, getattr(self, n)) for n in attrs])
-        return "%s(%s, headers=%s)" % (
-            self.__class__.__name__, args, dict(self.headers))
+        return "%s(%s)" % (self.__class__.__name__, args)
 
 
 class HTTPInputError(Exception):
@@ -552,6 +592,11 @@ class HTTPConnection(object):
         The ``version`` field of ``start_line`` is ignored.
 
         Returns a `.Future` if no callback is given.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in Tornado 6.0.
         """
         raise NotImplementedError()
 
@@ -560,6 +605,11 @@ class HTTPConnection(object):
 
         The callback will be run when the write is complete.  If no callback
         is given, returns a Future.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in Tornado 6.0.
         """
         raise NotImplementedError()
 
@@ -583,11 +633,28 @@ def url_concat(url, args):
     >>> url_concat("http://example.com/foo?a=b", [("c", "d"), ("c", "d2")])
     'http://example.com/foo?a=b&c=d&c=d2'
     """
-    if not args:
+    if args is None:
         return url
-    if url[-1] not in ('?', '&'):
-        url += '&' if ('?' in url) else '?'
-    return url + urlencode(args)
+    parsed_url = urlparse(url)
+    if isinstance(args, dict):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args.items())
+    elif isinstance(args, list) or isinstance(args, tuple):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args)
+    else:
+        err = "'args' parameter should be dict, list or tuple. Not {0}".format(
+            type(args))
+        raise TypeError(err)
+    final_query = urlencode(parsed_query)
+    url = urlunparse((
+        parsed_url[0],
+        parsed_url[1],
+        parsed_url[2],
+        parsed_url[3],
+        final_query,
+        parsed_url[5]))
+    return url
 
 
 class HTTPFile(ObjectDict):
@@ -792,6 +859,8 @@ def parse_request_start_line(line):
     try:
         method, path, version = line.split(" ")
     except ValueError:
+        # https://tools.ietf.org/html/rfc7230#section-3.1.1
+        # invalid request-line SHOULD respond with a 400 (Bad Request)
         raise HTTPInputError("Malformed HTTP request line")
     if not re.match(r"^HTTP/1\.[0-9]$", version):
         raise HTTPInputError(
@@ -822,7 +891,8 @@ def parse_response_start_line(line):
 # The original 2.7 version of this code did not correctly support some
 # combinations of semicolons and double quotes.
 # It has also been modified to support valueless parameters as seen in
-# websocket extension negotiations.
+# websocket extension negotiations, and to support non-ascii values in
+# RFC 2231/5987 format.
 
 
 def _parseparam(s):
@@ -839,25 +909,37 @@ def _parseparam(s):
 
 
 def _parse_header(line):
-    """Parse a Content-type like header.
+    r"""Parse a Content-type like header.
 
     Return the main content-type and a dictionary of options.
 
+    >>> d = "form-data; foo=\"b\\\\a\\\"r\"; file*=utf-8''T%C3%A4st"
+    >>> ct, d = _parse_header(d)
+    >>> ct
+    'form-data'
+    >>> d['file'] == r'T\u00e4st'.encode('ascii').decode('unicode_escape')
+    True
+    >>> d['foo']
+    'b\\a"r'
     """
     parts = _parseparam(';' + line)
     key = next(parts)
-    pdict = {}
+    # decode_params treats first argument special, but we already stripped key
+    params = [('Dummy', 'value')]
     for p in parts:
         i = p.find('=')
         if i >= 0:
             name = p[:i].strip().lower()
             value = p[i + 1:].strip()
-            if len(value) >= 2 and value[0] == value[-1] == '"':
-                value = value[1:-1]
-                value = value.replace('\\\\', '\\').replace('\\"', '"')
-            pdict[name] = value
-        else:
-            pdict[p] = None
+            params.append((name, native_str(value)))
+    params = email.utils.decode_params(params)
+    params.pop(0)  # get rid of the dummy again
+    pdict = {}
+    for name, value in params:
+        value = email.utils.collapse_rfc2231_value(value)
+        if len(value) >= 2 and value[0] == '"' and value[-1] == '"':
+            value = value[1:-1]
+        pdict[name] = value
     return key, pdict
 
 
@@ -881,6 +963,20 @@ def _encode_header(key, pdict):
     return '; '.join(out)
 
 
+def encode_username_password(username, password):
+    """Encodes a username/password pair in the format used by HTTP auth.
+
+    The return value is a byte string in the form ``username:password``.
+
+    .. versionadded:: 5.1
+    """
+    if isinstance(username, unicode_type):
+        username = unicodedata.normalize('NFC', username)
+    if isinstance(password, unicode_type):
+        password = unicodedata.normalize('NFC', password)
+    return utf8(username) + b":" + utf8(password)
+
+
 def doctests():
     import doctest
     return doctest.DocTestSuite()
@@ -901,3 +997,94 @@ def split_host_and_port(netloc):
         host = netloc
         port = None
     return (host, port)
+
+
+def qs_to_qsl(qs):
+    """Generator converting a result of ``parse_qs`` back to name-value pairs.
+
+    .. versionadded:: 5.0
+    """
+    for k, vs in qs.items():
+        for v in vs:
+            yield (k, v)
+
+
+_OctalPatt = re.compile(r"\\[0-3][0-7][0-7]")
+_QuotePatt = re.compile(r"[\\].")
+_nulljoin = ''.join
+
+
+def _unquote_cookie(str):
+    """Handle double quotes and escaping in cookie values.
+
+    This method is copied verbatim from the Python 3.5 standard
+    library (http.cookies._unquote) so we don't have to depend on
+    non-public interfaces.
+    """
+    # If there aren't any doublequotes,
+    # then there can't be any special characters.  See RFC 2109.
+    if str is None or len(str) < 2:
+        return str
+    if str[0] != '"' or str[-1] != '"':
+        return str
+
+    # We have to assume that we must decode this string.
+    # Down to work.
+
+    # Remove the "s
+    str = str[1:-1]
+
+    # Check for special sequences.  Examples:
+    #    \012 --> \n
+    #    \"   --> "
+    #
+    i = 0
+    n = len(str)
+    res = []
+    while 0 <= i < n:
+        o_match = _OctalPatt.search(str, i)
+        q_match = _QuotePatt.search(str, i)
+        if not o_match and not q_match:              # Neither matched
+            res.append(str[i:])
+            break
+        # else:
+        j = k = -1
+        if o_match:
+            j = o_match.start(0)
+        if q_match:
+            k = q_match.start(0)
+        if q_match and (not o_match or k < j):     # QuotePatt matched
+            res.append(str[i:k])
+            res.append(str[k + 1])
+            i = k + 2
+        else:                                      # OctalPatt matched
+            res.append(str[i:j])
+            res.append(chr(int(str[j + 1:j + 4], 8)))
+            i = j + 4
+    return _nulljoin(res)
+
+
+def parse_cookie(cookie):
+    """Parse a ``Cookie`` HTTP header into a dict of name/value pairs.
+
+    This function attempts to mimic browser cookie parsing behavior;
+    it specifically does not follow any of the cookie-related RFCs
+    (because browsers don't either).
+
+    The algorithm used is identical to that used by Django version 1.9.10.
+
+    .. versionadded:: 4.4.2
+    """
+    cookiedict = {}
+    for chunk in cookie.split(str(';')):
+        if str('=') in chunk:
+            key, val = chunk.split(str('='), 1)
+        else:
+            # Assume an empty name per
+            # https://bugzilla.mozilla.org/show_bug.cgi?id=169091
+            key, val = str(''), chunk
+        key, val = key.strip(), val.strip()
+        if key or val:
+            # unquote using Python's algorithm.
+            cookiedict[key] = _unquote_cookie(val)
+    return cookiedict

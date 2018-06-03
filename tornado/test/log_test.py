@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # Copyright 2012 Facebook
 #
@@ -13,7 +12,7 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import contextlib
 import glob
@@ -42,7 +41,8 @@ def ignore_bytes_warning():
 class LogFormatterTest(unittest.TestCase):
     # Matches the output of a single logging call (which may be multiple lines
     # if a traceback was included, so we use the DOTALL option)
-    LINE_RE = re.compile(b"(?s)\x01\\[E [0-9]{6} [0-9]{2}:[0-9]{2}:[0-9]{2} log_test:[0-9]+\\]\x02 (.*)")
+    LINE_RE = re.compile(
+        b"(?s)\x01\\[E [0-9]{6} [0-9]{2}:[0-9]{2}:[0-9]{2} log_test:[0-9]+\\]\x02 (.*)")
 
     def setUp(self):
         self.formatter = LogFormatter(color=False)

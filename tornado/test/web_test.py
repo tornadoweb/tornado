@@ -1,18 +1,26 @@
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
+
 from tornado.concurrent import Future
 from tornado import gen
-from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str, to_basestring
+from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str, to_basestring  # noqa: E501
+from tornado.httpclient import HTTPClientError
 from tornado.httputil import format_timestamp
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado import locale
+from tornado.locks import Event
 from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
-from tornado.test.util import unittest, skipBefore35, exec_test
+from tornado.test.util import unittest, skipBefore35, exec_test, ignore_deprecation
 from tornado.util import ObjectDict, unicode_type, timedelta_to_seconds, PY3
-from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish, removeslash, addslash, RedirectHandler as WebRedirectHandler, get_signature_key_version, GZipContentEncoding
+from tornado.web import (
+    Application, RequestHandler, StaticFileHandler, RedirectHandler as WebRedirectHandler,
+    HTTPError, MissingArgumentError, ErrorHandler, authenticated, asynchronous, url,
+    _create_signature_v1, create_signed_value, decode_signed_value, get_signature_key_version,
+    UIModule, Finish, stream_request_body, removeslash, addslash, GZipContentEncoding,
+)
 
 import binascii
 import contextlib
@@ -183,6 +191,40 @@ class SecureCookieV2Test(unittest.TestCase):
         self.assertEqual(new_handler.get_secure_cookie('foo'), None)
 
 
+class FinalReturnTest(WebTestCase):
+    def get_handlers(self):
+        test = self
+
+        class FinishHandler(RequestHandler):
+            @gen.coroutine
+            def get(self):
+                test.final_return = self.finish()
+
+        class RenderHandler(RequestHandler):
+            def create_template_loader(self, path):
+                return DictLoader({'foo.html': 'hi'})
+
+            @gen.coroutine
+            def get(self):
+                test.final_return = self.render('foo.html')
+
+        return [("/finish", FinishHandler),
+                ("/render", RenderHandler)]
+
+    def get_app_kwargs(self):
+        return dict(template_path='FinalReturnTest')
+
+    def test_finish_method_return_future(self):
+        response = self.fetch(self.get_url('/finish'))
+        self.assertEqual(response.code, 200)
+        self.assertIsInstance(self.final_return, Future)
+
+    def test_render_method_return_future(self):
+        response = self.fetch(self.get_url('/render'))
+        self.assertEqual(response.code, 200)
+        self.assertIsInstance(self.final_return, Future)
+
+
 class CookieTest(WebTestCase):
     def get_handlers(self):
         class SetCookieHandler(RequestHandler):
@@ -279,8 +321,8 @@ class CookieTest(WebTestCase):
 
         data = [('foo=a=b', 'a=b'),
                 ('foo="a=b"', 'a=b'),
-                ('foo="a;b"', 'a;b'),
-                # ('foo=a\\073b', 'a;b'),  # even encoded, ";" is a delimiter
+                ('foo="a;b"', '"a'),  # even quoted, ";" is a delimiter
+                ('foo=a\\073b', 'a\\073b'),  # escapes only decoded in quotes
                 ('foo="a\\073b"', 'a;b'),
                 ('foo="a\\"b"', 'a"b'),
                 ]
@@ -344,19 +386,17 @@ class AuthRedirectTest(WebTestCase):
                  dict(login_url='http://example.com/login'))]
 
     def test_relative_auth_redirect(self):
-        self.http_client.fetch(self.get_url('/relative'), self.stop,
-                               follow_redirects=False)
-        response = self.wait()
+        response = self.fetch(self.get_url('/relative'),
+                              follow_redirects=False)
         self.assertEqual(response.code, 302)
         self.assertEqual(response.headers['Location'], '/login?next=%2Frelative')
 
     def test_absolute_auth_redirect(self):
-        self.http_client.fetch(self.get_url('/absolute'), self.stop,
-                               follow_redirects=False)
-        response = self.wait()
+        response = self.fetch(self.get_url('/absolute'),
+                              follow_redirects=False)
         self.assertEqual(response.code, 302)
         self.assertTrue(re.match(
-            'http://example.com/login\?next=http%3A%2F%2Flocalhost%3A[0-9]+%2Fabsolute',
+            'http://example.com/login\?next=http%3A%2F%2F127.0.0.1%3A[0-9]+%2Fabsolute',
             response.headers['Location']), response.headers['Location'])
 
 
@@ -364,9 +404,11 @@ class ConnectionCloseHandler(RequestHandler):
     def initialize(self, test):
         self.test = test
 
-    @asynchronous
+    @gen.coroutine
     def get(self):
         self.test.on_handler_waiting()
+        never_finish = Event()
+        yield never_finish.wait()
 
     def on_connection_close(self):
         self.test.on_connection_close()
@@ -379,7 +421,7 @@ class ConnectionCloseTest(WebTestCase):
     def test_connection_close(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         s.connect(("127.0.0.1", self.get_http_port()))
-        self.stream = IOStream(s, io_loop=self.io_loop)
+        self.stream = IOStream(s)
         self.stream.write(b"GET / HTTP/1.0\r\n\r\n")
         self.wait()
 
@@ -543,14 +585,17 @@ class OptionalPathHandler(RequestHandler):
 class FlowControlHandler(RequestHandler):
     # These writes are too small to demonstrate real flow control,
     # but at least it shows that the callbacks get run.
-    @asynchronous
-    def get(self):
-        self.write("1")
-        self.flush(callback=self.step2)
+    with ignore_deprecation():
+        @asynchronous
+        def get(self):
+            self.write("1")
+            with ignore_deprecation():
+                self.flush(callback=self.step2)
 
     def step2(self):
         self.write("2")
-        self.flush(callback=self.step3)
+        with ignore_deprecation():
+            self.flush(callback=self.step3)
 
     def step3(self):
         self.write("3")
@@ -576,14 +621,14 @@ class RedirectHandler(RequestHandler):
 
 
 class EmptyFlushCallbackHandler(RequestHandler):
-    @asynchronous
-    @gen.engine
+    @gen.coroutine
     def get(self):
         # Ensure that the flush callback is run whether or not there
         # was any output.  The gen.Task and direct yield forms are
         # equivalent.
-        yield gen.Task(self.flush)  # "empty" flush, but writes headers
-        yield gen.Task(self.flush)  # empty flush
+        with ignore_deprecation():
+            yield gen.Task(self.flush)  # "empty" flush, but writes headers
+            yield gen.Task(self.flush)  # empty flush
         self.write("o")
         yield self.flush()  # flushes the "o"
         yield self.flush()  # empty flush
@@ -635,7 +680,12 @@ class WSGISafeWebTest(WebTestCase):
 {% end %}
 </body></html>""",
             "entry.html": """\
-{{ set_resources(embedded_css=".entry { margin-bottom: 1em; }", embedded_javascript="js_embed()", css_files=["/base.css", "/foo.css"], javascript_files="/common.js", html_head="<meta>", html_body='<script src="/analytics.js"/>') }}
+{{ set_resources(embedded_css=".entry { margin-bottom: 1em; }",
+                 embedded_javascript="js_embed()",
+                 css_files=["/base.css", "/foo.css"],
+                 javascript_files="/common.js",
+                 html_head="<meta>",
+                 html_body='<script src="/analytics.js"/>') }}
 <div class="entry">...</div>""",
         })
         return dict(template_loader=loader,
@@ -657,8 +707,10 @@ class WSGISafeWebTest(WebTestCase):
             url("/multi_header", MultiHeaderHandler),
             url("/redirect", RedirectHandler),
             url("/web_redirect_permanent", WebRedirectHandler, {"url": "/web_redirect_newpath"}),
-            url("/web_redirect", WebRedirectHandler, {"url": "/web_redirect_newpath", "permanent": False}),
-            url("//web_redirect_double_slash", WebRedirectHandler, {"url": '/web_redirect_newpath'}),
+            url("/web_redirect", WebRedirectHandler,
+                {"url": "/web_redirect_newpath", "permanent": False}),
+            url("//web_redirect_double_slash", WebRedirectHandler,
+                {"url": '/web_redirect_newpath'}),
             url("/header_injection", HeaderInjectionHandler),
             url("/get_argument", GetArgumentHandler),
             url("/get_arguments", GetArgumentsHandler),
@@ -763,7 +815,7 @@ js_embed()
 //]]>
 </script>
 <script src="/analytics.js"/>
-</body></html>""")
+</body></html>""")  # noqa: E501
 
     def test_optional_path(self):
         self.assertEqual(self.fetch_json("/optional_path/foo"),
@@ -917,6 +969,10 @@ class ErrorResponseTest(WebTestCase):
             self.assertEqual(response.code, 503)
             self.assertTrue(b"503: Service Unavailable" in response.body)
 
+            response = self.fetch("/default?status=435")
+            self.assertEqual(response.code, 435)
+            self.assertTrue(b"435: Unknown" in response.body)
+
     def test_write_error(self):
         with ExpectLog(app_log, "Uncaught exception"):
             response = self.fetch("/write_error")
@@ -1063,6 +1119,13 @@ class StaticFileTest(WebTestCase):
         response2 = self.get_and_head("/static/robots.txt", headers={
             'If-None-Match': response1.headers['Etag']})
         self.assertEqual(response2.code, 304)
+
+    def test_static_304_etag_modified_bug(self):
+        response1 = self.get_and_head("/static/robots.txt")
+        response2 = self.get_and_head("/static/robots.txt", headers={
+            'If-None-Match': '"MISMATCH"',
+            'If-Modified-Since': response1.headers['Last-Modified']})
+        self.assertEqual(response2.code, 200)
 
     def test_static_if_modified_since_pre_epoch(self):
         # On windows, the functions that work with time_t do not accept
@@ -1348,6 +1411,8 @@ class HostMatchingTest(WebTestCase):
                               [("/bar", HostMatchingTest.Handler, {"reply": "[1]"})])
         self.app.add_handlers("www.example.com",
                               [("/baz", HostMatchingTest.Handler, {"reply": "[2]"})])
+        self.app.add_handlers("www.e.*e.com",
+                              [("/baz", HostMatchingTest.Handler, {"reply": "[3]"})])
 
         response = self.fetch("/foo")
         self.assertEqual(response.body, b"wildcard")
@@ -1361,6 +1426,40 @@ class HostMatchingTest(WebTestCase):
         response = self.fetch("/bar", headers={'Host': 'www.example.com'})
         self.assertEqual(response.body, b"[1]")
         response = self.fetch("/baz", headers={'Host': 'www.example.com'})
+        self.assertEqual(response.body, b"[2]")
+        response = self.fetch("/baz", headers={'Host': 'www.exe.com'})
+        self.assertEqual(response.body, b"[3]")
+
+
+@wsgi_safe
+class DefaultHostMatchingTest(WebTestCase):
+    def get_handlers(self):
+        return []
+
+    def get_app_kwargs(self):
+        return {'default_host': "www.example.com"}
+
+    def test_default_host_matching(self):
+        self.app.add_handlers("www.example.com",
+                              [("/foo", HostMatchingTest.Handler, {"reply": "[0]"})])
+        self.app.add_handlers(r"www\.example\.com",
+                              [("/bar", HostMatchingTest.Handler, {"reply": "[1]"})])
+        self.app.add_handlers("www.test.com",
+                              [("/baz", HostMatchingTest.Handler, {"reply": "[2]"})])
+
+        response = self.fetch("/foo")
+        self.assertEqual(response.body, b"[0]")
+        response = self.fetch("/bar")
+        self.assertEqual(response.body, b"[1]")
+        response = self.fetch("/baz")
+        self.assertEqual(response.code, 404)
+
+        response = self.fetch("/foo", headers={"X-Real-Ip": "127.0.0.1"})
+        self.assertEqual(response.code, 404)
+
+        self.app.default_host = "www.test.com"
+
+        response = self.fetch("/baz")
         self.assertEqual(response.body, b"[2]")
 
 
@@ -1397,6 +1496,19 @@ class ClearHeaderTest(SimpleHandlerTestCase):
         self.assertEqual(response.headers["h2"], "bar")
 
 
+class Header204Test(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            self.set_status(204)
+            self.finish()
+
+    def test_204_headers(self):
+        response = self.fetch('/')
+        self.assertEqual(response.code, 204)
+        self.assertNotIn("Content-Length", response.headers)
+        self.assertNotIn("Transfer-Encoding", response.headers)
+
+
 @wsgi_safe
 class Header304Test(SimpleHandlerTestCase):
     class Handler(RequestHandler):
@@ -1428,7 +1540,7 @@ class StatusReasonTest(SimpleHandlerTestCase):
 
     def get_http_client(self):
         # simple_httpclient only: curl doesn't expose the reason string
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop)
+        return SimpleAsyncHTTPClient()
 
     def test_status(self):
         response = self.fetch("/?code=304")
@@ -1440,9 +1552,9 @@ class StatusReasonTest(SimpleHandlerTestCase):
         response = self.fetch("/?code=682&reason=Bar")
         self.assertEqual(response.code, 682)
         self.assertEqual(response.reason, "Bar")
-        with ExpectLog(app_log, 'Uncaught exception'):
-            response = self.fetch("/?code=682")
-        self.assertEqual(response.code, 500)
+        response = self.fetch("/?code=682")
+        self.assertEqual(response.code, 682)
+        self.assertEqual(response.reason, "Unknown")
 
 
 @wsgi_safe
@@ -1467,7 +1579,7 @@ class RaiseWithReasonTest(SimpleHandlerTestCase):
 
     def get_http_client(self):
         # simple_httpclient only: curl doesn't expose the reason string
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop)
+        return SimpleAsyncHTTPClient()
 
     def test_raise_with_reason(self):
         response = self.fetch("/")
@@ -1525,7 +1637,6 @@ class GzipTestCase(SimpleHandlerTestCase):
                 response.headers.get('X-Consumed-Content-Encoding')),
             'gzip')
 
-
     def test_gzip(self):
         response = self.fetch('/')
         self.assert_compressed(response)
@@ -1555,6 +1666,7 @@ class GzipTestCase(SimpleHandlerTestCase):
         self.assert_compressed(response)
         self.assertEqual([s.strip() for s in response.headers['Vary'].split(',')],
                          ['Accept-Language', 'Cookie', 'Accept-Encoding'])
+
 
 @wsgi_safe
 class PathArgsInPrepareTest(WebTestCase):
@@ -1733,28 +1845,29 @@ class MultipleExceptionTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         exc_count = 0
 
-        @asynchronous
-        def get(self):
-            from tornado.ioloop import IOLoop
-            IOLoop.current().add_callback(lambda: 1 / 0)
-            IOLoop.current().add_callback(lambda: 1 / 0)
+        with ignore_deprecation():
+            @asynchronous
+            def get(self):
+                IOLoop.current().add_callback(lambda: 1 / 0)
+                IOLoop.current().add_callback(lambda: 1 / 0)
 
         def log_exception(self, typ, value, tb):
             MultipleExceptionTest.Handler.exc_count += 1
 
     def test_multi_exception(self):
-        # This test verifies that multiple exceptions raised into the same
-        # ExceptionStackContext do not generate extraneous log entries
-        # due to "Cannot send error response after headers written".
-        # log_exception is called, but it does not proceed to send_error.
-        response = self.fetch('/')
-        self.assertEqual(response.code, 500)
-        response = self.fetch('/')
-        self.assertEqual(response.code, 500)
-        # Each of our two requests generated two exceptions, we should have
-        # seen at least three of them by now (the fourth may still be
-        # in the queue).
-        self.assertGreater(MultipleExceptionTest.Handler.exc_count, 2)
+        with ignore_deprecation():
+            # This test verifies that multiple exceptions raised into the same
+            # ExceptionStackContext do not generate extraneous log entries
+            # due to "Cannot send error response after headers written".
+            # log_exception is called, but it does not proceed to send_error.
+            response = self.fetch('/')
+            self.assertEqual(response.code, 500)
+            response = self.fetch('/')
+            self.assertEqual(response.code, 500)
+            # Each of our two requests generated two exceptions, we should have
+            # seen at least three of them by now (the fourth may still be
+            # in the queue).
+            self.assertGreater(MultipleExceptionTest.Handler.exc_count, 2)
 
 
 @wsgi_safe
@@ -2062,7 +2175,7 @@ class StreamingRequestBodyTest(WebTestCase):
         # Use a raw connection so we can control the sending of data.
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         s.connect(("127.0.0.1", self.get_http_port()))
-        stream = IOStream(s, io_loop=self.io_loop)
+        stream = IOStream(s)
         stream.write(b"GET " + url + b" HTTP/1.1\r\n")
         if connection_close:
             stream.write(b"Connection: close\r\n")
@@ -2085,9 +2198,9 @@ class StreamingRequestBodyTest(WebTestCase):
         stream.write(b"4\r\nqwer\r\n")
         data = yield self.data
         self.assertEquals(data, b"qwer")
-        stream.write(b"0\r\n")
+        stream.write(b"0\r\n\r\n")
         yield self.finished
-        data = yield gen.Task(stream.read_until_close)
+        data = yield stream.read_until_close()
         # This would ideally use an HTTP1Connection to read the response.
         self.assertTrue(data.endswith(b"{}"))
         stream.close()
@@ -2095,14 +2208,14 @@ class StreamingRequestBodyTest(WebTestCase):
     @gen_test
     def test_early_return(self):
         stream = self.connect(b"/early_return", connection_close=False)
-        data = yield gen.Task(stream.read_until_close)
+        data = yield stream.read_until_close()
         self.assertTrue(data.startswith(b"HTTP/1.1 401"))
 
     @gen_test
     def test_early_return_with_data(self):
         stream = self.connect(b"/early_return", connection_close=False)
         stream.write(b"4\r\nasdf\r\n")
-        data = yield gen.Task(stream.read_until_close)
+        data = yield stream.read_until_close()
         self.assertTrue(data.startswith(b"HTTP/1.1 401"))
 
     @gen_test
@@ -2141,12 +2254,12 @@ class BaseFlowControlHandler(RequestHandler):
         # Note that asynchronous prepare() does not block data_received,
         # so we don't use in_method here.
         self.methods.append('prepare')
-        yield gen.Task(IOLoop.current().add_callback)
+        yield gen.moment
 
     @gen.coroutine
     def post(self):
         with self.in_method('post'):
-            yield gen.Task(IOLoop.current().add_callback)
+            yield gen.moment
         self.write(dict(methods=self.methods))
 
 
@@ -2158,7 +2271,7 @@ class BaseStreamingRequestFlowControlTest(object):
 
     def get_http_client(self):
         # simple_httpclient only: curl doesn't support body_producer.
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop)
+        return SimpleAsyncHTTPClient()
 
     # Test all the slightly different code paths for fixed, chunked, etc bodies.
     def test_flow_control_fixed_body(self):
@@ -2207,7 +2320,7 @@ class DecoratedStreamingRequestFlowControlTest(
             @gen.coroutine
             def data_received(self, data):
                 with self.in_method('data_received'):
-                    yield gen.Task(IOLoop.current().add_callback)
+                    yield gen.moment
         return [('/', DecoratedFlowControlHandler, dict(test=self))]
 
 
@@ -2220,7 +2333,8 @@ class NativeStreamingRequestFlowControlTest(
             data_received = exec_test(globals(), locals(), """
             async def data_received(self, data):
                 with self.in_method('data_received'):
-                    await gen.Task(IOLoop.current().add_callback)
+                    import asyncio
+                    await asyncio.sleep(0)
             """)["data_received"]
         return [('/', NativeFlowControlHandler, dict(test=self))]
 
@@ -2261,8 +2375,8 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
             with ExpectLog(gen_log,
                            "(Cannot send error response after headers written"
                            "|Failed to flush partial response)"):
-                response = self.fetch("/high")
-        self.assertEqual(response.code, 599)
+                with self.assertRaises(HTTPClientError):
+                    self.fetch("/high", raise_error=True)
         self.assertEqual(str(self.server_error),
                          "Tried to write 40 bytes less than Content-Length")
 
@@ -2274,8 +2388,8 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
             with ExpectLog(gen_log,
                            "(Cannot send error response after headers written"
                            "|Failed to flush partial response)"):
-                response = self.fetch("/low")
-        self.assertEqual(response.code, 599)
+                with self.assertRaises(HTTPClientError):
+                    self.fetch("/low", raise_error=True)
         self.assertEqual(str(self.server_error),
                          "Tried to write more data than Content-Length")
 
@@ -2296,7 +2410,8 @@ class ClientCloseTest(SimpleHandlerTestCase):
                 self.write('requires HTTP/1.x')
 
     def test_client_close(self):
-        response = self.fetch('/')
+        with ignore_deprecation():
+            response = self.fetch('/')
         if response.body == b'requires HTTP/1.x':
             self.skipTest('requires HTTP/1.x')
         self.assertEqual(response.code, 599)
@@ -2798,3 +2913,54 @@ class ApplicationTest(AsyncTestCase):
 class URLSpecReverseTest(unittest.TestCase):
     def test_reverse(self):
         self.assertEqual('/favicon.ico', url(r'/favicon\.ico', None).reverse())
+        self.assertEqual('/favicon.ico', url(r'^/favicon\.ico$', None).reverse())
+
+    def test_non_reversible(self):
+        # URLSpecs are non-reversible if they include non-constant
+        # regex features outside capturing groups. Currently, this is
+        # only strictly enforced for backslash-escaped character
+        # classes.
+        paths = [
+            r'^/api/v\d+/foo/(\w+)$',
+        ]
+        for path in paths:
+            # A URLSpec can still be created even if it cannot be reversed.
+            url_spec = url(path, None)
+            try:
+                result = url_spec.reverse()
+                self.fail("did not get expected exception when reversing %s. "
+                          "result: %s" % (path, result))
+            except ValueError:
+                pass
+
+    def test_reverse_arguments(self):
+        self.assertEqual('/api/v1/foo/bar',
+                         url(r'^/api/v1/foo/(\w+)$', None).reverse('bar'))
+
+
+class RedirectHandlerTest(WebTestCase):
+    def get_handlers(self):
+        return [
+            ('/src', WebRedirectHandler, {'url': '/dst'}),
+            ('/src2', WebRedirectHandler, {'url': '/dst2?foo=bar'}),
+            (r'/(.*?)/(.*?)/(.*)', WebRedirectHandler, {'url': '/{1}/{0}/{2}'})]
+
+    def test_basic_redirect(self):
+        response = self.fetch('/src', follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], '/dst')
+
+    def test_redirect_with_argument(self):
+        response = self.fetch('/src?foo=bar', follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], '/dst?foo=bar')
+
+    def test_redirect_with_appending_argument(self):
+        response = self.fetch('/src2?foo2=bar2', follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], '/dst2?foo=bar&foo2=bar2')
+
+    def test_redirect_pattern(self):
+        response = self.fetch('/a/b/c', follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], '/b/a/c')

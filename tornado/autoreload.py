@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # Copyright 2009 Facebook
 #
@@ -45,7 +44,7 @@ incorrectly.
 
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import os
 import sys
@@ -63,12 +62,11 @@ import sys
 # file.py gets added to the path, which can cause confusion as imports
 # may become relative in spite of the future import.
 #
-# We address the former problem by setting the $PYTHONPATH environment
-# variable before re-execution so the new process will see the correct
-# path.  We attempt to address the latter problem when tornado.autoreload
-# is run as __main__, although we can't fix the general case because
-# we cannot reliably reconstruct the original command line
-# (http://bugs.python.org/issue14208).
+# We address the former problem by reconstructing the original command
+# line (Python >= 3.4) or by setting the $PYTHONPATH environment
+# variable (Python < 3.4) before re-execution so the new process will
+# see the correct path.  We attempt to address the latter problem when
+# tornado.autoreload is run as __main__.
 
 if __name__ == "__main__":
     # This sys.path manipulation must come before our imports (as much
@@ -103,35 +101,32 @@ except ImportError:
 # os.execv is broken on Windows and can't properly parse command line
 # arguments and executable name if they contain whitespaces. subprocess
 # fixes that behavior.
-# This distinction is also important because when we use execv, we want to
-# close the IOLoop and all its file descriptors, to guard against any
-# file descriptors that were not set CLOEXEC. When execv is not available,
-# we must not close the IOLoop because we want the process to exit cleanly.
 _has_execv = sys.platform != 'win32'
 
 _watched_files = set()
 _reload_hooks = []
 _reload_attempted = False
 _io_loops = weakref.WeakKeyDictionary()  # type: ignore
+_autoreload_is_main = False
+_original_argv = None
+_original_spec = None
 
 
-def start(io_loop=None, check_time=500):
+def start(check_time=500):
     """Begins watching source files for changes.
 
-    .. versionchanged:: 4.1
-       The ``io_loop`` argument is deprecated.
+    .. versionchanged:: 5.0
+       The ``io_loop`` argument (deprecated since version 4.1) has been removed.
     """
-    io_loop = io_loop or ioloop.IOLoop.current()
+    io_loop = ioloop.IOLoop.current()
     if io_loop in _io_loops:
         return
     _io_loops[io_loop] = True
     if len(_io_loops) > 1:
         gen_log.warning("tornado.autoreload started more than once in the same process")
-    if _has_execv:
-        add_reload_hook(functools.partial(io_loop.close, all_fds=True))
     modify_times = {}
     callback = functools.partial(_reload_on_update, modify_times)
-    scheduler = ioloop.PeriodicCallback(callback, check_time, io_loop=io_loop)
+    scheduler = ioloop.PeriodicCallback(callback, check_time)
     scheduler.start()
 
 
@@ -143,7 +138,7 @@ def wait():
     the command-line interface in `main`)
     """
     io_loop = ioloop.IOLoop()
-    start(io_loop)
+    io_loop.add_callback(start)
     io_loop.start()
 
 
@@ -215,21 +210,33 @@ def _reload():
         # ioloop.set_blocking_log_threshold so it doesn't fire
         # after the exec.
         signal.setitimer(signal.ITIMER_REAL, 0, 0)
-    # sys.path fixes: see comments at top of file.  If sys.path[0] is an empty
-    # string, we were (probably) invoked with -m and the effective path
-    # is about to change on re-exec.  Add the current directory to $PYTHONPATH
-    # to ensure that the new process sees the same path we did.
-    path_prefix = '.' + os.pathsep
-    if (sys.path[0] == '' and
-            not os.environ.get("PYTHONPATH", "").startswith(path_prefix)):
-        os.environ["PYTHONPATH"] = (path_prefix +
-                                    os.environ.get("PYTHONPATH", ""))
+    # sys.path fixes: see comments at top of file.  If __main__.__spec__
+    # exists, we were invoked with -m and the effective path is about to
+    # change on re-exec.  Reconstruct the original command line to
+    # ensure that the new process sees the same path we did.  If
+    # __spec__ is not available (Python < 3.4), check instead if
+    # sys.path[0] is an empty string and add the current directory to
+    # $PYTHONPATH.
+    if _autoreload_is_main:
+        spec = _original_spec
+        argv = _original_argv
+    else:
+        spec = getattr(sys.modules['__main__'], '__spec__', None)
+        argv = sys.argv
+    if spec:
+        argv = ['-m', spec.name] + argv[1:]
+    else:
+        path_prefix = '.' + os.pathsep
+        if (sys.path[0] == '' and
+                not os.environ.get("PYTHONPATH", "").startswith(path_prefix)):
+            os.environ["PYTHONPATH"] = (path_prefix +
+                                        os.environ.get("PYTHONPATH", ""))
     if not _has_execv:
-        subprocess.Popen([sys.executable] + sys.argv)
-        sys.exit(0)
+        subprocess.Popen([sys.executable] + argv)
+        os._exit(0)
     else:
         try:
-            os.execv(sys.executable, [sys.executable] + sys.argv)
+            os.execv(sys.executable, [sys.executable] + argv)
         except OSError:
             # Mac OS X versions prior to 10.6 do not support execv in
             # a process that contains multiple threads.  Instead of
@@ -242,12 +249,12 @@ def _reload():
             # Unfortunately the errno returned in this case does not
             # appear to be consistent, so we can't easily check for
             # this error specifically.
-            os.spawnv(os.P_NOWAIT, sys.executable,
-                      [sys.executable] + sys.argv)
+            os.spawnv(os.P_NOWAIT, sys.executable, [sys.executable] + argv)
             # At this point the IOLoop has been closed and finally
             # blocks will experience errors if we allow the stack to
             # unwind, so just exit uncleanly.
             os._exit(0)
+
 
 _USAGE = """\
 Usage:
@@ -269,7 +276,17 @@ def main():
     can catch import-time problems like syntax errors that would otherwise
     prevent the script from reaching its call to `wait`.
     """
+    # Remember that we were launched with autoreload as main.
+    # The main module can be tricky; set the variables both in our globals
+    # (which may be __main__) and the real importable version.
+    import tornado.autoreload
+    global _autoreload_is_main
+    global _original_argv, _original_spec
+    tornado.autoreload._autoreload_is_main = _autoreload_is_main = True
     original_argv = sys.argv
+    tornado.autoreload._original_argv = _original_argv = original_argv
+    original_spec = getattr(sys.modules['__main__'], '__spec__', None)
+    tornado.autoreload._original_spec = _original_spec = original_spec
     sys.argv = sys.argv[:]
     if len(sys.argv) >= 3 and sys.argv[1] == "-m":
         mode = "module"

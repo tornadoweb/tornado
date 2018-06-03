@@ -1,0 +1,49 @@
+What's new in Tornado 4.5.3
+===========================
+
+Jan 6, 2018
+------------
+
+`tornado.curl_httpclient`
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Improved debug logging on Python 3.
+
+`tornado.httpserver`
+~~~~~~~~~~~~~~~~~~~~
+
+- ``Content-Length`` and ``Transfer-Encoding`` headers are no longer
+  sent with 1xx or 204 responses (this was already true of 304
+  responses).
+- Reading chunked requests no longer leaves the connection in a broken
+  state.
+
+`tornado.iostream`
+~~~~~~~~~~~~~~~~~~
+
+- Writing a `memoryview` can no longer result in "BufferError:
+  Existing exports of data: object cannot be re-sized".
+
+`tornado.options`
+~~~~~~~~~~~~~~~~~
+
+- Duplicate option names are now detected properly whether they use
+  hyphens or underscores.
+
+`tornado.testing`
+~~~~~~~~~~~~~~~~~
+
+- `.AsyncHTTPTestCase.fetch` now uses ``127.0.0.1`` instead of
+  ``localhost``, improving compatibility with systems that have
+  partially-working ipv6 stacks.
+
+`tornado.web`
+~~~~~~~~~~~~~
+
+- It is no longer allowed to send a body with 1xx or 204 responses.
+
+`tornado.websocket`
+~~~~~~~~~~~~~~~~~~~
+
+- Requests with invalid websocket headers now get a response with
+  status code 400 instead of a closed connection.

@@ -39,6 +39,7 @@ define('cookie_secret', type=str, group='application',
        default='__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE__',
        help="signing key for secure cookies")
 
+
 class BaseHandler(RequestHandler):
     COOKIE_NAME = 'twitterdemo_user'
 
@@ -48,6 +49,7 @@ class BaseHandler(RequestHandler):
             return None
         return json_decode(user_json)
 
+
 class MainHandler(BaseHandler, TwitterMixin):
     @authenticated
     @gen.coroutine
@@ -56,6 +58,7 @@ class MainHandler(BaseHandler, TwitterMixin):
             '/statuses/home_timeline',
             access_token=self.current_user['access_token'])
         self.render('home.html', timeline=timeline)
+
 
 class LoginHandler(BaseHandler, TwitterMixin):
     @gen.coroutine
@@ -68,9 +71,11 @@ class LoginHandler(BaseHandler, TwitterMixin):
         else:
             yield self.authorize_redirect(callback_uri=self.request.full_url())
 
+
 class LogoutHandler(BaseHandler):
     def get(self):
         self.clear_cookie(self.COOKIE_NAME)
+
 
 def main():
     parse_command_line(final=False)
@@ -88,6 +93,7 @@ def main():
 
     logging.info('Listening on http://localhost:%d' % options.port)
     IOLoop.current().start()
+
 
 if __name__ == '__main__':
     main()

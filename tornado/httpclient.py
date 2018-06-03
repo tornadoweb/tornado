@@ -25,7 +25,7 @@ to switch to ``curl_httpclient`` for reasons such as the following:
 Note that if you are using ``curl_httpclient``, it is highly
 recommended that you use a recent version of ``libcurl`` and
 ``pycurl``.  Currently the minimum supported version of libcurl is
-7.21.1, and the minimum version of pycurl is 7.18.2.  It is highly
+7.22.0, and the minimum version of pycurl is 7.18.2.  It is highly
 recommended that your ``libcurl`` installation is built with
 asynchronous DNS resolver (threaded or c-ares), otherwise you may
 encounter various problems with request timeouts (for more
@@ -38,15 +38,16 @@ To select ``curl_httpclient``, call `AsyncHTTPClient.configure` at startup::
     AsyncHTTPClient.configure("tornado.curl_httpclient.CurlAsyncHTTPClient")
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import functools
 import time
+import warnings
 import weakref
 
-from tornado.concurrent import TracebackFuture
+from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado.escape import utf8, native_str
-from tornado import httputil, stack_context
+from tornado import gen, httputil, stack_context
 from tornado.ioloop import IOLoop
 from tornado.util import Configurable
 
@@ -54,14 +55,16 @@ from tornado.util import Configurable
 class HTTPClient(object):
     """A blocking HTTP client.
 
-    This interface is provided for convenience and testing; most applications
-    that are running an IOLoop will want to use `AsyncHTTPClient` instead.
+    This interface is provided to make it easier to share code between
+    synchronous and asynchronous applications. Applications that are
+    running an `.IOLoop` must use `AsyncHTTPClient` instead.
+
     Typical usage looks like this::
 
         http_client = httpclient.HTTPClient()
         try:
             response = http_client.fetch("http://www.google.com/")
-            print response.body
+            print(response.body)
         except httpclient.HTTPError as e:
             # HTTPError is raised for non-200 responses; the response
             # can be found in e.response.
@@ -70,12 +73,26 @@ class HTTPClient(object):
             # Other errors are possible, such as IOError.
             print("Error: " + str(e))
         http_client.close()
+
+    .. versionchanged:: 5.0
+
+       Due to limitations in `asyncio`, it is no longer possible to
+       use the synchronous ``HTTPClient`` while an `.IOLoop` is running.
+       Use `AsyncHTTPClient` instead.
+
     """
     def __init__(self, async_client_class=None, **kwargs):
+        # Initialize self._closed at the beginning of the constructor
+        # so that an exception raised here doesn't lead to confusing
+        # failures in __del__.
+        self._closed = True
         self._io_loop = IOLoop(make_current=False)
         if async_client_class is None:
             async_client_class = AsyncHTTPClient
-        self._async_client = async_client_class(self._io_loop, **kwargs)
+        # Create the client while our IOLoop is "current", without
+        # clobbering the thread's real current IOLoop (if any).
+        self._async_client = self._io_loop.run_sync(
+            gen.coroutine(lambda: async_client_class(**kwargs)))
         self._closed = False
 
     def __del__(self):
@@ -108,24 +125,24 @@ class AsyncHTTPClient(Configurable):
 
     Example usage::
 
-        def handle_response(response):
-            if response.error:
-                print "Error:", response.error
+        async def f():
+            http_client = AsyncHTTPClient()
+            try:
+                response = await http_client.fetch("http://www.google.com")
+            except Exception as e:
+                print("Error: %s" % e)
             else:
-                print response.body
-
-        http_client = AsyncHTTPClient()
-        http_client.fetch("http://www.google.com/", handle_response)
+                print(response.body)
 
     The constructor for this class is magic in several respects: It
     actually creates an instance of an implementation-specific
     subclass, and instances are reused as a kind of pseudo-singleton
-    (one per `.IOLoop`).  The keyword argument ``force_instance=True``
-    can be used to suppress this singleton behavior.  Unless
-    ``force_instance=True`` is used, no arguments other than
-    ``io_loop`` should be passed to the `AsyncHTTPClient` constructor.
-    The implementation subclass as well as arguments to its
-    constructor can be set with the static method `configure()`
+    (one per `.IOLoop`). The keyword argument ``force_instance=True``
+    can be used to suppress this singleton behavior. Unless
+    ``force_instance=True`` is used, no arguments should be passed to
+    the `AsyncHTTPClient` constructor. The implementation subclass as
+    well as arguments to its constructor can be set with the static
+    method `configure()`
 
     All `AsyncHTTPClient` implementations support a ``defaults``
     keyword argument, which can be used to set default values for
@@ -137,8 +154,9 @@ class AsyncHTTPClient(Configurable):
         client = AsyncHTTPClient(force_instance=True,
             defaults=dict(user_agent="MyUserAgent"))
 
-    .. versionchanged:: 4.1
-       The ``io_loop`` argument is deprecated.
+    .. versionchanged:: 5.0
+       The ``io_loop`` argument (deprecated since version 4.1) has been removed.
+
     """
     @classmethod
     def configurable_base(cls):
@@ -156,16 +174,15 @@ class AsyncHTTPClient(Configurable):
             setattr(cls, attr_name, weakref.WeakKeyDictionary())
         return getattr(cls, attr_name)
 
-    def __new__(cls, io_loop=None, force_instance=False, **kwargs):
-        io_loop = io_loop or IOLoop.current()
+    def __new__(cls, force_instance=False, **kwargs):
+        io_loop = IOLoop.current()
         if force_instance:
             instance_cache = None
         else:
             instance_cache = cls._async_clients()
         if instance_cache is not None and io_loop in instance_cache:
             return instance_cache[io_loop]
-        instance = super(AsyncHTTPClient, cls).__new__(cls, io_loop=io_loop,
-                                                       **kwargs)
+        instance = super(AsyncHTTPClient, cls).__new__(cls, **kwargs)
         # Make sure the instance knows which cache to remove itself from.
         # It can't simply call _async_clients() because we may be in
         # __new__(AsyncHTTPClient) but instance.__class__ may be
@@ -175,8 +192,8 @@ class AsyncHTTPClient(Configurable):
             instance_cache[instance.io_loop] = instance
         return instance
 
-    def initialize(self, io_loop, defaults=None):
-        self.io_loop = io_loop
+    def initialize(self, defaults=None):
+        self.io_loop = IOLoop.current()
         self.defaults = dict(HTTPRequest._DEFAULTS)
         if defaults is not None:
             self.defaults.update(defaults)
@@ -222,6 +239,18 @@ class AsyncHTTPClient(Configurable):
         In the callback interface, `HTTPError` is not automatically raised.
         Instead, you must check the response's ``error`` attribute or
         call its `~HTTPResponse.rethrow` method.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in 6.0. Use the returned `.Future` instead.
+
+           The ``raise_error=False`` argument currently suppresses
+           *all* errors, encapsulating them in `HTTPResponse` objects
+           with a 599 response code. This will change in Tornado 6.0:
+           ``raise_error=False`` will only affect the `HTTPError`
+           raised when a non-200 response code is used.
+
         """
         if self._closed:
             raise RuntimeError("fetch() called on closed AsyncHTTPClient")
@@ -235,8 +264,10 @@ class AsyncHTTPClient(Configurable):
         # where normal dicts get converted to HTTPHeaders objects.
         request.headers = httputil.HTTPHeaders(request.headers)
         request = _RequestProxy(request, self.defaults)
-        future = TracebackFuture()
+        future = Future()
         if callback is not None:
+            warnings.warn("callback arguments are deprecated, use the returned Future instead",
+                          DeprecationWarning)
             callback = stack_context.wrap(callback)
 
             def handle_future(future):
@@ -254,9 +285,14 @@ class AsyncHTTPClient(Configurable):
 
         def handle_response(response):
             if raise_error and response.error:
+                if isinstance(response.error, HTTPError):
+                    response.error.response = response
                 future.set_exception(response.error)
             else:
-                future.set_result(response)
+                if response.error and not response._error_is_response_code:
+                    warnings.warn("raise_error=False will allow '%s' to be raised in the future" %
+                                  response.error, DeprecationWarning)
+                future_set_result_unless_cancelled(future, response)
         self.fetch_impl(request, handle_response)
         return future
 
@@ -310,16 +346,16 @@ class HTTPRequest(object):
                  network_interface=None, streaming_callback=None,
                  header_callback=None, prepare_curl_callback=None,
                  proxy_host=None, proxy_port=None, proxy_username=None,
-                 proxy_password=None, allow_nonstandard_methods=None,
-                 validate_cert=None, ca_certs=None,
-                 allow_ipv6=None,
-                 client_key=None, client_cert=None, body_producer=None,
+                 proxy_password=None, proxy_auth_mode=None,
+                 allow_nonstandard_methods=None, validate_cert=None,
+                 ca_certs=None, allow_ipv6=None, client_key=None,
+                 client_cert=None, body_producer=None,
                  expect_100_continue=False, decompress_response=None,
                  ssl_options=None):
         r"""All parameters except ``url`` are optional.
 
-        :arg string url: URL to fetch
-        :arg string method: HTTP method, e.g. "GET" or "POST"
+        :arg str url: URL to fetch
+        :arg str method: HTTP method, e.g. "GET" or "POST"
         :arg headers: Additional HTTP headers to pass on the request
         :type headers: `~tornado.httputil.HTTPHeaders` or `dict`
         :arg body: HTTP request body as a string (byte or unicode; if unicode
@@ -335,32 +371,34 @@ class HTTPRequest(object):
            to pass a ``Content-Length`` in the headers as otherwise chunked
            encoding will be used, and many servers do not support chunked
            encoding on requests.  New in Tornado 4.0
-        :arg string auth_username: Username for HTTP authentication
-        :arg string auth_password: Password for HTTP authentication
-        :arg string auth_mode: Authentication mode; default is "basic".
+        :arg str auth_username: Username for HTTP authentication
+        :arg str auth_password: Password for HTTP authentication
+        :arg str auth_mode: Authentication mode; default is "basic".
            Allowed values are implementation-defined; ``curl_httpclient``
            supports "basic" and "digest"; ``simple_httpclient`` only supports
            "basic"
-        :arg float connect_timeout: Timeout for initial connection in seconds
-        :arg float request_timeout: Timeout for entire request in seconds
+        :arg float connect_timeout: Timeout for initial connection in seconds,
+           default 20 seconds
+        :arg float request_timeout: Timeout for entire request in seconds,
+           default 20 seconds
         :arg if_modified_since: Timestamp for ``If-Modified-Since`` header
         :type if_modified_since: `datetime` or `float`
         :arg bool follow_redirects: Should redirects be followed automatically
-           or return the 3xx response?
-        :arg int max_redirects: Limit for ``follow_redirects``
-        :arg string user_agent: String to send as ``User-Agent`` header
+           or return the 3xx response? Default True.
+        :arg int max_redirects: Limit for ``follow_redirects``, default 5.
+        :arg str user_agent: String to send as ``User-Agent`` header
         :arg bool decompress_response: Request a compressed response from
            the server and decompress it after downloading.  Default is True.
            New in Tornado 4.0.
         :arg bool use_gzip: Deprecated alias for ``decompress_response``
            since Tornado 4.0.
-        :arg string network_interface: Network interface to use for request.
+        :arg str network_interface: Network interface to use for request.
            ``curl_httpclient`` only; see note below.
-        :arg callable streaming_callback: If set, ``streaming_callback`` will
+        :arg collections.abc.Callable streaming_callback: If set, ``streaming_callback`` will
            be run with each chunk of data as it is received, and
            ``HTTPResponse.body`` and ``HTTPResponse.buffer`` will be empty in
            the final response.
-        :arg callable header_callback: If set, ``header_callback`` will
+        :arg collections.abc.Callable header_callback: If set, ``header_callback`` will
            be run with each header line as it is received (including the
            first line, e.g. ``HTTP/1.0 200 OK\r\n``, and a final line
            containing only ``\r\n``.  All lines include the trailing newline
@@ -368,26 +406,28 @@ class HTTPRequest(object):
            response.  This is most useful in conjunction with
            ``streaming_callback``, because it's the only way to get access to
            header data while the request is in progress.
-        :arg callable prepare_curl_callback: If set, will be called with
+        :arg collections.abc.Callable prepare_curl_callback: If set, will be called with
            a ``pycurl.Curl`` object to allow the application to make additional
            ``setopt`` calls.
-        :arg string proxy_host: HTTP proxy hostname.  To use proxies,
-           ``proxy_host`` and ``proxy_port`` must be set; ``proxy_username`` and
-           ``proxy_pass`` are optional.  Proxies are currently only supported
-           with ``curl_httpclient``.
+        :arg str proxy_host: HTTP proxy hostname.  To use proxies,
+           ``proxy_host`` and ``proxy_port`` must be set; ``proxy_username``,
+           ``proxy_pass`` and ``proxy_auth_mode`` are optional.  Proxies are
+           currently only supported with ``curl_httpclient``.
         :arg int proxy_port: HTTP proxy port
-        :arg string proxy_username: HTTP proxy username
-        :arg string proxy_password: HTTP proxy password
+        :arg str proxy_username: HTTP proxy username
+        :arg str proxy_password: HTTP proxy password
+        :arg str proxy_auth_mode: HTTP proxy Authentication mode;
+           default is "basic". supports "basic" and "digest"
         :arg bool allow_nonstandard_methods: Allow unknown values for ``method``
-           argument?
+           argument? Default is False.
         :arg bool validate_cert: For HTTPS requests, validate the server's
-           certificate?
-        :arg string ca_certs: filename of CA certificates in PEM format,
+           certificate? Default is True.
+        :arg str ca_certs: filename of CA certificates in PEM format,
            or None to use defaults.  See note below when used with
            ``curl_httpclient``.
-        :arg string client_key: Filename for client SSL key, if any.  See
+        :arg str client_key: Filename for client SSL key, if any.  See
            note below when used with ``curl_httpclient``.
-        :arg string client_cert: Filename for client SSL certificate, if any.
+        :arg str client_cert: Filename for client SSL certificate, if any.
            See note below when used with ``curl_httpclient``.
         :arg ssl.SSLContext ssl_options: `ssl.SSLContext` object for use in
            ``simple_httpclient`` (unsupported by ``curl_httpclient``).
@@ -419,6 +459,9 @@ class HTTPRequest(object):
 
         .. versionadded:: 4.2
            The ``ssl_options`` argument.
+
+        .. versionadded:: 4.5
+           The ``proxy_auth_mode`` argument.
         """
         # Note that some of these attributes go through property setters
         # defined below.
@@ -430,6 +473,7 @@ class HTTPRequest(object):
         self.proxy_port = proxy_port
         self.proxy_username = proxy_username
         self.proxy_password = proxy_password
+        self.proxy_auth_mode = proxy_auth_mode
         self.url = url
         self.method = method
         self.body = body
@@ -530,7 +574,7 @@ class HTTPResponse(object):
 
     * buffer: ``cStringIO`` object for response body
 
-    * body: response body as string (created on demand from ``self.buffer``)
+    * body: response body as bytes (created on demand from ``self.buffer``)
 
     * error: Exception object, if any
 
@@ -561,8 +605,10 @@ class HTTPResponse(object):
             self.effective_url = request.url
         else:
             self.effective_url = effective_url
+        self._error_is_response_code = False
         if error is None:
             if self.code < 200 or self.code >= 300:
+                self._error_is_response_code = True
                 self.error = HTTPError(self.code, message=self.reason,
                                        response=self)
             else:
@@ -591,7 +637,7 @@ class HTTPResponse(object):
         return "%s(%s)" % (self.__class__.__name__, args)
 
 
-class HTTPError(Exception):
+class HTTPClientError(Exception):
     """Exception thrown for an unsuccessful HTTP request.
 
     Attributes:
@@ -604,12 +650,18 @@ class HTTPError(Exception):
     Note that if ``follow_redirects`` is False, redirects become HTTPErrors,
     and you can look at ``error.response.headers['Location']`` to see the
     destination of the redirect.
+
+    .. versionchanged:: 5.1
+
+       Renamed from ``HTTPError`` to ``HTTPClientError`` to avoid collisions with
+       `tornado.web.HTTPError`. The name ``tornado.httpclient.HTTPError`` remains
+       as an alias.
     """
     def __init__(self, code, message=None, response=None):
         self.code = code
         self.message = message or httputil.responses.get(code, "Unknown")
         self.response = response
-        super(HTTPError, self).__init__(code, message, response)
+        super(HTTPClientError, self).__init__(code, message, response)
 
     def __str__(self):
         return "HTTP %d: %s" % (self.code, self.message)
@@ -619,6 +671,9 @@ class HTTPError(Exception):
     # (especially on pypy, which doesn't have the same recursion
     # detection as cpython).
     __repr__ = __str__
+
+
+HTTPError = HTTPClientError
 
 
 class _RequestProxy(object):
@@ -646,6 +701,8 @@ def main():
     define("print_body", type=bool, default=True)
     define("follow_redirects", type=bool, default=True)
     define("validate_cert", type=bool, default=True)
+    define("proxy_host", type=str)
+    define("proxy_port", type=int)
     args = parse_command_line()
     client = HTTPClient()
     for arg in args:
@@ -653,6 +710,8 @@ def main():
             response = client.fetch(arg,
                                     follow_redirects=options.follow_redirects,
                                     validate_cert=options.validate_cert,
+                                    proxy_host=options.proxy_host,
+                                    proxy_port=options.proxy_port,
                                     )
         except HTTPError as e:
             if e.response is not None:
@@ -664,6 +723,7 @@ def main():
         if options.print_body:
             print(native_str(response.body))
     client.close()
+
 
 if __name__ == "__main__":
     main()

@@ -16,16 +16,16 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.coverage",
     "sphinx.ext.doctest",
-    "sphinx.ext.extlinks",
     "sphinx.ext.intersphinx",
     "sphinx.ext.viewcode",
-    ]
+]
 
 primary_domain = 'py'
 default_role = 'py:obj'
 
 autodoc_member_order = "bysource"
 autoclass_content = "both"
+autodoc_inherit_docstrings = False
 
 # Without this line sphinx includes a copy of object.__init__'s docstring
 # on any class that doesn't define __init__.
@@ -37,12 +37,9 @@ coverage_ignore_modules = [
     "tornado.platform.asyncio",
     "tornado.platform.caresresolver",
     "tornado.platform.twisted",
-    ]
+]
 # I wish this could go in a per-module file...
 coverage_ignore_classes = [
-    # tornado.concurrent
-    "TracebackFuture",
-
     # tornado.gen
     "Runner",
 
@@ -60,7 +57,7 @@ coverage_ignore_classes = [
     "WebSocketProtocol",
     "WebSocketProtocol13",
     "WebSocketProtocol76",
-    ]
+]
 
 coverage_ignore_functions = [
     # various modules
@@ -71,30 +68,20 @@ coverage_ignore_functions = [
     # parse_qs_bytes should probably be documented but it's complicated by
     # having different implementations between py2 and py3.
     "parse_qs_bytes",
+
+    # tornado.gen
+    "Multi",
 ]
 
 html_favicon = 'favicon.ico'
 
 latex_documents = [
     ('index', 'tornado.tex', 'Tornado Documentation', 'The Tornado Authors', 'manual', False),
-    ]
-
-# HACK: sphinx has limited support for substitutions with the |version|
-# variable, but there doesn't appear to be any way to use this in a link
-# target.
-# http://stackoverflow.com/questions/1227037/substitutions-inside-links-in-rest-sphinx
-# The extlink extension can be used to do link substitutions, but it requires a
-# portion of the url to be literally contained in the document.  Therefore,
-# this link must be referenced as :current_tarball:`z`
-extlinks = {
-    'current_tarball': (
-        'https://pypi.python.org/packages/source/t/tornado/tornado-%s.tar.g%%s' % version,
-        'tornado-%s.tar.g' % version),
-    }
+]
 
 intersphinx_mapping = {
-    'python': ('https://docs.python.org/3.4/', None),
-    }
+    'python': ('https://docs.python.org/3.6/', None),
+}
 
 on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 

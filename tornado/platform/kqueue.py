@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # Copyright 2012 Facebook
 #
@@ -14,7 +13,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 """KQueue-based IOLoop implementation for BSD/Mac systems."""
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import select
 

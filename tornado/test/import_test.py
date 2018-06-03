@@ -1,5 +1,5 @@
 # flake8: noqa
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 from tornado.test.util import unittest
 
 
@@ -11,7 +11,6 @@ class ImportTest(unittest.TestCase):
         import tornado.auth
         import tornado.autoreload
         import tornado.concurrent
-        # import tornado.curl_httpclient  # depends on pycurl
         import tornado.escape
         import tornado.gen
         import tornado.http1connection
@@ -28,6 +27,7 @@ class ImportTest(unittest.TestCase):
         import tornado.simple_httpclient
         import tornado.stack_context
         import tornado.tcpserver
+        import tornado.tcpclient
         import tornado.template
         import tornado.testing
         import tornado.util
@@ -45,3 +45,11 @@ class ImportTest(unittest.TestCase):
             pass
         else:
             import tornado.curl_httpclient
+
+    def test_import_aliases(self):
+        # Ensure we don't delete formerly-documented aliases accidentally.
+        import tornado.ioloop
+        import tornado.gen
+        import tornado.util
+        self.assertIs(tornado.ioloop.TimeoutError, tornado.util.TimeoutError)
+        self.assertIs(tornado.gen.TimeoutError, tornado.util.TimeoutError)

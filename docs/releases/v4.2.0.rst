@@ -23,7 +23,7 @@ New modules: `tornado.locks` and `tornado.queues`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 These modules provide classes for coordinating coroutines, merged from
-`Toro <http://toro.readthedocs.org>`_.
+`Toro <https://toro.readthedocs.io>`_.
 
 To port your code from Toro's queues to Tornado 4.2, import `.Queue`,
 `.PriorityQueue`, or `.LifoQueue` from `tornado.queues` instead of from
@@ -49,7 +49,7 @@ be unlocked *without* acquiring it. This encouraged unorthodox patterns; in
 Tornado, just use `~.Semaphore.acquire`.
 
 Toro's ``Event.wait`` raised a ``Timeout`` exception after a timeout. In
-Tornado, `.Event.wait` raises `tornado.gen.TimeoutError`.
+Tornado, `.Event.wait` raises ``tornado.gen.TimeoutError``.
 
 Toro's ``Condition.wait`` also raised ``Timeout``, but in Tornado, the `.Future`
 returned by `.Condition.wait` resolves to False after a timeout::

@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import logging
 
 from tornado import gen
@@ -9,6 +7,7 @@ from tornado.websocket import websocket_connect
 
 define('url', default='ws://localhost:9001')
 define('name', default='Tornado')
+
 
 @gen.engine
 def run_tests():
@@ -35,12 +34,14 @@ def run_tests():
     assert msg is None
     IOLoop.instance().stop()
 
+
 def main():
     parse_command_line()
 
     IOLoop.instance().add_callback(run_tests)
 
     IOLoop.instance().start()
+
 
 if __name__ == '__main__':
     main()

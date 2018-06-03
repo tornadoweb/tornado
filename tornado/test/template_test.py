@@ -1,4 +1,4 @@
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import os
 import sys
@@ -203,10 +203,15 @@ three{%end%}
             self.assertTrue("# test.html:2" in traceback.format_exc())
 
     def test_error_line_number_module(self):
+        loader = None
+
+        def load_generate(path, **kwargs):
+            return loader.load(path).generate(**kwargs)
+
         loader = DictLoader({
             "base.html": "{% module Template('sub.html') %}",
             "sub.html": "{{1/0}}",
-        }, namespace={"_tt_modules": ObjectDict(Template=lambda path, **kwargs: loader.load(path).generate(**kwargs))})
+        }, namespace={"_tt_modules": ObjectDict(Template=load_generate)})
         try:
             loader.load("base.html").generate()
             self.fail("did not get expected exception")

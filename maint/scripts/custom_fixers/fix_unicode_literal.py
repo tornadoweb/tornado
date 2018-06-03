@@ -16,4 +16,4 @@ class FixUnicodeLiteral(fixer_base.BaseFix):
 
     def transform(self, node, results):
         arg = results["arg"]
-        node.replace(String('u'+arg.value, prefix=node.prefix))
+        node.replace(String('u' + arg.value, prefix=node.prefix))

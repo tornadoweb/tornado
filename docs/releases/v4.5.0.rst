@@ -1,0 +1,231 @@
+What's new in Tornado 4.5
+=========================
+
+Apr 16, 2017
+------------
+
+Backwards-compatibility warning
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- The `tornado.websocket` module now imposes a limit on the size of incoming
+  messages, which defaults to 10MiB.
+
+New module
+~~~~~~~~~~
+
+- `tornado.routing` provides a more flexible routing system than the one built in
+  to `.Application`.
+
+General changes
+~~~~~~~~~~~~~~~
+
+- Reduced the number of circular references, reducing memory usage and
+  improving performance.
+
+`tornado.auth`
+~~~~~~~~~~~~~~
+
+* The `tornado.auth` module has been updated for compatibility with `a
+  change to Facebook's access_token endpoint
+  <https://github.com/tornadoweb/tornado/pull/1977>`_. This includes both
+  the changes initially released in Tornado 4.4.3 and an additional change
+  to support the ```session_expires`` field in the new format.
+  The ``session_expires`` field is currently a string; it should be accessed
+  as ``int(user['session_expires'])`` because it will change from a string to
+  an int in Tornado 5.0.
+
+
+`tornado.autoreload`
+~~~~~~~~~~~~~~~~~~~~
+
+- Autoreload is now compatible with the `asyncio` event loop.
+- Autoreload no longer attempts to close the `.IOLoop` and all registered
+  file descriptors before restarting; it relies on the ``CLOEXEC`` flag
+  being set instead.
+
+`tornado.concurrent`
+~~~~~~~~~~~~~~~~~~~~
+
+- Suppressed some "'NoneType' object not callback" messages that could
+  be logged at shutdown.
+
+`tornado.gen`
+~~~~~~~~~~~~~
+
+- ``yield None`` is now equivalent to ``yield gen.moment``.
+  `~tornado.gen.moment` is deprecated. This improves compatibility with
+  `asyncio`.
+- Fixed an issue in which a generator object could be garbage
+  collected prematurely (most often when weak references are used.
+- New function `.is_coroutine_function` identifies functions wrapped
+  by `.coroutine` or `.engine`.
+
+``tornado.http1connection``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- The ``Transfer-Encoding`` header is now parsed case-insensitively.
+
+`tornado.httpclient`
+~~~~~~~~~~~~~~~~~~~~
+
+- ``SimpleAsyncHTTPClient`` now follows 308 redirects.
+- ``CurlAsyncHTTPClient`` will no longer accept protocols other than
+  ``http`` and ``https``. To override this, set ``pycurl.PROTOCOLS``
+  and ``pycurl.REDIR_PROTOCOLS`` in a ``prepare_curl_callback``.
+- ``CurlAsyncHTTPClient`` now supports digest authentication for proxies
+  (in addition to basic auth) via the new ``proxy_auth_mode`` argument.
+- The minimum supported version of ``libcurl`` is now ``7.22.0``.
+
+`tornado.httpserver`
+~~~~~~~~~~~~~~~~~~~~
+
+- `.HTTPServer` now accepts the keyword argument
+  ``trusted_downstream`` which controls the parsing of
+  ``X-Forwarded-For`` headers. This header may be a list or set of IP
+  addresses of trusted proxies which will be skipped in the
+  ``X-Forwarded-For`` list.
+- The ``no_keep_alive`` argument works again.
+
+`tornado.httputil`
+~~~~~~~~~~~~~~~~~~
+
+- `.url_concat` correctly handles fragments and existing query arguments.
+
+`tornado.ioloop`
+~~~~~~~~~~~~~~~~
+
+- Fixed 100% CPU usage after a callback returns an empty list or dict.
+- `.IOLoop.add_callback` now uses a lockless implementation which
+  makes it safe for use from ``__del__`` methods. This improves
+  performance of calls to `~.IOLoop.add_callback` from the `.IOLoop`
+  thread, and slightly decreases it for calls from other threads.
+
+`tornado.iostream`
+~~~~~~~~~~~~~~~~~~
+
+- `memoryview` objects are now permitted as arguments to `~.BaseIOStream.write`.
+- The internal memory buffers used by `.IOStream` now use `bytearray`
+  instead of a list of `bytes`, improving performance.
+- Futures returned by `~.BaseIOStream.write` are no longer orphaned if a second
+  call to ``write`` occurs before the previous one is finished.
+
+`tornado.log`
+~~~~~~~~~~~~~
+
+- Colored log output is now supported on Windows if the
+  `colorama <https://pypi.python.org/pypi/colorama>`_ library
+  is installed  and the application calls ``colorama.init()`` at
+  startup.
+- The signature of the `.LogFormatter` constructor has been changed to
+  make it compatible with `logging.config.dictConfig`.
+
+`tornado.netutil`
+~~~~~~~~~~~~~~~~~
+
+- Worked around an issue that caused "LookupError: unknown encoding:
+  latin1" errors on Solaris.
+
+`tornado.process`
+~~~~~~~~~~~~~~~~~
+
+- `.Subprocess` no longer causes "subprocess still running" warnings on Python 3.6.
+- Improved error handling in `.cpu_count`.
+
+`tornado.tcpclient`
+~~~~~~~~~~~~~~~~~~~
+
+- `.TCPClient` now supports a ``source_ip`` and ``source_port`` argument.
+- Improved error handling for environments where IPv6 support is incomplete.
+
+`tornado.tcpserver`
+~~~~~~~~~~~~~~~~~~~
+
+- `.TCPServer.handle_stream` implementations may now be native coroutines.
+- Stopping a `.TCPServer` twice no longer raises an exception.
+
+`tornado.web`
+~~~~~~~~~~~~~
+
+- `.RedirectHandler` now supports substituting parts of the matched
+  URL into the redirect location using `str.format` syntax.
+- New methods `.RequestHandler.render_linked_js`,
+  `.RequestHandler.render_embed_js`,
+  `.RequestHandler.render_linked_css`, and
+  `.RequestHandler.render_embed_css` can be overridden to customize
+  the output of `.UIModule`.
+
+
+`tornado.websocket`
+~~~~~~~~~~~~~~~~~~~
+
+- `.WebSocketHandler.on_message` implementations may now be
+  coroutines. New messages will not be processed until the previous
+  ``on_message`` coroutine has finished.
+- The ``websocket_ping_interval`` and ``websocket_ping_timeout``
+  application settings can now be used to enable a periodic ping of
+  the websocket connection, allowing dropped connections to be
+  detected and closed.
+- The new ``websocket_max_message_size`` setting defaults to 10MiB.
+  The connection will be closed if messages larger than this are received.
+- Headers set by `.RequestHandler.prepare` or
+  `.RequestHandler.set_default_headers` are now sent as a part of the
+  websocket handshake.
+- Return values from `.WebSocketHandler.get_compression_options` may now include
+  the keys ``compression_level`` and ``mem_level`` to set gzip parameters.
+  The default compression level is now 6 instead of 9.
+
+Demos
+~~~~~
+
+- A new file upload demo is available in the `file_upload
+  <https://github.com/tornadoweb/tornado/tree/master/demos/file_upload>`_
+  directory.
+- A new `.TCPClient` and `.TCPServer` demo is available in the
+  `tcpecho <https://github.com/tornadoweb/tornado/tree/master/demos/tcpecho>`_ directory.
+- Minor updates have been made to several existing demos, including
+  updates to more recent versions of jquery.
+
+Credits
+~~~~~~~
+
+The following people contributed commits to this release:
+
+- A\. Jesse Jiryu Davis
+- Aaron Opfer
+- Akihiro Yamazaki
+- Alexander
+- Andreas Røsdal
+- Andrew Rabert
+- Andrew Sumin
+- Antoine Pietri
+- Antoine Pitrou
+- Artur Stawiarski
+- Ben Darnell
+- Brian Mego
+- Dario
+- Doug Vargas
+- Eugene Dubovoy
+- Iver Jordal
+- JZQT
+- James Maier
+- Jeff Hunter
+- Leynos
+- Mark Henderson
+- Michael V. DePalatis
+- Min RK
+- Mircea Ulinic
+- Ping
+- Ping Yang
+- Riccardo Magliocchetti
+- Samuel Chen
+- Samuel Dion-Girardeau
+- Scott Meisburger
+- Shawn Ding
+- TaoBeier
+- Thomas Kluyver
+- Vadim Semenov
+- matee
+- mike820324
+- stiletto
+- zhimin
+- 依云

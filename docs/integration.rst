@@ -5,6 +5,6 @@ Integration with other services
 
    auth
    wsgi
-   asyncio
    caresresolver
    twisted
+   asyncio

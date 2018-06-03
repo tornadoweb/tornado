@@ -153,6 +153,10 @@ By default uploaded files are fully buffered in memory; if you need to
 handle files that are too large to comfortably keep in memory see the
 `.stream_request_body` class decorator.
 
+In the demos directory,
+`file_receiver.py <https://github.com/tornadoweb/tornado/tree/master/demos/file_upload/>`_
+shows both methods of receiving file uploads.
+
 Due to the quirks of the HTML form encoding (e.g. the ambiguity around
 singular versus plural arguments), Tornado does not attempt to unify
 form arguments with other types of input.  In particular, we do not
@@ -161,7 +165,7 @@ of form-encoding may override `~.RequestHandler.prepare` to parse their
 requests::
 
     def prepare(self):
-        if self.request.headers["Content-Type"].startswith("application/json"):
+        if self.request.headers.get("Content-Type", "").startswith("application/json"):
             self.json_args = json.loads(self.request.body)
         else:
             self.json_args = None
@@ -189,9 +193,9 @@ place:
    etc. If the URL regular expression contains capturing groups, they
    are passed as arguments to this method.
 5. When the request is finished, `~.RequestHandler.on_finish()` is
-   called.  For synchronous handlers this is immediately after
-   ``get()`` (etc) return; for asynchronous handlers it is after the
-   call to `~.RequestHandler.finish()`.
+   called. For most handlers this is immediately after ``get()`` (etc)
+   return; for handlers using the `tornado.web.asynchronous` decorator
+   it is after the call to `~.RequestHandler.finish()`.
 
 All methods designed to be overridden are noted as such in the
 `.RequestHandler` documentation.  Some of the most commonly
@@ -278,7 +282,7 @@ to the prefix ``/photos/`` instead::
     app = tornado.web.Application([
         url(r"/photos/(.*)", MyPhotoHandler),
         url(r"/pictures/(.*)", tornado.web.RedirectHandler,
-            dict(url=r"/photos/\1")),
+            dict(url=r"/photos/{0}")),
         ])
 
 Unlike `.RequestHandler.redirect`, `.RedirectHandler` uses permanent
@@ -291,64 +295,23 @@ To send a temporary redirect with a `.RedirectHandler`, add
 Asynchronous handlers
 ~~~~~~~~~~~~~~~~~~~~~
 
-Tornado handlers are synchronous by default: when the
-``get()``/``post()`` method returns, the request is considered
-finished and the response is sent.  Since all other requests are
-blocked while one handler is running, any long-running handler should
-be made asynchronous so it can call its slow operations in a
-non-blocking way.  This topic is covered in more detail in
-:doc:`async`; this section is about the particulars of
-asynchronous techniques in `.RequestHandler` subclasses.
+Certain handler methods (including ``prepare()`` and the HTTP verb
+methods ``get()``/``post()``/etc) may be overridden as coroutines to
+make the handler asynchronous.
 
-The simplest way to make a handler asynchronous is to use the
-`.coroutine` decorator.  This allows you to perform non-blocking I/O
-with the ``yield`` keyword, and no response will be sent until the
-coroutine has returned.  See :doc:`coroutines` for more details.
+Tornado also supports a callback-based style of asynchronous handler
+with the `tornado.web.asynchronous` decorator, but this style is
+deprecated and will be removed in Tornado 6.0. New applications should
+use coroutines instead.
 
-In some cases, coroutines may be less convenient than a
-callback-oriented style, in which case the `.tornado.web.asynchronous`
-decorator can be used instead.  When this decorator is used the response
-is not automatically sent; instead the request will be kept open until
-some callback calls `.RequestHandler.finish`.  It is up to the application
-to ensure that this method is called, or else the user's browser will
-simply hang.
-
-Here is an example that makes a call to the FriendFeed API using
-Tornado's built-in `.AsyncHTTPClient`:
+For example, here is a simple handler using a coroutine:
 
 .. testcode::
 
     class MainHandler(tornado.web.RequestHandler):
-        @tornado.web.asynchronous
-        def get(self):
+        async def get(self):
             http = tornado.httpclient.AsyncHTTPClient()
-            http.fetch("http://friendfeed-api.com/v2/feed/bret",
-                       callback=self.on_response)
-
-        def on_response(self, response):
-            if response.error: raise tornado.web.HTTPError(500)
-            json = tornado.escape.json_decode(response.body)
-            self.write("Fetched " + str(len(json["entries"])) + " entries "
-                       "from the FriendFeed API")
-            self.finish()
-
-.. testoutput::
-   :hide:
-
-When ``get()`` returns, the request has not finished. When the HTTP
-client eventually calls ``on_response()``, the request is still open,
-and the response is finally flushed to the client with the call to
-``self.finish()``.
-
-For comparison, here is the same example using a coroutine:
-
-.. testcode::
-
-    class MainHandler(tornado.web.RequestHandler):
-        @tornado.gen.coroutine
-        def get(self):
-            http = tornado.httpclient.AsyncHTTPClient()
-            response = yield http.fetch("http://friendfeed-api.com/v2/feed/bret")
+            response = await http.fetch("http://friendfeed-api.com/v2/feed/bret")
             json = tornado.escape.json_decode(response.body)
             self.write("Fetched " + str(len(json["entries"])) + " entries "
                        "from the FriendFeed API")

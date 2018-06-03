@@ -51,6 +51,7 @@ class MainHandler(tornado.web.RequestHandler):
     def get(self):
         self.render("index.html", messages=ChatSocketHandler.cache)
 
+
 class ChatSocketHandler(tornado.websocket.WebSocketHandler):
     waiters = set()
     cache = []
@@ -87,7 +88,7 @@ class ChatSocketHandler(tornado.websocket.WebSocketHandler):
         chat = {
             "id": str(uuid.uuid4()),
             "body": parsed["body"],
-            }
+        }
         chat["html"] = tornado.escape.to_basestring(
             self.render_string("message.html", message=chat))
 

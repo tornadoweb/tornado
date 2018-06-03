@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-# coding: utf-8
+# -*- coding: utf-8 -*-
 #
 # Copyright 2012 Facebook
 #
@@ -17,7 +16,7 @@
 
 """Data used by the tornado.locale module."""
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 LOCALE_NAMES = {
     "af_ZA": {"name_en": u"Afrikaans", "name": u"Afrikaans"},
