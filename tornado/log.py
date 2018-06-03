@@ -220,22 +220,26 @@ def enable_pretty_logging(options=None, logger=None):
         logger = logging.getLogger()
     logger.setLevel(getattr(logging, options.logging.upper()))
     if options.log_file_prefix:
-        rotate_mode = options.log_rotate_mode
-        if rotate_mode == 'size':
-            channel = logging.handlers.RotatingFileHandler(
-                filename=options.log_file_prefix,
-                maxBytes=options.log_file_max_size,
-                backupCount=options.log_file_num_backups)
-        elif rotate_mode == 'time':
-            channel = logging.handlers.TimedRotatingFileHandler(
-                filename=options.log_file_prefix,
-                when=options.log_rotate_when,
-                interval=options.log_rotate_interval,
-                backupCount=options.log_file_num_backups)
+        if not options.log_rotate:
+            channel = logging.handlers.WatchedFileHandler(
+                filename=options.log_file_prefix)
         else:
-            error_message = 'The value of log_rotate_mode option should be ' +\
-                            '"size" or "time", not "%s".' % rotate_mode
-            raise ValueError(error_message)
+            rotate_mode = options.log_rotate_mode
+            if rotate_mode == 'size':
+                channel = logging.handlers.RotatingFileHandler(
+                    filename=options.log_file_prefix,
+                    maxBytes=options.log_file_max_size,
+                    backupCount=options.log_file_num_backups)
+            elif rotate_mode == 'time':
+                channel = logging.handlers.TimedRotatingFileHandler(
+                    filename=options.log_file_prefix,
+                    when=options.log_rotate_when,
+                    interval=options.log_rotate_interval,
+                    backupCount=options.log_file_num_backups)
+            else:
+                error_message = 'The value of log_rotate_mode option should be ' +\
+                                '"size" or "time", not "%s".' % rotate_mode
+                raise ValueError(error_message)
         channel.setFormatter(LogFormatter(color=False))
         logger.addHandler(channel)
 
@@ -273,6 +277,10 @@ def define_logging_options(options=None):
                          "Note that if you are running multiple tornado processes, "
                          "log_file_prefix must be different for each of them (e.g. "
                          "include the port number)"))
+
+    options.define("log_rotate", type=bool, default=True,
+                   help="Log rotation switch")
+
     options.define("log_file_max_size", type=int, default=100 * 1000 * 1000,
                    help="max size of log files before rollover")
     options.define("log_file_num_backups", type=int, default=10,
