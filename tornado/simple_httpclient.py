@@ -209,7 +209,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
 class _HTTPConnection(httputil.HTTPMessageDelegate):
     _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
-    _SAFE_NETHODS = set(["GET", "HEAD", "OPTIONS"])
+    _SAFE_METHODS = set(["GET", "HEAD", "OPTIONS"])
 
     def __init__(self, client, request, release_callback,
                  final_callback, max_buffer_size, tcp_client,
@@ -517,7 +517,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             # compatibility with pre-HTTP/1.1 user agents which don't
             # understand the 303 status.
             if self.code in (301, 302, 303):
-                if self.request.method not in self._SAFE_NETHODS:
+                if self.request.method not in self._SAFE_METHODS:
                     new_request.method = "GET"
                 new_request.body = None
                 for h in ["Content-Length", "Content-Type",
