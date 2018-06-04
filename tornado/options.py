@@ -365,7 +365,17 @@ class OptionParser(object):
         for name in config:
             normalized = self._normalize_name(name)
             if normalized in self._options:
-                self._options[normalized].set(config[name])
+                option = self._options[normalized]
+                if option.multiple:
+                    if not isinstance(config[name], (list, str)):
+                        raise Error("Option %r is required to be a list of %s "
+                                    "or a comma-separated string" %
+                                    (option.name, option.type.__name__))
+
+                if type(config[name]) == str and option.type != str:
+                    option.parse(config[name])
+                else:
+                    option.set(config[name])
 
         if final:
             self.run_parse_callbacks()
