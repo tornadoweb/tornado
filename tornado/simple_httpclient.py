@@ -20,6 +20,7 @@ import functools
 import re
 import socket
 import sys
+import time
 from io import BytesIO
 
 
@@ -215,6 +216,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                  max_header_size, max_body_size):
         self.io_loop = IOLoop.current()
         self.start_time = self.io_loop.time()
+        self.start_wall_time = time.time()
         self.client = client
         self.request = request
         self.release_callback = release_callback
@@ -447,6 +449,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     value = value.real_error
             self._run_callback(HTTPResponse(self.request, 599, error=value,
                                             request_time=self.io_loop.time() - self.start_time,
+                                            start_time=self.start_wall_time,
                                             ))
 
             if hasattr(self, "stream"):
@@ -539,6 +542,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                                 self.code, reason=getattr(self, 'reason', None),
                                 headers=self.headers,
                                 request_time=self.io_loop.time() - self.start_time,
+                                start_time=self.start_wall_time,
                                 buffer=buffer,
                                 effective_url=self.request.url)
         self._run_callback(response)

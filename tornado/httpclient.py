@@ -578,17 +578,35 @@ class HTTPResponse(object):
 
     * error: Exception object, if any
 
-    * request_time: seconds from request start to finish
+    * request_time: seconds from request start to finish. Includes all network
+      operations from DNS resolution to receiving the last byte of data.
+      Does not include time spent in the queue (due to the ``max_clients`` option).
+      If redirects were followed, only includes the final request.
+
+    * start_time: Time at which the HTTP operation started, based on `time.time`
+      (not the monotonic clock used by `.IOLoop.time`). May be ``None`` if the request
+      timed out while in the queue.
 
     * time_info: dictionary of diagnostic timing information from the request.
       Available data are subject to change, but currently uses timings
       available from http://curl.haxx.se/libcurl/c/curl_easy_getinfo.html,
       plus ``queue``, which is the delay (if any) introduced by waiting for
       a slot under `AsyncHTTPClient`'s ``max_clients`` setting.
+
+    .. versionadded:: 5.1
+
+       Added the ``start_time`` attribute.
+
+    .. versionchanged:: 5.1
+
+       The ``request_time`` attribute previously included time spent in the queue
+       for ``simple_httpclient``, but not in ``curl_httpclient``. Now queueing time
+       is excluded in both implementations. ``request_time`` is now more accurate for
+       ``curl_httpclient`` because it uses a monotonic clock when available.
     """
     def __init__(self, request, code, headers=None, buffer=None,
                  effective_url=None, error=None, request_time=None,
-                 time_info=None, reason=None):
+                 time_info=None, reason=None, start_time=None):
         if isinstance(request, _RequestProxy):
             self.request = request.request
         else:
@@ -615,6 +633,7 @@ class HTTPResponse(object):
                 self.error = None
         else:
             self.error = error
+        self.start_time = start_time
         self.request_time = request_time
         self.time_info = time_info or {}
 
