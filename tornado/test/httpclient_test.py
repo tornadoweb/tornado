@@ -9,6 +9,7 @@ import sys
 import threading
 import datetime
 from io import BytesIO
+import time
 import unicodedata
 
 from tornado.escape import utf8, native_str
@@ -545,6 +546,22 @@ X-XSS-Protection: 1;
         response = self.fetch("/set_header?k=foo&v=%E9")
         response.rethrow()
         self.assertEqual(response.headers["Foo"], native_str(u"\u00e9"))
+
+    def test_response_times(self):
+        # A few simple sanity checks of the response time fields to
+        # make sure they're using the right basis (between the
+        # wall-time and monotonic clocks).
+        start_time = time.time()
+        response = self.fetch("/hello")
+        response.rethrow()
+        self.assertGreaterEqual(response.request_time, 0)
+        self.assertLess(response.request_time, 1.0)
+        # A very crude check to make sure that start_time is based on
+        # wall time and not the monotonic clock.
+        self.assertLess(abs(response.start_time - start_time), 1.0)
+
+        for k, v in response.time_info.items():
+            self.assertTrue(0 <= v < 1.0, "time_info[%s] out of bounds: %s" % (k, v))
 
 
 class RequestProxyTest(unittest.TestCase):

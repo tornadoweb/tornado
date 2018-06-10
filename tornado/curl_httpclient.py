@@ -80,7 +80,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         self._multi = None
 
     def fetch_impl(self, request, callback):
-        self._requests.append((request, callback))
+        self._requests.append((request, callback, self.io_loop.time()))
         self._process_queue()
         self._set_timeout(0)
 
@@ -205,13 +205,15 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 while self._free_list and self._requests:
                     started += 1
                     curl = self._free_list.pop()
-                    (request, callback) = self._requests.popleft()
+                    (request, callback, queue_start_time) = self._requests.popleft()
                     curl.info = {
                         "headers": httputil.HTTPHeaders(),
                         "buffer": BytesIO(),
                         "request": request,
                         "callback": callback,
+                        "queue_start_time": queue_start_time,
                         "curl_start_time": time.time(),
+                        "curl_start_ioloop_time": self.io_loop.current().time(),
                     }
                     try:
                         self._curl_setup_request(
@@ -257,7 +259,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         # the various curl timings are documented at
         # http://curl.haxx.se/libcurl/c/curl_easy_getinfo.html
         time_info = dict(
-            queue=info["curl_start_time"] - info["request"].start_time,
+            queue=info["curl_start_ioloop_time"] - info["queue_start_time"],
             namelookup=curl.getinfo(pycurl.NAMELOOKUP_TIME),
             connect=curl.getinfo(pycurl.CONNECT_TIME),
             appconnect=curl.getinfo(pycurl.APPCONNECT_TIME),
@@ -271,7 +273,8 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 request=info["request"], code=code, headers=info["headers"],
                 buffer=buffer, effective_url=effective_url, error=error,
                 reason=info['headers'].get("X-Http-Reason", None),
-                request_time=time.time() - info["curl_start_time"],
+                request_time=self.io_loop.time() - info["curl_start_ioloop_time"],
+                start_time=info["curl_start_time"],
                 time_info=time_info))
         except Exception:
             self.handle_callback_exception(info["callback"])
