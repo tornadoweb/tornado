@@ -26,8 +26,7 @@ from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWo
 from tornado.test import httpclient_test
 from tornado.testing import (AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase,
                              ExpectLog, gen_test)
-from tornado.test.util import (skipOnTravis, skipIfNoIPv6, refusing_port, skipBefore35,
-                               exec_test, ignore_deprecation)
+from tornado.test.util import skipOnTravis, skipIfNoIPv6, refusing_port, skipBefore35, exec_test
 from tornado.web import RequestHandler, Application, url, stream_request_body
 
 
@@ -251,36 +250,26 @@ class SimpleHTTPClientTestMixin(object):
     @gen_test
     def test_connect_timeout(self):
         timeout = 0.1
-        timeout_min, timeout_max = 0.099, 1.0
 
         class TimeoutResolver(Resolver):
             def resolve(self, *args, **kwargs):
                 return Future()  # never completes
 
         with closing(self.create_client(resolver=TimeoutResolver())) as client:
-            with ignore_deprecation():
-                response = yield client.fetch(self.get_url('/hello'),
-                                              connect_timeout=timeout,
-                                              raise_error=False)
-                self.assertEqual(response.code, 599)
-                self.assertTrue(timeout_min < response.request_time < timeout_max,
-                                response.request_time)
-                self.assertEqual(str(response.error), "Timeout while connecting")
+            with self.assertRaises(HTTPTimeoutError):
+                yield client.fetch(self.get_url('/hello'),
+                                   connect_timeout=timeout,
+                                   request_timeout=3600,
+                                   raise_error=True)
 
     @skipOnTravis
     def test_request_timeout(self):
         timeout = 0.1
-        timeout_min, timeout_max = 0.099, 0.15
         if os.name == 'nt':
             timeout = 0.5
-            timeout_min, timeout_max = 0.4, 0.6
 
-        with ignore_deprecation():
-            response = self.fetch('/trigger?wake=false', request_timeout=timeout)
-            self.assertEqual(response.code, 599)
-        self.assertTrue(timeout_min < response.request_time < timeout_max,
-                        response.request_time)
-        self.assertEqual(str(response.error), "Timeout during request")
+        with self.assertRaises(HTTPTimeoutError):
+            self.fetch('/trigger?wake=false', request_timeout=timeout, raise_error=True)
         # trigger the hanging request to let it clean up after itself
         self.triggers.popleft()()
 
@@ -345,41 +334,33 @@ class SimpleHTTPClientTestMixin(object):
         cleanup_func, port = refusing_port()
         self.addCleanup(cleanup_func)
         with ExpectLog(gen_log, ".*", required=False):
-            with ignore_deprecation():
-                response = self.fetch("http://127.0.0.1:%d/" % port)
-        self.assertEqual(599, response.code)
+            with self.assertRaises(socket.error) as cm:
+                self.fetch("http://127.0.0.1:%d/" % port, raise_error=True)
 
         if sys.platform != 'cygwin':
             # cygwin returns EPERM instead of ECONNREFUSED here
-            contains_errno = str(errno.ECONNREFUSED) in str(response.error)
+            contains_errno = str(errno.ECONNREFUSED) in str(cm.exception)
             if not contains_errno and hasattr(errno, "WSAECONNREFUSED"):
-                contains_errno = str(errno.WSAECONNREFUSED) in str(response.error)
-            self.assertTrue(contains_errno, response.error)
+                contains_errno = str(errno.WSAECONNREFUSED) in str(cm.exception)
+            self.assertTrue(contains_errno, cm.exception)
             # This is usually "Connection refused".
             # On windows, strerror is broken and returns "Unknown error".
             expected_message = os.strerror(errno.ECONNREFUSED)
-            self.assertTrue(expected_message in str(response.error),
-                            response.error)
+            self.assertTrue(expected_message in str(cm.exception),
+                            cm.exception)
 
     def test_queue_timeout(self):
-        with ignore_deprecation():
-            with closing(self.create_client(max_clients=1)) as client:
-                # Wait for the trigger request to block, not complete.
-                fut1 = client.fetch(self.get_url('/trigger'),
-                                    request_timeout=10, raise_error=False)
-                self.wait()
-                fut2 = client.fetch(self.get_url('/hello'),
-                                    connect_timeout=0.1, raise_error=False)
-                fut2.add_done_callback(self.stop)
-                response = self.wait().result()
+        with closing(self.create_client(max_clients=1)) as client:
+            # Wait for the trigger request to block, not complete.
+            fut1 = client.fetch(self.get_url('/trigger'), request_timeout=10)
+            self.wait()
+            with self.assertRaises(HTTPTimeoutError) as cm:
+                self.io_loop.run_sync(lambda: client.fetch(
+                    self.get_url('/hello'), connect_timeout=0.1, raise_error=True))
 
-                self.assertEqual(response.code, 599)
-                self.assertTrue(response.request_time < 1, response.request_time)
-                self.assertEqual(str(response.error), "Timeout in request queue")
-                self.triggers.popleft()()
-                fut1.add_done_callback(self.stop)
-                self.wait()
-                fut1.result()
+            self.assertEqual(str(cm.exception), "Timeout in request queue")
+            self.triggers.popleft()()
+            self.io_loop.run_sync(lambda: fut1)
 
     def test_no_content_length(self):
         response = self.fetch("/no_content_length")
@@ -578,16 +559,15 @@ class HTTP100ContinueTestCase(AsyncHTTPTestCase):
             request.connection.finish()
             return
         self.request = request
-        with ignore_deprecation():
-            self.request.connection.stream.write(
-                b"HTTP/1.1 100 CONTINUE\r\n\r\n",
-                self.respond_200)
+        fut = self.request.connection.stream.write(
+            b"HTTP/1.1 100 CONTINUE\r\n\r\n")
+        fut.add_done_callback(self.respond_200)
 
-    def respond_200(self):
-        with ignore_deprecation():
-            self.request.connection.stream.write(
-                b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA",
-                self.request.connection.stream.close)
+    def respond_200(self, fut):
+        fut.result()
+        fut = self.request.connection.stream.write(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA")
+        fut.add_done_callback(lambda f: self.request.connection.stream.close())
 
     def get_app(self):
         # Not a full Application, but works as an HTTPServer callback
@@ -638,13 +618,12 @@ class HTTP204NoContentTestCase(AsyncHTTPTestCase):
     def test_204_invalid_content_length(self):
         # 204 status with non-zero content length is malformed
         with ExpectLog(gen_log, ".*Response with code 204 should not have body"):
-            with ignore_deprecation():
-                response = self.fetch("/?error=1")
-            if not self.http1:
-                self.skipTest("requires HTTP/1.x")
-            if self.http_client.configured_class != SimpleAsyncHTTPClient:
-                self.skipTest("curl client accepts invalid headers")
-            self.assertEqual(response.code, 599)
+            with self.assertRaises(HTTPStreamClosedError):
+                self.fetch("/?error=1", raise_error=True)
+                if not self.http1:
+                    self.skipTest("requires HTTP/1.x")
+                if self.http_client.configured_class != SimpleAsyncHTTPClient:
+                    self.skipTest("curl client accepts invalid headers")
 
 
 class HostnameMappingTestCase(AsyncHTTPTestCase):

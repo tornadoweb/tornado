@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from tornado import gen, ioloop
 from tornado.log import app_log
+from tornado.simple_httpclient import SimpleAsyncHTTPClient, HTTPTimeoutError
 from tornado.test.util import unittest, skipBefore35, exec_test, ignore_deprecation
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, gen_test, ExpectLog
 from tornado.web import Application
@@ -98,19 +99,23 @@ class AsyncHTTPTestCaseTest(AsyncHTTPTestCase):
         response = self.fetch(path)
         self.assertEqual(response.request.url, self.get_url(path))
 
+    @gen_test
     def test_fetch_full_http_url(self):
         path = 'http://localhost:%d/path' % self.external_port
 
-        with ignore_deprecation():
-            response = self.fetch(path, request_timeout=0.1, raise_error=False)
-        self.assertEqual(response.request.url, path)
+        with contextlib.closing(SimpleAsyncHTTPClient(force_instance=True)) as client:
+            with self.assertRaises(HTTPTimeoutError) as cm:
+                yield client.fetch(path, request_timeout=0.1, raise_error=True)
+        self.assertEqual(cm.exception.response.request.url, path)
 
+    @gen_test
     def test_fetch_full_https_url(self):
         path = 'https://localhost:%d/path' % self.external_port
 
-        with ignore_deprecation():
-            response = self.fetch(path, request_timeout=0.1)
-        self.assertEqual(response.request.url, path)
+        with contextlib.closing(SimpleAsyncHTTPClient(force_instance=True)) as client:
+            with self.assertRaises(HTTPTimeoutError) as cm:
+                yield client.fetch(path, request_timeout=0.1, raise_error=True)
+        self.assertEqual(cm.exception.response.request.url, path)
 
     @classmethod
     def tearDownClass(cls):
