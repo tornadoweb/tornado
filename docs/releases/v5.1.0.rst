@@ -40,6 +40,14 @@ Deprecation notice
 - The ``OAuthMixin._oauth_get_user`` method is deprecated and will be removed in
   6.0. Override `~.OAuthMixin._oauth_get_user_future` instead.
 
+`tornado.autoreload`
+~~~~~~~~~~~~~~~~~~~~
+
+- The command-line autoreload wrapper is now preserved if an internal
+  autoreload fires.
+- The command-line wrapper no longer starts duplicated processes on windows
+  when combined with internal autoreload.
+
 `tornado.concurrent`
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -69,10 +77,23 @@ Deprecation notice
 - `tornado.httpclient.HTTPError` has been renamed to
   `.HTTPClientError` to avoid ambiguity in code that also has to deal
   with `tornado.web.HTTPError`. The old name remains as an alias.
+- ``tornado.curl_httpclient`` now supports non-ASCII characters in
+  username and password arguments.
+- ``.HTTPResponse.request_time`` now behaves consistently across
+  ``simple_httpclient`` and ``curl_httpclient``, excluding time spent
+  in the ``max_clients`` queue in both cases (previously this time was
+  included in ``simple_httpclient`` but excluded in
+  ``curl_httpclient``). In both cases the time is now computed using
+  a monotonic clock where available.
+- `.HTTPResponse` now has a ``start_time`` attribute recording a
+  wall-clock (`time.time`) timestamp at which the request started
+  (after leaving the ``max_clients`` queue if applicable).
 
 `tornado.httputil`
 ~~~~~~~~~~~~~~~~~~
 
+- `.parse_multipart_form_data` now recognizes non-ASCII filenames in
+  RFC 2231/5987 (``filename*=``) format.
 - `.HTTPServerRequest.write` is deprecated and will be removed in 6.0. Use
   the methods of ``request.connection`` instead.
 - Malformed HTTP headers are now logged less noisily.
@@ -86,6 +107,8 @@ Deprecation notice
   `~.IOLoop.set_blocking_log_threshold`, `~.IOLoop.log_stack`,
   and `.IOLoop.handle_callback_exception` are deprecated and will
   be removed in 6.0.
+- Fixed a `KeyError` in `.IOLoop.close` when `.IOLoop` objects are
+  being opened and closed in multiple threads.
 
 `tornado.iostream`
 ~~~~~~~~~~~~~~~~~~
@@ -95,6 +118,19 @@ Deprecation notice
 - ``streaming_callback`` arguments to `.BaseIOStream.read_bytes` and
   `.BaseIOStream.read_until_close` are deprecated and will be removed
   in 6.0.
+
+`tornado.netutil`
+~~~~~~~~~~~~~~~~~
+
+- Improved compatibility with GNU Hurd.
+
+`tornado.options`
+~~~~~~~~~~~~~~~~~
+
+- `tornado.options.parse_config_file` now allows setting options to
+  strings (which will be parsed the same way as
+  `tornado.options.parse_command_line`) in addition to the specified
+  type for the option.
 
 `tornado.platform.twisted`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -125,6 +161,9 @@ Deprecation notice
 - New method `.RequestHandler.detach` can be used from methods
   that are not decorated with ``@asynchronous`` (the decorator
   was required to use ``self.request.connection.detach()``.
+- `.RequestHandler.finish` and `.RequestHandler.render` now return
+  ``Futures`` that can be used to wait for the last part of the
+  response to be sent to the client.
 - `.FallbackHandler` now calls ``on_finish`` for the benefit of
   subclasses that may have overridden it.
 - The `.asynchronous` decorator is deprecated and will be removed in 6.0.
@@ -135,6 +174,8 @@ Deprecation notice
 `tornado.websocket`
 ~~~~~~~~~~~~~~~~~~~
 
+- When compression is enabled, memory limits now apply to the
+  post-decompression size of the data, protecting against DoS attacks.
 - `.websocket_connect` now supports subprotocols.
 - `.WebSocketHandler` and `.WebSocketClientConnection` now have
   ``selected_subprotocol`` attributes to see the subprotocol in use.

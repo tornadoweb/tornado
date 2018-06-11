@@ -91,7 +91,6 @@ instances to define isolated sets of options, such as for subcommands.
    options can be defined, set, and read with any mix of the two.
    Dashes are typical for command-line usage while config files require
    underscores.
-
 """
 
 from __future__ import absolute_import, division, print_function
@@ -326,18 +325,20 @@ class OptionParser(object):
         the global namespace that matches a defined option will be
         used to set that option's value.
 
-        Options are not parsed from strings as they would be on the
-        command line; they should be set to the correct type (this
-        means if you have ``datetime`` or ``timedelta`` options you
-        will need to import those modules in the config file.
+        Options may either be the specified type for the option or
+        strings (in which case they will be parsed the same way as in
+        `.parse_command_line`)
 
         Example (using the options defined in the top-level docs of
         this module)::
 
             port = 80
             mysql_host = 'mydb.example.com:3306'
+            # Both lists and comma-separated strings are allowed for
+            # multiple=True.
             memcache_hosts = ['cache1.example.com:11011',
                               'cache2.example.com:11011']
+            memcache_hosts = 'cache1.example.com:11011,cache2.example.com:11011'
 
         If ``final`` is ``False``, parse callbacks will not be run.
         This is useful for applications that wish to combine configurations
@@ -357,6 +358,9 @@ class OptionParser(object):
         .. versionchanged:: 4.4
            The special variable ``__file__`` is available inside config
            files, specifying the absolute path to the config file itself.
+
+        .. versionchanged:: 5.1
+           Added the ability to set options via strings in config files.
 
         """
         config = {'__file__': os.path.abspath(path)}

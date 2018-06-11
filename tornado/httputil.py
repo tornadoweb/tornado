@@ -783,6 +783,11 @@ def parse_multipart_form_data(boundary, data, arguments, files):
     The ``boundary`` and ``data`` parameters are both byte strings.
     The dictionaries given in the arguments and files parameters
     will be updated with the contents of the body.
+
+    .. versionchanged:: 5.1
+
+       Now recognizes non-ASCII filenames in RFC 2231/5987
+       (``filename*=``) format.
     """
     # The standard allows for the boundary to be quoted in the header,
     # although it's rare (it happens at least for google app engine
