@@ -626,9 +626,8 @@ class EmptyFlushCallbackHandler(RequestHandler):
         # Ensure that the flush callback is run whether or not there
         # was any output.  The gen.Task and direct yield forms are
         # equivalent.
-        with ignore_deprecation():
-            yield gen.Task(self.flush)  # "empty" flush, but writes headers
-            yield gen.Task(self.flush)  # empty flush
+        yield self.flush()  # "empty" flush, but writes headers
+        yield self.flush()  # empty flush
         self.write("o")
         yield self.flush()  # flushes the "o"
         yield self.flush()  # empty flush
@@ -2410,11 +2409,11 @@ class ClientCloseTest(SimpleHandlerTestCase):
                 self.write('requires HTTP/1.x')
 
     def test_client_close(self):
-        with ignore_deprecation():
-            response = self.fetch('/')
-        if response.body == b'requires HTTP/1.x':
-            self.skipTest('requires HTTP/1.x')
-        self.assertEqual(response.code, 599)
+        with self.assertRaises((HTTPClientError, unittest.SkipTest)):
+            response = self.fetch('/', raise_error=True)
+            if response.body == b'requires HTTP/1.x':
+                self.skipTest('requires HTTP/1.x')
+            self.assertEqual(response.code, 599)
 
 
 class SignedValueTest(unittest.TestCase):

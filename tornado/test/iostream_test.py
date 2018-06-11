@@ -15,7 +15,6 @@ from tornado.test.util import (unittest, skipIfNonUnix, refusing_port, skipPypy3
 from tornado.web import RequestHandler, Application
 import errno
 import hashlib
-import logging
 import os
 import platform
 import random
@@ -94,33 +93,19 @@ class TestIOStreamWebMixin(object):
     @gen_test
     def test_write_while_connecting(self):
         stream = self._make_client_iostream()
-        connected = [False]
-        cond = Condition()
-
-        def connected_callback():
-            connected[0] = True
-            cond.notify()
-        with ignore_deprecation():
-            stream.connect(("127.0.0.1", self.get_http_port()),
-                           callback=connected_callback)
+        connect_fut = stream.connect(("127.0.0.1", self.get_http_port()))
         # unlike the previous tests, try to write before the connection
         # is complete.
-        written = [False]
+        write_fut = stream.write(b"GET / HTTP/1.0\r\nConnection: close\r\n\r\n")
+        self.assertFalse(connect_fut.done())
 
-        def write_callback():
-            written[0] = True
-            cond.notify()
-        with ignore_deprecation():
-            stream.write(b"GET / HTTP/1.0\r\nConnection: close\r\n\r\n",
-                         callback=write_callback)
-        self.assertTrue(not connected[0])
-        # by the time the write has flushed, the connection callback has
-        # also run
-        try:
-            while not (connected[0] and written[0]):
-                yield cond.wait()
-        finally:
-            logging.debug((connected, written))
+        # connect will always complete before write.
+        it = gen.WaitIterator(connect_fut, write_fut)
+        resolved_order = []
+        while not it.done():
+            yield it.next()
+            resolved_order.append(it.current_future)
+        self.assertEqual(resolved_order, [connect_fut, write_fut])
 
         data = yield stream.read_until_close()
         self.assertTrue(data.endswith(b"Hello"))
@@ -470,8 +455,7 @@ class TestReadWriteMixin(object):
             self.assertEqual(res, OK)
 
             ws.close()
-            with ignore_deprecation():
-                rs.read_until(b"\r\n", lambda x: x)
+            rs.read_until(b"\r\n")
             # If _close_callback (self.stop) is not called,
             # an AssertionError: Async operation timed out after 5 seconds
             # will be raised.
@@ -570,7 +554,7 @@ class TestReadWriteMixin(object):
             rs.close()
 
     @gen_test
-    def test_read_until_max_bytes_inline(self):
+    def test_read_until_max_bytes_inline_legacy(self):
         rs, ws = yield self.make_iostream_pair()
         closed = Event()
         rs.set_close_callback(closed.set)
@@ -584,6 +568,25 @@ class TestReadWriteMixin(object):
                 with ignore_deprecation():
                     rs.read_until(b"def", callback=lambda x: self.fail(), max_bytes=5)
                 yield closed.wait()
+        finally:
+            ws.close()
+            rs.close()
+
+    @gen_test
+    def test_read_until_max_bytes_inline(self):
+        rs, ws = yield self.make_iostream_pair()
+        closed = Event()
+        rs.set_close_callback(closed.set)
+        try:
+            # Similar to the error case in the previous test, but the
+            # ws writes first so rs reads are satisfied
+            # inline.  For consistency with the out-of-line case, we
+            # do not raise the error synchronously.
+            ws.write(b"123456")
+            with ExpectLog(gen_log, "Unsatisfiable read"):
+                with self.assertRaises(StreamClosedError):
+                    yield rs.read_until(b"def", max_bytes=5)
+            yield closed.wait()
         finally:
             ws.close()
             rs.close()
@@ -871,7 +874,7 @@ class TestIOStreamMixin(TestReadWriteMixin):
         listener.close()
         raise gen.Return((server_stream, client_stream))
 
-    def test_connection_refused(self):
+    def test_connection_refused_legacy(self):
         # When a connection is refused, the connect callback should not
         # be run.  (The kqueue IOLoop used to behave differently from the
         # epoll IOLoop in this respect)
@@ -898,7 +901,31 @@ class TestIOStreamMixin(TestReadWriteMixin):
             # cygwin's errnos don't match those used on native windows python
             self.assertTrue(stream.error.args[0] in _ERRNO_CONNREFUSED)
 
+    @gen_test
+    def test_connection_refused(self):
+        # When a connection is refused, the connect callback should not
+        # be run.  (The kqueue IOLoop used to behave differently from the
+        # epoll IOLoop in this respect)
+        cleanup_func, port = refusing_port()
+        self.addCleanup(cleanup_func)
+        stream = IOStream(socket.socket())
+
+        stream.set_close_callback(self.stop)
+        # log messages vary by platform and ioloop implementation
+        with ExpectLog(gen_log, ".*", required=False):
+            with self.assertRaises(StreamClosedError):
+                yield stream.connect(("127.0.0.1", port))
+
+        self.assertTrue(isinstance(stream.error, socket.error), stream.error)
+        if sys.platform != 'cygwin':
+            _ERRNO_CONNREFUSED = (errno.ECONNREFUSED,)
+            if hasattr(errno, "WSAECONNREFUSED"):
+                _ERRNO_CONNREFUSED += (errno.WSAECONNREFUSED,)
+            # cygwin's errnos don't match those used on native windows python
+            self.assertTrue(stream.error.args[0] in _ERRNO_CONNREFUSED)
+
     @unittest.skipIf(mock is None, 'mock package not present')
+    @gen_test
     def test_gaierror(self):
         # Test that IOStream sets its exc_info on getaddrinfo error.
         # It's difficult to reliably trigger a getaddrinfo error;
@@ -910,11 +937,9 @@ class TestIOStreamMixin(TestReadWriteMixin):
         stream.set_close_callback(self.stop)
         with mock.patch('socket.socket.connect',
                         side_effect=socket.gaierror(errno.EIO, 'boom')):
-            with ExpectLog(gen_log, "Connect error"):
-                with ignore_deprecation():
-                    stream.connect(('localhost', 80), callback=self.stop)
-                self.wait()
-                self.assertIsInstance(stream.error, socket.gaierror)
+            with self.assertRaises(StreamClosedError):
+                yield stream.connect(('localhost', 80))
+            self.assertTrue(isinstance(stream.error, socket.gaierror))
 
     @gen_test
     def test_read_callback_error(self):
@@ -945,8 +970,7 @@ class TestIOStreamMixin(TestReadWriteMixin):
             with mock.patch('tornado.iostream.BaseIOStream._try_inline_read',
                             side_effect=IOError('boom')):
                 with self.assertRaisesRegexp(IOError, 'boom'):
-                    with ignore_deprecation():
-                        client.read_until_close(lambda x: None)
+                    client.read_until_close()
         finally:
             server.close()
             client.close()
@@ -982,8 +1006,7 @@ class TestIOStreamMixin(TestReadWriteMixin):
         server.set_close_callback(closed.set)
         try:
             # Start a read that will be fulfilled asynchronously.
-            with ignore_deprecation():
-                server.read_bytes(1, lambda data: None)
+            server.read_bytes(1)
             client.write(b'a')
             # Stub out read_from_fd to make it fail.
 
@@ -1250,12 +1273,12 @@ class WaitForHandshakeTest(AsyncTestCase):
         handshake_future = Future()
 
         class TestServer(TCPServer):
+            @gen.coroutine
             def handle_stream(self, stream, address):
-                with ignore_deprecation():
-                    stream.wait_for_handshake(self.handshake_done)
+                fut = stream.wait_for_handshake()
                 test.assertRaises(RuntimeError, stream.wait_for_handshake)
+                yield fut
 
-            def handshake_done(self):
                 handshake_future.set_result(None)
 
         yield self.connect_to_server(TestServer)
@@ -1266,16 +1289,10 @@ class WaitForHandshakeTest(AsyncTestCase):
         handshake_future = Future()
 
         class TestServer(TCPServer):
+            @gen.coroutine
             def handle_stream(self, stream, address):
-                self.stream = stream
-                with ignore_deprecation():
-                    stream.wait_for_handshake(self.handshake_done)
-
-            def handshake_done(self):
-                with ignore_deprecation():
-                    self.stream.wait_for_handshake(self.handshake2_done)
-
-            def handshake2_done(self):
+                yield stream.wait_for_handshake()
+                yield stream.wait_for_handshake()
                 handshake_future.set_result(None)
 
         yield self.connect_to_server(TestServer)
