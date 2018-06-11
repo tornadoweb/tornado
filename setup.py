@@ -103,7 +103,7 @@ MacOS users should run:
 
 kwargs = {}
 
-version = "5.1.dev1"
+version = "5.1b1"
 
 with open('README.rst') as f:
     kwargs['long_description'] = f.read()
