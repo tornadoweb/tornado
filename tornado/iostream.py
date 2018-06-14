@@ -40,7 +40,7 @@ from tornado import ioloop
 from tornado.log import gen_log, app_log
 from tornado.netutil import ssl_wrap_socket, _client_ssl_defaults, _server_ssl_defaults
 from tornado import stack_context
-from tornado.util import errno_from_exception
+from tornado.util import errno_from_exception, Configurable
 
 try:
     from tornado.platform.posix import _set_nonblocking
@@ -1297,6 +1297,7 @@ class IOStream(BaseIOStream):
            in Tornado 6.0. Use the returned `.Future` instead.
 
         """
+
         self._connecting = True
         if callback is not None:
             warnings.warn("callback argument is deprecated, use returned Future instead",
@@ -1452,7 +1453,7 @@ class IOStream(BaseIOStream):
                     raise
 
 
-class SSLIOStream(IOStream):
+class SSLIOStream(IOStream, Configurable):
     """A utility class to write to and read from a non-blocking SSL socket.
 
     If the socket passed to the constructor is already connected,
@@ -1463,7 +1464,12 @@ class SSLIOStream(IOStream):
     before constructing the `SSLIOStream`.  Unconnected sockets will be
     wrapped when `IOStream.connect` is finished.
     """
+
     def __init__(self, *args, **kwargs):
+      pass
+
+
+    def initialize(self, *args, **kwargs):
         """The ``ssl_options`` keyword argument may either be an
         `ssl.SSLContext` object or a dictionary of keywords arguments
         for `ssl.wrap_socket`
@@ -1486,6 +1492,15 @@ class SSLIOStream(IOStream):
             # IOLoop iteration and then the real IO state will be set in
             # _handle_events.
             self._add_io_state(self.io_loop.WRITE)
+
+    @classmethod
+    def configurable_base(cls):
+        return SSLIOStream
+
+    @classmethod
+    def configurable_default(cls):
+        return SSLIOStream
+
 
     def reading(self):
         return self._handshake_reading or super(SSLIOStream, self).reading()
