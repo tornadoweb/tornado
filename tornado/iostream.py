@@ -1466,8 +1466,7 @@ class SSLIOStream(IOStream, Configurable):
     """
 
     def __init__(self, *args, **kwargs):
-      pass
-
+        pass
 
     def initialize(self, *args, **kwargs):
         """The ``ssl_options`` keyword argument may either be an
@@ -1500,7 +1499,6 @@ class SSLIOStream(IOStream, Configurable):
     @classmethod
     def configurable_default(cls):
         return SSLIOStream
-
 
     def reading(self):
         return self._handshake_reading or super(SSLIOStream, self).reading()
