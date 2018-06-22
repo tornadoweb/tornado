@@ -20,7 +20,7 @@ its prerequisites can be installed with `docker-compose up`.
 
 3. Create a database and user for the blog.
 
-   Connect to the database with `psql -Upostgres` (for PostgreSQL) or
+   Connect to the database with `psql -U postgres` (for PostgreSQL) or
    `cockroach sql` (for CockroachDB).
 
    Create a database and user, and grant permissions:
