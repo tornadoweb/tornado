@@ -116,7 +116,6 @@ var updater = {
 
     newMessages: function(response) {
         if (!response.messages) return;
-        updater.cursor = response.cursor;
         var messages = response.messages;
         updater.cursor = messages[messages.length - 1].id;
         console.log(messages.length, "new messages, cursor:", updater.cursor);
