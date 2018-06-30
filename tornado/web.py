@@ -948,6 +948,8 @@ class RequestHandler(object):
             kwargs["autoescape"] = settings["autoescape"]
         if "template_whitespace" in settings:
             kwargs["whitespace"] = settings["template_whitespace"]
+        if settings.get("template_ext_path_dict"):
+            kwargs["template_ext_path_dict"] = settings["template_ext_path_dict"]
         return template.Loader(template_path, **kwargs)
 
     def flush(self, include_footers=False, callback=None):

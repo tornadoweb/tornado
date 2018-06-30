@@ -1,0 +1,9 @@
+{% extends "{ROOT_DIR}/templates/common.html" %}
+{% block title %}This is title{% end %}
+{% block body %}
+<h1>This is post.</h1>
+<p>We passed <strong>template_ext_path_dict</strong> to <strong>Application</strong>.</p>
+<p>In this page,just use <strong>ROOT_DIR</strong> in <strong>template_ext_path_dict</strong> to extending template,</p>
+<p>it's useful to extending the same template in different level directories.</p>
+<p><a href="/">GO to main page.</a></p>
+{% end %}
