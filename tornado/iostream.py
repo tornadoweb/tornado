@@ -99,6 +99,7 @@ class StreamClosedError(IOError):
     .. versionchanged:: 4.3
        Added the ``real_error`` attribute.
     """
+
     def __init__(self, real_error=None):
         super(StreamClosedError, self).__init__('Stream is closed')
         self.real_error = real_error
@@ -226,6 +227,7 @@ class BaseIOStream(object):
     Subclasses must implement `fileno`, `close_fd`, `write_to_fd`,
     `read_from_fd`, and optionally `get_fd_error`.
     """
+
     def __init__(self, max_buffer_size=None,
                  read_chunk_size=None, max_write_buffer_size=None):
         """`BaseIOStream` constructor.
@@ -1216,6 +1218,7 @@ class IOStream(BaseIOStream):
        :hide:
 
     """
+
     def __init__(self, socket, *args, **kwargs):
         self.socket = socket
         self.socket.setblocking(False)
@@ -1472,9 +1475,28 @@ class SSLIOStream(IOStream, Configurable):
         """The ``ssl_options`` keyword argument may either be an
         `ssl.SSLContext` object or a dictionary of keywords arguments
         for `ssl.wrap_socket`
+
+        The ``create_context_on_init`` keyword argument triggers the
+        wrapping of the socket during the construction of the object.
+        If set to True, the ``server_side`` and ``do_handshake_on_connect``
+        arguments are also evaluated and passed to ssl_wrap_socket
+
         """
         self._ssl_options = kwargs.pop('ssl_options', _client_ssl_defaults)
+
+        if kwargs.pop('create_context_on_init', False):
+            server_side = kwargs.pop('server_side', False)
+            do_handshake_on_connect = kwargs.pop('do_handshake_on_connect', False)
+            connection = args[0]
+            self.socket = ssl_wrap_socket(connection,
+                                          self._ssl_options,
+                                          server_side=server_side,
+                                          do_handshake_on_connect=do_handshake_on_connect)
+
+            args = (self.socket,) + args[1:]
+
         super(SSLIOStream, self).__init__(*args, **kwargs)
+
         self._ssl_accepting = True
         self._handshake_reading = False
         self._handshake_writing = False
@@ -1730,6 +1752,7 @@ class PipeIOStream(BaseIOStream):
     one-way, so a `PipeIOStream` can be used for reading or writing but not
     both.
     """
+
     def __init__(self, fd, *args, **kwargs):
         self.fd = fd
         self._fio = io.FileIO(self.fd, "r+")

@@ -24,7 +24,7 @@ from tornado import gen
 from tornado.log import app_log
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
-from tornado.netutil import bind_sockets, add_accept_handler, ssl_wrap_socket
+from tornado.netutil import bind_sockets, add_accept_handler
 from tornado import process
 from tornado.util import errno_from_exception
 
@@ -104,6 +104,7 @@ class TCPServer(object):
     .. versionchanged:: 5.0
        The ``io_loop`` argument has been removed.
     """
+
     def __init__(self, ssl_options=None, max_buffer_size=None,
                  read_chunk_size=None):
         self.ssl_options = ssl_options
@@ -254,38 +255,16 @@ class TCPServer(object):
         raise NotImplementedError()
 
     def _handle_connection(self, connection, address):
-        if self.ssl_options is not None:
-            assert ssl, "Python 2.6+ and OpenSSL required for SSL"
-            try:
-                connection = ssl_wrap_socket(connection,
-                                             self.ssl_options,
-                                             server_side=True,
-                                             do_handshake_on_connect=False)
-            except ssl.SSLError as err:
-                if err.args[0] == ssl.SSL_ERROR_EOF:
-                    return connection.close()
-                else:
-                    raise
-            except socket.error as err:
-                # If the connection is closed immediately after it is created
-                # (as in a port scan), we can get one of several errors.
-                # wrap_socket makes an internal call to getpeername,
-                # which may return either EINVAL (Mac OS X) or ENOTCONN
-                # (Linux).  If it returns ENOTCONN, this error is
-                # silently swallowed by the ssl module, so we need to
-                # catch another error later on (AttributeError in
-                # SSLIOStream._do_ssl_handshake).
-                # To test this behavior, try nmap with the -sT flag.
-                # https://github.com/tornadoweb/tornado/pull/750
-                if errno_from_exception(err) in (errno.ECONNABORTED, errno.EINVAL):
-                    return connection.close()
-                else:
-                    raise
         try:
             if self.ssl_options is not None:
                 stream = SSLIOStream(connection,
                                      max_buffer_size=self.max_buffer_size,
-                                     read_chunk_size=self.read_chunk_size)
+                                     read_chunk_size=self.read_chunk_size,
+                                     ssl_options=self.ssl_options,
+                                     server_side=True,
+                                     do_handshake_on_connect=False,
+                                     create_context_on_init=True)
+
             else:
                 stream = IOStream(connection,
                                   max_buffer_size=self.max_buffer_size,
@@ -295,5 +274,27 @@ class TCPServer(object):
             if future is not None:
                 IOLoop.current().add_future(gen.convert_yielded(future),
                                             lambda f: f.result())
+
+        except ssl.SSLError as err:
+            if err.args[0] == ssl.SSL_ERROR_EOF:
+                return connection.close()
+            else:
+                raise
+        except socket.error as err:
+            # If the connection is closed immediately after it is created
+            # (as in a port scan), we can get one of several errors.
+            # wrap_socket makes an internal call to getpeername,
+            # which may return either EINVAL (Mac OS X) or ENOTCONN
+            # (Linux).  If it returns ENOTCONN, this error is
+            # silently swallowed by the ssl module, so we need to
+            # catch another error later on (AttributeError in
+            # SSLIOStream._do_ssl_handshake).
+            # To test this behavior, try nmap with the -sT flag.
+            # https://github.com/tornadoweb/tornado/pull/750
+            if errno_from_exception(err) in (errno.ECONNABORTED, errno.EINVAL):
+                return connection.close()
+            else:
+                raise
+
         except Exception:
             app_log.error("Error in connection callback", exc_info=True)
