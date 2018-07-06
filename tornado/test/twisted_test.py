@@ -32,7 +32,7 @@ from tornado.escape import utf8
 from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
-from tornado.ioloop import IOLoop, PollIOLoop
+from tornado.ioloop import IOLoop
 from tornado.platform.auto import set_close_exec
 from tornado.testing import bind_unused_port
 from tornado.test.util import unittest
@@ -687,43 +687,6 @@ if have_twisted:
         pass
     else:
         globalLogBeginner.beginLoggingTo([], redirectStandardIO=False)
-
-if have_twisted:
-    class LayeredTwistedIOLoop(TwistedIOLoop):
-        """Layers a TwistedIOLoop on top of a TornadoReactor on a PollIOLoop.
-
-        This is of course silly, but is useful for testing purposes to make
-        sure we're implementing both sides of the various interfaces
-        correctly.  In some tests another TornadoReactor is layered on top
-        of the whole stack.
-        """
-        def initialize(self, **kwargs):
-            self.real_io_loop = PollIOLoop(make_current=False)  # type: ignore
-            reactor = self.real_io_loop.run_sync(gen.coroutine(TornadoReactor))
-            super(LayeredTwistedIOLoop, self).initialize(reactor=reactor, **kwargs)
-            self.add_callback(self.make_current)
-
-        def close(self, all_fds=False):
-            super(LayeredTwistedIOLoop, self).close(all_fds=all_fds)
-            # HACK: This is the same thing that test_class.unbuildReactor does.
-            for reader in self.reactor._internalReaders:
-                self.reactor.removeReader(reader)
-                reader.connectionLost(None)
-            self.real_io_loop.close(all_fds=all_fds)
-
-        def stop(self):
-            # One of twisted's tests fails if I don't delay crash()
-            # until the reactor has started, but if I move this to
-            # TwistedIOLoop then the tests fail when I'm *not* running
-            # tornado-on-twisted-on-tornado.  I'm clearly missing something
-            # about the startup/crash semantics, but since stop and crash
-            # are really only used in tests it doesn't really matter.
-            def f():
-                self.reactor.crash()
-                # Become current again on restart. This is needed to
-                # override real_io_loop's claim to being the current loop.
-                self.add_callback(self.make_current)
-            self.reactor.callWhenRunning(f)
 
 if __name__ == "__main__":
     unittest.main()

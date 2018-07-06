@@ -20,9 +20,8 @@ except ImportError:
 
 from tornado.escape import native_str
 from tornado import gen
-from tornado.ioloop import IOLoop, TimeoutError, PollIOLoop, PeriodicCallback
+from tornado.ioloop import IOLoop, TimeoutError, PeriodicCallback
 from tornado.log import app_log
-from tornado.platform.select import _Select
 from tornado.stack_context import ExceptionStackContext, StackContext, wrap, NullContext
 from tornado.testing import AsyncTestCase, bind_unused_port, ExpectLog, gen_test
 from tornado.test.util import (unittest, skipIfNonUnix, skipOnTravis,
@@ -42,42 +41,6 @@ try:
     import twisted
 except ImportError:
     twisted = None
-
-
-class FakeTimeSelect(_Select):
-    def __init__(self):
-        self._time = 1000
-        super(FakeTimeSelect, self).__init__()
-
-    def time(self):
-        return self._time
-
-    def sleep(self, t):
-        self._time += t
-
-    def poll(self, timeout):
-        events = super(FakeTimeSelect, self).poll(0)
-        if events:
-            return events
-        self._time += timeout
-        return []
-
-
-class FakeTimeIOLoop(PollIOLoop):
-    """IOLoop implementation with a fake and deterministic clock.
-
-    The clock advances as needed to trigger timeouts immediately.
-    For use when testing code that involves the passage of time
-    and no external dependencies.
-    """
-    def initialize(self):
-        self.fts = FakeTimeSelect()
-        super(FakeTimeIOLoop, self).initialize(impl=self.fts,
-                                               time_func=self.fts.time)
-
-    def sleep(self, t):
-        """Simulate a blocking sleep by advancing the clock."""
-        self.fts.sleep(t)
 
 
 class TestIOLoop(AsyncTestCase):
@@ -278,7 +241,7 @@ class TestIOLoop(AsyncTestCase):
         self.io_loop.call_later(0, self.stop)
         self.wait()
         # The asyncio event loop does not guarantee the order of these
-        # callbacks, but PollIOLoop does.
+        # callbacks.
         self.assertEqual(sorted(results), [1, 2, 3, 4])
 
     def test_add_timeout_return(self):
@@ -751,66 +714,6 @@ class TestIOLoopRunSync(unittest.TestCase):
         self.io_loop.run_sync(namespace['f2'])
 
 
-@unittest.skipIf(asyncio is not None,
-                 'IOLoop configuration not available')
-class TestPeriodicCallback(unittest.TestCase):
-    def setUp(self):
-        self.io_loop = FakeTimeIOLoop()
-        self.io_loop.make_current()
-
-    def tearDown(self):
-        self.io_loop.close()
-
-    def test_basic(self):
-        calls = []
-
-        def cb():
-            calls.append(self.io_loop.time())
-        pc = PeriodicCallback(cb, 10000)
-        pc.start()
-        self.io_loop.call_later(50, self.io_loop.stop)
-        self.io_loop.start()
-        self.assertEqual(calls, [1010, 1020, 1030, 1040, 1050])
-
-    def test_overrun(self):
-        sleep_durations = [9, 9, 10, 11, 20, 20, 35, 35, 0, 0]
-        expected = [
-            1010, 1020, 1030,  # first 3 calls on schedule
-            1050, 1070,  # next 2 delayed one cycle
-            1100, 1130,  # next 2 delayed 2 cycles
-            1170, 1210,  # next 2 delayed 3 cycles
-            1220, 1230,  # then back on schedule.
-        ]
-        calls = []
-
-        def cb():
-            calls.append(self.io_loop.time())
-            if not sleep_durations:
-                self.io_loop.stop()
-                return
-            self.io_loop.sleep(sleep_durations.pop(0))
-        pc = PeriodicCallback(cb, 10000)
-        pc.start()
-        self.io_loop.start()
-        self.assertEqual(calls, expected)
-
-    def test_io_loop_set_at_start(self):
-        # Check PeriodicCallback uses the current IOLoop at start() time,
-        # not at instantiation time.
-        calls = []
-        io_loop = FakeTimeIOLoop()
-
-        def cb():
-            calls.append(io_loop.time())
-        pc = PeriodicCallback(cb, 10000)
-        io_loop.make_current()
-        pc.start()
-        io_loop.call_later(50, io_loop.stop)
-        io_loop.start()
-        self.assertEqual(calls, [1010, 1020, 1030, 1040, 1050])
-        io_loop.close()
-
-
 class TestPeriodicCallbackMath(unittest.TestCase):
     def simulate_calls(self, pc, durations):
         """Simulate a series of calls to the PeriodicCallback.
@@ -884,24 +787,18 @@ class TestPeriodicCallbackMath(unittest.TestCase):
 class TestIOLoopConfiguration(unittest.TestCase):
     def run_python(self, *statements):
         statements = [
-            'from tornado.ioloop import IOLoop, PollIOLoop',
+            'from tornado.ioloop import IOLoop',
             'classname = lambda x: x.__class__.__name__',
         ] + list(statements)
         args = [sys.executable, '-c', '; '.join(statements)]
         return native_str(subprocess.check_output(args)).strip()
 
     def test_default(self):
-        if asyncio is not None:
-            # When asyncio is available, it is used by default.
-            cls = self.run_python('print(classname(IOLoop.current()))')
-            self.assertEqual(cls, 'AsyncIOMainLoop')
-            cls = self.run_python('print(classname(IOLoop()))')
-            self.assertEqual(cls, 'AsyncIOLoop')
-        else:
-            # Otherwise, the default is a subclass of PollIOLoop
-            is_poll = self.run_python(
-                'print(isinstance(IOLoop.current(), PollIOLoop))')
-            self.assertEqual(is_poll, 'True')
+        # When asyncio is available, it is used by default.
+        cls = self.run_python('print(classname(IOLoop.current()))')
+        self.assertEqual(cls, 'AsyncIOMainLoop')
+        cls = self.run_python('print(classname(IOLoop()))')
+        self.assertEqual(cls, 'AsyncIOLoop')
 
     @unittest.skipIf(asyncio is not None,
                      "IOLoop configuration not available")

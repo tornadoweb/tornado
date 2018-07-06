@@ -43,9 +43,6 @@ coverage_ignore_classes = [
     # tornado.gen
     "Runner",
 
-    # tornado.ioloop
-    "PollIOLoop",
-
     # tornado.web
     "ChunkedTransferEncoding",
     "GZipContentEncoding",

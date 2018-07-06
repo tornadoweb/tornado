@@ -23,16 +23,14 @@ This module has been tested with Twisted versions 11.0.0 and newer.
 
 from __future__ import absolute_import, division, print_function
 
-import datetime
 import functools
-import numbers
 import socket
 import sys
 
 import twisted.internet.abstract  # type: ignore
 from twisted.internet.defer import Deferred  # type: ignore
 from twisted.internet.posixbase import PosixReactorBase  # type: ignore
-from twisted.internet.interfaces import IReactorFDSet, IDelayedCall, IReactorTime, IReadDescriptor, IWriteDescriptor  # type: ignore # noqa: E501
+from twisted.internet.interfaces import IReactorFDSet, IDelayedCall, IReactorTime  # type: ignore
 from twisted.python import failure, log  # type: ignore
 from twisted.internet import error  # type: ignore
 import twisted.names.cache  # type: ignore
@@ -48,9 +46,8 @@ from tornado import gen
 import tornado.ioloop
 from tornado.log import app_log
 from tornado.netutil import Resolver
-from tornado.stack_context import NullContext, wrap
+from tornado.stack_context import NullContext
 from tornado.ioloop import IOLoop
-from tornado.util import timedelta_to_seconds
 
 
 @implementer(IDelayedCall)
@@ -366,167 +363,6 @@ def install():
     from twisted.internet.main import installReactor  # type: ignore
     installReactor(reactor)
     return reactor
-
-
-@implementer(IReadDescriptor, IWriteDescriptor)
-class _FD(object):
-    def __init__(self, fd, fileobj, handler):
-        self.fd = fd
-        self.fileobj = fileobj
-        self.handler = handler
-        self.reading = False
-        self.writing = False
-        self.lost = False
-
-    def fileno(self):
-        return self.fd
-
-    def doRead(self):
-        if not self.lost:
-            self.handler(self.fileobj, tornado.ioloop.IOLoop.READ)
-
-    def doWrite(self):
-        if not self.lost:
-            self.handler(self.fileobj, tornado.ioloop.IOLoop.WRITE)
-
-    def connectionLost(self, reason):
-        if not self.lost:
-            self.handler(self.fileobj, tornado.ioloop.IOLoop.ERROR)
-            self.lost = True
-
-    writeConnectionLost = readConnectionLost = connectionLost
-
-    def logPrefix(self):
-        return ''
-
-
-class TwistedIOLoop(tornado.ioloop.IOLoop):
-    """IOLoop implementation that runs on Twisted.
-
-    `TwistedIOLoop` implements the Tornado IOLoop interface on top of
-    the Twisted reactor. Recommended usage::
-
-        from tornado.platform.twisted import TwistedIOLoop
-        from twisted.internet import reactor
-        TwistedIOLoop().install()
-        # Set up your tornado application as usual using `IOLoop.instance`
-        reactor.run()
-
-    Uses the global Twisted reactor by default.  To create multiple
-    ``TwistedIOLoops`` in the same process, you must pass a unique reactor
-    when constructing each one.
-
-    Not compatible with `tornado.process.Subprocess.set_exit_callback`
-    because the ``SIGCHLD`` handlers used by Tornado and Twisted conflict
-    with each other.
-
-    See also :meth:`tornado.ioloop.IOLoop.install` for general notes on
-    installing alternative IOLoops.
-
-    .. deprecated:: 5.1
-
-       The `asyncio` event loop will be the only available implementation in
-       Tornado 6.0.
-    """
-    def initialize(self, reactor=None, **kwargs):
-        super(TwistedIOLoop, self).initialize(**kwargs)
-        if reactor is None:
-            import twisted.internet.reactor  # type: ignore
-            reactor = twisted.internet.reactor
-        self.reactor = reactor
-        self.fds = {}
-
-    def close(self, all_fds=False):
-        fds = self.fds
-        self.reactor.removeAll()
-        for c in self.reactor.getDelayedCalls():
-            c.cancel()
-        if all_fds:
-            for fd in fds.values():
-                self.close_fd(fd.fileobj)
-
-    def add_handler(self, fd, handler, events):
-        if fd in self.fds:
-            raise ValueError('fd %s added twice' % fd)
-        fd, fileobj = self.split_fd(fd)
-        self.fds[fd] = _FD(fd, fileobj, wrap(handler))
-        if events & tornado.ioloop.IOLoop.READ:
-            self.fds[fd].reading = True
-            self.reactor.addReader(self.fds[fd])
-        if events & tornado.ioloop.IOLoop.WRITE:
-            self.fds[fd].writing = True
-            self.reactor.addWriter(self.fds[fd])
-
-    def update_handler(self, fd, events):
-        fd, fileobj = self.split_fd(fd)
-        if events & tornado.ioloop.IOLoop.READ:
-            if not self.fds[fd].reading:
-                self.fds[fd].reading = True
-                self.reactor.addReader(self.fds[fd])
-        else:
-            if self.fds[fd].reading:
-                self.fds[fd].reading = False
-                self.reactor.removeReader(self.fds[fd])
-        if events & tornado.ioloop.IOLoop.WRITE:
-            if not self.fds[fd].writing:
-                self.fds[fd].writing = True
-                self.reactor.addWriter(self.fds[fd])
-        else:
-            if self.fds[fd].writing:
-                self.fds[fd].writing = False
-                self.reactor.removeWriter(self.fds[fd])
-
-    def remove_handler(self, fd):
-        fd, fileobj = self.split_fd(fd)
-        if fd not in self.fds:
-            return
-        self.fds[fd].lost = True
-        if self.fds[fd].reading:
-            self.reactor.removeReader(self.fds[fd])
-        if self.fds[fd].writing:
-            self.reactor.removeWriter(self.fds[fd])
-        del self.fds[fd]
-
-    def start(self):
-        old_current = IOLoop.current(instance=False)
-        try:
-            self._setup_logging()
-            self.make_current()
-            self.reactor.run()
-        finally:
-            if old_current is None:
-                IOLoop.clear_current()
-            else:
-                old_current.make_current()
-
-    def stop(self):
-        self.reactor.crash()
-
-    def add_timeout(self, deadline, callback, *args, **kwargs):
-        # This method could be simplified (since tornado 4.0) by
-        # overriding call_at instead of add_timeout, but we leave it
-        # for now as a test of backwards-compatibility.
-        if isinstance(deadline, numbers.Real):
-            delay = max(deadline - self.time(), 0)
-        elif isinstance(deadline, datetime.timedelta):
-            delay = timedelta_to_seconds(deadline)
-        else:
-            raise TypeError("Unsupported deadline %r")
-        return self.reactor.callLater(
-            delay, self._run_callback,
-            functools.partial(wrap(callback), *args, **kwargs))
-
-    def remove_timeout(self, timeout):
-        if timeout.active():
-            timeout.cancel()
-
-    def add_callback(self, callback, *args, **kwargs):
-        self.reactor.callFromThread(
-            self._run_callback,
-            functools.partial(wrap(callback), *args, **kwargs))
-
-    def add_callback_from_signal(self, callback, *args, **kwargs):
-        self.add_callback(callback, *args, **kwargs)
 
 
 class TwistedResolver(Resolver):
