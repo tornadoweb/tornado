@@ -47,7 +47,6 @@ TEST_MODULES = [
     'tornado.test.queues_test',
     'tornado.test.routing_test',
     'tornado.test.simple_httpclient_test',
-    'tornado.test.stack_context_test',
     'tornado.test.tcpclient_test',
     'tornado.test.tcpserver_test',
     'tornado.test.template_test',

@@ -182,26 +182,6 @@ class ReturnFutureTest(AsyncTestCase):
         future.result()
 
     @gen_test
-    def test_future_traceback_legacy(self):
-        with ignore_deprecation():
-            @return_future
-            @gen.engine
-            def f(callback):
-                yield gen.Task(self.io_loop.add_callback)
-                try:
-                    1 / 0
-                except ZeroDivisionError:
-                    self.expected_frame = traceback.extract_tb(
-                        sys.exc_info()[2], limit=1)[0]
-                    raise
-            try:
-                yield f()
-                self.fail("didn't get expected exception")
-            except ZeroDivisionError:
-                tb = traceback.extract_tb(sys.exc_info()[2])
-                self.assertIn(self.expected_frame, tb)
-
-    @gen_test
     def test_future_traceback(self):
         @gen.coroutine
         def f():

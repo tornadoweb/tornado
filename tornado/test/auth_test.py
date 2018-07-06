@@ -254,20 +254,6 @@ class TwitterClientLoginHandler(TwitterClientHandler):
         yield self.authorize_redirect()
 
 
-class TwitterClientLoginGenEngineHandler(TwitterClientHandler):
-    with ignore_deprecation():
-        @asynchronous
-        @gen.engine
-        def get(self):
-            if self.get_argument("oauth_token", None):
-                user = yield self.get_authenticated_user()
-                self.finish(user)
-            else:
-                # Old style: with @gen.engine we can ignore the Future from
-                # authorize_redirect.
-                self.authorize_redirect()
-
-
 class TwitterClientLoginGenCoroutineHandler(TwitterClientHandler):
     @gen.coroutine
     def get(self):
@@ -278,25 +264,6 @@ class TwitterClientLoginGenCoroutineHandler(TwitterClientHandler):
             # New style: with @gen.coroutine the result must be yielded
             # or else the request will be auto-finished too soon.
             yield self.authorize_redirect()
-
-
-class TwitterClientShowUserHandlerLegacy(TwitterClientHandler):
-    with ignore_deprecation():
-        @asynchronous
-        @gen.engine
-        def get(self):
-            # TODO: would be nice to go through the login flow instead of
-            # cheating with a hard-coded access token.
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore', DeprecationWarning)
-                response = yield gen.Task(self.twitter_request,
-                                          '/users/show/%s' % self.get_argument('name'),
-                                          access_token=dict(key='hjkl', secret='vbnm'))
-            if response is None:
-                self.set_status(500)
-                self.finish('error from twitter request')
-            else:
-                self.finish(response)
 
 
 class TwitterClientShowUserHandler(TwitterClientHandler):
@@ -376,12 +343,8 @@ class AuthTest(AsyncHTTPTestCase):
 
                 ('/legacy/twitter/client/login', TwitterClientLoginHandlerLegacy, dict(test=self)),
                 ('/twitter/client/login', TwitterClientLoginHandler, dict(test=self)),
-                ('/twitter/client/login_gen_engine',
-                 TwitterClientLoginGenEngineHandler, dict(test=self)),
                 ('/twitter/client/login_gen_coroutine',
                  TwitterClientLoginGenCoroutineHandler, dict(test=self)),
-                ('/legacy/twitter/client/show_user',
-                 TwitterClientShowUserHandlerLegacy, dict(test=self)),
                 ('/twitter/client/show_user',
                  TwitterClientShowUserHandler, dict(test=self)),
 
@@ -567,9 +530,6 @@ class AuthTest(AsyncHTTPTestCase):
     def test_twitter_redirect(self):
         self.base_twitter_redirect('/twitter/client/login')
 
-    def test_twitter_redirect_gen_engine(self):
-        self.base_twitter_redirect('/twitter/client/login_gen_engine')
-
     def test_twitter_redirect_gen_coroutine(self):
         self.base_twitter_redirect('/twitter/client/login_gen_coroutine')
 
@@ -586,18 +546,6 @@ class AuthTest(AsyncHTTPTestCase):
                           u'name': u'Foo',
                           u'screen_name': u'foo',
                           u'username': u'foo'})
-
-    def test_twitter_show_user_legacy(self):
-        response = self.fetch('/legacy/twitter/client/show_user?name=somebody')
-        response.rethrow()
-        self.assertEqual(json_decode(response.body),
-                         {'name': 'Somebody', 'screen_name': 'somebody'})
-
-    def test_twitter_show_user_error_legacy(self):
-        with ExpectLog(gen_log, 'Error response HTTP 500'):
-            response = self.fetch('/legacy/twitter/client/show_user?name=error')
-        self.assertEqual(response.code, 500)
-        self.assertEqual(response.body, b'error from twitter request')
 
     def test_twitter_show_user(self):
         response = self.fetch('/twitter/client/show_user?name=somebody')
