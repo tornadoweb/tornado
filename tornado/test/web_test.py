@@ -582,26 +582,6 @@ class OptionalPathHandler(RequestHandler):
         self.write({"path": path})
 
 
-class FlowControlHandler(RequestHandler):
-    # These writes are too small to demonstrate real flow control,
-    # but at least it shows that the callbacks get run.
-    with ignore_deprecation():
-        @asynchronous
-        def get(self):
-            self.write("1")
-            with ignore_deprecation():
-                self.flush(callback=self.step2)
-
-    def step2(self):
-        self.write("2")
-        with ignore_deprecation():
-            self.flush(callback=self.step3)
-
-    def step3(self):
-        self.write("3")
-        self.finish()
-
-
 class MultiHeaderHandler(RequestHandler):
     def get(self):
         self.set_header("x-overwrite", "1")
@@ -911,12 +891,8 @@ js_embed()
 
 class NonWSGIWebTests(WebTestCase):
     def get_handlers(self):
-        return [("/flow_control", FlowControlHandler),
-                ("/empty_flush", EmptyFlushCallbackHandler),
+        return [("/empty_flush", EmptyFlushCallbackHandler),
                 ]
-
-    def test_flow_control(self):
-        self.assertEqual(self.fetch("/flow_control").body, b"123")
 
     def test_empty_flush(self):
         response = self.fetch("/empty_flush")

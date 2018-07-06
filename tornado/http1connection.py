@@ -21,7 +21,6 @@
 from __future__ import absolute_import, division, print_function
 
 import re
-import warnings
 
 from tornado.concurrent import (Future, future_add_done_callback,
                                 future_set_result_unless_cancelled)
@@ -31,7 +30,7 @@ from tornado import httputil
 from tornado import iostream
 from tornado.log import gen_log, app_log
 from tornado import stack_context
-from tornado.util import GzipDecompressor, PY3
+from tornado.util import GzipDecompressor
 
 
 class _QuietException(Exception):
@@ -337,7 +336,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         """
         self._max_body_size = max_body_size
 
-    def write_headers(self, start_line, headers, chunk=None, callback=None):
+    def write_headers(self, start_line, headers, chunk=None):
         """Implements `.HTTPConnection.write_headers`."""
         lines = []
         if self.is_client:
@@ -388,10 +387,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         # cases that let bytes slip through. Remove these native_str calls when those
         # are fixed.
         header_lines = (native_str(n) + ": " + native_str(v) for n, v in headers.get_all())
-        if PY3:
-            lines.extend(l.encode('latin1') for l in header_lines)
-        else:
-            lines.extend(header_lines)
+        lines.extend(l.encode('latin1') for l in header_lines)
         for line in lines:
             if b'\n' in line:
                 raise ValueError('Newline in header: ' + repr(line))
@@ -401,12 +397,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             future.set_exception(iostream.StreamClosedError())
             future.exception()
         else:
-            if callback is not None:
-                warnings.warn("callback argument is deprecated, use returned Future instead",
-                              DeprecationWarning)
-                self._write_callback = stack_context.wrap(callback)
-            else:
-                future = self._write_future = Future()
+            future = self._write_future = Future()
             data = b"\r\n".join(lines) + b"\r\n\r\n"
             if chunk:
                 data += self._format_chunk(chunk)
@@ -429,7 +420,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         else:
             return chunk
 
-    def write(self, chunk, callback=None):
+    def write(self, chunk):
         """Implements `.HTTPConnection.write`.
 
         For backwards compatibility it is allowed but deprecated to
@@ -442,12 +433,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             self._write_future.set_exception(iostream.StreamClosedError())
             self._write_future.exception()
         else:
-            if callback is not None:
-                warnings.warn("callback argument is deprecated, use returned Future instead",
-                              DeprecationWarning)
-                self._write_callback = stack_context.wrap(callback)
-            else:
-                future = self._write_future = Future()
+            future = self._write_future = Future()
             self._pending_write = self.stream.write(self._format_chunk(chunk))
             self._pending_write.add_done_callback(self._on_write_complete)
         return future

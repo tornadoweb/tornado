@@ -950,7 +950,7 @@ class RequestHandler(object):
             kwargs["whitespace"] = settings["template_whitespace"]
         return template.Loader(template_path, **kwargs)
 
-    def flush(self, include_footers=False, callback=None):
+    def flush(self, include_footers=False):
         """Flushes the current output buffer to the network.
 
         The ``callback`` argument, if given, can be used for flow control:
@@ -962,10 +962,9 @@ class RequestHandler(object):
         .. versionchanged:: 4.0
            Now returns a `.Future` if no callback is given.
 
-        .. deprecated:: 5.1
+        .. versionchanged:: 6.0
 
-           The ``callback`` argument is deprecated and will be removed in
-           Tornado 6.0.
+           The ``callback`` argument was removed.
         """
         chunk = b"".join(self._write_buffer)
         self._write_buffer = []
@@ -991,13 +990,13 @@ class RequestHandler(object):
                                                     self._status_code,
                                                     self._reason)
             return self.request.connection.write_headers(
-                start_line, self._headers, chunk, callback=callback)
+                start_line, self._headers, chunk)
         else:
             for transform in self._transforms:
                 chunk = transform.transform_chunk(chunk, include_footers)
             # Ignore the chunk and only write the headers for HEAD requests
             if self.request.method != "HEAD":
-                return self.request.connection.write(chunk, callback=callback)
+                return self.request.connection.write(chunk)
             else:
                 future = Future()
                 future.set_result(None)
