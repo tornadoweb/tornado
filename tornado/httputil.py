@@ -83,6 +83,7 @@ class _NormalizedHeaderCache(dict):
     >>> normalized_headers["coNtent-TYPE"]
     'Content-Type'
     """
+
     def __init__(self, size):
         super(_NormalizedHeaderCache, self).__init__()
         self.size = size
@@ -132,6 +133,7 @@ class HTTPHeaders(collections.MutableMapping):
     Set-Cookie: A=B
     Set-Cookie: C=D
     """
+
     def __init__(self, *args, **kwargs):
         self._dict = {}  # type: typing.Dict[str, str]
         self._as_list = {}  # type: typing.Dict[str, typing.List[str]]
@@ -349,6 +351,7 @@ class HTTPServerRequest(object):
     .. versionchanged:: 4.0
        Moved from ``tornado.httpserver.HTTPRequest``.
     """
+
     def __init__(self, method=None, uri=None, version="HTTP/1.0", headers=None,
                  body=None, host=None, files=None, connection=None,
                  start_line=None, server_connection=None):
@@ -451,30 +454,19 @@ class HTTPServerRequest(object):
         else:
             return self._finish_time - self._start_time
 
-    def get_ssl_certificate(self, binary_form=False):
+    def get_ssl_certificate(self, **kwargs):
         """Returns the client's SSL certificate, if any.
+           See the documentation of the IOStream method for details
 
-        To use client certificates, the HTTPServer's
-        `ssl.SSLContext.verify_mode` field must be set, e.g.::
-
-            ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-            ssl_ctx.load_cert_chain("foo.crt", "foo.key")
-            ssl_ctx.load_verify_locations("cacerts.pem")
-            ssl_ctx.verify_mode = ssl.CERT_REQUIRED
-            server = HTTPServer(app, ssl_options=ssl_ctx)
-
-        By default, the return value is a dictionary (or None, if no
-        client certificate is present).  If ``binary_form`` is true, a
-        DER-encoded form of the certificate is returned instead.  See
-        SSLSocket.getpeercert() in the standard library for more
-        details.
-        http://docs.python.org/library/ssl.html#sslsocket-objects
         """
-        try:
-            return self.connection.stream.socket.getpeercert(
-                binary_form=binary_form)
-        except SSLError:
-            return None
+        return self.connection.stream.get_ssl_certificate(**kwargs)
+
+    def get_ssl_certificate_chain(self, **kwargs):
+        """Returns the client's SSL certificate chain, if any.
+           See the documentation of the IOStream method for details
+
+        """
+        return self.connection.stream.get_ssl_certificate_chain(**kwargs)
 
     def _parse_body(self):
         parse_body_arguments(
@@ -513,6 +505,7 @@ class HTTPServerConnectionDelegate(object):
 
     .. versionadded:: 4.0
     """
+
     def start_request(self, server_conn, request_conn):
         """This method is called by the server when a new request has started.
 
@@ -539,6 +532,7 @@ class HTTPMessageDelegate(object):
 
     .. versionadded:: 4.0
     """
+
     def headers_received(self, start_line, headers):
         """Called when the HTTP headers have been received and parsed.
 
@@ -579,6 +573,7 @@ class HTTPConnection(object):
 
     .. versionadded:: 4.0
     """
+
     def write_headers(self, start_line, headers, chunk=None, callback=None):
         """Write an HTTP header block.
 

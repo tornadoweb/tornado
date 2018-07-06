@@ -1743,6 +1743,37 @@ class SSLIOStream(IOStream, Configurable):
             return True
         return super(SSLIOStream, self)._is_connreset(e)
 
+    def get_ssl_certificate(self, **kwargs):
+        """" Returns the client's SSL certificate, if any.
+
+              To use client certificates, the HTTPServer's
+              `ssl.SSLContext.verify_mode` field must be set, e.g.::
+
+                  ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                  ssl_ctx.load_cert_chain("foo.crt", "foo.key")
+                  ssl_ctx.load_verify_locations("cacerts.pem")
+                  ssl_ctx.verify_mode = ssl.CERT_REQUIRED
+                  server = HTTPServer(app, ssl_options=ssl_ctx)
+
+              By default, the return value is a dictionary (or None, if no
+              client certificate is present).  If ``binary_form`` is true, a
+              DER-encoded form of the certificate is returned instead.  See
+              SSLSocket.getpeercert() in the standard library for more
+              details.
+              http://docs.python.org/library/ssl.html#sslsocket-objects
+        """
+        binary_form = kwargs.get('binary_form', False)
+        try:
+            return self.socket.getpeercert(binary_form=binary_form)
+        except ssl.SSLError:
+            return None
+
+    def get_ssl_certificate_chain(self, **kwargs):
+        """ Should returns the client's SSL Certificate chain.
+            However, the python ssl library does not expose this
+        """
+        raise NotImplemented
+
 
 class PipeIOStream(BaseIOStream):
     """Pipe-based `IOStream` implementation.
