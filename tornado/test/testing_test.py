@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from tornado import gen, ioloop
+from tornado.httpserver import HTTPServer
 from tornado.log import app_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, HTTPTimeoutError
 from tornado.test.util import unittest, skipBefore35, exec_test, ignore_deprecation
@@ -84,12 +85,15 @@ class AsyncTestCaseTest(AsyncTestCase):
 
 
 class AsyncHTTPTestCaseTest(AsyncHTTPTestCase):
-    @classmethod
-    def setUpClass(cls):
-        super(AsyncHTTPTestCaseTest, cls).setUpClass()
-        # An unused port is bound so we can make requests upon it without
-        # impacting a real local web server.
-        cls.external_sock, cls.external_port = bind_unused_port()
+    def setUp(self):
+        super(AsyncHTTPTestCaseTest, self).setUp()
+        # Bind a second port.
+        sock, port = bind_unused_port()
+        app = Application()
+        server = HTTPServer(app, **self.get_httpserver_options())
+        server.add_socket(sock)
+        self.second_port = port
+        self.second_server = server
 
     def get_app(self):
         return Application()
@@ -99,28 +103,17 @@ class AsyncHTTPTestCaseTest(AsyncHTTPTestCase):
         response = self.fetch(path)
         self.assertEqual(response.request.url, self.get_url(path))
 
-    @gen_test
     def test_fetch_full_http_url(self):
-        path = 'http://localhost:%d/path' % self.external_port
+        # Ensure that self.fetch() recognizes absolute urls and does
+        # not transform them into references to our main test server.
+        path = 'http://localhost:%d/path' % self.second_port
 
-        with contextlib.closing(SimpleAsyncHTTPClient(force_instance=True)) as client:
-            with self.assertRaises(HTTPTimeoutError) as cm:
-                yield client.fetch(path, request_timeout=0.1, raise_error=True)
-        self.assertEqual(cm.exception.response.request.url, path)
+        response = self.fetch(path)
+        self.assertEqual(response.request.url, path)
 
-    @gen_test
-    def test_fetch_full_https_url(self):
-        path = 'https://localhost:%d/path' % self.external_port
-
-        with contextlib.closing(SimpleAsyncHTTPClient(force_instance=True)) as client:
-            with self.assertRaises(HTTPTimeoutError) as cm:
-                yield client.fetch(path, request_timeout=0.1, raise_error=True)
-        self.assertEqual(cm.exception.response.request.url, path)
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.external_sock.close()
-        super(AsyncHTTPTestCaseTest, cls).tearDownClass()
+    def tearDown(self):
+        self.second_server.stop()
+        super(AsyncHTTPTestCaseTest, self).tearDown()
 
 
 class AsyncTestCaseWrapperTest(unittest.TestCase):

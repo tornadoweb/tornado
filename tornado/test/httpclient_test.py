@@ -430,28 +430,6 @@ X-XSS-Protection: 1;
         self.assertEqual(response.code, 304)
         self.assertEqual(response.headers['Content-Length'], '42')
 
-    def test_final_callback_stack_context(self):
-        # The final callback should be run outside of the httpclient's
-        # stack_context.  We want to ensure that there is not stack_context
-        # between the user's callback and the IOLoop, so monkey-patch
-        # IOLoop.handle_callback_exception and disable the test harness's
-        # context with a NullContext.
-        # Note that this does not apply to secondary callbacks (header
-        # and streaming_callback), as errors there must be seen as errors
-        # by the http client so it can clean up the connection.
-        exc_info = []
-
-        def handle_callback_exception(callback):
-            exc_info.append(sys.exc_info())
-            self.stop()
-        self.io_loop.handle_callback_exception = handle_callback_exception
-        with NullContext():
-            with ignore_deprecation():
-                self.http_client.fetch(self.get_url('/hello'),
-                                       lambda response: 1 / 0)
-        self.wait()
-        self.assertEqual(exc_info[0][0], ZeroDivisionError)
-
     @gen_test
     def test_future_interface(self):
         response = yield self.http_client.fetch(self.get_url('/hello'))

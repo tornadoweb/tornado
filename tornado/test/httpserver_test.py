@@ -970,8 +970,9 @@ class MaxHeaderSizeTest(AsyncHTTPTestCase):
             except HTTPError as e:
                 # 431 is "Request Header Fields Too Large", defined in RFC
                 # 6585. However, many implementations just close the
-                # connection in this case, resulting in a 599.
-                self.assertIn(e.response.code, (431, 599))
+                # connection in this case, resulting in a missing response.
+                if e.response is not None:
+                    self.assertIn(e.response.code, (431, 599))
 
 
 @skipOnTravis

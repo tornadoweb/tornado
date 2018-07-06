@@ -132,21 +132,6 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
         response = self.fetch('/custom_fail_reason')
         self.assertEqual(str(response.error), "HTTP 400: Custom reason")
 
-    def test_failed_setup(self):
-        self.http_client = self.create_client(max_clients=1)
-        for i in range(5):
-            with ignore_deprecation():
-                response = self.fetch(u'/ユニコード')
-            self.assertIsNot(response.error, None)
-
-            with self.assertRaises((UnicodeEncodeError, HTTPClientError)):
-                # This raises UnicodeDecodeError on py3 and
-                # HTTPClientError(404) on py2. The main motivation of
-                # this test is to ensure that the UnicodeEncodeError
-                # during the setup phase doesn't lead the request to
-                # be dropped on the floor.
-                response = self.fetch(u'/ユニコード', raise_error=True)
-
     def test_digest_auth_non_ascii(self):
         response = self.fetch('/digest_non_ascii', auth_mode='digest',
                               auth_username='foo', auth_password='barユ£')
