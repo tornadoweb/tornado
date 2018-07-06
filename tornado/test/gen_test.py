@@ -11,7 +11,7 @@ import time
 import weakref
 import warnings
 
-from tornado.concurrent import return_future, Future
+from tornado.concurrent import Future
 from tornado.escape import url_escape
 from tornado.httpclient import AsyncHTTPClient
 from tornado.ioloop import IOLoop
@@ -42,10 +42,10 @@ class GenBasicTest(AsyncTestCase):
             yield gen.moment
         raise gen.Return(arg)
 
-    with ignore_deprecation():
-        @return_future
-        def async_future(self, result, callback):
-            self.io_loop.add_callback(callback, result)
+    @gen.coroutine
+    def async_future(self, result):
+        yield gen.moment
+        return result
 
     @gen.coroutine
     def async_exception(self, e):
@@ -168,6 +168,8 @@ class GenBasicTest(AsyncTestCase):
 
     @gen_test
     def test_multi_future_duplicate(self):
+        # Note that this doesn't work with native corotines, only with
+        # decorated coroutines.
         f = self.async_future(2)
         results = yield [self.async_future(1), f, self.async_future(3), f]
         self.assertEqual(results, [1, 2, 3, 2])

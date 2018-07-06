@@ -28,39 +28,20 @@ directly.
 """
 from __future__ import absolute_import, division, print_function
 
+import asyncio
+from concurrent import futures
 import functools
 import sys
-import warnings
-
-from tornado.stack_context import ExceptionStackContext, wrap
-from tornado.util import ArgReplacer
-
-try:
-    from concurrent import futures
-except ImportError:
-    futures = None
-
-try:
-    import asyncio
-except ImportError:
-    asyncio = None
-
-try:
-    import typing
-except ImportError:
-    typing = None
 
 
 class ReturnValueIgnoredError(Exception):
+    # No longer used; was previously used by @return_future
     pass
 
 
 Future = asyncio.Future  # noqa
 
-if futures is None:
-    FUTURES = Future  # type: typing.Union[type, typing.Tuple[type, ...]]
-else:
-    FUTURES = (futures.Future, Future)
+FUTURES = (futures.Future, Future)
 
 
 def is_future(x):
@@ -119,22 +100,19 @@ def run_on_executor(*args, **kwargs):
        The ``callback`` argument is deprecated and will be removed in
        6.0. The decorator itself is discouraged in new code but will
        not be removed in 6.0.
+
+    .. versionchanged:: 6.0
+
+       The ``callback`` argument was removed.
     """
     def run_on_executor_decorator(fn):
         executor = kwargs.get("executor", "executor")
 
         @functools.wraps(fn)
         def wrapper(self, *args, **kwargs):
-            callback = kwargs.pop("callback", None)
             async_future = Future()
             conc_future = getattr(self, executor).submit(fn, self, *args, **kwargs)
             chain_future(conc_future, async_future)
-            if callback:
-                warnings.warn("callback arguments are deprecated, use the returned Future instead",
-                              DeprecationWarning)
-                from tornado.ioloop import IOLoop
-                IOLoop.current().add_future(
-                    async_future, lambda future: callback(future.result()))
             return async_future
         return wrapper
     if args and kwargs:
@@ -147,120 +125,6 @@ def run_on_executor(*args, **kwargs):
 
 
 _NO_RESULT = object()
-
-
-def return_future(f):
-    """Decorator to make a function that returns via callback return a
-    `Future`.
-
-    This decorator was provided to ease the transition from
-    callback-oriented code to coroutines. It is not recommended for
-    new code.
-
-    The wrapped function should take a ``callback`` keyword argument
-    and invoke it with one argument when it has finished.  To signal failure,
-    the function can simply raise an exception (which will be
-    captured by the `.StackContext` and passed along to the ``Future``).
-
-    From the caller's perspective, the callback argument is optional.
-    If one is given, it will be invoked when the function is complete
-    with ``Future.result()`` as an argument.  If the function fails, the
-    callback will not be run and an exception will be raised into the
-    surrounding `.StackContext`.
-
-    If no callback is given, the caller should use the ``Future`` to
-    wait for the function to complete (perhaps by yielding it in a
-    coroutine, or passing it to `.IOLoop.add_future`).
-
-    Usage:
-
-    .. testcode::
-
-        @return_future
-        def future_func(arg1, arg2, callback):
-            # Do stuff (possibly asynchronous)
-            callback(result)
-
-        async def caller():
-            await future_func(arg1, arg2)
-
-    ..
-
-    Note that ``@return_future`` and ``@gen.engine`` can be applied to the
-    same function, provided ``@return_future`` appears first.  However,
-    consider using ``@gen.coroutine`` instead of this combination.
-
-    .. versionchanged:: 5.1
-
-       Now raises a `.DeprecationWarning` if a callback argument is passed to
-       the decorated function and deprecation warnings are enabled.
-
-    .. deprecated:: 5.1
-
-       This decorator will be removed in Tornado 6.0. New code should
-       use coroutines directly instead of wrapping callback-based code
-       with this decorator. Interactions with non-Tornado
-       callback-based code should be managed explicitly to avoid
-       relying on the `.ExceptionStackContext` built into this
-       decorator.
-    """
-    warnings.warn("@return_future is deprecated, use coroutines instead",
-                  DeprecationWarning)
-    return _non_deprecated_return_future(f)
-
-
-def _non_deprecated_return_future(f):
-    # Allow auth.py to use this decorator without triggering
-    # deprecation warnings. This will go away once auth.py has removed
-    # its legacy interfaces in 6.0.
-    replacer = ArgReplacer(f, 'callback')
-
-    @functools.wraps(f)
-    def wrapper(*args, **kwargs):
-        future = Future()
-        callback, args, kwargs = replacer.replace(
-            lambda value=_NO_RESULT: future_set_result_unless_cancelled(future, value),
-            args, kwargs)
-
-        def handle_error(typ, value, tb):
-            future_set_exc_info(future, (typ, value, tb))
-            return True
-        exc_info = None
-        with ExceptionStackContext(handle_error, delay_warning=True):
-            try:
-                result = f(*args, **kwargs)
-                if result is not None:
-                    raise ReturnValueIgnoredError(
-                        "@return_future should not be used with functions "
-                        "that return values")
-            except:
-                exc_info = sys.exc_info()
-                raise
-        if exc_info is not None:
-            # If the initial synchronous part of f() raised an exception,
-            # go ahead and raise it to the caller directly without waiting
-            # for them to inspect the Future.
-            future.result()
-
-        # If the caller passed in a callback, schedule it to be called
-        # when the future resolves.  It is important that this happens
-        # just before we return the future, or else we risk confusing
-        # stack contexts with multiple exceptions (one here with the
-        # immediate exception, and again when the future resolves and
-        # the callback triggers its exception by calling future.result()).
-        if callback is not None:
-            warnings.warn("callback arguments are deprecated, use the returned Future instead",
-                          DeprecationWarning)
-
-            def run_callback(future):
-                result = future.result()
-                if result is _NO_RESULT:
-                    callback()
-                else:
-                    callback(future.result())
-            future_add_done_callback(future, wrap(run_callback))
-        return future
-    return wrapper
 
 
 def chain_future(a, b):
