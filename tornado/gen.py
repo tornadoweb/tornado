@@ -91,61 +91,20 @@ See the `convert_yielded` function to extend this mechanism.
 from __future__ import absolute_import, division, print_function
 
 import asyncio
+import builtins
 import collections
+from collections.abc import Generator
 import functools
-import os
+from functools import singledispatch
+from inspect import isawaitable
 import sys
-import types
-import warnings
 
 from tornado.concurrent import (Future, is_future, chain_future, future_set_exc_info,
                                 future_add_done_callback, future_set_result_unless_cancelled)
 from tornado.ioloop import IOLoop
 from tornado.log import app_log
 from tornado import stack_context
-from tornado.util import PY3, TimeoutError
-
-try:
-    try:
-        # py34+
-        from functools import singledispatch  # type: ignore
-    except ImportError:
-        from singledispatch import singledispatch  # backport
-except ImportError:
-    # In most cases, singledispatch is required (to avoid
-    # difficult-to-diagnose problems in which the functionality
-    # available differs depending on which invisble packages are
-    # installed). However, in Google App Engine third-party
-    # dependencies are more trouble so we allow this module to be
-    # imported without it.
-    if 'APPENGINE_RUNTIME' not in os.environ:
-        raise
-    singledispatch = None
-
-try:
-    try:
-        # py35+
-        from collections.abc import Generator as GeneratorType  # type: ignore
-    except ImportError:
-        from backports_abc import Generator as GeneratorType  # type: ignore
-
-    try:
-        # py35+
-        from inspect import isawaitable  # type: ignore
-    except ImportError:
-        from backports_abc import isawaitable
-except ImportError:
-    if 'APPENGINE_RUNTIME' not in os.environ:
-        raise
-    from types import GeneratorType
-
-    def isawaitable(x):  # type: ignore
-        return False
-
-if PY3:
-    import builtins
-else:
-    import __builtin__ as builtins
+from tornado.util import TimeoutError
 
 
 class KeyReuseError(Exception):
@@ -229,38 +188,14 @@ def coroutine(func):
        `.IOLoop.run_sync` for top-level calls, or passing the `.Future`
        to `.IOLoop.add_future`.
 
-    .. deprecated:: 5.1
+    .. versionchanged:: 6.0
 
-       The ``callback`` argument is deprecated and will be removed in 6.0.
-       Use the returned awaitable object instead.
+       The ``callback`` argument was removed. Use the returned
+       awaitable object instead.
     """
-    return _make_coroutine_wrapper(func, replace_callback=True)
-
-
-def _make_coroutine_wrapper(func, replace_callback):
-    """The inner workings of ``@gen.coroutine`` and ``@gen.engine``.
-
-    The two decorators differ in their treatment of the ``callback``
-    argument, so we cannot simply implement ``@engine`` in terms of
-    ``@coroutine``.
-    """
-    # On Python 3.5, set the coroutine flag on our generator, to allow it
-    # to be used with 'await'.
-    wrapped = func
-    if hasattr(types, 'coroutine'):
-        func = types.coroutine(func)
-
-    @functools.wraps(wrapped)
+    @functools.wraps(func)
     def wrapper(*args, **kwargs):
         future = _create_future()
-
-        if replace_callback and 'callback' in kwargs:
-            warnings.warn("callback arguments are deprecated, use the returned Future instead",
-                          DeprecationWarning, stacklevel=2)
-            callback = kwargs.pop('callback')
-            IOLoop.current().add_future(
-                future, lambda future: callback(future.result()))
-
         try:
             result = func(*args, **kwargs)
         except (Return, StopIteration) as e:
@@ -273,7 +208,7 @@ def _make_coroutine_wrapper(func, replace_callback):
                 # Avoid circular references
                 future = None
         else:
-            if isinstance(result, GeneratorType):
+            if isinstance(result, Generator):
                 # Inline the first iteration of Runner.run.  This lets us
                 # avoid the cost of creating a Runner when the coroutine
                 # never actually yields, which in turn allows us to
@@ -319,7 +254,7 @@ def _make_coroutine_wrapper(func, replace_callback):
         future_set_result_unless_cancelled(future, result)
         return future
 
-    wrapper.__wrapped__ = wrapped
+    wrapper.__wrapped__ = func
     wrapper.__tornado_coroutine__ = True
     return wrapper
 
@@ -890,10 +825,6 @@ class Runner(object):
             return False
         return True
 
-    def result_callback(self, key):
-        return stack_context.wrap(_argument_adapter(
-            functools.partial(self.set_result, key)))
-
     def handle_exception(self, typ, value, tb):
         if not self.running and not self.finished:
             self.future = Future()
@@ -907,26 +838,6 @@ class Runner(object):
         if self.stack_context_deactivate is not None:
             self.stack_context_deactivate()
             self.stack_context_deactivate = None
-
-
-Arguments = collections.namedtuple('Arguments', ['args', 'kwargs'])
-
-
-def _argument_adapter(callback):
-    """Returns a function that when invoked runs ``callback`` with one arg.
-
-    If the function returned by this function is called with exactly
-    one argument, that argument is passed to ``callback``.  Otherwise
-    the args tuple and kwargs dict are wrapped in an `Arguments` object.
-    """
-    def wrapper(*args, **kwargs):
-        if kwargs or len(args) > 1:
-            callback(Arguments(args, kwargs))
-        elif args:
-            callback(args[0])
-        else:
-            callback(None)
-    return wrapper
 
 
 # Convert Awaitables into Futures.
@@ -952,7 +863,6 @@ def convert_yielded(yielded):
 
     .. versionadded:: 4.1
     """
-    # Lists and dicts containing YieldPoints were handled earlier.
     if yielded is None or yielded is moment:
         return moment
     elif yielded is _null_future:
@@ -967,5 +877,4 @@ def convert_yielded(yielded):
         raise BadYieldError("yielded unknown object %r" % (yielded,))
 
 
-if singledispatch is not None:
-    convert_yielded = singledispatch(convert_yielded)
+convert_yielded = singledispatch(convert_yielded)
