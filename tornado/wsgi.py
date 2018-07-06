@@ -85,8 +85,10 @@ class WSGIApplication(web.Application):
 
 # WSGI has no facilities for flow control, so just return an already-done
 # Future when the interface requires it.
-_dummy_future = Future()
-_dummy_future.set_result(None)
+def _dummy_future():
+    f = Future()
+    f.set_result(None)
+    return f
 
 
 class _WSGIConnection(httputil.HTTPConnection):
@@ -118,7 +120,7 @@ class _WSGIConnection(httputil.HTTPConnection):
             self.write(chunk, callback)
         elif callback is not None:
             callback()
-        return _dummy_future
+        return _dummy_future()
 
     def write(self, chunk, callback=None):
         if self._expected_content_remaining is not None:
@@ -130,7 +132,7 @@ class _WSGIConnection(httputil.HTTPConnection):
         self._write_buffer.append(chunk)
         if callback is not None:
             callback()
-        return _dummy_future
+        return _dummy_future()
 
     def finish(self):
         if (self._expected_content_remaining is not None and
