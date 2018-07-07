@@ -21,7 +21,6 @@ from __future__ import absolute_import, division, print_function
 
 import logging
 import signal
-import sys
 import warnings
 
 from tornado.escape import utf8
@@ -37,21 +36,16 @@ try:
     from twisted.internet.defer import Deferred, inlineCallbacks, returnValue  # type: ignore
     from twisted.internet.protocol import Protocol  # type: ignore
     from twisted.internet.asyncioreactor import AsyncioSelectorReactor
-    have_twisted = True
-except ImportError:
-    have_twisted = False
-
-# The core of Twisted 12.3.0 is available on python 3, but twisted.web is not
-# so test for it separately.
-try:
     from twisted.web.client import Agent, readBody  # type: ignore
     from twisted.web.resource import Resource  # type: ignore
     from twisted.web.server import Site  # type: ignore
-    # As of Twisted 15.0.0, twisted.web is present but fails our
-    # tests due to internal str/bytes errors.
-    have_twisted_web = sys.version_info < (3,)
+
+    have_twisted = True
 except ImportError:
-    have_twisted_web = False
+    have_twisted = False
+else:
+    # Not used directly but needed for `yield deferred` to work.
+    import tornado.platform.twisted  # noqa: F401
 
 skipIfNoTwisted = unittest.skipUnless(have_twisted,
                                       "twisted module not present")
@@ -77,7 +71,6 @@ def restore_signal_handlers(saved):
 
 
 @skipIfNoTwisted
-@unittest.skipIf(not have_twisted_web, 'twisted web not present')
 class CompatibilityTests(unittest.TestCase):
     def setUp(self):
         self.saved_signals = save_signal_handlers()
@@ -96,7 +89,7 @@ class CompatibilityTests(unittest.TestCase):
             isLeaf = True
 
             def render_GET(self, request):
-                return "Hello from twisted!"
+                return b"Hello from twisted!"
         site = Site(HelloResource())
         port = self.reactor.listenTCP(0, site, interface='127.0.0.1')
         self.twisted_port = port.getHost().port
@@ -111,28 +104,24 @@ class CompatibilityTests(unittest.TestCase):
         sock, self.tornado_port = bind_unused_port()
         server.add_sockets([sock])
 
-    def run_ioloop(self):
-        self.stop_loop = self.io_loop.stop
-        self.io_loop.start()
-        self.reactor.fireSystemEvent('shutdown')
-
     def run_reactor(self):
+        # In theory, we can run the event loop through Tornado,
+        # Twisted, or asyncio interfaces. However, since we're trying
+        # to avoid installing anything as the global event loop, only
+        # the twisted interface gets everything wired up correectly
+        # without extra hacks. This method is a part of a
+        # no-longer-used generalization that allowed us to test
+        # different combinations.
         self.stop_loop = self.reactor.stop
         self.stop = self.reactor.stop
         self.reactor.run()
 
     def tornado_fetch(self, url, runner):
-        responses = []
         client = AsyncHTTPClient()
-
-        def callback(response):
-            responses.append(response)
-            self.stop_loop()
-        client.fetch(url, callback=callback)
+        fut = client.fetch(url)
+        fut.add_done_callback(lambda f: self.stop_loop())
         runner()
-        self.assertEqual(len(responses), 1)
-        responses[0].rethrow()
-        return responses[0]
+        return fut.result()
 
     def twisted_fetch(self, url, runner):
         # http://twistedmatrix.com/documents/current/web/howto/client.html
@@ -170,7 +159,7 @@ class CompatibilityTests(unittest.TestCase):
         d.addBoth(shutdown)
         runner()
         self.assertTrue(chunks)
-        return ''.join(chunks)
+        return b''.join(chunks)
 
     def twisted_coroutine_fetch(self, url, runner):
         body = [None]
@@ -192,35 +181,23 @@ class CompatibilityTests(unittest.TestCase):
         runner()
         return body[0]
 
-    def testTwistedServerTornadoClientIOLoop(self):
-        self.start_twisted_server()
-        response = self.tornado_fetch(
-            'http://127.0.0.1:%d' % self.twisted_port, self.run_ioloop)
-        self.assertEqual(response.body, 'Hello from twisted!')
-
     def testTwistedServerTornadoClientReactor(self):
         self.start_twisted_server()
         response = self.tornado_fetch(
             'http://127.0.0.1:%d' % self.twisted_port, self.run_reactor)
-        self.assertEqual(response.body, 'Hello from twisted!')
-
-    def testTornadoServerTwistedClientIOLoop(self):
-        self.start_tornado_server()
-        response = self.twisted_fetch(
-            'http://127.0.0.1:%d' % self.tornado_port, self.run_ioloop)
-        self.assertEqual(response, 'Hello from tornado!')
+        self.assertEqual(response.body, b'Hello from twisted!')
 
     def testTornadoServerTwistedClientReactor(self):
         self.start_tornado_server()
         response = self.twisted_fetch(
             'http://127.0.0.1:%d' % self.tornado_port, self.run_reactor)
-        self.assertEqual(response, 'Hello from tornado!')
+        self.assertEqual(response, b'Hello from tornado!')
 
-    def testTornadoServerTwistedCoroutineClientIOLoop(self):
+    def testTornadoServerTwistedCoroutineClientReactor(self):
         self.start_tornado_server()
         response = self.twisted_coroutine_fetch(
-            'http://127.0.0.1:%d' % self.tornado_port, self.run_ioloop)
-        self.assertEqual(response, 'Hello from tornado!')
+            'http://127.0.0.1:%d' % self.tornado_port, self.run_reactor)
+        self.assertEqual(response, b'Hello from tornado!')
 
 
 @skipIfNoTwisted
