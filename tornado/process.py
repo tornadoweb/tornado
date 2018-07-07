@@ -34,7 +34,7 @@ from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
 from tornado.platform.auto import set_close_exec
 from tornado import stack_context
-from tornado.util import errno_from_exception, PY3
+from tornado.util import errno_from_exception
 
 try:
     import multiprocessing
@@ -42,18 +42,8 @@ except ImportError:
     # Multiprocessing is not available on Google App Engine.
     multiprocessing = None
 
-if PY3:
-    long = int
-
 # Re-export this exception for convenience.
-try:
-    CalledProcessError = subprocess.CalledProcessError
-except AttributeError:
-    # The subprocess module exists in Google App Engine, but is empty.
-    # This module isn't very useful in that case, but it should
-    # at least be importable.
-    if 'APPENGINE_RUNTIME' not in os.environ:
-        raise
+CalledProcessError = subprocess.CalledProcessError
 
 
 def cpu_count():
@@ -80,7 +70,7 @@ def _reseed_random():
     # random.seed (at least as of python 2.6).  If os.urandom is not
     # available, we mix in the pid in addition to a timestamp.
     try:
-        seed = long(hexlify(os.urandom(16)), 16)
+        seed = int(hexlify(os.urandom(16)), 16)
     except NotImplementedError:
         seed = int(time.time() * 1000) ^ os.getpid()
     random.seed(seed)

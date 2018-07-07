@@ -21,39 +21,25 @@ import errno
 import os
 import sys
 import socket
+import ssl
 import stat
 
 from tornado.concurrent import dummy_executor, run_on_executor
 from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.platform.auto import set_close_exec
-from tornado.util import PY3, Configurable, errno_from_exception
+from tornado.util import Configurable, errno_from_exception
 
-try:
-    import ssl
-except ImportError:
-    # ssl is not available on Google App Engine
-    ssl = None
-
-if PY3:
-    xrange = range
-
-if ssl is not None:
-    # Note that the naming of ssl.Purpose is confusing; the purpose
-    # of a context is to authentiate the opposite side of the connection.
-    _client_ssl_defaults = ssl.create_default_context(
-        ssl.Purpose.SERVER_AUTH)
-    _server_ssl_defaults = ssl.create_default_context(
-        ssl.Purpose.CLIENT_AUTH)
-    if hasattr(ssl, 'OP_NO_COMPRESSION'):
-        # See netutil.ssl_options_to_context
-        _client_ssl_defaults.options |= ssl.OP_NO_COMPRESSION
-        _server_ssl_defaults.options |= ssl.OP_NO_COMPRESSION
-else:
-    # Google App Engine
-    _client_ssl_defaults = dict(cert_reqs=None,
-                                ca_certs=None)
-    _server_ssl_defaults = {}
+# Note that the naming of ssl.Purpose is confusing; the purpose
+# of a context is to authentiate the opposite side of the connection.
+_client_ssl_defaults = ssl.create_default_context(
+    ssl.Purpose.SERVER_AUTH)
+_server_ssl_defaults = ssl.create_default_context(
+    ssl.Purpose.CLIENT_AUTH)
+if hasattr(ssl, 'OP_NO_COMPRESSION'):
+    # See netutil.ssl_options_to_context
+    _client_ssl_defaults.options |= ssl.OP_NO_COMPRESSION
+    _server_ssl_defaults.options |= ssl.OP_NO_COMPRESSION
 
 # ThreadedResolver runs getaddrinfo on a thread. If the hostname is unicode,
 # getaddrinfo attempts to import encodings.idna. If this is done at
@@ -241,7 +227,7 @@ def add_accept_handler(sock, callback):
         # Instead, we use the (default) listen backlog as a rough
         # heuristic for the number of connections we can reasonably
         # accept at once.
-        for i in xrange(_DEFAULT_BACKLOG):
+        for i in range(_DEFAULT_BACKLOG):
             if removed[0]:
                 # The socket was probably closed
                 return
@@ -321,7 +307,7 @@ class Resolver(Configurable):
     def configurable_default(cls):
         return DefaultExecutorResolver
 
-    def resolve(self, host, port, family=socket.AF_UNSPEC, callback=None):
+    def resolve(self, host, port, family=socket.AF_UNSPEC):
         """Resolves an address.
 
         The ``host`` argument is a string which may be a hostname or a
@@ -339,9 +325,9 @@ class Resolver(Configurable):
         .. versionchanged:: 4.4
            Standardized all implementations to raise `IOError`.
 
-        .. deprecated:: 5.1
-           The ``callback`` argument is deprecated and will be removed in 6.0.
+        .. versionchanged:: 6.0 The ``callback`` argument was removed.
            Use the returned awaitable object instead.
+
         """
         raise NotImplementedError()
 
