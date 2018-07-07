@@ -103,7 +103,6 @@ from tornado.concurrent import (Future, is_future, chain_future, future_set_exc_
                                 future_add_done_callback, future_set_result_unless_cancelled)
 from tornado.ioloop import IOLoop
 from tornado.log import app_log
-from tornado import stack_context
 from tornado.util import TimeoutError
 
 
@@ -215,14 +214,7 @@ def coroutine(func):
                 # use "optional" coroutines in critical path code without
                 # performance penalty for the synchronous case.
                 try:
-                    orig_stack_contexts = stack_context._state.contexts
                     yielded = next(result)
-                    if stack_context._state.contexts is not orig_stack_contexts:
-                        yielded = _create_future()
-                        yielded.set_exception(
-                            stack_context.StackContextInconsistentError(
-                                'stack_context inconsistency (probably caused '
-                                'by yield within a "with StackContext" block)'))
                 except (StopIteration, Return) as e:
                     future_set_result_unless_cancelled(future, _value_from_stopiteration(e))
                 except Exception:
@@ -577,9 +569,6 @@ def with_timeout(timeout, future, quiet_exceptions=()):
        Added support for yieldable objects other than `.Future`.
 
     """
-    # TODO: allow YieldPoints in addition to other yieldables?
-    # Tricky to do with stack_context semantics.
-    #
     # It's tempting to optimize this by cancelling the input future on timeout
     # instead of creating a new one, but A) we can't know if we are the only
     # one waiting on the input future, so cancelling it might disrupt other
@@ -694,12 +683,6 @@ class Runner(object):
         self.finished = False
         self.had_exception = False
         self.io_loop = IOLoop.current()
-        # For efficiency, we do not create a stack context until we
-        # reach a YieldPoint (stack contexts are required for the historical
-        # semantics of YieldPoints, but not for Futures).  When we have
-        # done so, this field will be set and must be called at the end
-        # of the coroutine.
-        self.stack_context_deactivate = None
         if self.handle_yield(first_yielded):
             gen = result_future = first_yielded = None
             self.run()
@@ -751,7 +734,6 @@ class Runner(object):
                     return
                 self.future = None
                 try:
-                    orig_stack_contexts = stack_context._state.contexts
                     exc_info = None
 
                     try:
@@ -771,11 +753,6 @@ class Runner(object):
                     else:
                         yielded = self.gen.send(value)
 
-                    if stack_context._state.contexts is not orig_stack_contexts:
-                        self.gen.throw(
-                            stack_context.StackContextInconsistentError(
-                                'stack_context inconsistency (probably caused '
-                                'by yield within a "with StackContext" block)'))
                 except (StopIteration, Return) as e:
                     self.finished = True
                     self.future = _null_future
@@ -790,14 +767,12 @@ class Runner(object):
                     future_set_result_unless_cancelled(self.result_future,
                                                        _value_from_stopiteration(e))
                     self.result_future = None
-                    self._deactivate_stack_context()
                     return
                 except Exception:
                     self.finished = True
                     self.future = _null_future
                     future_set_exc_info(self.result_future, sys.exc_info())
                     self.result_future = None
-                    self._deactivate_stack_context()
                     return
                 if not self.handle_yield(yielded):
                     return
@@ -833,11 +808,6 @@ class Runner(object):
             return True
         else:
             return False
-
-    def _deactivate_stack_context(self):
-        if self.stack_context_deactivate is not None:
-            self.stack_context_deactivate()
-            self.stack_context_deactivate = None
 
 
 # Convert Awaitables into Futures.

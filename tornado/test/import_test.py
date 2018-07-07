@@ -35,7 +35,6 @@ import tornado.netutil
 import tornado.options
 import tornado.process
 import tornado.simple_httpclient
-import tornado.stack_context
 import tornado.tcpserver
 import tornado.tcpclient
 import tornado.template

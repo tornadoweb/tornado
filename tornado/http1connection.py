@@ -29,7 +29,6 @@ from tornado import gen
 from tornado import httputil
 from tornado import iostream
 from tornado.log import gen_log, app_log
-from tornado import stack_context
 from tornado.util import GzipDecompressor
 
 
@@ -286,7 +285,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         after sending its request but before receiving all the
         response.
         """
-        self._close_callback = stack_context.wrap(callback)
+        self._close_callback = callback
 
     def _on_connection_close(self):
         # Note that this callback is only registered on the IOStream

@@ -9,7 +9,6 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 from tornado.netutil import Resolver, OverrideResolver, _client_ssl_defaults
 from tornado.log import gen_log
-from tornado import stack_context
 from tornado.tcpclient import TCPClient
 from tornado.util import PY3
 
@@ -159,15 +158,14 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
                               len(self.active), len(self.queue)))
 
     def _process_queue(self):
-        with stack_context.NullContext():
-            while self.queue and len(self.active) < self.max_clients:
-                key, request, callback = self.queue.popleft()
-                if key not in self.waiting:
-                    continue
-                self._remove_timeout(key)
-                self.active[key] = (request, callback)
-                release_callback = functools.partial(self._release_fetch, key)
-                self._handle_request(request, release_callback, callback)
+        while self.queue and len(self.active) < self.max_clients:
+            key, request, callback = self.queue.popleft()
+            if key not in self.waiting:
+                continue
+            self._remove_timeout(key)
+            self.active[key] = (request, callback)
+            release_callback = functools.partial(self._release_fetch, key)
+            self._handle_request(request, release_callback, callback)
 
     def _connection_class(self):
         return _HTTPConnection
@@ -265,7 +263,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             if timeout:
                 self._timeout = self.io_loop.add_timeout(
                     self.start_time + timeout,
-                    stack_context.wrap(functools.partial(self._on_timeout, "while connecting")))
+                    functools.partial(self._on_timeout, "while connecting"))
                 stream = yield self.tcp_client.connect(
                     host, port, af=af,
                     ssl_options=ssl_options,
@@ -283,7 +281,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 if self.request.request_timeout:
                     self._timeout = self.io_loop.add_timeout(
                         self.start_time + self.request.request_timeout,
-                        stack_context.wrap(functools.partial(self._on_timeout, "during request")))
+                        functools.partial(self._on_timeout, "during request"))
                 if (self.request.method not in self._SUPPORTED_METHODS and
                         not self.request.allow_nonstandard_methods):
                     raise KeyError("unknown method %s" % self.request.method)

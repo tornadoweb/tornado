@@ -39,7 +39,6 @@ from tornado.concurrent import Future
 from tornado import ioloop
 from tornado.log import gen_log, app_log
 from tornado.netutil import ssl_wrap_socket, _client_ssl_defaults, _server_ssl_defaults
-from tornado import stack_context
 from tornado.util import errno_from_exception
 
 try:
@@ -540,7 +539,7 @@ class BaseIOStream(object):
         Unlike other callback-based interfaces, ``set_close_callback``
         was not removed in Tornado 6.0.
         """
-        self._close_callback = stack_context.wrap(callback)
+        self._close_callback = callback
         self._maybe_add_error_listener()
 
     def close(self, exc_info=False):
@@ -981,9 +980,8 @@ class BaseIOStream(object):
             return
         if self._state is None:
             self._state = ioloop.IOLoop.ERROR | state
-            with stack_context.NullContext():
-                self.io_loop.add_handler(
-                    self.fileno(), self._handle_events, self._state)
+            self.io_loop.add_handler(
+                self.fileno(), self._handle_events, self._state)
         elif not self._state & state:
             self._state = self._state | state
             self.io_loop.update_handler(self.fileno(), self._state)

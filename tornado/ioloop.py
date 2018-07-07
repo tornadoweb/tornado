@@ -45,7 +45,6 @@ import random
 
 from tornado.concurrent import Future, is_future, chain_future, future_set_exc_info, future_add_done_callback  # noqa: E501
 from tornado.log import app_log
-from tornado import stack_context
 from tornado.util import Configurable, TimeoutError, unicode_type, import_object
 
 
@@ -575,25 +574,17 @@ class IOLoop(Configurable):
 
         Safe for use from a Python signal handler; should not be used
         otherwise.
-
-        Callbacks added with this method will be run without any
-        `.stack_context`, to avoid picking up the context of the function
-        that was interrupted by the signal.
         """
         raise NotImplementedError()
 
     def spawn_callback(self, callback, *args, **kwargs):
         """Calls the given callback on the next IOLoop iteration.
 
-        Unlike all other callback-related methods on IOLoop,
-        ``spawn_callback`` does not associate the callback with its caller's
-        ``stack_context``, so it is suitable for fire-and-forget callbacks
-        that should not interfere with the caller.
+        As of Tornado 6.0, this method is equivalent to `add_callback`.
 
         .. versionadded:: 4.0
         """
-        with stack_context.NullContext():
-            self.add_callback(callback, *args, **kwargs)
+        self.add_callback(callback, *args, **kwargs)
 
     def add_future(self, future, callback):
         """Schedules a callback on the ``IOLoop`` when the given
@@ -607,7 +598,6 @@ class IOLoop(Configurable):
         interchangeable).
         """
         assert is_future(future)
-        callback = stack_context.wrap(callback)
         future_add_done_callback(
             future, lambda future: self.add_callback(callback, future))
 

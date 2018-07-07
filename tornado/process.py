@@ -33,7 +33,6 @@ from tornado import ioloop
 from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
 from tornado.platform.auto import set_close_exec
-from tornado import stack_context
 from tornado.util import errno_from_exception
 
 try:
@@ -255,7 +254,7 @@ class Subprocess(object):
         can be used as an alternative to an exit callback if the
         signal handler is causing a problem.
         """
-        self._exit_callback = stack_context.wrap(callback)
+        self._exit_callback = callback
         Subprocess.initialize()
         Subprocess._waiting[self.pid] = self
         Subprocess._try_cleanup_process(self.pid)

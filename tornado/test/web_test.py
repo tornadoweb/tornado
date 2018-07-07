@@ -5,7 +5,6 @@ from tornado import gen
 from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str, to_basestring  # noqa: E501
 from tornado.httpclient import HTTPClientError
 from tornado.httputil import format_timestamp
-from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado import locale
 from tornado.locks import Event
@@ -13,7 +12,7 @@ from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
-from tornado.test.util import unittest, skipBefore35, exec_test, ignore_deprecation
+from tornado.test.util import unittest, skipBefore35, exec_test
 from tornado.util import ObjectDict, unicode_type, PY3
 from tornado.web import (
     Application, RequestHandler, StaticFileHandler, RedirectHandler as WebRedirectHandler,

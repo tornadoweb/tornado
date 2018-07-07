@@ -27,7 +27,6 @@ from io import BytesIO
 
 from tornado import httputil
 from tornado import ioloop
-from tornado import stack_context
 
 from tornado.escape import utf8, native_str
 from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main
@@ -141,17 +140,16 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
 
     def _handle_timeout(self):
         """Called by IOLoop when the requested timeout has passed."""
-        with stack_context.NullContext():
-            self._timeout = None
-            while True:
-                try:
-                    ret, num_handles = self._multi.socket_action(
-                        pycurl.SOCKET_TIMEOUT, 0)
-                except pycurl.error as e:
-                    ret = e.args[0]
-                if ret != pycurl.E_CALL_MULTI_PERFORM:
-                    break
-            self._finish_pending_requests()
+        self._timeout = None
+        while True:
+            try:
+                ret, num_handles = self._multi.socket_action(
+                    pycurl.SOCKET_TIMEOUT, 0)
+            except pycurl.error as e:
+                ret = e.args[0]
+            if ret != pycurl.E_CALL_MULTI_PERFORM:
+                break
+        self._finish_pending_requests()
 
         # In theory, we shouldn't have to do this because curl will
         # call _set_timeout whenever the timeout changes.  However,
@@ -174,15 +172,14 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         """Called by IOLoop periodically to ask libcurl to process any
         events it may have forgotten about.
         """
-        with stack_context.NullContext():
-            while True:
-                try:
-                    ret, num_handles = self._multi.socket_all()
-                except pycurl.error as e:
-                    ret = e.args[0]
-                if ret != pycurl.E_CALL_MULTI_PERFORM:
-                    break
-            self._finish_pending_requests()
+        while True:
+            try:
+                ret, num_handles = self._multi.socket_all()
+            except pycurl.error as e:
+                ret = e.args[0]
+            if ret != pycurl.E_CALL_MULTI_PERFORM:
+                break
+        self._finish_pending_requests()
 
     def _finish_pending_requests(self):
         """Process any requests that were completed by the last
@@ -199,45 +196,44 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         self._process_queue()
 
     def _process_queue(self):
-        with stack_context.NullContext():
-            while True:
-                started = 0
-                while self._free_list and self._requests:
-                    started += 1
-                    curl = self._free_list.pop()
-                    (request, callback, queue_start_time) = self._requests.popleft()
-                    curl.info = {
-                        "headers": httputil.HTTPHeaders(),
-                        "buffer": BytesIO(),
-                        "request": request,
-                        "callback": callback,
-                        "queue_start_time": queue_start_time,
-                        "curl_start_time": time.time(),
-                        "curl_start_ioloop_time": self.io_loop.current().time(),
-                    }
-                    try:
-                        self._curl_setup_request(
-                            curl, request, curl.info["buffer"],
-                            curl.info["headers"])
-                    except Exception as e:
-                        # If there was an error in setup, pass it on
-                        # to the callback. Note that allowing the
-                        # error to escape here will appear to work
-                        # most of the time since we are still in the
-                        # caller's original stack frame, but when
-                        # _process_queue() is called from
-                        # _finish_pending_requests the exceptions have
-                        # nowhere to go.
-                        self._free_list.append(curl)
-                        callback(HTTPResponse(
-                            request=request,
-                            code=599,
-                            error=e))
-                    else:
-                        self._multi.add_handle(curl)
+        while True:
+            started = 0
+            while self._free_list and self._requests:
+                started += 1
+                curl = self._free_list.pop()
+                (request, callback, queue_start_time) = self._requests.popleft()
+                curl.info = {
+                    "headers": httputil.HTTPHeaders(),
+                    "buffer": BytesIO(),
+                    "request": request,
+                    "callback": callback,
+                    "queue_start_time": queue_start_time,
+                    "curl_start_time": time.time(),
+                    "curl_start_ioloop_time": self.io_loop.current().time(),
+                }
+                try:
+                    self._curl_setup_request(
+                        curl, request, curl.info["buffer"],
+                        curl.info["headers"])
+                except Exception as e:
+                    # If there was an error in setup, pass it on
+                    # to the callback. Note that allowing the
+                    # error to escape here will appear to work
+                    # most of the time since we are still in the
+                    # caller's original stack frame, but when
+                    # _process_queue() is called from
+                    # _finish_pending_requests the exceptions have
+                    # nowhere to go.
+                    self._free_list.append(curl)
+                    callback(HTTPResponse(
+                        request=request,
+                        code=599,
+                        error=e))
+                else:
+                    self._multi.add_handle(curl)
 
-                if not started:
-                    break
+            if not started:
+                break
 
     def _finish(self, curl, curl_error=None, curl_message=None):
         info = curl.info

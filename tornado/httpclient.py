@@ -47,7 +47,7 @@ import weakref
 
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado.escape import utf8, native_str
-from tornado import gen, httputil, stack_context
+from tornado import gen, httputil
 from tornado.ioloop import IOLoop
 from tornado.util import Configurable
 
@@ -498,38 +498,6 @@ class HTTPRequest(object):
     @body.setter
     def body(self, value):
         self._body = utf8(value)
-
-    @property
-    def body_producer(self):
-        return self._body_producer
-
-    @body_producer.setter
-    def body_producer(self, value):
-        self._body_producer = stack_context.wrap(value)
-
-    @property
-    def streaming_callback(self):
-        return self._streaming_callback
-
-    @streaming_callback.setter
-    def streaming_callback(self, value):
-        self._streaming_callback = stack_context.wrap(value)
-
-    @property
-    def header_callback(self):
-        return self._header_callback
-
-    @header_callback.setter
-    def header_callback(self, value):
-        self._header_callback = stack_context.wrap(value)
-
-    @property
-    def prepare_curl_callback(self):
-        return self._prepare_curl_callback
-
-    @prepare_curl_callback.setter
-    def prepare_curl_callback(self, value):
-        self._prepare_curl_callback = stack_context.wrap(value)
 
 
 class HTTPResponse(object):

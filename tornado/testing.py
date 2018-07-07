@@ -30,7 +30,6 @@ from tornado import netutil
 from tornado.platform.asyncio import AsyncIOMainLoop
 from tornado.process import Subprocess
 from tornado.log import app_log
-from tornado.stack_context import ExceptionStackContext
 from tornado.util import raise_exc_info, basestring_type, PY3
 
 
@@ -206,8 +205,7 @@ class AsyncTestCase(unittest.TestCase):
             raise_exc_info(failure)
 
     def run(self, result=None):
-        with ExceptionStackContext(self._handle_exception, delay_warning=True):
-            super(AsyncTestCase, self).run(result)
+        super(AsyncTestCase, self).run(result)
         # As a last resort, if an exception escaped super.run() and wasn't
         # re-raised in tearDown, raise it here.  This will cause the
         # unittest run to fail messily, but that's better than silently
@@ -601,7 +599,7 @@ def main(**kwargs):
 
     The easiest way to run a test is via the command line::
 
-        python -m tornado.testing tornado.test.stack_context_test
+        python -m tornado.testing tornado.test.web_test
 
     See the standard library unittest module for ways in which tests can
     be specified.
@@ -616,7 +614,7 @@ def main(**kwargs):
         # Runs all tests
         python -m tornado.test.runtests
         # Runs one test
-        python -m tornado.test.runtests tornado.test.stack_context_test
+        python -m tornado.test.runtests tornado.test.web_test
 
     Additional keyword arguments passed through to ``unittest.main()``.
     For example, use ``tornado.testing.main(verbosity=2)``

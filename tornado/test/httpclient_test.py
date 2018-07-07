@@ -5,7 +5,6 @@ import base64
 import binascii
 from contextlib import closing
 import copy
-import sys
 import threading
 import datetime
 from io import BytesIO
@@ -20,9 +19,8 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado.log import gen_log
 from tornado import netutil
-from tornado.stack_context import ExceptionStackContext, NullContext
 from tornado.testing import AsyncHTTPTestCase, bind_unused_port, gen_test, ExpectLog
-from tornado.test.util import unittest, skipOnTravis, ignore_deprecation
+from tornado.test.util import unittest, skipOnTravis
 from tornado.web import Application, RequestHandler, url
 from tornado.httputil import format_timestamp, HTTPHeaders
 
@@ -218,27 +216,6 @@ Transfer-Encoding: chunked
             self.assertEqual(resp.body, b"12")
             self.io_loop.remove_handler(sock.fileno())
 
-    def test_streaming_stack_context(self):
-        chunks = []
-        exc_info = []
-
-        def error_handler(typ, value, tb):
-            exc_info.append((typ, value, tb))
-            return True
-
-        def streaming_cb(chunk):
-            chunks.append(chunk)
-            if chunk == b'qwer':
-                1 / 0
-
-        with ignore_deprecation():
-            with ExceptionStackContext(error_handler):
-                self.fetch('/chunk', streaming_callback=streaming_cb)
-
-        self.assertEqual(chunks, [b'asdf', b'qwer'])
-        self.assertEqual(1, len(exc_info))
-        self.assertIs(exc_info[0][0], ZeroDivisionError)
-
     def test_basic_auth(self):
         # This test data appears in section 2 of RFC 7617.
         self.assertEqual(self.fetch("/auth", auth_username="Aladdin",
@@ -351,23 +328,6 @@ Transfer-Encoding: chunked
         self.assertEqual(len(first_line), 1, first_line)
         self.assertRegexpMatches(first_line[0], 'HTTP/[0-9]\\.[0-9] 200.*\r\n')
         self.assertEqual(chunks, [b'asdf', b'qwer'])
-
-    def test_header_callback_stack_context(self):
-        exc_info = []
-
-        def error_handler(typ, value, tb):
-            exc_info.append((typ, value, tb))
-            return True
-
-        def header_callback(header_line):
-            if header_line.lower().startswith('content-type:'):
-                1 / 0
-
-        with ignore_deprecation():
-            with ExceptionStackContext(error_handler):
-                self.fetch('/chunk', header_callback=header_callback)
-        self.assertEqual(len(exc_info), 1)
-        self.assertIs(exc_info[0][0], ZeroDivisionError)
 
     @gen_test
     def test_configure_defaults(self):

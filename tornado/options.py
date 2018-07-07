@@ -104,7 +104,6 @@ import textwrap
 
 from tornado.escape import _unicode, native_str
 from tornado.log import define_logging_options
-from tornado import stack_context
 from tornado.util import basestring_type, exec_in
 
 
@@ -421,7 +420,7 @@ class OptionParser(object):
 
     def add_parse_callback(self, callback):
         """Adds a parse callback, to be invoked when option parsing is done."""
-        self._parse_callbacks.append(stack_context.wrap(callback))
+        self._parse_callbacks.append(callback)
 
     def run_parse_callbacks(self):
         for callback in self._parse_callbacks:

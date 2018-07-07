@@ -22,10 +22,9 @@ from tornado.escape import native_str
 from tornado import gen
 from tornado.ioloop import IOLoop, TimeoutError, PeriodicCallback
 from tornado.log import app_log
-from tornado.stack_context import ExceptionStackContext, StackContext, wrap, NullContext
 from tornado.testing import AsyncTestCase, bind_unused_port, ExpectLog, gen_test
 from tornado.test.util import (unittest, skipIfNonUnix, skipOnTravis,
-                               skipBefore35, exec_test, ignore_deprecation)
+                               skipBefore35, exec_test)
 
 try:
     from concurrent import futures
@@ -332,24 +331,20 @@ class TestIOLoop(AsyncTestCase):
 
     def test_exception_logging(self):
         """Uncaught exceptions get logged by the IOLoop."""
-        # Use a NullContext to keep the exception from being caught by
-        # AsyncTestCase.
-        with NullContext():
-            self.io_loop.add_callback(lambda: 1 / 0)
-            self.io_loop.add_callback(self.stop)
-            with ExpectLog(app_log, "Exception in callback"):
-                self.wait()
+        self.io_loop.add_callback(lambda: 1 / 0)
+        self.io_loop.add_callback(self.stop)
+        with ExpectLog(app_log, "Exception in callback"):
+            self.wait()
 
     def test_exception_logging_future(self):
         """The IOLoop examines exceptions from Futures and logs them."""
-        with NullContext():
-            @gen.coroutine
-            def callback():
-                self.io_loop.add_callback(self.stop)
-                1 / 0
-            self.io_loop.add_callback(callback)
-            with ExpectLog(app_log, "Exception in callback"):
-                self.wait()
+        @gen.coroutine
+        def callback():
+            self.io_loop.add_callback(self.stop)
+            1 / 0
+        self.io_loop.add_callback(callback)
+        with ExpectLog(app_log, "Exception in callback"):
+            self.wait()
 
     @skipBefore35
     def test_exception_logging_native_coro(self):
@@ -361,24 +356,23 @@ class TestIOLoop(AsyncTestCase):
             self.io_loop.add_callback(self.io_loop.add_callback, self.stop)
             1 / 0
         """)
-        with NullContext():
-            self.io_loop.add_callback(namespace["callback"])
-            with ExpectLog(app_log, "Exception in callback"):
-                self.wait()
+        self.io_loop.add_callback(namespace["callback"])
+        with ExpectLog(app_log, "Exception in callback"):
+            self.wait()
 
     def test_spawn_callback(self):
-        with ignore_deprecation():
-            # An added callback runs in the test's stack_context, so will be
-            # re-raised in wait().
-            self.io_loop.add_callback(lambda: 1 / 0)
-            with self.assertRaises(ZeroDivisionError):
-                self.wait()
-            # A spawned callback is run directly on the IOLoop, so it will be
-            # logged without stopping the test.
-            self.io_loop.spawn_callback(lambda: 1 / 0)
-            self.io_loop.add_callback(self.stop)
-            with ExpectLog(app_log, "Exception in callback"):
-                self.wait()
+        # Both add_callback and spawn_callback run directly on the IOLoop,
+        # so their errors are logged without stopping the test.
+        self.io_loop.add_callback(lambda: 1 / 0)
+        self.io_loop.add_callback(self.stop)
+        with ExpectLog(app_log, "Exception in callback"):
+            self.wait()
+        # A spawned callback is run directly on the IOLoop, so it will be
+        # logged without stopping the test.
+        self.io_loop.spawn_callback(lambda: 1 / 0)
+        self.io_loop.add_callback(self.stop)
+        with ExpectLog(app_log, "Exception in callback"):
+            self.wait()
 
     @skipIfNonUnix
     def test_remove_handler_from_handler(self):
@@ -475,64 +469,6 @@ class TestIOLoopCurrentAsync(AsyncTestCase):
             yield e.submit(IOLoop.clear_current)
 
 
-class TestIOLoopAddCallback(AsyncTestCase):
-    def setUp(self):
-        super(TestIOLoopAddCallback, self).setUp()
-        self.active_contexts = []
-
-    def add_callback(self, callback, *args, **kwargs):
-        self.io_loop.add_callback(callback, *args, **kwargs)
-
-    @contextlib.contextmanager
-    def context(self, name):
-        self.active_contexts.append(name)
-        yield
-        self.assertEqual(self.active_contexts.pop(), name)
-
-    def test_pre_wrap(self):
-        # A pre-wrapped callback is run in the context in which it was
-        # wrapped, not when it was added to the IOLoop.
-        def f1():
-            self.assertIn('c1', self.active_contexts)
-            self.assertNotIn('c2', self.active_contexts)
-            self.stop()
-
-        with ignore_deprecation():
-            with StackContext(functools.partial(self.context, 'c1')):
-                wrapped = wrap(f1)
-
-            with StackContext(functools.partial(self.context, 'c2')):
-                self.add_callback(wrapped)
-
-        self.wait()
-
-    def test_pre_wrap_with_args(self):
-        # Same as test_pre_wrap, but the function takes arguments.
-        # Implementation note: The function must not be wrapped in a
-        # functools.partial until after it has been passed through
-        # stack_context.wrap
-        def f1(foo, bar):
-            self.assertIn('c1', self.active_contexts)
-            self.assertNotIn('c2', self.active_contexts)
-            self.stop((foo, bar))
-
-        with ignore_deprecation():
-            with StackContext(functools.partial(self.context, 'c1')):
-                wrapped = wrap(f1)
-
-            with StackContext(functools.partial(self.context, 'c2')):
-                self.add_callback(wrapped, 1, bar=2)
-
-        result = self.wait()
-        self.assertEqual(result, (1, 2))
-
-
-class TestIOLoopAddCallbackFromSignal(TestIOLoopAddCallback):
-    # Repeat the add_callback tests using add_callback_from_signal
-    def add_callback(self, callback, *args, **kwargs):
-        self.io_loop.add_callback_from_signal(callback, *args, **kwargs)
-
-
 @unittest.skipIf(futures is None, "futures module not present")
 class TestIOLoopFutures(AsyncTestCase):
     def test_add_future_threads(self):
@@ -542,39 +478,6 @@ class TestIOLoopFutures(AsyncTestCase):
             future = self.wait()
             self.assertTrue(future.done())
             self.assertTrue(future.result() is None)
-
-    def test_add_future_stack_context(self):
-        ready = threading.Event()
-
-        def task():
-            # we must wait for the ioloop callback to be scheduled before
-            # the task completes to ensure that add_future adds the callback
-            # asynchronously (which is the scenario in which capturing
-            # the stack_context matters)
-            ready.wait(1)
-            assert ready.isSet(), "timed out"
-            raise Exception("worker")
-
-        def callback(future):
-            self.future = future
-            raise Exception("callback")
-
-        def handle_exception(typ, value, traceback):
-            self.exception = value
-            self.stop()
-            return True
-
-        # stack_context propagates to the ioloop callback, but the worker
-        # task just has its exceptions caught and saved in the Future.
-        with ignore_deprecation():
-            with futures.ThreadPoolExecutor(1) as pool:
-                with ExceptionStackContext(handle_exception):
-                    self.io_loop.add_future(pool.submit(task), callback)
-                ready.set()
-            self.wait()
-
-        self.assertEqual(self.exception.args[0], "callback")
-        self.assertEqual(self.future.exception().args[0], "worker")
 
     @gen_test
     def test_run_in_executor_gen(self):

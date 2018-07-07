@@ -78,7 +78,6 @@ import time
 import tornado
 import traceback
 import types
-import warnings
 from inspect import isclass
 from io import BytesIO
 
@@ -89,13 +88,12 @@ from tornado import httputil
 from tornado import iostream
 from tornado import locale
 from tornado.log import access_log, app_log, gen_log
-from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
 from tornado.routing import (AnyMatches, DefaultHostMatches, HostMatches,
                              ReversibleRouter, Rule, ReversibleRuleRouter,
                              URLSpec)
-from tornado.util import (ObjectDict, raise_exc_info,
+from tornado.util import (ObjectDict,
                           unicode_type, _websocket_mask, PY3)
 
 url = URLSpec
@@ -1537,17 +1535,6 @@ class RequestHandler(object):
                     match = True
                     break
         return match
-
-    def _stack_context_handle_exception(self, type, value, traceback):
-        try:
-            # For historical reasons _handle_request_exception only takes
-            # the exception value instead of the full triple,
-            # so re-raise the exception to ensure that it's in
-            # sys.exc_info()
-            raise_exc_info((type, value, traceback))
-        except Exception:
-            self._handle_request_exception(value)
-        return True
 
     @gen.coroutine
     def _execute(self, transforms, *args, **kwargs):
