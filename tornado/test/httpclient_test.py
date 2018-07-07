@@ -547,11 +547,6 @@ class HTTPResponseTestCase(unittest.TestCase):
 
 class SyncHTTPClientTest(unittest.TestCase):
     def setUp(self):
-        if IOLoop.configured_class().__name__ == 'TwistedIOLoop':
-            # TwistedIOLoop only supports the global reactor, so we can't have
-            # separate IOLoops for client and server threads.
-            raise unittest.SkipTest(
-                'Sync HTTPClient not compatible with TwistedIOLoop')
         self.server_ioloop = IOLoop()
 
         @gen.coroutine

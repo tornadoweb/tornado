@@ -19,14 +19,7 @@ import random
 import socket
 import ssl
 import sys
-
-try:
-    from unittest import mock  # type: ignore
-except ImportError:
-    try:
-        import mock  # type: ignore
-    except ImportError:
-        mock = None
+from unittest import mock
 
 
 def _server_ssl_options():
@@ -692,7 +685,6 @@ class TestIOStreamMixin(TestReadWriteMixin):
             # cygwin's errnos don't match those used on native windows python
             self.assertTrue(stream.error.args[0] in _ERRNO_CONNREFUSED)
 
-    @unittest.skipIf(mock is None, 'mock package not present')
     @gen_test
     def test_gaierror(self):
         # Test that IOStream sets its exc_info on getaddrinfo error.
@@ -709,7 +701,6 @@ class TestIOStreamMixin(TestReadWriteMixin):
                 yield stream.connect(('localhost', 80))
             self.assertTrue(isinstance(stream.error, socket.gaierror))
 
-    @unittest.skipIf(mock is None, 'mock package not present')
     @gen_test
     def test_read_until_close_with_error(self):
         server, client = yield self.make_iostream_pair()

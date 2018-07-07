@@ -11,12 +11,8 @@ _import_everything = b"""
 # at startup, which in turn creates the default event loop and prevents forking.
 # Explicitly disallow the default event loop so that an error will be raised
 # if something tries to touch it.
-try:
-    import asyncio
-except ImportError:
-    pass
-else:
-    asyncio.set_event_loop(None)
+import asyncio
+asyncio.set_event_loop(None)
 
 import tornado.auth
 import tornado.autoreload

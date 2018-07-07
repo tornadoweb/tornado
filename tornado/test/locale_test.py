@@ -7,7 +7,7 @@ import tempfile
 
 import tornado.locale
 from tornado.escape import utf8, to_unicode
-from tornado.test.util import unittest, skipOnAppEngine
+from tornado.test.util import unittest
 from tornado.util import unicode_type
 
 
@@ -37,8 +37,6 @@ class TranslationLoaderTest(unittest.TestCase):
         self.assertTrue(isinstance(locale, tornado.locale.CSVLocale))
         self.assertEqual(locale.translate("school"), u"\u00e9cole")
 
-    # tempfile.mkdtemp is not available on app engine.
-    @skipOnAppEngine
     def test_csv_bom(self):
         with open(os.path.join(os.path.dirname(__file__), 'csv_translations',
                                'fr_FR.csv'), 'rb') as f:

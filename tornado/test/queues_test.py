@@ -18,7 +18,7 @@ from random import random
 from tornado import gen, queues
 from tornado.gen import TimeoutError
 from tornado.testing import gen_test, AsyncTestCase
-from tornado.test.util import unittest, skipBefore35, exec_test
+from tornado.test.util import unittest
 
 
 class QueueBasicTest(AsyncTestCase):
@@ -156,22 +156,19 @@ class QueueGetTest(AsyncTestCase):
         for getter in getters:
             self.assertRaises(TimeoutError, getter.result)
 
-    @skipBefore35
     @gen_test
     def test_async_for(self):
         q = queues.Queue()
         for i in range(5):
             q.put(i)
 
-        namespace = exec_test(globals(), locals(), """
         async def f():
             results = []
             async for i in q:
                 results.append(i)
                 if i == 4:
                     return results
-        """)
-        results = yield namespace['f']()
+        results = yield f()
         self.assertEqual(results, list(range(5)))
 
 

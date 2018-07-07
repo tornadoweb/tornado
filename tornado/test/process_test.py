@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import asyncio
 import logging
 import os
 import signal
@@ -16,19 +17,8 @@ from tornado.testing import bind_unused_port, ExpectLog, AsyncTestCase, gen_test
 from tornado.test.util import unittest, skipIfNonUnix
 from tornado.web import RequestHandler, Application
 
-try:
-    import asyncio
-except ImportError:
-    asyncio = None
-
-
-def skip_if_twisted():
-    if IOLoop.configured_class().__name__.endswith('TwistedIOLoop'):
-        raise unittest.SkipTest("Process tests not compatible with TwistedIOLoop")
 
 # Not using AsyncHTTPTestCase because we need control over the IOLoop.
-
-
 @skipIfNonUnix
 class ProcessTest(unittest.TestCase):
     def get_app(self):
@@ -64,7 +54,6 @@ class ProcessTest(unittest.TestCase):
         # reactor and don't restore it to a sane state after the fork
         # (asyncio has the same issue, but we have a special case in
         # place for it).
-        skip_if_twisted()
         with ExpectLog(gen_log, "(Starting .* processes|child .* exited|uncaught exception)"):
             sock, port = bind_unused_port()
 
@@ -185,7 +174,6 @@ class SubprocessTest(AsyncTestCase):
     def test_stderr(self):
         # This test is mysteriously flaky on twisted: it succeeds, but logs
         # an error of EBADF on closing a file descriptor.
-        skip_if_twisted()
         subproc = Subprocess([sys.executable, '-u', '-c',
                               r"import sys; sys.stderr.write('hello\n')"],
                              stderr=Subprocess.STREAM)
@@ -196,8 +184,6 @@ class SubprocessTest(AsyncTestCase):
         subproc.stderr.close()
 
     def test_sigchild(self):
-        # Twisted's SIGCHLD handler and Subprocess's conflict with each other.
-        skip_if_twisted()
         Subprocess.initialize()
         self.addCleanup(Subprocess.uninitialize)
         subproc = Subprocess([sys.executable, '-c', 'pass'])
@@ -208,7 +194,6 @@ class SubprocessTest(AsyncTestCase):
 
     @gen_test
     def test_sigchild_future(self):
-        skip_if_twisted()
         Subprocess.initialize()
         self.addCleanup(Subprocess.uninitialize)
         subproc = Subprocess([sys.executable, '-c', 'pass'])
@@ -217,7 +202,6 @@ class SubprocessTest(AsyncTestCase):
         self.assertEqual(subproc.returncode, ret)
 
     def test_sigchild_signal(self):
-        skip_if_twisted()
         Subprocess.initialize()
         self.addCleanup(Subprocess.uninitialize)
         subproc = Subprocess([sys.executable, '-c',
@@ -248,7 +232,6 @@ class SubprocessTest(AsyncTestCase):
 
     @gen_test
     def test_wait_for_exit_raise(self):
-        skip_if_twisted()
         Subprocess.initialize()
         self.addCleanup(Subprocess.uninitialize)
         subproc = Subprocess([sys.executable, '-c', 'import sys; sys.exit(1)'])
@@ -258,7 +241,6 @@ class SubprocessTest(AsyncTestCase):
 
     @gen_test
     def test_wait_for_exit_raise_disabled(self):
-        skip_if_twisted()
         Subprocess.initialize()
         self.addCleanup(Subprocess.uninitialize)
         subproc = Subprocess([sys.executable, '-c', 'import sys; sys.exit(1)'])

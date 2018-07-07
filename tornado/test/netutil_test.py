@@ -15,11 +15,6 @@ from tornado.testing import AsyncTestCase, gen_test, bind_unused_port
 from tornado.test.util import unittest, skipIfNoNetwork
 
 try:
-    from concurrent import futures
-except ImportError:
-    futures = None
-
-try:
     import pycares  # type: ignore
 except ImportError:
     pycares = None
@@ -101,7 +96,6 @@ class OverrideResolverTest(AsyncTestCase, _ResolverTestMixin):
 
 
 @skipIfNoNetwork
-@unittest.skipIf(futures is None, "futures module not present")
 class ThreadedResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
         super(ThreadedResolverTest, self).setUp()
@@ -125,7 +119,6 @@ class ThreadedResolverErrorTest(AsyncTestCase, _ResolverErrorTestMixin):
 
 
 @skipIfNoNetwork
-@unittest.skipIf(futures is None, "futures module not present")
 @unittest.skipIf(sys.platform == 'win32', "preexec_fn not available on win32")
 class ThreadedResolverImportTest(unittest.TestCase):
     def test_import(self):

@@ -10,7 +10,7 @@ from tornado import gen
 from tornado.iostream import IOStream
 from tornado.log import app_log
 from tornado.tcpserver import TCPServer
-from tornado.test.util import skipBefore35, skipIfNonUnix, exec_test, unittest
+from tornado.test.util import skipIfNonUnix, unittest
 from tornado.testing import AsyncTestCase, ExpectLog, bind_unused_port, gen_test
 
 
@@ -43,20 +43,17 @@ class TCPServerTest(AsyncTestCase):
             if client is not None:
                 client.close()
 
-    @skipBefore35
     @gen_test
     def test_handle_stream_native_coroutine(self):
         # handle_stream may be a native coroutine.
 
-        namespace = exec_test(globals(), locals(), """
         class TestServer(TCPServer):
             async def handle_stream(self, stream, address):
                 stream.write(b'data')
                 stream.close()
-        """)
 
         sock, port = bind_unused_port()
-        server = namespace['TestServer']()
+        server = TestServer()
         server.add_socket(sock)
         client = IOStream(socket.socket())
         yield client.connect(('localhost', port))

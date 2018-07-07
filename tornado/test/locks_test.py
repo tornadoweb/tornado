@@ -17,7 +17,7 @@ from datetime import timedelta
 from tornado import gen, locks
 from tornado.gen import TimeoutError
 from tornado.testing import gen_test, AsyncTestCase
-from tornado.test.util import unittest, skipBefore35, exec_test
+from tornado.test.util import unittest
 
 
 class ConditionTest(AsyncTestCase):
@@ -349,18 +349,15 @@ class SemaphoreContextManagerTest(AsyncTestCase):
         # Semaphore was released and can be acquired again.
         self.assertTrue(sem.acquire().done())
 
-    @skipBefore35
     @gen_test
     def test_context_manager_async_await(self):
         # Repeat the above test using 'async with'.
         sem = locks.Semaphore()
 
-        namespace = exec_test(globals(), locals(), """
         async def f():
             async with sem as yielded:
                 self.assertTrue(yielded is None)
-        """)
-        yield namespace['f']()
+        yield f()
 
         # Semaphore was released and can be acquired again.
         self.assertTrue(sem.acquire().done())
@@ -480,7 +477,6 @@ class LockTests(AsyncTestCase):
         yield futures
         self.assertEqual(list(range(N)), history)
 
-    @skipBefore35
     @gen_test
     def test_acquire_fifo_async_with(self):
         # Repeat the above test using `async with lock:`
@@ -490,12 +486,10 @@ class LockTests(AsyncTestCase):
         N = 5
         history = []
 
-        namespace = exec_test(globals(), locals(), """
         async def f(idx):
             async with lock:
                 history.append(idx)
-        """)
-        futures = [namespace['f'](i) for i in range(N)]
+        futures = [f(i) for i in range(N)]
         lock.release()
         yield futures
         self.assertEqual(list(range(N)), history)

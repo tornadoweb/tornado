@@ -2,19 +2,15 @@ from __future__ import absolute_import, division, print_function
 
 from tornado import gen, ioloop
 from tornado.httpserver import HTTPServer
-from tornado.test.util import unittest, skipBefore35, exec_test
+from tornado.test.util import unittest
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, gen_test
 from tornado.web import Application
+import asyncio
 import contextlib
 import os
 import platform
 import traceback
 import warnings
-
-try:
-    import asyncio
-except ImportError:
-    asyncio = None
 
 
 @contextlib.contextmanager
@@ -104,18 +100,14 @@ class AsyncTestCaseWrapperTest(unittest.TestCase):
         self.assertEqual(len(result.errors), 1)
         self.assertIn("should be decorated", result.errors[0][1])
 
-    @skipBefore35
     @unittest.skipIf(platform.python_implementation() == 'PyPy',
                      'pypy destructor warnings cannot be silenced')
     def test_undecorated_coroutine(self):
-        namespace = exec_test(globals(), locals(), """
         class Test(AsyncTestCase):
             async def test_coro(self):
                 pass
-        """)
 
-        test_class = namespace['Test']
-        test = test_class('test_coro')
+        test = Test('test_coro')
         result = unittest.TestResult()
 
         # Silence "RuntimeWarning: coroutine 'test_coro' was never awaited".
@@ -265,33 +257,25 @@ class GenTest(AsyncTestCase):
         test_with_kwargs(self, test='test')
         self.finished = True
 
-    @skipBefore35
     def test_native_coroutine(self):
-        namespace = exec_test(globals(), locals(), """
         @gen_test
         async def test(self):
             self.finished = True
-        """)
+        test(self)
 
-        namespace['test'](self)
-
-    @skipBefore35
     def test_native_coroutine_timeout(self):
         # Set a short timeout and exceed it.
-        namespace = exec_test(globals(), locals(), """
         @gen_test(timeout=0.1)
         async def test(self):
             await gen.sleep(1)
-        """)
 
         try:
-            namespace['test'](self)
+            test(self)
             self.fail("did not get expected exception")
         except ioloop.TimeoutError:
             self.finished = True
 
 
-@unittest.skipIf(asyncio is None, "asyncio module not present")
 class GetNewIOLoopTest(AsyncTestCase):
     def get_new_ioloop(self):
         # Use the current loop instead of creating a new one here.

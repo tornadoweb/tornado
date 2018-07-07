@@ -14,6 +14,7 @@
 # under the License.
 from __future__ import absolute_import, division, print_function
 
+from concurrent import futures
 import logging
 import re
 import socket
@@ -24,13 +25,7 @@ from tornado import gen
 from tornado.iostream import IOStream
 from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncTestCase, bind_unused_port, gen_test
-from tornado.test.util import unittest, skipBefore35, exec_test
-
-
-try:
-    from concurrent import futures
-except ImportError:
-    futures = None
+from tornado.test.util import unittest
 
 
 class MiscFutureTest(AsyncTestCase):
@@ -141,7 +136,6 @@ class GeneratorClientTest(ClientTestMixin, AsyncTestCase):
     client_class = GeneratorCapClient
 
 
-@unittest.skipIf(futures is None, "concurrent.futures module not present")
 class RunOnExecutorTest(AsyncTestCase):
     @gen_test
     def test_no_calling(self):
@@ -185,7 +179,6 @@ class RunOnExecutorTest(AsyncTestCase):
         answer = yield o.f()
         self.assertEqual(answer, 42)
 
-    @skipBefore35
     @gen_test
     def test_async_await(self):
         class Object(object):
@@ -197,12 +190,11 @@ class RunOnExecutorTest(AsyncTestCase):
                 return 42
 
         o = Object()
-        namespace = exec_test(globals(), locals(), """
+
         async def f():
             answer = await o.f()
             return answer
-        """)
-        result = yield namespace['f']()
+        result = yield f()
         self.assertEqual(result, 42)
 
 

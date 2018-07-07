@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from concurrent.futures import ThreadPoolExecutor
+from concurrent import futures
 import contextlib
 import datetime
 import functools
@@ -10,36 +11,14 @@ import sys
 import threading
 import time
 import types
-try:
-    from unittest import mock  # type: ignore
-except ImportError:
-    try:
-        import mock  # type: ignore
-    except ImportError:
-        mock = None
+from unittest import mock
 
 from tornado.escape import native_str
 from tornado import gen
 from tornado.ioloop import IOLoop, TimeoutError, PeriodicCallback
 from tornado.log import app_log
 from tornado.testing import AsyncTestCase, bind_unused_port, ExpectLog, gen_test
-from tornado.test.util import (unittest, skipIfNonUnix, skipOnTravis,
-                               skipBefore35, exec_test)
-
-try:
-    from concurrent import futures
-except ImportError:
-    futures = None
-
-try:
-    import asyncio
-except ImportError:
-    asyncio = None
-
-try:
-    import twisted
-except ImportError:
-    twisted = None
+from tornado.test.util import unittest, skipIfNonUnix, skipOnTravis
 
 
 class TestIOLoop(AsyncTestCase):
@@ -346,17 +325,14 @@ class TestIOLoop(AsyncTestCase):
         with ExpectLog(app_log, "Exception in callback"):
             self.wait()
 
-    @skipBefore35
     def test_exception_logging_native_coro(self):
         """The IOLoop examines exceptions from awaitables and logs them."""
-        namespace = exec_test(globals(), locals(), """
         async def callback():
             # Stop the IOLoop two iterations after raising an exception
             # to give the exception time to be logged.
             self.io_loop.add_callback(self.io_loop.add_callback, self.stop)
             1 / 0
-        """)
-        self.io_loop.add_callback(namespace["callback"])
+        self.io_loop.add_callback(callback)
         with ExpectLog(app_log, "Exception in callback"):
             self.wait()
 
@@ -469,7 +445,6 @@ class TestIOLoopCurrentAsync(AsyncTestCase):
             yield e.submit(IOLoop.clear_current)
 
 
-@unittest.skipIf(futures is None, "futures module not present")
 class TestIOLoopFutures(AsyncTestCase):
     def test_add_future_threads(self):
         with futures.ThreadPoolExecutor(1) as pool:
@@ -501,7 +476,6 @@ class TestIOLoopFutures(AsyncTestCase):
 
         self.assertEqual([event1, event2], res)
 
-    @skipBefore35
     @gen_test
     def test_run_in_executor_native(self):
         event1 = threading.Event()
@@ -515,15 +489,13 @@ class TestIOLoopFutures(AsyncTestCase):
         # Go through an async wrapper to ensure that the result of
         # run_in_executor works with await and not just gen.coroutine
         # (simply passing the underlying concurrrent future would do that).
-        namespace = exec_test(globals(), locals(), """
-            async def async_wrapper(self_event, other_event):
-                return await IOLoop.current().run_in_executor(
-                    None, sync_func, self_event, other_event)
-        """)
+        async def async_wrapper(self_event, other_event):
+            return await IOLoop.current().run_in_executor(
+                None, sync_func, self_event, other_event)
 
         res = yield [
-            namespace["async_wrapper"](event1, event2),
-            namespace["async_wrapper"](event2, event1)
+            async_wrapper(event1, event2),
+            async_wrapper(event2, event1)
         ]
 
         self.assertEqual([event1, event2], res)
@@ -591,17 +563,14 @@ class TestIOLoopRunSync(unittest.TestCase):
             yield gen.sleep(1)
         self.assertRaises(TimeoutError, self.io_loop.run_sync, f, timeout=0.01)
 
-    @skipBefore35
     def test_native_coroutine(self):
         @gen.coroutine
         def f1():
             yield gen.moment
 
-        namespace = exec_test(globals(), locals(), """
         async def f2():
             await f1()
-        """)
-        self.io_loop.run_sync(namespace['f2'])
+        self.io_loop.run_sync(f2)
 
 
 class TestPeriodicCallbackMath(unittest.TestCase):
@@ -660,7 +629,6 @@ class TestPeriodicCallbackMath(unittest.TestCase):
         self.assertEqual(self.simulate_calls(pc, [-100, 0, 0]),
                          [1010, 1020, 1030])
 
-    @unittest.skipIf(mock is None, 'mock package not present')
     def test_jitter(self):
         random_times = [0.5, 1, 0, 0.75]
         expected = [1010, 1022.5, 1030, 1041.25]
@@ -690,39 +658,18 @@ class TestIOLoopConfiguration(unittest.TestCase):
         cls = self.run_python('print(classname(IOLoop()))')
         self.assertEqual(cls, 'AsyncIOLoop')
 
-    @unittest.skipIf(asyncio is not None,
-                     "IOLoop configuration not available")
-    def test_explicit_select(self):
-        # SelectIOLoop can always be configured explicitly.
-        default_class = self.run_python(
-            'IOLoop.configure("tornado.platform.select.SelectIOLoop")',
-            'print(classname(IOLoop.current()))')
-        self.assertEqual(default_class, 'SelectIOLoop')
-
-    @unittest.skipIf(asyncio is None, "asyncio module not present")
     def test_asyncio(self):
         cls = self.run_python(
             'IOLoop.configure("tornado.platform.asyncio.AsyncIOLoop")',
             'print(classname(IOLoop.current()))')
         self.assertEqual(cls, 'AsyncIOMainLoop')
 
-    @unittest.skipIf(asyncio is None, "asyncio module not present")
     def test_asyncio_main(self):
         cls = self.run_python(
             'from tornado.platform.asyncio import AsyncIOMainLoop',
             'AsyncIOMainLoop().install()',
             'print(classname(IOLoop.current()))')
         self.assertEqual(cls, 'AsyncIOMainLoop')
-
-    @unittest.skipIf(twisted is None, "twisted module not present")
-    @unittest.skipIf(asyncio is not None,
-                     "IOLoop configuration not available")
-    def test_twisted(self):
-        cls = self.run_python(
-            'from tornado.platform.twisted import TwistedIOLoop',
-            'TwistedIOLoop().install()',
-            'print(classname(IOLoop.current()))')
-        self.assertEqual(cls, 'TwistedIOLoop')
 
 
 if __name__ == "__main__":

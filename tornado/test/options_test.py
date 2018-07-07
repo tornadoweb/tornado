@@ -2,26 +2,14 @@
 from __future__ import absolute_import, division, print_function
 
 import datetime
+from io import StringIO
 import os
 import sys
+from unittest import mock
 
 from tornado.options import OptionParser, Error
-from tornado.util import basestring_type, PY3
+from tornado.util import basestring_type
 from tornado.test.util import unittest, subTest
-
-if PY3:
-    from io import StringIO
-else:
-    from cStringIO import StringIO
-
-try:
-    # py33+
-    from unittest import mock  # type: ignore
-except ImportError:
-    try:
-        import mock  # type: ignore
-    except ImportError:
-        mock = None
 
 
 class Email(object):
@@ -179,7 +167,6 @@ class OptionsTest(unittest.TestCase):
 
         self.assertEqual({}, options.group_dict('nonexistent'))
 
-    @unittest.skipIf(mock is None, 'mock package not present')
     def test_mock_patch(self):
         # ensure that our setattr hooks don't interfere with mock.patch
         options = OptionParser()
