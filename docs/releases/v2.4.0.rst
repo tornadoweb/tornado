@@ -57,7 +57,7 @@ HTTP clients
 * New method `.RequestHandler.get_template_namespace` can be overridden to
   add additional variables without modifying keyword arguments to
   ``render_string``.
-* `.RequestHandler.add_header` now works with `.WSGIApplication`.
+* `.RequestHandler.add_header` now works with ``WSGIApplication``.
 * `.RequestHandler.get_secure_cookie` now handles a potential error case.
 * ``RequestHandler.__init__`` now calls ``super().__init__`` to ensure that
   all constructors are called when multiple inheritance is used.

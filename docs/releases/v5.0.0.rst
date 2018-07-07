@@ -193,8 +193,8 @@ Other notes
 - The ``io_loop`` argument to `.PeriodicCallback` has been removed.
 - It is now possible to create a `.PeriodicCallback` in one thread
   and start it in another without passing an explicit event loop.
-- The `.IOLoop.set_blocking_signal_threshold` and
-  `.IOLoop.set_blocking_log_threshold` methods are deprecated because
+- The ``IOLoop.set_blocking_signal_threshold`` and
+  ``IOLoop.set_blocking_log_threshold`` methods are deprecated because
   they are not implemented for the `asyncio` event loop`. Use the
   ``PYTHONASYNCIODEBUG=1`` environment variable instead.
 - `.IOLoop.clear_current` now works if it is called before any
@@ -257,8 +257,8 @@ Other notes
 `tornado.platform.twisted`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- The ``io_loop`` arguments to `.TornadoReactor`, `.TwistedResolver`,
-  and `tornado.platform.twisted.install` have been removed.
+- The ``io_loop`` arguments to ``TornadoReactor``, `.TwistedResolver`,
+  and ``tornado.platform.twisted.install`` have been removed.
 
 `tornado.process`
 ~~~~~~~~~~~~~~~~~

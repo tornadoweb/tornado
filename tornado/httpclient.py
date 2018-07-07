@@ -42,7 +42,6 @@ from __future__ import absolute_import, division, print_function
 
 import functools
 import time
-import warnings
 import weakref
 
 from tornado.concurrent import Future, future_set_result_unless_cancelled

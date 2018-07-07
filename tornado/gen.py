@@ -17,25 +17,7 @@ environment than chaining callbacks. Code using coroutines is
 technically asynchronous, but it is written as a single generator
 instead of a collection of separate functions.
 
-For example, the following callback-based asynchronous handler:
-
-.. testcode::
-
-    class AsyncHandler(RequestHandler):
-        @asynchronous
-        def get(self):
-            http_client = AsyncHTTPClient()
-            http_client.fetch("http://example.com",
-                              callback=self.on_fetch)
-
-        def on_fetch(self, response):
-            do_something_with_response(response)
-            self.render("template.html")
-
-.. testoutput::
-   :hide:
-
-could be written with ``gen`` as:
+For example, here's a coroutine-based handler:
 
 .. testcode::
 
@@ -160,7 +142,8 @@ def coroutine(func):
     """Decorator for asynchronous generators.
 
     Any generator that yields objects from this module must be wrapped
-    in either this decorator or `engine`.
+    in this decorator (or use ``async def`` and ``await`` for similar
+    functionality).
 
     Coroutines may "return" by raising the special exception
     `Return(value) <Return>`.  In Python 3.3+, it is also possible for
@@ -169,13 +152,7 @@ def coroutine(func):
     In all versions of Python a coroutine that simply wishes to exit
     early may use the ``return`` statement without a value.
 
-    Functions with this decorator return a `.Future`.  Additionally,
-    they may be called with a ``callback`` keyword argument, which
-    will be invoked with the future's result when it resolves.  If the
-    coroutine fails, the callback will not be run and an exception
-    will be raised into the surrounding `.StackContext`.  The
-    ``callback`` argument is not visible inside the decorated
-    function; it is handled by the decorator itself.
+    Functions with this decorator return a `.Future`.
 
     .. warning::
 
@@ -191,6 +168,7 @@ def coroutine(func):
 
        The ``callback`` argument was removed. Use the returned
        awaitable object instead.
+
     """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
@@ -426,11 +404,6 @@ def multi(children, quiet_exceptions=()):
     one. All others will be logged, unless they are of types
     contained in the ``quiet_exceptions`` argument.
 
-    If any of the inputs are `YieldPoints <YieldPoint>`, the returned
-    yieldable object is a `YieldPoint`. Otherwise, returns a `.Future`.
-    This means that the result of `multi` can be used in a native
-    coroutine if and only if all of its children can be.
-
     In a ``yield``-based coroutine, it is not normally necessary to
     call this function directly, since the coroutine runner will
     do it automatically when a list or dict is yielded. However,
@@ -452,7 +425,7 @@ def multi(children, quiet_exceptions=()):
     .. versionchanged:: 4.3
        Replaced the class ``Multi`` and the function ``multi_future``
        with a unified function ``multi``. Added support for yieldables
-       other than `YieldPoint` and `.Future`.
+       other than ``YieldPoint`` and `.Future`.
 
     """
     return multi_future(children, quiet_exceptions=quiet_exceptions)
@@ -464,8 +437,7 @@ Multi = multi
 def multi_future(children, quiet_exceptions=()):
     """Wait for multiple asynchronous futures in parallel.
 
-    This function is similar to `multi`, but does not support
-    `YieldPoints <YieldPoint>`.
+    Since Tornado 6.0, this function is exactly the same as `multi`.
 
     .. versionadded:: 4.0
 
@@ -552,8 +524,6 @@ def with_timeout(timeout, future, quiet_exceptions=()):
     If the wrapped `.Future` fails after it has timed out, the exception
     will be logged unless it is of a type contained in ``quiet_exceptions``
     (which may be an exception type or a sequence of types).
-
-    Does not support `YieldPoint` subclasses.
 
     The wrapped `.Future` is not canceled when the timeout expires,
     permitting it to be reused. `asyncio.wait_for` is similar to this
@@ -665,7 +635,7 @@ Usage: ``yield gen.moment``
 
 
 class Runner(object):
-    """Internal implementation of `tornado.gen.engine`.
+    """Internal implementation of `tornado.gen.coroutine`.
 
     Maintains information about pending callbacks and their results.
 

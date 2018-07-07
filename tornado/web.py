@@ -245,8 +245,7 @@ class RequestHandler(object):
         of the request method.
 
         Asynchronous support: Decorate this method with `.gen.coroutine`
-        or use ``async def`` to make it asynchronous (the
-        `asynchronous` decorator cannot be used on `prepare`).
+        or use ``async def`` to make it asynchronous.
         If this method returns a `.Future` execution will not proceed
         until the `.Future` is done.
 

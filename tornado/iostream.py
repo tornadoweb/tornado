@@ -37,7 +37,7 @@ import re
 
 from tornado.concurrent import Future
 from tornado import ioloop
-from tornado.log import gen_log, app_log
+from tornado.log import gen_log
 from tornado.netutil import ssl_wrap_socket, _client_ssl_defaults, _server_ssl_defaults
 from tornado.util import errno_from_exception
 

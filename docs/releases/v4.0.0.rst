@@ -96,14 +96,14 @@ Other notes
   will be created on demand when needed.
 * The internals of the `tornado.gen` module have been rewritten to
   improve performance when using ``Futures``, at the expense of some
-  performance degradation for the older `.YieldPoint` interfaces.
+  performance degradation for the older ``YieldPoint`` interfaces.
 * New function `.with_timeout` wraps a `.Future` and raises an exception
   if it doesn't complete in a given amount of time.
 * New object `.moment` can be yielded to allow the IOLoop to run for
   one iteration before resuming.
-* `.Task` is now a function returning a `.Future` instead of a `.YieldPoint`
+* ``Task`` is now a function returning a `.Future` instead of a ``YieldPoint``
   subclass.  This change should be transparent to application code, but
-  allows `.Task` to take advantage of the newly-optimized `.Future`
+  allows ``Task`` to take advantage of the newly-optimized `.Future`
   handling.
 
 `tornado.http1connection`
@@ -135,7 +135,7 @@ Other notes
 * The ``connection`` attribute of `.HTTPServerRequest` is now documented
   for public use; applications are expected to write their responses
   via the `.HTTPConnection` interface.
-* The `.HTTPServerRequest.write` and `.HTTPServerRequest.finish` methods
+* The ``HTTPServerRequest.write`` and ``HTTPServerRequest.finish`` methods
   are now deprecated.  (`.RequestHandler.write` and `.RequestHandler.finish`
   are *not* deprecated; this only applies to the methods on
   `.HTTPServerRequest`)
@@ -233,7 +233,7 @@ Other notes
 `tornado.platform.twisted`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* `.TwistedIOLoop` now works on Python 3.3+ (with Twisted 14.0.0+).
+* ``TwistedIOLoop`` now works on Python 3.3+ (with Twisted 14.0.0+).
 
 ``tornado.simple_httpclient``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -251,8 +251,8 @@ Other notes
 * ``simple_httpclient`` now raises the original exception (e.g. an `IOError`)
   in more cases, instead of converting everything to ``HTTPError``.
 
-`tornado.stack_context`
-~~~~~~~~~~~~~~~~~~~~~~~
+``tornado.stack_context``
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * The stack context system now has less performance overhead when no
   stack contexts are active.
@@ -324,8 +324,8 @@ Other notes
 `tornado.wsgi`
 ~~~~~~~~~~~~~~
 
-* New class `.WSGIAdapter` supports running a Tornado `.Application` on
+* New class ``WSGIAdapter`` supports running a Tornado `.Application` on
   a WSGI server in a way that is more compatible with Tornado's non-WSGI
-  `.HTTPServer`.  `.WSGIApplication` is deprecated in favor of using
-  `.WSGIAdapter` with a regular `.Application`.
-* `.WSGIAdapter` now supports gzipped output.
+  `.HTTPServer`.  ``WSGIApplication`` is deprecated in favor of using
+  ``WSGIAdapter`` with a regular `.Application`.
+* ``WSGIAdapter`` now supports gzipped output.

@@ -39,7 +39,6 @@ import twisted.names.resolve  # type: ignore
 from tornado.concurrent import Future, future_set_exc_info
 from tornado.escape import utf8
 from tornado import gen
-import tornado.ioloop
 from tornado.netutil import Resolver
 
 

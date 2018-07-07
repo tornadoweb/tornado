@@ -60,7 +60,7 @@ Backwards-compatibility notes
   yieldable in coroutines.
 * New function `tornado.gen.sleep` is a coroutine-friendly
   analogue to `time.sleep`.
-* `.gen.engine` now correctly captures the stack context for its callbacks.
+* ``gen.engine`` now correctly captures the stack context for its callbacks.
 
 `tornado.httpclient`
 ~~~~~~~~~~~~~~~~~~~~
@@ -167,7 +167,7 @@ Backwards-compatibility notes
 `tornado.web`
 ~~~~~~~~~~~~~
 
-* The `.asynchronous` decorator now understands `concurrent.futures.Future`
+* The ``asynchronous`` decorator now understands `concurrent.futures.Future`
   in addition to `tornado.concurrent.Future`.
 * `.StaticFileHandler` no longer logs a stack trace if the connection is
   closed while sending the file.

@@ -66,7 +66,6 @@ import time
 import urllib.parse
 import uuid
 
-from tornado import gen
 from tornado import httpclient
 from tornado import escape
 from tornado.httputil import url_concat
@@ -403,7 +402,6 @@ class OAuthMixin(object):
 
         args["oauth_signature"] = signature
         return url + "?" + urllib.parse.urlencode(args)
-
 
     def _oauth_consumer_token(self):
         """Subclasses must override this to return their OAuth consumer keys.
@@ -815,7 +813,7 @@ class FacebookGraphMixin(OAuth2Mixin):
     _FACEBOOK_BASE_URL = "https://graph.facebook.com"
 
     async def get_authenticated_user(self, redirect_uri, client_id, client_secret,
-                               code, extra_fields=None):
+                                     code, extra_fields=None):
         """Handles the login for the Facebook user, returning a user object.
 
         Example usage:

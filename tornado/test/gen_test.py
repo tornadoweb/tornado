@@ -14,7 +14,7 @@ from tornado.concurrent import Future
 from tornado.ioloop import IOLoop
 from tornado.log import app_log
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
-from tornado.test.util import unittest, skipOnTravis, skipBefore33, skipBefore35, skipNotCPython, exec_test
+from tornado.test.util import unittest, skipOnTravis, skipBefore33, skipBefore35, skipNotCPython, exec_test  # noqa: E501
 from tornado.web import Application, RequestHandler, HTTPError
 
 from tornado import gen

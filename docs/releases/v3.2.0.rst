@@ -79,7 +79,7 @@ New modules
 `tornado.ioloop`
 ~~~~~~~~~~~~~~~~
 
-* `.IOLoop` now uses `~.IOLoop.handle_callback_exception` consistently for
+* `.IOLoop` now uses ``IOLoop.handle_callback_exception`` consistently for
   error logging.
 * `.IOLoop` now frees callback objects earlier, reducing memory usage
   while idle.

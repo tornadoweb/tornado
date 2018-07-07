@@ -30,7 +30,7 @@ from tornado import netutil
 from tornado.platform.asyncio import AsyncIOMainLoop
 from tornado.process import Subprocess
 from tornado.log import app_log
-from tornado.util import raise_exc_info, basestring_type, PY3
+from tornado.util import raise_exc_info, basestring_type
 
 
 _NON_OWNED_IOLOOPS = AsyncIOMainLoop

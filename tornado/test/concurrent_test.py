@@ -17,7 +17,6 @@ from __future__ import absolute_import, division, print_function
 import logging
 import re
 import socket
-import warnings
 
 from tornado.concurrent import Future, run_on_executor, future_set_result_unless_cancelled
 from tornado.escape import utf8, to_unicode

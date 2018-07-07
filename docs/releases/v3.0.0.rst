@@ -10,7 +10,7 @@ Highlights
 * The ``callback`` argument to many asynchronous methods is now
   optional, and these methods return a `.Future`.  The `tornado.gen`
   module now understands ``Futures``, and these methods can be used
-  directly without a `.gen.Task` wrapper.
+  directly without a ``gen.Task`` wrapper.
 * New function `.IOLoop.current` returns the `.IOLoop` that is running
   on the current thread (as opposed to `.IOLoop.instance`, which
   returns a specific thread's (usually the main thread's) IOLoop.
@@ -136,7 +136,7 @@ Multiple modules
   calling a callback you return a value with ``raise
   gen.Return(value)`` (or simply ``return value`` in Python 3.3).
 * Generators may now yield `.Future` objects.
-* Callbacks produced by `.gen.Callback` and `.gen.Task` are now automatically
+* Callbacks produced by ``gen.Callback`` and ``gen.Task`` are now automatically
   stack-context-wrapped, to minimize the risk of context leaks when used
   with asynchronous functions that don't do their own wrapping.
 * Fixed a memory leak involving generators, `.RequestHandler.flush`,
@@ -167,7 +167,7 @@ Multiple modules
   when instantiating an implementation subclass directly.
 * Secondary `.AsyncHTTPClient` callbacks (``streaming_callback``,
   ``header_callback``, and ``prepare_curl_callback``) now respect
-  `.StackContext`.
+  ``StackContext``.
 
 `tornado.httpserver`
 ~~~~~~~~~~~~~~~~~~~~
@@ -311,9 +311,9 @@ Multiple modules
 `tornado.platform.twisted`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* New class `tornado.platform.twisted.TwistedIOLoop` allows Tornado
+* New class ``tornado.platform.twisted.TwistedIOLoop`` allows Tornado
   code to be run on the Twisted reactor (as opposed to the existing
-  `.TornadoReactor`, which bridges the gap in the other direction).
+  ``TornadoReactor``, which bridges the gap in the other direction).
 * New class `tornado.platform.twisted.TwistedResolver` is an asynchronous
   implementation of the `.Resolver` interface.
 
@@ -343,10 +343,10 @@ Multiple modules
 * Fixed a bug in which ``SimpleAsyncHTTPClient`` callbacks were being run in the
   client's ``stack_context``.
 
-`tornado.stack_context`
-~~~~~~~~~~~~~~~~~~~~~~~
+``tornado.stack_context``
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* `.stack_context.wrap` now runs the wrapped callback in a more consistent
+* ``stack_context.wrap`` now runs the wrapped callback in a more consistent
   environment by recreating contexts even if they already exist on the
   stack.
 * Fixed a bug in which stack contexts could leak from one callback

@@ -26,8 +26,7 @@ Tornado can be roughly divided into four major components:
 
 The Tornado web framework and HTTP server together offer a full-stack
 alternative to `WSGI <http://www.python.org/dev/peps/pep-3333/>`_.
-While it is possible to use the Tornado web framework in a WSGI
-container (`.WSGIAdapter`), or use the Tornado HTTP server as a
-container for other WSGI frameworks (`.WSGIContainer`), each of these
-combinations has limitations and to take full advantage of Tornado you
-will need to use the Tornado's web framework and HTTP server together.
+While it is possible to use the Tornado HTTP server as a container for
+other WSGI frameworks (`.WSGIContainer`), this combination has
+limitations and to take full advantage of Tornado you will need to use
+the Tornado's web framework and HTTP server together.

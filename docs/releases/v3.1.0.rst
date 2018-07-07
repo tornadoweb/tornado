@@ -28,7 +28,7 @@ Multiple modules
   are asynchronous in `.OAuthMixin` and derived classes, although they
   do not take a callback.  The `.Future` these methods return must be
   yielded if they are called from a function decorated with `.gen.coroutine`
-  (but not `.gen.engine`).
+  (but not ``gen.engine``).
 * `.TwitterMixin` now uses ``/account/verify_credentials`` to get information
   about the logged-in user, which is more robust against changing screen
   names.
@@ -147,11 +147,11 @@ Multiple modules
 * `.Subprocess.set_exit_callback` now works for subprocesses created
   without an explicit ``io_loop`` parameter.
 
-`tornado.stack_context`
-~~~~~~~~~~~~~~~~~~~~~~~
+``tornado.stack_context``
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* `tornado.stack_context` has been rewritten and is now much faster.
-* New function `.run_with_stack_context` facilitates the use of stack
+* ``tornado.stack_context`` has been rewritten and is now much faster.
+* New function ``run_with_stack_context`` facilitates the use of stack
   contexts with coroutines.
 
 `tornado.tcpserver`
@@ -170,7 +170,7 @@ Multiple modules
 ~~~~~~~~~~~~~~~~~
 
 * `tornado.testing.AsyncTestCase.wait` now raises the correct exception
-  when it has been modified by `tornado.stack_context`.
+  when it has been modified by ``tornado.stack_context``.
 * `tornado.testing.gen_test` can now be called as ``@gen_test(timeout=60)``
   to give some tests a longer timeout than others.
 * The environment variable ``ASYNC_TEST_TIMEOUT`` can now be set to
@@ -210,11 +210,11 @@ Multiple modules
   instead of being turned into spaces.
 * `.RequestHandler.send_error` will now only be called once per request,
   even if multiple exceptions are caught by the stack context.
-* The `tornado.web.asynchronous` decorator is no longer necessary for
+* The ``tornado.web.asynchronous`` decorator is no longer necessary for
   methods that return a `.Future` (i.e. those that use the `.gen.coroutine`
-  or `.return_future` decorators)
+  or ``return_future`` decorators)
 * `.RequestHandler.prepare` may now be asynchronous if it returns a
-  `.Future`.  The `~tornado.web.asynchronous` decorator is not used with
+  `.Future`.  The ``tornado.web.asynchronous`` decorator is not used with
   ``prepare``; one of the `.Future`-related decorators should be used instead.
 * ``RequestHandler.current_user`` may now be assigned to normally.
 * `.RequestHandler.redirect` no longer silently strips control characters

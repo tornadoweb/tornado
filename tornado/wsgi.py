@@ -16,16 +16,15 @@
 """WSGI support for the Tornado web framework.
 
 WSGI is the Python standard for web servers, and allows for interoperability
-between Tornado and other Python web frameworks and servers.  This module
-provides WSGI support in two ways:
+between Tornado and other Python web frameworks and servers.
 
-* `WSGIAdapter` converts a `tornado.web.Application` to the WSGI application
-  interface.  This is useful for running a Tornado app on another
-  HTTP server, such as Google App Engine.  See the `WSGIAdapter` class
-  documentation for limitations that apply.
-* `WSGIContainer` lets you run other WSGI applications and frameworks on the
-  Tornado HTTP server.  For example, with this class you can mix Django
-  and Tornado handlers in a single server.
+This module provides WSGI support via the `WSGIContainer` class, which
+makes it possible to run applications using other WSGI frameworks on
+the Tornado HTTP server. The reverse is not supported; the Tornado
+`.Application` and `.RequestHandler` classes are designed for use with
+the Tornado `.HTTPServer` and cannot be used in a generic WSGI
+container.
+
 """
 
 from __future__ import absolute_import, division, print_function

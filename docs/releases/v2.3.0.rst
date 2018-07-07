@@ -102,9 +102,9 @@ Other modules
   function is called repeatedly.
 * `tornado.locale.get_supported_locales` no longer takes a meaningless
   ``cls`` argument.
-* `.StackContext` instances now have a deactivation callback that can be
+* ``StackContext`` instances now have a deactivation callback that can be
   used to prevent further propagation.
 * `tornado.testing.AsyncTestCase.wait` now resets its timeout on each call.
-* `tornado.wsgi.WSGIApplication` now parses arguments correctly on Python 3.
+* ``tornado.wsgi.WSGIApplication`` now parses arguments correctly on Python 3.
 * Exception handling on Python 3 has been improved; previously some exceptions
   such as `UnicodeDecodeError` would generate ``TypeErrors``
