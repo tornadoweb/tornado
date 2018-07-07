@@ -157,19 +157,6 @@ class TestIOLoop(AsyncTestCase):
         for i in range(1000):
             other_ioloop.add_callback(lambda: None)
 
-    def test_handle_callback_exception(self):
-        # IOLoop.handle_callback_exception can be overridden to catch
-        # exceptions in callbacks.
-        def handle_callback_exception(callback):
-            self.assertIs(sys.exc_info()[0], ZeroDivisionError)
-            self.stop()
-        self.io_loop.handle_callback_exception = handle_callback_exception
-        with NullContext():
-            # remove the test StackContext that would see this uncaught
-            # exception as a test failure.
-            self.io_loop.add_callback(lambda: 1 / 0)
-        self.wait()
-
     @skipIfNonUnix  # just because socketpair is so convenient
     def test_read_while_writeable(self):
         # Ensure that write events don't come in while we're waiting for

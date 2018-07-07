@@ -32,36 +32,21 @@ events. `IOLoop.add_timeout` is a non-blocking alternative to
 
 from __future__ import absolute_import, division, print_function
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import datetime
 import logging
 import numbers
 import os
 import sys
-import threading
 import time
-import traceback
 import math
 import random
 
 from tornado.concurrent import Future, is_future, chain_future, future_set_exc_info, future_add_done_callback  # noqa: E501
-from tornado.log import app_log, gen_log
+from tornado.log import app_log
 from tornado import stack_context
 from tornado.util import Configurable, timedelta_to_seconds, TimeoutError, unicode_type, import_object
-
-try:
-    import signal
-except ImportError:
-    signal = None
-
-try:
-    from concurrent.futures import ThreadPoolExecutor
-except ImportError:
-    ThreadPoolExecutor = None
-
-try:
-    import asyncio
-except ImportError:
-    asyncio = None
 
 
 class IOLoop(Configurable):
@@ -146,24 +131,11 @@ class IOLoop(Configurable):
        to redundantly specify the `asyncio` event loop.
 
     """
-    # Constants from the epoll module
-    _EPOLLIN = 0x001
-    _EPOLLPRI = 0x002
-    _EPOLLOUT = 0x004
-    _EPOLLERR = 0x008
-    _EPOLLHUP = 0x010
-    _EPOLLRDHUP = 0x2000
-    _EPOLLONESHOT = (1 << 30)
-    _EPOLLET = (1 << 31)
-
-    # Our events map exactly to the epoll events
+    # These constants were originally based on constants from the epoll module.
     NONE = 0
-    READ = _EPOLLIN
-    WRITE = _EPOLLOUT
-    ERROR = _EPOLLERR | _EPOLLHUP
-
-    # In Python 2, _current.instance points to the current IOLoop.
-    _current = threading.local()
+    READ = 0x001
+    WRITE = 0x004
+    ERROR = 0x018
 
     # In Python 3, _ioloop_for_asyncio maps from asyncio loops to IOLoops.
     _ioloop_for_asyncio = dict()
@@ -253,27 +225,20 @@ class IOLoop(Configurable):
            since even if we do not create an `IOLoop`, this method
            may initialize the asyncio loop.
         """
-        if asyncio is None:
-            current = getattr(IOLoop._current, "instance", None)
-            if current is None and instance:
-                current = IOLoop()
-                if IOLoop._current.instance is not current:
-                    raise RuntimeError("new IOLoop did not become current")
-        else:
-            try:
-                loop = asyncio.get_event_loop()
-            except (RuntimeError, AssertionError):
-                if not instance:
-                    return None
-                raise
-            try:
-                return IOLoop._ioloop_for_asyncio[loop]
-            except KeyError:
-                if instance:
-                    from tornado.platform.asyncio import AsyncIOMainLoop
-                    current = AsyncIOMainLoop(make_current=True)
-                else:
-                    current = None
+        try:
+            loop = asyncio.get_event_loop()
+        except (RuntimeError, AssertionError):
+            if not instance:
+                return None
+            raise
+        try:
+            return IOLoop._ioloop_for_asyncio[loop]
+        except KeyError:
+            if instance:
+                from tornado.platform.asyncio import AsyncIOMainLoop
+                current = AsyncIOMainLoop(make_current=True)
+            else:
+                current = None
         return current
 
     def make_current(self):
@@ -293,11 +258,7 @@ class IOLoop(Configurable):
            This method also sets the current `asyncio` event loop.
         """
         # The asyncio event loops override this method.
-        assert asyncio is None
-        old = getattr(IOLoop._current, "instance", None)
-        if old is not None:
-            old.clear_current()
-        IOLoop._current.instance = self
+        raise NotImplementedError()
 
     @staticmethod
     def clear_current():
@@ -404,54 +365,6 @@ class IOLoop(Configurable):
            raw file descriptors.
         """
         raise NotImplementedError()
-
-    def set_blocking_signal_threshold(self, seconds, action):
-        """Sends a signal if the `IOLoop` is blocked for more than
-        ``s`` seconds.
-
-        Pass ``seconds=None`` to disable.  Requires Python 2.6 on a unixy
-        platform.
-
-        The action parameter is a Python signal handler.  Read the
-        documentation for the `signal` module for more information.
-        If ``action`` is None, the process will be killed if it is
-        blocked for too long.
-
-        .. deprecated:: 5.0
-
-           Not implemented on the `asyncio` event loop. Use the environment
-           variable ``PYTHONASYNCIODEBUG=1`` instead. This method will be
-           removed in Tornado 6.0.
-        """
-        raise NotImplementedError()
-
-    def set_blocking_log_threshold(self, seconds):
-        """Logs a stack trace if the `IOLoop` is blocked for more than
-        ``s`` seconds.
-
-        Equivalent to ``set_blocking_signal_threshold(seconds,
-        self.log_stack)``
-
-        .. deprecated:: 5.0
-
-           Not implemented on the `asyncio` event loop. Use the environment
-           variable ``PYTHONASYNCIODEBUG=1`` instead. This method will be
-           removed in Tornado 6.0.
-        """
-        self.set_blocking_signal_threshold(seconds, self.log_stack)
-
-    def log_stack(self, signal, frame):
-        """Signal handler to log the stack trace of the current thread.
-
-        For use with `set_blocking_signal_threshold`.
-
-        .. deprecated:: 5.1
-
-           This method will be removed in Tornado 6.0.
-        """
-        gen_log.warning('IOLoop blocked for %f seconds in\n%s',
-                        self._blocking_signal_threshold,
-                        ''.join(traceback.format_stack(frame)))
 
     def start(self):
         """Starts the I/O loop.
@@ -706,10 +619,6 @@ class IOLoop(Configurable):
 
         .. versionadded:: 5.0
         """
-        if ThreadPoolExecutor is None:
-            raise RuntimeError(
-                "concurrent.futures is required to use IOLoop.run_in_executor")
-
         if executor is None:
             if not hasattr(self, '_executor'):
                 from tornado.process import cpu_count
@@ -752,33 +661,11 @@ class IOLoop(Configurable):
                 else:
                     self.add_future(ret, self._discard_future_result)
         except Exception:
-            self.handle_callback_exception(callback)
+            app_log.error("Exception in callback %r", callback, exc_info=True)
 
     def _discard_future_result(self, future):
         """Avoid unhandled-exception warnings from spawned coroutines."""
         future.result()
-
-    def handle_callback_exception(self, callback):
-        """This method is called whenever a callback run by the `IOLoop`
-        throws an exception.
-
-        By default simply logs the exception as an error.  Subclasses
-        may override this method to customize reporting of exceptions.
-
-        The exception itself is not passed explicitly, but is available
-        in `sys.exc_info`.
-
-        .. versionchanged:: 5.0
-
-           When the `asyncio` event loop is used (which is now the
-           default on Python 3), some callback errors will be handled by
-           `asyncio` instead of this method.
-
-        .. deprecated: 5.1
-
-           Support for this method will be removed in Tornado 6.0.
-        """
-        app_log.error("Exception in callback %r", callback, exc_info=True)
 
     def split_fd(self, fd):
         """Returns an (fd, obj) pair from an ``fd`` parameter.
@@ -911,7 +798,7 @@ class PeriodicCallback(object):
         try:
             return self.callback()
         except Exception:
-            self.io_loop.handle_callback_exception(self.callback)
+            app_log.error("Exception in callback %r", self.callback, exc_info=True)
         finally:
             self._schedule_next()
 
