@@ -26,10 +26,7 @@ from __future__ import absolute_import, division, print_function
 
 import os
 
-if 'APPENGINE_RUNTIME' in os.environ:
-    def set_close_exec(fd):
-        pass
-elif os.name == 'nt':
+if os.name == 'nt':
     from tornado.platform.windows import set_close_exec
 else:
     from tornado.platform.posix import set_close_exec

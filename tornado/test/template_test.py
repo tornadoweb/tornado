@@ -7,7 +7,7 @@ import traceback
 from tornado.escape import utf8, native_str, to_unicode
 from tornado.template import Template, DictLoader, ParseError, Loader
 from tornado.test.util import unittest
-from tornado.util import ObjectDict, unicode_type
+from tornado.util import ObjectDict
 
 
 class TemplateTest(unittest.TestCase):
@@ -80,12 +80,7 @@ class TemplateTest(unittest.TestCase):
         # test simulates unicode characters appearing directly in the
         # template file (with utf8 encoding), i.e. \u escapes would not
         # be used in the template file itself.
-        if str is unicode_type:
-            # python 3 needs a different version of this test since
-            # 2to3 doesn't run on template internals
-            template = Template(utf8(u'{{ "\u00e9" }}'))
-        else:
-            template = Template(utf8(u'{{ u"\u00e9" }}'))
+        template = Template(utf8(u'{{ "\u00e9" }}'))
         self.assertEqual(template.generate(), utf8(u"\u00e9"))
 
     def test_custom_namespace(self):

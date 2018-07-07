@@ -25,6 +25,7 @@ import sys
 import struct
 import tornado.escape
 import tornado.web
+from urllib.parse import urlparse
 import zlib
 
 from tornado.concurrent import Future, future_set_result_unless_cancelled
@@ -36,13 +37,7 @@ from tornado.log import gen_log
 from tornado import simple_httpclient
 from tornado.queues import Queue
 from tornado.tcpclient import TCPClient
-from tornado.util import _websocket_mask, PY3
-
-if PY3:
-    from urllib.parse import urlparse  # py2
-    xrange = range
-else:
-    from urlparse import urlparse  # py3
+from tornado.util import _websocket_mask
 
 _default_max_message_size = 10 * 1024 * 1024
 

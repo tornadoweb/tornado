@@ -67,6 +67,9 @@ import functools
 import gzip
 import hashlib
 import hmac
+import http.cookies
+from inspect import isclass
+from io import BytesIO
 import mimetypes
 import numbers
 import os.path
@@ -78,12 +81,13 @@ import time
 import tornado
 import traceback
 import types
-from inspect import isclass
-from io import BytesIO
+import urllib.parse
+from urllib.parse import urlencode
 
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado import escape
 from tornado import gen
+from tornado.httpserver import HTTPServer
 from tornado import httputil
 from tornado import iostream
 from tornado import locale
@@ -93,19 +97,9 @@ from tornado.escape import utf8, _unicode
 from tornado.routing import (AnyMatches, DefaultHostMatches, HostMatches,
                              ReversibleRouter, Rule, ReversibleRuleRouter,
                              URLSpec)
-from tornado.util import (ObjectDict,
-                          unicode_type, _websocket_mask, PY3)
+from tornado.util import ObjectDict, unicode_type, _websocket_mask
 
 url = URLSpec
-
-if PY3:
-    import http.cookies as Cookie
-    import urllib.parse as urlparse
-    from urllib.parse import urlencode
-else:
-    import Cookie
-    import urlparse
-    from urllib import urlencode
 
 try:
     import typing  # noqa
@@ -556,7 +550,7 @@ class RequestHandler(object):
             # Don't let us accidentally inject bad stuff
             raise ValueError("Invalid cookie %r: %r" % (name, value))
         if not hasattr(self, "_new_cookie"):
-            self._new_cookie = Cookie.SimpleCookie()
+            self._new_cookie = http.cookies.SimpleCookie()
         if name in self._new_cookie:
             del self._new_cookie[name]
         self._new_cookie[name] = value
@@ -1936,9 +1930,6 @@ class Application(ReversibleRouter):
         .. versionchanged:: 4.3
            Now returns the `.HTTPServer` object.
         """
-        # import is here rather than top level because HTTPServer
-        # is not importable on appengine
-        from tornado.httpserver import HTTPServer
         server = HTTPServer(self, **kwargs)
         server.listen(port, address)
         return server
@@ -2895,7 +2886,7 @@ def authenticated(method):
             if self.request.method in ("GET", "HEAD"):
                 url = self.get_login_url()
                 if "?" not in url:
-                    if urlparse.urlsplit(url).scheme:
+                    if urllib.parse.urlsplit(url).scheme:
                         # if login url is absolute, make next absolute too
                         next_url = self.request.full_url()
                     else:

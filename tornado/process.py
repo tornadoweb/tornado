@@ -21,6 +21,7 @@ from __future__ import absolute_import, division, print_function
 
 import errno
 import os
+import multiprocessing
 import signal
 import subprocess
 import sys
@@ -34,12 +35,6 @@ from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
 from tornado.platform.auto import set_close_exec
 from tornado.util import errno_from_exception
-
-try:
-    import multiprocessing
-except ImportError:
-    # Multiprocessing is not available on Google App Engine.
-    multiprocessing = None
 
 # Re-export this exception for convenience.
 CalledProcessError = subprocess.CalledProcessError

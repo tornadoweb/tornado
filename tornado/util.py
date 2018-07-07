@@ -17,10 +17,7 @@ import atexit
 from inspect import getfullargspec
 import os
 import re
-import sys
 import zlib
-
-PY3 = sys.version_info >= (3,)
 
 # Aliases for types that are spelled differently in different Python
 # versions. bytes_type is deprecated and no longer used in Tornado
@@ -46,11 +43,7 @@ else:
     from typing import Any, AnyStr, Union, Optional, Dict, Mapping  # noqa
     from typing import Tuple, Match, Callable  # noqa
 
-    if PY3:
-        _BaseString = str
-    else:
-        _BaseString = Union[bytes, unicode_type]
-
+    _BaseString = str
 
 try:
     from sys import is_finalizing
@@ -440,13 +433,7 @@ def _websocket_mask_python(mask, data):
     unmasked_arr = array.array("B", data)
     for i in range(len(data)):
         unmasked_arr[i] = unmasked_arr[i] ^ mask_arr[i % 4]
-    if PY3:
-        # tostring was deprecated in py32.  It hasn't been removed,
-        # but since we turn on deprecation warnings in our tests
-        # we need to use the right one.
-        return unmasked_arr.tobytes()
-    else:
-        return unmasked_arr.tostring()
+    return unmasked_arr.tobytes()
 
 
 if (os.environ.get('TORNADO_NO_EXTENSION') or

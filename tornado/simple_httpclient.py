@@ -10,7 +10,6 @@ from tornado.iostream import StreamClosedError
 from tornado.netutil import Resolver, OverrideResolver, _client_ssl_defaults
 from tornado.log import gen_log
 from tornado.tcpclient import TCPClient
-from tornado.util import PY3
 
 import base64
 import collections
@@ -18,21 +17,11 @@ import copy
 import functools
 import re
 import socket
+import ssl
 import sys
 import time
 from io import BytesIO
-
-
-if PY3:
-    import urllib.parse as urlparse
-else:
-    import urlparse
-
-try:
-    import ssl
-except ImportError:
-    # ssl is not available on Google App Engine.
-    ssl = None
+import urllib.parse
 
 
 class HTTPTimeoutError(HTTPError):
@@ -235,7 +224,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
     @gen.coroutine
     def run(self):
         try:
-            self.parsed = urlparse.urlsplit(_unicode(self.request.url))
+            self.parsed = urllib.parse.urlsplit(_unicode(self.request.url))
             if self.parsed.scheme not in ("http", "https"):
                 raise ValueError("Unsupported url scheme: %s" %
                                  self.request.url)
@@ -504,8 +493,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         if self._should_follow_redirect():
             assert isinstance(self.request, _RequestProxy)
             new_request = copy.copy(self.request.request)
-            new_request.url = urlparse.urljoin(self.request.url,
-                                               self.headers["Location"])
+            new_request.url = urllib.parse.urljoin(self.request.url,
+                                                   self.headers["Location"])
             new_request.max_redirects = self.request.max_redirects - 1
             del new_request.headers["Host"]
             # http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.3.4
