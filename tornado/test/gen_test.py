@@ -1,37 +1,23 @@
 from __future__ import absolute_import, division, print_function
 
+import asyncio
+from concurrent import futures
 import gc
-import contextlib
 import datetime
-import functools
 import platform
 import sys
 import textwrap
 import time
 import weakref
-import warnings
 
 from tornado.concurrent import Future
-from tornado.escape import url_escape
-from tornado.httpclient import AsyncHTTPClient
 from tornado.ioloop import IOLoop
 from tornado.log import app_log
-from tornado import stack_context
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
-from tornado.test.util import unittest, skipOnTravis, skipBefore33, skipBefore35, skipNotCPython, exec_test, ignore_deprecation  # noqa: E501
-from tornado.web import Application, RequestHandler, asynchronous, HTTPError
+from tornado.test.util import unittest, skipOnTravis, skipBefore33, skipBefore35, skipNotCPython, exec_test
+from tornado.web import Application, RequestHandler, HTTPError
 
 from tornado import gen
-
-try:
-    from concurrent import futures
-except ImportError:
-    futures = None
-
-try:
-    import asyncio
-except ImportError:
-    asyncio = None
 
 
 class GenBasicTest(AsyncTestCase):

@@ -17,7 +17,7 @@ from tornado.test.util import unittest, skipBefore35, exec_test, ignore_deprecat
 from tornado.util import ObjectDict, unicode_type, PY3
 from tornado.web import (
     Application, RequestHandler, StaticFileHandler, RedirectHandler as WebRedirectHandler,
-    HTTPError, MissingArgumentError, ErrorHandler, authenticated, asynchronous, url,
+    HTTPError, MissingArgumentError, ErrorHandler, authenticated, url,
     _create_signature_v1, create_signed_value, decode_signed_value, get_signature_key_version,
     UIModule, Finish, stream_request_body, removeslash, addslash, GZipContentEncoding,
 )
@@ -1814,35 +1814,6 @@ class GetArgumentErrorTest(SimpleHandlerTestCase):
         self.assertEqual(json_decode(response.body),
                          {'arg_name': 'foo',
                           'log_message': 'Missing argument foo'})
-
-
-class MultipleExceptionTest(SimpleHandlerTestCase):
-    class Handler(RequestHandler):
-        exc_count = 0
-
-        with ignore_deprecation():
-            @asynchronous
-            def get(self):
-                IOLoop.current().add_callback(lambda: 1 / 0)
-                IOLoop.current().add_callback(lambda: 1 / 0)
-
-        def log_exception(self, typ, value, tb):
-            MultipleExceptionTest.Handler.exc_count += 1
-
-    def test_multi_exception(self):
-        with ignore_deprecation():
-            # This test verifies that multiple exceptions raised into the same
-            # ExceptionStackContext do not generate extraneous log entries
-            # due to "Cannot send error response after headers written".
-            # log_exception is called, but it does not proceed to send_error.
-            response = self.fetch('/')
-            self.assertEqual(response.code, 500)
-            response = self.fetch('/')
-            self.assertEqual(response.code, 500)
-            # Each of our two requests generated two exceptions, we should have
-            # seen at least three of them by now (the fourth may still be
-            # in the queue).
-            self.assertGreater(MultipleExceptionTest.Handler.exc_count, 2)
 
 
 @wsgi_safe
