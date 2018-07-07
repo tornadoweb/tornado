@@ -85,33 +85,6 @@ class BaseCapClient(object):
             raise CapError(message)
 
 
-class ManualCapClient(BaseCapClient):
-    def capitalize(self, request_data, callback=None):
-        logging.debug("capitalize")
-        self.request_data = request_data
-        self.stream = IOStream(socket.socket())
-        self.stream.connect(('127.0.0.1', self.port),
-                            callback=self.handle_connect)
-        self.future = Future()
-        if callback is not None:
-            self.future.add_done_callback(
-                stack_context.wrap(lambda future: callback(future.result())))
-        return self.future
-
-    def handle_connect(self):
-        logging.debug("handle_connect")
-        self.stream.write(utf8(self.request_data + "\n"))
-        self.stream.read_until(b'\n', callback=self.handle_read)
-
-    def handle_read(self, data):
-        logging.debug("handle_read")
-        self.stream.close()
-        try:
-            self.future.set_result(self.process_response(data))
-        except CapError as e:
-            self.future.set_exception(e)
-
-
 class GeneratorCapClient(BaseCapClient):
     @gen.coroutine
     def capitalize(self, request_data):
@@ -164,20 +137,6 @@ class ClientTestMixin(object):
             with self.assertRaisesRegexp(CapError, "already capitalized"):
                 yield self.client.capitalize("HELLO")
         self.io_loop.run_sync(f)
-
-
-class ManualClientTest(ClientTestMixin, AsyncTestCase):
-    client_class = ManualCapClient
-
-    def setUp(self):
-        self.warning_catcher = warnings.catch_warnings()
-        self.warning_catcher.__enter__()
-        warnings.simplefilter('ignore', DeprecationWarning)
-        super(ManualClientTest, self).setUp()
-
-    def tearDown(self):
-        super(ManualClientTest, self).tearDown()
-        self.warning_catcher.__exit__(None, None, None)
 
 
 class GeneratorClientTest(ClientTestMixin, AsyncTestCase):
