@@ -14,6 +14,7 @@ from __future__ import absolute_import, division, print_function
 
 import array
 import atexit
+from inspect import getfullargspec
 import os
 import re
 import sys
@@ -21,28 +22,12 @@ import zlib
 
 PY3 = sys.version_info >= (3,)
 
-if PY3:
-    xrange = range
-
-# inspect.getargspec() raises DeprecationWarnings in Python 3.5.
-# The two functions have compatible interfaces for the parts we need.
-if PY3:
-    from inspect import getfullargspec as getargspec
-else:
-    from inspect import getargspec
-
 # Aliases for types that are spelled differently in different Python
 # versions. bytes_type is deprecated and no longer used in Tornado
 # itself but is left in case anyone outside Tornado is using it.
 bytes_type = bytes
-if PY3:
-    unicode_type = str
-    basestring_type = str
-else:
-    # The names unicode and basestring don't exist in py3 so silence flake8.
-    unicode_type = unicode  # noqa
-    basestring_type = basestring  # noqa
-
+unicode_type = str
+basestring_type = str
 
 try:
     import typing  # noqa
@@ -185,12 +170,6 @@ def import_object(name):
         raise ImportError("No module named %s" % parts[-1])
 
 
-# Stubs to make mypy happy (and later for actual type-checking).
-def raise_exc_info(exc_info):
-    # type: (Tuple[type, BaseException, types.TracebackType]) -> None
-    pass
-
-
 def exec_in(code, glob, loc=None):
     # type: (Any, Dict[str, Any], Optional[Mapping[str, Any]]) -> Any
     if isinstance(code, basestring_type):
@@ -200,20 +179,12 @@ def exec_in(code, glob, loc=None):
     exec(code, glob, loc)
 
 
-if PY3:
-    exec("""
 def raise_exc_info(exc_info):
+    # type: (Tuple[type, BaseException, types.TracebackType]) -> None
     try:
         raise exc_info[1].with_traceback(exc_info[2])
     finally:
         exc_info = None
-
-""")
-else:
-    exec("""
-def raise_exc_info(exc_info):
-    raise exc_info[0], exc_info[1], exc_info[2]
-""")
 
 
 def errno_from_exception(e):
@@ -402,13 +373,13 @@ class ArgReplacer(object):
     def _getargnames(self, func):
         # type: (Callable) -> List[str]
         try:
-            return getargspec(func).args
+            return getfullargspec(func).args
         except TypeError:
             if hasattr(func, 'func_code'):
                 # Cython-generated code has all the attributes needed
-                # by inspect.getargspec, but the inspect module only
+                # by inspect.getfullargspec, but the inspect module only
                 # works with ordinary functions. Inline the portion of
-                # getargspec that we need here. Note that for static
+                # getfullargspec that we need here. Note that for static
                 # functions the @cython.binding(True) decorator must
                 # be used (for methods it works out of the box).
                 code = func.func_code  # type: ignore
@@ -452,7 +423,7 @@ class ArgReplacer(object):
 def timedelta_to_seconds(td):
     # type: (datetime.timedelta) -> float
     """Equivalent to td.total_seconds() (introduced in python 2.7)."""
-    return (td.microseconds + (td.seconds + td.days * 24 * 3600) * 10 ** 6) / float(10 ** 6)
+    return td.total_seconds()
 
 
 def _websocket_mask_python(mask, data):
@@ -467,7 +438,7 @@ def _websocket_mask_python(mask, data):
     """
     mask_arr = array.array("B", mask)
     unmasked_arr = array.array("B", data)
-    for i in xrange(len(data)):
+    for i in range(len(data)):
         unmasked_arr[i] = unmasked_arr[i] ^ mask_arr[i % 4]
     if PY3:
         # tostring was deprecated in py32.  It hasn't been removed,

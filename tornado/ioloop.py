@@ -46,7 +46,7 @@ import random
 from tornado.concurrent import Future, is_future, chain_future, future_set_exc_info, future_add_done_callback  # noqa: E501
 from tornado.log import app_log
 from tornado import stack_context
-from tornado.util import Configurable, timedelta_to_seconds, TimeoutError, unicode_type, import_object
+from tornado.util import Configurable, TimeoutError, unicode_type, import_object
 
 
 class IOLoop(Configurable):
@@ -512,7 +512,7 @@ class IOLoop(Configurable):
         if isinstance(deadline, numbers.Real):
             return self.call_at(deadline, callback, *args, **kwargs)
         elif isinstance(deadline, datetime.timedelta):
-            return self.call_at(self.time() + timedelta_to_seconds(deadline),
+            return self.call_at(self.time() + deadline.total_seconds(),
                                 callback, *args, **kwargs)
         else:
             raise TypeError("Unsupported deadline %r" % deadline)

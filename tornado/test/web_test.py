@@ -14,7 +14,7 @@ from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest, skipBefore35, exec_test, ignore_deprecation
-from tornado.util import ObjectDict, unicode_type, timedelta_to_seconds, PY3
+from tornado.util import ObjectDict, unicode_type, PY3
 from tornado.web import (
     Application, RequestHandler, StaticFileHandler, RedirectHandler as WebRedirectHandler,
     HTTPError, MissingArgumentError, ErrorHandler, authenticated, asynchronous, url,
@@ -352,7 +352,7 @@ class CookieTest(WebTestCase):
         expires = datetime.datetime.utcnow() + datetime.timedelta(days=10)
         header_expires = datetime.datetime(
             *email.utils.parsedate(match.groupdict()["expires"])[:6])
-        self.assertTrue(abs(timedelta_to_seconds(expires - header_expires)) < 10)
+        self.assertTrue(abs((expires - header_expires).total_seconds()) < 10)
 
     def test_set_cookie_false_flags(self):
         response = self.fetch("/set_falsy_flags")

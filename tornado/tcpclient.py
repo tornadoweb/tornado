@@ -29,7 +29,6 @@ from tornado import gen
 from tornado.netutil import Resolver
 from tornado.platform.auto import set_close_exec
 from tornado.gen import TimeoutError
-from tornado.util import timedelta_to_seconds
 
 _INITIAL_CONNECT_TIMEOUT = 0.3
 
@@ -216,7 +215,7 @@ class TCPClient(object):
             if isinstance(timeout, numbers.Real):
                 timeout = IOLoop.current().time() + timeout
             elif isinstance(timeout, datetime.timedelta):
-                timeout = IOLoop.current().time() + timedelta_to_seconds(timeout)
+                timeout = IOLoop.current().time() + timeout.total_seconds()
             else:
                 raise TypeError("Unsupported timeout %r" % timeout)
         if timeout is not None:
