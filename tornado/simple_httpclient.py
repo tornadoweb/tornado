@@ -608,6 +608,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             return (
                 self.code in (301, 302, 303, 307, 308)
                 and self.request.max_redirects > 0
+                and self.headers is not None
+                and self.headers.get("Location") is not None
             )
         return False
 

@@ -62,6 +62,13 @@ class RedirectHandler(RequestHandler):
         )
 
 
+class RedirectWithoutLocationHandler(RequestHandler):
+    def prepare(self):
+        # For testing error handling of a redirect with no location header.
+        self.set_status(301)
+        self.finish()
+
+
 class ChunkHandler(RequestHandler):
     @gen.coroutine
     def get(self):
@@ -143,6 +150,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
                 url("/post", PostHandler),
                 url("/put", PutHandler),
                 url("/redirect", RedirectHandler),
+                url("/redirect_without_location", RedirectWithoutLocationHandler),
                 url("/chunk", ChunkHandler),
                 url("/auth", AuthHandler),
                 url("/countdown/([0-9]+)", CountdownHandler, name="countdown"),
@@ -290,6 +298,14 @@ Transfer-Encoding: chunked
         self.assertEqual(200, response.code)
         self.assertTrue(response.effective_url.endswith("/countdown/0"))
         self.assertEqual(b"Zero", response.body)
+
+    def test_redirect_without_location(self):
+        response = self.fetch("/redirect_without_location", follow_redirects=True)
+        # If there is no location header, the redirect response should
+        # just be returned as-is. (This should arguably raise an
+        # error, but libcurl doesn't treat this as an error, so we
+        # don't either).
+        self.assertEqual(301, response.code)
 
     def test_credentials_in_url(self):
         url = self.get_url("/auth").replace("http://", "http://me:secret@")
