@@ -100,7 +100,9 @@ else:
             env=dict(os.environ, PYTHONPATH=pythonpath),
             universal_newlines=True)
 
-        for i in range(20):
+        # This timeout needs to be fairly generous for pypy due to jit
+        # warmup costs.
+        for i in range(40):
             if autoreload_proc.poll() is not None:
                 break
             time.sleep(0.1)
