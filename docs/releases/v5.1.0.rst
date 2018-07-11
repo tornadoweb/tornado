@@ -1,8 +1,8 @@
 What's new in Tornado 5.1
 =========================
 
-In progress
------------
+July 12, 2018
+-------------
 
 Deprecation notice
 ~~~~~~~~~~~~~~~~~~
