@@ -24,5 +24,5 @@ from __future__ import absolute_import, division, print_function
 # is zero for an official release, positive for a development branch,
 # or negative for a release candidate or beta (after the base version
 # number has been incremented)
-version = "5.1b1"
-version_info = (5, 1, 0, -99)
+version = "5.1"
+version_info = (5, 1, 0, 0)
