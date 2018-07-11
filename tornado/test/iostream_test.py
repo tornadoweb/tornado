@@ -1028,7 +1028,7 @@ class TestIOStreamMixin(TestReadWriteMixin):
         """
         # Run concurrent writers that will write enough bytes so as to
         # clog the socket buffer and accumulate bytes in our write buffer.
-        m, n = 10000, 1000
+        m, n = 5000, 1000
         nproducers = 10
         total_bytes = m * n * nproducers
         server, client = yield self.make_iostream_pair(max_buffer_size=total_bytes)
