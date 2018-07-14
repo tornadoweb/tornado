@@ -17,25 +17,7 @@ environment than chaining callbacks. Code using coroutines is
 technically asynchronous, but it is written as a single generator
 instead of a collection of separate functions.
 
-For example, the following callback-based asynchronous handler:
-
-.. testcode::
-
-    class AsyncHandler(RequestHandler):
-        @asynchronous
-        def get(self):
-            http_client = AsyncHTTPClient()
-            http_client.fetch("http://example.com",
-                              callback=self.on_fetch)
-
-        def on_fetch(self, response):
-            do_something_with_response(response)
-            self.render("template.html")
-
-.. testoutput::
-   :hide:
-
-could be written with ``gen`` as:
+For example, here's a coroutine-based handler:
 
 .. testcode::
 
@@ -88,64 +70,20 @@ See the `convert_yielded` function to extend this mechanism.
    via ``singledispatch``.
 
 """
-from __future__ import absolute_import, division, print_function
-
+import asyncio
+import builtins
 import collections
+from collections.abc import Generator
 import functools
-import itertools
-import os
+from functools import singledispatch
+from inspect import isawaitable
 import sys
-import types
-import warnings
 
 from tornado.concurrent import (Future, is_future, chain_future, future_set_exc_info,
                                 future_add_done_callback, future_set_result_unless_cancelled)
 from tornado.ioloop import IOLoop
 from tornado.log import app_log
-from tornado import stack_context
-from tornado.util import PY3, raise_exc_info, TimeoutError
-
-try:
-    try:
-        # py34+
-        from functools import singledispatch  # type: ignore
-    except ImportError:
-        from singledispatch import singledispatch  # backport
-except ImportError:
-    # In most cases, singledispatch is required (to avoid
-    # difficult-to-diagnose problems in which the functionality
-    # available differs depending on which invisble packages are
-    # installed). However, in Google App Engine third-party
-    # dependencies are more trouble so we allow this module to be
-    # imported without it.
-    if 'APPENGINE_RUNTIME' not in os.environ:
-        raise
-    singledispatch = None
-
-try:
-    try:
-        # py35+
-        from collections.abc import Generator as GeneratorType  # type: ignore
-    except ImportError:
-        from backports_abc import Generator as GeneratorType  # type: ignore
-
-    try:
-        # py35+
-        from inspect import isawaitable  # type: ignore
-    except ImportError:
-        from backports_abc import isawaitable
-except ImportError:
-    if 'APPENGINE_RUNTIME' not in os.environ:
-        raise
-    from types import GeneratorType
-
-    def isawaitable(x):  # type: ignore
-        return False
-
-if PY3:
-    import builtins
-else:
-    import __builtin__ as builtins
+from tornado.util import TimeoutError
 
 
 class KeyReuseError(Exception):
@@ -198,53 +136,12 @@ def _create_future():
     return future
 
 
-def engine(func):
-    """Callback-oriented decorator for asynchronous generators.
-
-    This is an older interface; for new code that does not need to be
-    compatible with versions of Tornado older than 3.0 the
-    `coroutine` decorator is recommended instead.
-
-    This decorator is similar to `coroutine`, except it does not
-    return a `.Future` and the ``callback`` argument is not treated
-    specially.
-
-    In most cases, functions decorated with `engine` should take
-    a ``callback`` argument and invoke it with their result when
-    they are finished.  One notable exception is the
-    `~tornado.web.RequestHandler` :ref:`HTTP verb methods <verbs>`,
-    which use ``self.finish()`` in place of a callback argument.
-
-    .. deprecated:: 5.1
-
-       This decorator will be removed in 6.0. Use `coroutine` or
-       ``async def`` instead.
-    """
-    warnings.warn("gen.engine is deprecated, use gen.coroutine or async def instead",
-                  DeprecationWarning)
-    func = _make_coroutine_wrapper(func, replace_callback=False)
-
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        future = func(*args, **kwargs)
-
-        def final_callback(future):
-            if future.result() is not None:
-                raise ReturnValueIgnoredError(
-                    "@gen.engine functions cannot return values: %r" %
-                    (future.result(),))
-        # The engine interface doesn't give us any way to return
-        # errors but to raise them into the stack context.
-        # Save the stack context here to use when the Future has resolved.
-        future_add_done_callback(future, stack_context.wrap(final_callback))
-    return wrapper
-
-
 def coroutine(func):
     """Decorator for asynchronous generators.
 
     Any generator that yields objects from this module must be wrapped
-    in either this decorator or `engine`.
+    in this decorator (or use ``async def`` and ``await`` for similar
+    functionality).
 
     Coroutines may "return" by raising the special exception
     `Return(value) <Return>`.  In Python 3.3+, it is also possible for
@@ -253,13 +150,7 @@ def coroutine(func):
     In all versions of Python a coroutine that simply wishes to exit
     early may use the ``return`` statement without a value.
 
-    Functions with this decorator return a `.Future`.  Additionally,
-    they may be called with a ``callback`` keyword argument, which
-    will be invoked with the future's result when it resolves.  If the
-    coroutine fails, the callback will not be run and an exception
-    will be raised into the surrounding `.StackContext`.  The
-    ``callback`` argument is not visible inside the decorated
-    function; it is handled by the decorator itself.
+    Functions with this decorator return a `.Future`.
 
     .. warning::
 
@@ -271,38 +162,15 @@ def coroutine(func):
        `.IOLoop.run_sync` for top-level calls, or passing the `.Future`
        to `.IOLoop.add_future`.
 
-    .. deprecated:: 5.1
+    .. versionchanged:: 6.0
 
-       The ``callback`` argument is deprecated and will be removed in 6.0.
-       Use the returned awaitable object instead.
+       The ``callback`` argument was removed. Use the returned
+       awaitable object instead.
+
     """
-    return _make_coroutine_wrapper(func, replace_callback=True)
-
-
-def _make_coroutine_wrapper(func, replace_callback):
-    """The inner workings of ``@gen.coroutine`` and ``@gen.engine``.
-
-    The two decorators differ in their treatment of the ``callback``
-    argument, so we cannot simply implement ``@engine`` in terms of
-    ``@coroutine``.
-    """
-    # On Python 3.5, set the coroutine flag on our generator, to allow it
-    # to be used with 'await'.
-    wrapped = func
-    if hasattr(types, 'coroutine'):
-        func = types.coroutine(func)
-
-    @functools.wraps(wrapped)
+    @functools.wraps(func)
     def wrapper(*args, **kwargs):
         future = _create_future()
-
-        if replace_callback and 'callback' in kwargs:
-            warnings.warn("callback arguments are deprecated, use the returned Future instead",
-                          DeprecationWarning, stacklevel=2)
-            callback = kwargs.pop('callback')
-            IOLoop.current().add_future(
-                future, lambda future: callback(future.result()))
-
         try:
             result = func(*args, **kwargs)
         except (Return, StopIteration) as e:
@@ -315,21 +183,14 @@ def _make_coroutine_wrapper(func, replace_callback):
                 # Avoid circular references
                 future = None
         else:
-            if isinstance(result, GeneratorType):
+            if isinstance(result, Generator):
                 # Inline the first iteration of Runner.run.  This lets us
                 # avoid the cost of creating a Runner when the coroutine
                 # never actually yields, which in turn allows us to
                 # use "optional" coroutines in critical path code without
                 # performance penalty for the synchronous case.
                 try:
-                    orig_stack_contexts = stack_context._state.contexts
                     yielded = next(result)
-                    if stack_context._state.contexts is not orig_stack_contexts:
-                        yielded = _create_future()
-                        yielded.set_exception(
-                            stack_context.StackContextInconsistentError(
-                                'stack_context inconsistency (probably caused '
-                                'by yield within a "with StackContext" block)'))
                 except (StopIteration, Return) as e:
                     future_set_result_unless_cancelled(future, _value_from_stopiteration(e))
                 except Exception:
@@ -361,7 +222,7 @@ def _make_coroutine_wrapper(func, replace_callback):
         future_set_result_unless_cancelled(future, result)
         return future
 
-    wrapper.__wrapped__ = wrapped
+    wrapper.__wrapped__ = func
     wrapper.__tornado_coroutine__ = True
     return wrapper
 
@@ -520,203 +381,6 @@ class WaitIterator(object):
         return self.next()
 
 
-class YieldPoint(object):
-    """Base class for objects that may be yielded from the generator.
-
-    .. deprecated:: 4.0
-       Use `Futures <.Future>` instead. This class and all its subclasses
-       will be removed in 6.0
-    """
-    def __init__(self):
-        warnings.warn("YieldPoint is deprecated, use Futures instead",
-                      DeprecationWarning)
-
-    def start(self, runner):
-        """Called by the runner after the generator has yielded.
-
-        No other methods will be called on this object before ``start``.
-        """
-        raise NotImplementedError()
-
-    def is_ready(self):
-        """Called by the runner to determine whether to resume the generator.
-
-        Returns a boolean; may be called more than once.
-        """
-        raise NotImplementedError()
-
-    def get_result(self):
-        """Returns the value to use as the result of the yield expression.
-
-        This method will only be called once, and only after `is_ready`
-        has returned true.
-        """
-        raise NotImplementedError()
-
-
-class Callback(YieldPoint):
-    """Returns a callable object that will allow a matching `Wait` to proceed.
-
-    The key may be any value suitable for use as a dictionary key, and is
-    used to match ``Callbacks`` to their corresponding ``Waits``.  The key
-    must be unique among outstanding callbacks within a single run of the
-    generator function, but may be reused across different runs of the same
-    function (so constants generally work fine).
-
-    The callback may be called with zero or one arguments; if an argument
-    is given it will be returned by `Wait`.
-
-    .. deprecated:: 4.0
-       Use `Futures <.Future>` instead. This class will be removed in 6.0.
-    """
-    def __init__(self, key):
-        warnings.warn("gen.Callback is deprecated, use Futures instead",
-                      DeprecationWarning)
-        self.key = key
-
-    def start(self, runner):
-        self.runner = runner
-        runner.register_callback(self.key)
-
-    def is_ready(self):
-        return True
-
-    def get_result(self):
-        return self.runner.result_callback(self.key)
-
-
-class Wait(YieldPoint):
-    """Returns the argument passed to the result of a previous `Callback`.
-
-    .. deprecated:: 4.0
-       Use `Futures <.Future>` instead. This class will be removed in 6.0.
-    """
-    def __init__(self, key):
-        warnings.warn("gen.Wait is deprecated, use Futures instead",
-                      DeprecationWarning)
-        self.key = key
-
-    def start(self, runner):
-        self.runner = runner
-
-    def is_ready(self):
-        return self.runner.is_ready(self.key)
-
-    def get_result(self):
-        return self.runner.pop_result(self.key)
-
-
-class WaitAll(YieldPoint):
-    """Returns the results of multiple previous `Callbacks <Callback>`.
-
-    The argument is a sequence of `Callback` keys, and the result is
-    a list of results in the same order.
-
-    `WaitAll` is equivalent to yielding a list of `Wait` objects.
-
-    .. deprecated:: 4.0
-       Use `Futures <.Future>` instead. This class will be removed in 6.0.
-    """
-    def __init__(self, keys):
-        warnings.warn("gen.WaitAll is deprecated, use gen.multi instead",
-                      DeprecationWarning)
-        self.keys = keys
-
-    def start(self, runner):
-        self.runner = runner
-
-    def is_ready(self):
-        return all(self.runner.is_ready(key) for key in self.keys)
-
-    def get_result(self):
-        return [self.runner.pop_result(key) for key in self.keys]
-
-
-def Task(func, *args, **kwargs):
-    """Adapts a callback-based asynchronous function for use in coroutines.
-
-    Takes a function (and optional additional arguments) and runs it with
-    those arguments plus a ``callback`` keyword argument.  The argument passed
-    to the callback is returned as the result of the yield expression.
-
-    .. versionchanged:: 4.0
-       ``gen.Task`` is now a function that returns a `.Future`, instead of
-       a subclass of `YieldPoint`.  It still behaves the same way when
-       yielded.
-
-    .. deprecated:: 5.1
-       This function is deprecated and will be removed in 6.0.
-    """
-    warnings.warn("gen.Task is deprecated, use Futures instead",
-                  DeprecationWarning)
-    future = _create_future()
-
-    def handle_exception(typ, value, tb):
-        if future.done():
-            return False
-        future_set_exc_info(future, (typ, value, tb))
-        return True
-
-    def set_result(result):
-        if future.done():
-            return
-        future_set_result_unless_cancelled(future, result)
-    with stack_context.ExceptionStackContext(handle_exception):
-        func(*args, callback=_argument_adapter(set_result), **kwargs)
-    return future
-
-
-class YieldFuture(YieldPoint):
-    def __init__(self, future):
-        """Adapts a `.Future` to the `YieldPoint` interface.
-
-        .. versionchanged:: 5.0
-           The ``io_loop`` argument (deprecated since version 4.1) has been removed.
-
-        .. deprecated:: 5.1
-           This class will be removed in 6.0.
-        """
-        warnings.warn("YieldFuture is deprecated, use Futures instead",
-                      DeprecationWarning)
-        self.future = future
-        self.io_loop = IOLoop.current()
-
-    def start(self, runner):
-        if not self.future.done():
-            self.runner = runner
-            self.key = object()
-            runner.register_callback(self.key)
-            self.io_loop.add_future(self.future, runner.result_callback(self.key))
-        else:
-            self.runner = None
-            self.result_fn = self.future.result
-
-    def is_ready(self):
-        if self.runner is not None:
-            return self.runner.is_ready(self.key)
-        else:
-            return True
-
-    def get_result(self):
-        if self.runner is not None:
-            return self.runner.pop_result(self.key).result()
-        else:
-            return self.result_fn()
-
-
-def _contains_yieldpoint(children):
-    """Returns True if ``children`` contains any YieldPoints.
-
-    ``children`` may be a dict or a list, as used by `MultiYieldPoint`
-    and `multi_future`.
-    """
-    if isinstance(children, dict):
-        return any(isinstance(i, YieldPoint) for i in children.values())
-    if isinstance(children, list):
-        return any(isinstance(i, YieldPoint) for i in children)
-    return False
-
-
 def multi(children, quiet_exceptions=()):
     """Runs multiple asynchronous operations in parallel.
 
@@ -737,11 +401,6 @@ def multi(children, quiet_exceptions=()):
     If any children raise exceptions, ``multi()`` will raise the first
     one. All others will be logged, unless they are of types
     contained in the ``quiet_exceptions`` argument.
-
-    If any of the inputs are `YieldPoints <YieldPoint>`, the returned
-    yieldable object is a `YieldPoint`. Otherwise, returns a `.Future`.
-    This means that the result of `multi` can be used in a native
-    coroutine if and only if all of its children can be.
 
     In a ``yield``-based coroutine, it is not normally necessary to
     call this function directly, since the coroutine runner will
@@ -764,91 +423,19 @@ def multi(children, quiet_exceptions=()):
     .. versionchanged:: 4.3
        Replaced the class ``Multi`` and the function ``multi_future``
        with a unified function ``multi``. Added support for yieldables
-       other than `YieldPoint` and `.Future`.
+       other than ``YieldPoint`` and `.Future`.
 
     """
-    if _contains_yieldpoint(children):
-        return MultiYieldPoint(children, quiet_exceptions=quiet_exceptions)
-    else:
-        return multi_future(children, quiet_exceptions=quiet_exceptions)
+    return multi_future(children, quiet_exceptions=quiet_exceptions)
 
 
 Multi = multi
 
 
-class MultiYieldPoint(YieldPoint):
-    """Runs multiple asynchronous operations in parallel.
-
-    This class is similar to `multi`, but it always creates a stack
-    context even when no children require it. It is not compatible with
-    native coroutines.
-
-    .. versionchanged:: 4.2
-       If multiple ``YieldPoints`` fail, any exceptions after the first
-       (which is raised) will be logged. Added the ``quiet_exceptions``
-       argument to suppress this logging for selected exception types.
-
-    .. versionchanged:: 4.3
-       Renamed from ``Multi`` to ``MultiYieldPoint``. The name ``Multi``
-       remains as an alias for the equivalent `multi` function.
-
-    .. deprecated:: 4.3
-       Use `multi` instead. This class will be removed in 6.0.
-    """
-    def __init__(self, children, quiet_exceptions=()):
-        warnings.warn("MultiYieldPoint is deprecated, use Futures instead",
-                      DeprecationWarning)
-        self.keys = None
-        if isinstance(children, dict):
-            self.keys = list(children.keys())
-            children = children.values()
-        self.children = []
-        for i in children:
-            if not isinstance(i, YieldPoint):
-                i = convert_yielded(i)
-            if is_future(i):
-                i = YieldFuture(i)
-            self.children.append(i)
-        assert all(isinstance(i, YieldPoint) for i in self.children)
-        self.unfinished_children = set(self.children)
-        self.quiet_exceptions = quiet_exceptions
-
-    def start(self, runner):
-        for i in self.children:
-            i.start(runner)
-
-    def is_ready(self):
-        finished = list(itertools.takewhile(
-            lambda i: i.is_ready(), self.unfinished_children))
-        self.unfinished_children.difference_update(finished)
-        return not self.unfinished_children
-
-    def get_result(self):
-        result_list = []
-        exc_info = None
-        for f in self.children:
-            try:
-                result_list.append(f.get_result())
-            except Exception as e:
-                if exc_info is None:
-                    exc_info = sys.exc_info()
-                else:
-                    if not isinstance(e, self.quiet_exceptions):
-                        app_log.error("Multiple exceptions in yield list",
-                                      exc_info=True)
-        if exc_info is not None:
-            raise_exc_info(exc_info)
-        if self.keys is not None:
-            return dict(zip(self.keys, result_list))
-        else:
-            return list(result_list)
-
-
 def multi_future(children, quiet_exceptions=()):
     """Wait for multiple asynchronous futures in parallel.
 
-    This function is similar to `multi`, but does not support
-    `YieldPoints <YieldPoint>`.
+    Since Tornado 6.0, this function is exactly the same as `multi`.
 
     .. versionadded:: 4.0
 
@@ -936,8 +523,6 @@ def with_timeout(timeout, future, quiet_exceptions=()):
     will be logged unless it is of a type contained in ``quiet_exceptions``
     (which may be an exception type or a sequence of types).
 
-    Does not support `YieldPoint` subclasses.
-
     The wrapped `.Future` is not canceled when the timeout expires,
     permitting it to be reused. `asyncio.wait_for` is similar to this
     function but it does cancel the wrapped `.Future` on timeout.
@@ -952,9 +537,6 @@ def with_timeout(timeout, future, quiet_exceptions=()):
        Added support for yieldable objects other than `.Future`.
 
     """
-    # TODO: allow YieldPoints in addition to other yieldables?
-    # Tricky to do with stack_context semantics.
-    #
     # It's tempting to optimize this by cancelling the input future on timeout
     # instead of creating a new one, but A) we can't know if we are the only
     # one waiting on the input future, so cancelling it might disrupt other
@@ -1051,7 +633,7 @@ Usage: ``yield gen.moment``
 
 
 class Runner(object):
-    """Internal implementation of `tornado.gen.engine`.
+    """Internal implementation of `tornado.gen.coroutine`.
 
     Maintains information about pending callbacks and their results.
 
@@ -1069,12 +651,6 @@ class Runner(object):
         self.finished = False
         self.had_exception = False
         self.io_loop = IOLoop.current()
-        # For efficiency, we do not create a stack context until we
-        # reach a YieldPoint (stack contexts are required for the historical
-        # semantics of YieldPoints, but not for Futures).  When we have
-        # done so, this field will be set and must be called at the end
-        # of the coroutine.
-        self.stack_context_deactivate = None
         if self.handle_yield(first_yielded):
             gen = result_future = first_yielded = None
             self.run()
@@ -1126,7 +702,6 @@ class Runner(object):
                     return
                 self.future = None
                 try:
-                    orig_stack_contexts = stack_context._state.contexts
                     exc_info = None
 
                     try:
@@ -1146,11 +721,6 @@ class Runner(object):
                     else:
                         yielded = self.gen.send(value)
 
-                    if stack_context._state.contexts is not orig_stack_contexts:
-                        self.gen.throw(
-                            stack_context.StackContextInconsistentError(
-                                'stack_context inconsistency (probably caused '
-                                'by yield within a "with StackContext" block)'))
                 except (StopIteration, Return) as e:
                     self.finished = True
                     self.future = _null_future
@@ -1165,14 +735,12 @@ class Runner(object):
                     future_set_result_unless_cancelled(self.result_future,
                                                        _value_from_stopiteration(e))
                     self.result_future = None
-                    self._deactivate_stack_context()
                     return
                 except Exception:
                     self.finished = True
                     self.future = _null_future
                     future_set_exc_info(self.result_future, sys.exc_info())
                     self.result_future = None
-                    self._deactivate_stack_context()
                     return
                 if not self.handle_yield(yielded):
                     return
@@ -1181,47 +749,11 @@ class Runner(object):
             self.running = False
 
     def handle_yield(self, yielded):
-        # Lists containing YieldPoints require stack contexts;
-        # other lists are handled in convert_yielded.
-        if _contains_yieldpoint(yielded):
-            yielded = multi(yielded)
-
-        if isinstance(yielded, YieldPoint):
-            # YieldPoints are too closely coupled to the Runner to go
-            # through the generic convert_yielded mechanism.
+        try:
+            self.future = convert_yielded(yielded)
+        except BadYieldError:
             self.future = Future()
-
-            def start_yield_point():
-                try:
-                    yielded.start(self)
-                    if yielded.is_ready():
-                        future_set_result_unless_cancelled(self.future, yielded.get_result())
-                    else:
-                        self.yield_point = yielded
-                except Exception:
-                    self.future = Future()
-                    future_set_exc_info(self.future, sys.exc_info())
-
-            if self.stack_context_deactivate is None:
-                # Start a stack context if this is the first
-                # YieldPoint we've seen.
-                with stack_context.ExceptionStackContext(
-                        self.handle_exception) as deactivate:
-                    self.stack_context_deactivate = deactivate
-
-                    def cb():
-                        start_yield_point()
-                        self.run()
-                    self.io_loop.add_callback(cb)
-                    return False
-            else:
-                start_yield_point()
-        else:
-            try:
-                self.future = convert_yielded(yielded)
-            except BadYieldError:
-                self.future = Future()
-                future_set_exc_info(self.future, sys.exc_info())
+            future_set_exc_info(self.future, sys.exc_info())
 
         if self.future is moment:
             self.io_loop.add_callback(self.run)
@@ -1236,10 +768,6 @@ class Runner(object):
             return False
         return True
 
-    def result_callback(self, key):
-        return stack_context.wrap(_argument_adapter(
-            functools.partial(self.set_result, key)))
-
     def handle_exception(self, typ, value, tb):
         if not self.running and not self.finished:
             self.future = Future()
@@ -1249,89 +777,14 @@ class Runner(object):
         else:
             return False
 
-    def _deactivate_stack_context(self):
-        if self.stack_context_deactivate is not None:
-            self.stack_context_deactivate()
-            self.stack_context_deactivate = None
-
-
-Arguments = collections.namedtuple('Arguments', ['args', 'kwargs'])
-
-
-def _argument_adapter(callback):
-    """Returns a function that when invoked runs ``callback`` with one arg.
-
-    If the function returned by this function is called with exactly
-    one argument, that argument is passed to ``callback``.  Otherwise
-    the args tuple and kwargs dict are wrapped in an `Arguments` object.
-    """
-    def wrapper(*args, **kwargs):
-        if kwargs or len(args) > 1:
-            callback(Arguments(args, kwargs))
-        elif args:
-            callback(args[0])
-        else:
-            callback(None)
-    return wrapper
-
 
 # Convert Awaitables into Futures.
 try:
-    import asyncio
-except ImportError:
-    # Py2-compatible version for use with Cython.
-    # Copied from PEP 380.
-    @coroutine
-    def _wrap_awaitable(x):
-        if hasattr(x, '__await__'):
-            _i = x.__await__()
-        else:
-            _i = iter(x)
-        try:
-            _y = next(_i)
-        except StopIteration as _e:
-            _r = _value_from_stopiteration(_e)
-        else:
-            while 1:
-                try:
-                    _s = yield _y
-                except GeneratorExit as _e:
-                    try:
-                        _m = _i.close
-                    except AttributeError:
-                        pass
-                    else:
-                        _m()
-                    raise _e
-                except BaseException as _e:
-                    _x = sys.exc_info()
-                    try:
-                        _m = _i.throw
-                    except AttributeError:
-                        raise _e
-                    else:
-                        try:
-                            _y = _m(*_x)
-                        except StopIteration as _e:
-                            _r = _value_from_stopiteration(_e)
-                            break
-                else:
-                    try:
-                        if _s is None:
-                            _y = next(_i)
-                        else:
-                            _y = _i.send(_s)
-                    except StopIteration as _e:
-                        _r = _value_from_stopiteration(_e)
-                        break
-        raise Return(_r)
-else:
-    try:
-        _wrap_awaitable = asyncio.ensure_future
-    except AttributeError:
-        # asyncio.ensure_future was introduced in Python 3.4.4, but
-        # Debian jessie still ships with 3.4.2 so try the old name.
-        _wrap_awaitable = getattr(asyncio, 'async')
+    _wrap_awaitable = asyncio.ensure_future
+except AttributeError:
+    # asyncio.ensure_future was introduced in Python 3.4.4, but
+    # Debian jessie still ships with 3.4.2 so try the old name.
+    _wrap_awaitable = getattr(asyncio, 'async')
 
 
 def convert_yielded(yielded):
@@ -1348,7 +801,6 @@ def convert_yielded(yielded):
 
     .. versionadded:: 4.1
     """
-    # Lists and dicts containing YieldPoints were handled earlier.
     if yielded is None or yielded is moment:
         return moment
     elif yielded is _null_future:
@@ -1363,5 +815,4 @@ def convert_yielded(yielded):
         raise BadYieldError("yielded unknown object %r" % (yielded,))
 
 
-if singledispatch is not None:
-    convert_yielded = singledispatch(convert_yielded)
+convert_yielded = singledispatch(convert_yielded)

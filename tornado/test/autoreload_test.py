@@ -1,4 +1,3 @@
-from __future__ import absolute_import, division, print_function
 import os
 import shutil
 import subprocess
@@ -6,8 +5,7 @@ from subprocess import Popen
 import sys
 from tempfile import mkdtemp
 import time
-
-from tornado.test.util import unittest
+import unittest
 
 
 class AutoreloadTest(unittest.TestCase):

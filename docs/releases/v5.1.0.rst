@@ -9,14 +9,14 @@ Deprecation notice
 
 - Tornado 6.0 will drop support for Python 2.7 and 3.4. The minimum
   supported Python version will be 3.5.2.
-- The `tornado.stack_context` module is deprecated and will be removed
+- The ``tornado.stack_context`` module is deprecated and will be removed
   in Tornado 6.0. The reason for this is that it is not feasible to
   provide this module's semantics in the presence of ``async def``
-  native coroutines. `.ExceptionStackContext` is mainly obsolete
-  thanks to coroutines. `.StackContext` lacks a direct replacement
+  native coroutines. ``ExceptionStackContext`` is mainly obsolete
+  thanks to coroutines. ``StackContext`` lacks a direct replacement
   although the new ``contextvars`` package (in the Python standard
   library beginning in Python 3.7) may be an alternative.
-- Callback-oriented code often relies on `.ExceptionStackContext` to
+- Callback-oriented code often relies on ``ExceptionStackContext`` to
   handle errors and prevent leaked connections. In order to avoid the
   risk of silently introducing subtle leaks (and to consolidate all of
   Tornado's interfaces behind the coroutine pattern), ``callback``
@@ -55,14 +55,14 @@ Deprecation notice
   with ``await``.
 - The ``callback`` argument to `.run_on_executor` is deprecated and will
   be removed in 6.0.
-- `.return_future` is deprecated and will be removed in 6.0.
+- ``return_future`` is deprecated and will be removed in 6.0.
 
 `tornado.gen`
 ~~~~~~~~~~~~~
 
 - Some older portions of this module are deprecated and will be removed
-  in 6.0. This includes `.engine`, `.YieldPoint`, `.Callback`,
-  `.Wait`, `.WaitAll`, `.MultiYieldPoint`, and `.Task`.
+  in 6.0. This includes ``engine``, ``YieldPoint``, ``Callback``,
+  ``Wait``, ``WaitAll``, ``MultiYieldPoint``, and ``Task``.
 - Functions decorated with ``@gen.coroutine`` will no longer accept
   ``callback`` arguments in 6.0.
 
@@ -94,7 +94,7 @@ Deprecation notice
 
 - `.parse_multipart_form_data` now recognizes non-ASCII filenames in
   RFC 2231/5987 (``filename*=``) format.
-- `.HTTPServerRequest.write` is deprecated and will be removed in 6.0. Use
+- ``HTTPServerRequest.write`` is deprecated and will be removed in 6.0. Use
   the methods of ``request.connection`` instead.
 - Malformed HTTP headers are now logged less noisily.
 
@@ -103,9 +103,9 @@ Deprecation notice
 
 - `.PeriodicCallback` now supports a ``jitter`` argument to randomly
   vary the timeout.
-- `.IOLoop.set_blocking_signal_threshold`,
-  `~.IOLoop.set_blocking_log_threshold`, `~.IOLoop.log_stack`,
-  and `.IOLoop.handle_callback_exception` are deprecated and will
+- ``IOLoop.set_blocking_signal_threshold``,
+  ``IOLoop.set_blocking_log_threshold``, ``IOLoop.log_stack``,
+  and ``IOLoop.handle_callback_exception`` are deprecated and will
   be removed in 6.0.
 - Fixed a `KeyError` in `.IOLoop.close` when `.IOLoop` objects are
   being opened and closed in multiple threads.
@@ -135,14 +135,14 @@ Deprecation notice
 `tornado.platform.twisted`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- `.TornadoReactor` and `.TwistedIOLoop` are deprecated and will be
+- ``TornadoReactor`` and ``TwistedIOLoop`` are deprecated and will be
   removed in 6.0. Instead, Tornado will always use the asyncio event loop
   and twisted can be configured to do so as well.
 
-`tornado.stack_context`
-~~~~~~~~~~~~~~~~~~~~~~~
+``tornado.stack_context``
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- The `tornado.stack_context` module is deprecated and will be removed
+- The ``tornado.stack_context`` module is deprecated and will be removed
   in 6.0.
 
 `tornado.testing`
@@ -166,7 +166,7 @@ Deprecation notice
   response to be sent to the client.
 - `.FallbackHandler` now calls ``on_finish`` for the benefit of
   subclasses that may have overridden it.
-- The `.asynchronous` decorator is deprecated and will be removed in 6.0.
+- The ``asynchronous`` decorator is deprecated and will be removed in 6.0.
 - The ``callback`` argument to `.RequestHandler.flush` is deprecated
   and will be removed in 6.0.
 
@@ -191,5 +191,5 @@ Deprecation notice
 `tornado.wsgi`
 ~~~~~~~~~~~~~~
 
-- `.WSGIApplication` and `.WSGIAdapter` are deprecated and will be removed
+- ``WSGIApplication`` and ``WSGIAdapter`` are deprecated and will be removed
   in Tornado 6.0.

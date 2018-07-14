@@ -39,19 +39,15 @@ supported by `gettext` and related tools).  If neither method is called,
 the `Locale.translate` method will simply return the original string.
 """
 
-from __future__ import absolute_import, division, print_function
-
 import codecs
 import csv
 import datetime
-from io import BytesIO
 import numbers
 import os
 import re
 
 from tornado import escape
 from tornado.log import gen_log
-from tornado.util import PY3
 
 from tornado._locale_data import LOCALE_NAMES
 
@@ -148,18 +144,9 @@ def load_translations(directory, encoding=None):
                 # in most cases but is common with CSV files because Excel
                 # cannot read utf-8 files without a BOM.
                 encoding = 'utf-8-sig'
-        if PY3:
-            # python 3: csv.reader requires a file open in text mode.
-            # Force utf8 to avoid dependence on $LANG environment variable.
-            f = open(full_path, "r", encoding=encoding)
-        else:
-            # python 2: csv can only handle byte strings (in ascii-compatible
-            # encodings), which we decode below. Transcode everything into
-            # utf8 before passing it to csv.reader.
-            f = BytesIO()
-            with codecs.open(full_path, "r", encoding=encoding) as infile:
-                f.write(escape.utf8(infile.read()))
-            f.seek(0)
+        # python 3: csv.reader requires a file open in text mode.
+        # Specify an encoding to avoid dependence on $LANG environment variable.
+        f = open(full_path, "r", encoding=encoding)
         _translations[locale] = {}
         for i, row in enumerate(csv.reader(f)):
             if not row or len(row) < 2:

@@ -1,21 +1,16 @@
 # coding: utf-8
-from __future__ import absolute_import, division, print_function
+from io import StringIO
 import re
 import sys
 import datetime
+import unittest
 
 import tornado.escape
 from tornado.escape import utf8
-from tornado.test.util import unittest
 from tornado.util import (
     raise_exc_info, Configurable, exec_in, ArgReplacer,
-    timedelta_to_seconds, import_object, re_unescape, is_finalizing, PY3,
+    timedelta_to_seconds, import_object, re_unescape, is_finalizing
 )
-
-if PY3:
-    from io import StringIO
-else:
-    from cStringIO import StringIO
 
 
 class RaiseExcInfoTest(unittest.TestCase):
@@ -197,10 +192,9 @@ class UnicodeLiteralTest(unittest.TestCase):
 
 
 class ExecInTest(unittest.TestCase):
-    # This test is python 2 only because there are no new future imports
-    # defined in python 3 yet.
-    @unittest.skipIf(sys.version_info >= print_function.getMandatoryRelease(),
-                     'no testable future imports')
+    # TODO(bdarnell): make a version of this test for one of the new
+    # future imports available in python 3.
+    @unittest.skip('no testable future imports')
     def test_no_inherit_future(self):
         # This file has from __future__ import print_function...
         f = StringIO()

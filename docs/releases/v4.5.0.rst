@@ -58,7 +58,7 @@ General changes
 - Fixed an issue in which a generator object could be garbage
   collected prematurely (most often when weak references are used.
 - New function `.is_coroutine_function` identifies functions wrapped
-  by `.coroutine` or `.engine`.
+  by `.coroutine` or ``engine``.
 
 ``tornado.http1connection``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

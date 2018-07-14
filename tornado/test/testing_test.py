@@ -1,21 +1,14 @@
-from __future__ import absolute_import, division, print_function
-
 from tornado import gen, ioloop
-from tornado.log import app_log
-from tornado.simple_httpclient import SimpleAsyncHTTPClient, HTTPTimeoutError
-from tornado.test.util import unittest, skipBefore35, exec_test, ignore_deprecation
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, gen_test, ExpectLog
+from tornado.httpserver import HTTPServer
+from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, gen_test
 from tornado.web import Application
+import asyncio
 import contextlib
 import os
 import platform
 import traceback
+import unittest
 import warnings
-
-try:
-    import asyncio
-except ImportError:
-    asyncio = None
 
 
 @contextlib.contextmanager
@@ -33,15 +26,6 @@ def set_environ(name, value):
 
 
 class AsyncTestCaseTest(AsyncTestCase):
-    def test_exception_in_callback(self):
-        with ignore_deprecation():
-            self.io_loop.add_callback(lambda: 1 / 0)
-            try:
-                self.wait()
-                self.fail("did not get expected exception")
-            except ZeroDivisionError:
-                pass
-
     def test_wait_timeout(self):
         time = self.io_loop.time
 
@@ -70,26 +54,17 @@ class AsyncTestCaseTest(AsyncTestCase):
         self.io_loop.add_timeout(self.io_loop.time() + 0.03, self.stop)
         self.wait(timeout=0.15)
 
-    def test_multiple_errors(self):
-        with ignore_deprecation():
-            def fail(message):
-                raise Exception(message)
-            self.io_loop.add_callback(lambda: fail("error one"))
-            self.io_loop.add_callback(lambda: fail("error two"))
-            # The first error gets raised; the second gets logged.
-            with ExpectLog(app_log, "multiple unhandled exceptions"):
-                with self.assertRaises(Exception) as cm:
-                    self.wait()
-            self.assertEqual(str(cm.exception), "error one")
-
 
 class AsyncHTTPTestCaseTest(AsyncHTTPTestCase):
-    @classmethod
-    def setUpClass(cls):
-        super(AsyncHTTPTestCaseTest, cls).setUpClass()
-        # An unused port is bound so we can make requests upon it without
-        # impacting a real local web server.
-        cls.external_sock, cls.external_port = bind_unused_port()
+    def setUp(self):
+        super(AsyncHTTPTestCaseTest, self).setUp()
+        # Bind a second port.
+        sock, port = bind_unused_port()
+        app = Application()
+        server = HTTPServer(app, **self.get_httpserver_options())
+        server.add_socket(sock)
+        self.second_port = port
+        self.second_server = server
 
     def get_app(self):
         return Application()
@@ -99,28 +74,17 @@ class AsyncHTTPTestCaseTest(AsyncHTTPTestCase):
         response = self.fetch(path)
         self.assertEqual(response.request.url, self.get_url(path))
 
-    @gen_test
     def test_fetch_full_http_url(self):
-        path = 'http://localhost:%d/path' % self.external_port
+        # Ensure that self.fetch() recognizes absolute urls and does
+        # not transform them into references to our main test server.
+        path = 'http://localhost:%d/path' % self.second_port
 
-        with contextlib.closing(SimpleAsyncHTTPClient(force_instance=True)) as client:
-            with self.assertRaises(HTTPTimeoutError) as cm:
-                yield client.fetch(path, request_timeout=0.1, raise_error=True)
-        self.assertEqual(cm.exception.response.request.url, path)
+        response = self.fetch(path)
+        self.assertEqual(response.request.url, path)
 
-    @gen_test
-    def test_fetch_full_https_url(self):
-        path = 'https://localhost:%d/path' % self.external_port
-
-        with contextlib.closing(SimpleAsyncHTTPClient(force_instance=True)) as client:
-            with self.assertRaises(HTTPTimeoutError) as cm:
-                yield client.fetch(path, request_timeout=0.1, raise_error=True)
-        self.assertEqual(cm.exception.response.request.url, path)
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.external_sock.close()
-        super(AsyncHTTPTestCaseTest, cls).tearDownClass()
+    def tearDown(self):
+        self.second_server.stop()
+        super(AsyncHTTPTestCaseTest, self).tearDown()
 
 
 class AsyncTestCaseWrapperTest(unittest.TestCase):
@@ -134,18 +98,14 @@ class AsyncTestCaseWrapperTest(unittest.TestCase):
         self.assertEqual(len(result.errors), 1)
         self.assertIn("should be decorated", result.errors[0][1])
 
-    @skipBefore35
     @unittest.skipIf(platform.python_implementation() == 'PyPy',
                      'pypy destructor warnings cannot be silenced')
     def test_undecorated_coroutine(self):
-        namespace = exec_test(globals(), locals(), """
         class Test(AsyncTestCase):
             async def test_coro(self):
                 pass
-        """)
 
-        test_class = namespace['Test']
-        test = test_class('test_coro')
+        test = Test('test_coro')
         result = unittest.TestResult()
 
         # Silence "RuntimeWarning: coroutine 'test_coro' was never awaited".
@@ -295,33 +255,25 @@ class GenTest(AsyncTestCase):
         test_with_kwargs(self, test='test')
         self.finished = True
 
-    @skipBefore35
     def test_native_coroutine(self):
-        namespace = exec_test(globals(), locals(), """
         @gen_test
         async def test(self):
             self.finished = True
-        """)
+        test(self)
 
-        namespace['test'](self)
-
-    @skipBefore35
     def test_native_coroutine_timeout(self):
         # Set a short timeout and exceed it.
-        namespace = exec_test(globals(), locals(), """
         @gen_test(timeout=0.1)
         async def test(self):
             await gen.sleep(1)
-        """)
 
         try:
-            namespace['test'](self)
+            test(self)
             self.fail("did not get expected exception")
         except ioloop.TimeoutError:
             self.finished = True
 
 
-@unittest.skipIf(asyncio is None, "asyncio module not present")
 class GetNewIOLoopTest(AsyncTestCase):
     def get_new_ioloop(self):
         # Use the current loop instead of creating a new one here.

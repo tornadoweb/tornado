@@ -1,8 +1,6 @@
-from __future__ import absolute_import, division, print_function
-
 import functools
-import sys
 import traceback
+import unittest
 
 from tornado.concurrent import Future
 from tornado import gen
@@ -12,7 +10,6 @@ from tornado.log import gen_log, app_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
-from tornado.test.util import unittest, skipBefore35, exec_test
 from tornado.web import Application, RequestHandler
 
 try:
@@ -512,8 +509,6 @@ class WebSocketTest(WebSocketBaseTestCase):
         yield self.close(ws)
 
 
-if sys.version_info >= (3, 5):
-    NativeCoroutineOnMessageHandler = exec_test(globals(), locals(), """
 class NativeCoroutineOnMessageHandler(TestWebSocketHandler):
     def initialize(self, close_future, compression_options=None):
         super().initialize(close_future, compression_options)
@@ -525,7 +520,7 @@ class NativeCoroutineOnMessageHandler(TestWebSocketHandler):
         self.sleeping += 1
         await gen.sleep(0.01)
         self.sleeping -= 1
-        self.write_message(message)""")['NativeCoroutineOnMessageHandler']
+        self.write_message(message)
 
 
 class WebSocketNativeCoroutineTest(WebSocketBaseTestCase):
@@ -535,7 +530,6 @@ class WebSocketNativeCoroutineTest(WebSocketBaseTestCase):
             ('/native', NativeCoroutineOnMessageHandler,
              dict(close_future=self.close_future))])
 
-    @skipBefore35
     @gen_test
     def test_native_coroutine(self):
         ws = yield self.ws_connect('/native')

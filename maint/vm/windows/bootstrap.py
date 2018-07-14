@@ -21,7 +21,6 @@ To run the tests with tox, cd to e:\maint\vm\windows and run
 To run under cygwin (which must be installed separately), run
   cd /cygdrive/e; python -m tornado.test.runtests
 """
-from __future__ import absolute_import, division, print_function
 
 import os
 import subprocess

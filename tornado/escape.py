@@ -19,27 +19,14 @@ Also includes a few other miscellaneous string manipulation functions that
 have crept in over time.
 """
 
-from __future__ import absolute_import, division, print_function
-
+import html.entities
 import json
 import re
+import urllib.parse
 
-from tornado.util import PY3, unicode_type, basestring_type
+from tornado.util import unicode_type, basestring_type
 
-if PY3:
-    from urllib.parse import parse_qs as _parse_qs
-    import html.entities as htmlentitydefs
-    import urllib.parse as urllib_parse
-    unichr = chr
-else:
-    from urlparse import parse_qs as _parse_qs
-    import htmlentitydefs
-    import urllib as urllib_parse
-
-try:
-    import typing  # noqa
-except ImportError:
-    pass
+import typing  # noqa
 
 
 _XHTML_ESCAPE_RE = re.compile('[&<>"\']')
@@ -102,82 +89,54 @@ def url_escape(value, plus=True):
     .. versionadded:: 3.1
         The ``plus`` argument
     """
-    quote = urllib_parse.quote_plus if plus else urllib_parse.quote
+    quote = urllib.parse.quote_plus if plus else urllib.parse.quote
     return quote(utf8(value))
 
 
-# python 3 changed things around enough that we need two separate
-# implementations of url_unescape.  We also need our own implementation
-# of parse_qs since python 3's version insists on decoding everything.
-if not PY3:
-    def url_unescape(value, encoding='utf-8', plus=True):
-        """Decodes the given value from a URL.
+def url_unescape(value, encoding='utf-8', plus=True):
+    """Decodes the given value from a URL.
 
-        The argument may be either a byte or unicode string.
+    The argument may be either a byte or unicode string.
 
-        If encoding is None, the result will be a byte string.  Otherwise,
-        the result is a unicode string in the specified encoding.
+    If encoding is None, the result will be a byte string.  Otherwise,
+    the result is a unicode string in the specified encoding.
 
-        If ``plus`` is true (the default), plus signs will be interpreted
-        as spaces (literal plus signs must be represented as "%2B").  This
-        is appropriate for query strings and form-encoded values but not
-        for the path component of a URL.  Note that this default is the
-        reverse of Python's urllib module.
+    If ``plus`` is true (the default), plus signs will be interpreted
+    as spaces (literal plus signs must be represented as "%2B").  This
+    is appropriate for query strings and form-encoded values but not
+    for the path component of a URL.  Note that this default is the
+    reverse of Python's urllib module.
 
-        .. versionadded:: 3.1
-           The ``plus`` argument
-        """
-        unquote = (urllib_parse.unquote_plus if plus else urllib_parse.unquote)
-        if encoding is None:
-            return unquote(utf8(value))
-        else:
-            return unicode_type(unquote(utf8(value)), encoding)
+    .. versionadded:: 3.1
+       The ``plus`` argument
+    """
+    if encoding is None:
+        if plus:
+            # unquote_to_bytes doesn't have a _plus variant
+            value = to_basestring(value).replace('+', ' ')
+        return urllib.parse.unquote_to_bytes(value)
+    else:
+        unquote = (urllib.parse.unquote_plus if plus
+                   else urllib.parse.unquote)
+        return unquote(to_basestring(value), encoding=encoding)
 
-    parse_qs_bytes = _parse_qs
-else:
-    def url_unescape(value, encoding='utf-8', plus=True):
-        """Decodes the given value from a URL.
 
-        The argument may be either a byte or unicode string.
+def parse_qs_bytes(qs, keep_blank_values=False, strict_parsing=False):
+    """Parses a query string like urlparse.parse_qs, but returns the
+    values as byte strings.
 
-        If encoding is None, the result will be a byte string.  Otherwise,
-        the result is a unicode string in the specified encoding.
-
-        If ``plus`` is true (the default), plus signs will be interpreted
-        as spaces (literal plus signs must be represented as "%2B").  This
-        is appropriate for query strings and form-encoded values but not
-        for the path component of a URL.  Note that this default is the
-        reverse of Python's urllib module.
-
-        .. versionadded:: 3.1
-           The ``plus`` argument
-        """
-        if encoding is None:
-            if plus:
-                # unquote_to_bytes doesn't have a _plus variant
-                value = to_basestring(value).replace('+', ' ')
-            return urllib_parse.unquote_to_bytes(value)
-        else:
-            unquote = (urllib_parse.unquote_plus if plus
-                       else urllib_parse.unquote)
-            return unquote(to_basestring(value), encoding=encoding)
-
-    def parse_qs_bytes(qs, keep_blank_values=False, strict_parsing=False):
-        """Parses a query string like urlparse.parse_qs, but returns the
-        values as byte strings.
-
-        Keys still become type str (interpreted as latin1 in python3!)
-        because it's too painful to keep them as byte strings in
-        python3 and in practice they're nearly always ascii anyway.
-        """
-        # This is gross, but python3 doesn't give us another way.
-        # Latin1 is the universal donor of character encodings.
-        result = _parse_qs(qs, keep_blank_values, strict_parsing,
-                           encoding='latin1', errors='strict')
-        encoded = {}
-        for k, v in result.items():
-            encoded[k] = [i.encode('latin1') for i in v]
-        return encoded
+    Keys still become type str (interpreted as latin1 in python3!)
+    because it's too painful to keep them as byte strings in
+    python3 and in practice they're nearly always ascii anyway.
+    """
+    # This is gross, but python3 doesn't give us another way.
+    # Latin1 is the universal donor of character encodings.
+    result = urllib.parse.parse_qs(qs, keep_blank_values, strict_parsing,
+                                   encoding='latin1', errors='strict')
+    encoded = {}
+    for k, v in result.items():
+        encoded[k] = [i.encode('latin1') for i in v]
+    return encoded
 
 
 _UTF8_TYPES = (bytes, type(None))
@@ -223,10 +182,7 @@ _unicode = to_unicode
 
 # When dealing with the standard library across python 2 and 3 it is
 # sometimes useful to have a direct conversion to the native string type
-if str is unicode_type:
-    native_str = to_unicode
-else:
-    native_str = utf8
+native_str = to_unicode
 
 _BASESTRING_TYPES = (basestring_type, type(None))
 
@@ -378,9 +334,9 @@ def _convert_entity(m):
     if m.group(1) == "#":
         try:
             if m.group(2)[:1].lower() == 'x':
-                return unichr(int(m.group(2)[1:], 16))
+                return chr(int(m.group(2)[1:], 16))
             else:
-                return unichr(int(m.group(2)))
+                return chr(int(m.group(2)))
         except ValueError:
             return "&#%s;" % m.group(2)
     try:
@@ -391,8 +347,8 @@ def _convert_entity(m):
 
 def _build_unicode_map():
     unicode_map = {}
-    for name, value in htmlentitydefs.name2codepoint.items():
-        unicode_map[name] = unichr(value)
+    for name, value in html.entities.name2codepoint.items():
+        unicode_map[name] = chr(value)
     return unicode_map
 
 

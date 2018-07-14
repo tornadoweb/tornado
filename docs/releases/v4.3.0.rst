@@ -12,7 +12,7 @@ Highlights
   Inside a function defined with ``async def``, use ``await`` instead of
   ``yield`` to wait on an asynchronous operation. Coroutines defined with
   async/await will be faster than those defined with ``@gen.coroutine`` and
-  ``yield``, but do not support some features including `.Callback`/`.Wait` or
+  ``yield``, but do not support some features including ``Callback``/``Wait`` or
   the ability to yield a Twisted ``Deferred``. See :ref:`the users'
   guide <native_coroutines>` for more.
 * The async/await keywords are also available when compiling with Cython in

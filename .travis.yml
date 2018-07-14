@@ -11,24 +11,19 @@ language: python
 # For a list of available versions, run
 #     aws s3 ls s3://travis-python-archives/binaries/ubuntu/14.04/x86_64/
 python:
-    - 2.7
-    - pypy2.7-5.8.0
-    - 3.4
     - 3.5
     - 3.6
-    - nightly
     - pypy3.5-5.8.0
 
 install:
     # On nightly, upgrade setuptools first to work around
     # https://github.com/pypa/setuptools/issues/1257
     - if [[ $TRAVIS_PYTHON_VERSION == 'nightly' ]]; then travis_retry pip install -U setuptools; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then travis_retry pip install mock monotonic; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 'pypy' ]]; then travis_retry pip install mock; fi
     # TODO(bdarnell): pycares tests are currently disabled on travis due to ipv6 issues.
     #- if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then travis_retry pip install pycares; fi
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then travis_retry pip install pycurl; fi
-    # Twisted runs on 2.x and 3.3+, but is flaky on pypy.
+    # Twisted is flaky on pypy (TODO: still? this note is quite old)
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then travis_retry pip install Twisted; fi
     - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then travis_retry pip install sphinx sphinx_rtd_theme; fi
     - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then travis_retry pip install flake8; fi
@@ -65,16 +60,10 @@ script:
     # run it with nightly cpython. Coverage is very slow on pypy.
     - if [[ $TRAVIS_PYTHON_VERSION != nightly && $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then export RUN_COVERAGE=1; fi
     - if [[ "$RUN_COVERAGE" == 1 ]]; then export TARGET="-m coverage run $TARGET"; fi
-    - python $TARGET
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --ioloop=tornado.platform.select.SelectIOLoop; fi
+    - python -bb $TARGET
     - python -O $TARGET
     - LANG=C python $TARGET
     - LANG=en_US.utf-8 python $TARGET
-    - if [[ $TRAVIS_PYTHON_VERSION == 3* ]]; then python -bb $TARGET; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --httpclient=tornado.curl_httpclient.CurlAsyncHTTPClient; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --ioloop=tornado.platform.twisted.TwistedIOLoop; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --resolver=tornado.platform.twisted.TwistedResolver; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --ioloop=tornado.ioloop.PollIOLoop --ioloop_time_monotonic; fi
     #- if [[ $TRAVIS_PYTHON_VERSION != pypy* ]]; then python $TARGET --resolver=tornado.platform.caresresolver.CaresResolver; fi
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy3' ]]; then /tmp/nodeps/bin/python -m tornado.test.runtests; fi
     # make coverage reports for Codecov to find

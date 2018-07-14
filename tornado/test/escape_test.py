@@ -1,4 +1,4 @@
-from __future__ import absolute_import, division, print_function
+import unittest
 
 import tornado.escape
 from tornado.escape import (
@@ -6,7 +6,6 @@ from tornado.escape import (
     to_unicode, json_decode, json_encode, squeeze, recursive_unicode,
 )
 from tornado.util import unicode_type
-from tornado.test.util import unittest
 
 linkify_tests = [
     # (input, linkify_kwargs, expected_output)

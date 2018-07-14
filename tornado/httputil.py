@@ -19,52 +19,30 @@ This module also defines the `HTTPServerRequest` class which is exposed
 via `tornado.web.RequestHandler.request`.
 """
 
-from __future__ import absolute_import, division, print_function
-
 import calendar
 import collections
 import copy
 import datetime
 import email.utils
+from http.client import responses
+import http.cookies as Cookie
 import numbers
 import re
+from ssl import SSLError
 import time
 import unicodedata
-import warnings
+from urllib.parse import urlencode, urlparse, urlunparse, parse_qsl
 
 from tornado.escape import native_str, parse_qs_bytes, utf8
 from tornado.log import gen_log
-from tornado.util import ObjectDict, PY3, unicode_type
-
-if PY3:
-    import http.cookies as Cookie
-    from http.client import responses
-    from urllib.parse import urlencode, urlparse, urlunparse, parse_qsl
-else:
-    import Cookie
-    from httplib import responses
-    from urllib import urlencode
-    from urlparse import urlparse, urlunparse, parse_qsl
+from tornado.util import ObjectDict, unicode_type
 
 
 # responses is unused in this file, but we re-export it to other files.
 # Reference it so pyflakes doesn't complain.
 responses
 
-try:
-    from ssl import SSLError
-except ImportError:
-    # ssl is unavailable on app engine.
-    class _SSLError(Exception):
-        pass
-    # Hack around a mypy limitation. We can't simply put "type: ignore"
-    # on the class definition itself; must go through an assignment.
-    SSLError = _SSLError  # type: ignore
-
-try:
-    import typing  # noqa: F401
-except ImportError:
-    pass
+import typing  # noqa: F401
 
 
 # RFC 7230 section 3.5: a recipient MAY recognize a single LF as a line
@@ -378,21 +356,6 @@ class HTTPServerRequest(object):
         self.query_arguments = copy.deepcopy(self.arguments)
         self.body_arguments = {}
 
-    def supports_http_1_1(self):
-        """Returns True if this request supports HTTP/1.1 semantics.
-
-        .. deprecated:: 4.0
-
-           Applications are less likely to need this information with
-           the introduction of `.HTTPConnection`. If you still need
-           it, access the ``version`` attribute directly. This method
-           will be removed in Tornado 6.0.
-
-        """
-        warnings.warn("supports_http_1_1() is deprecated, use request.version instead",
-                      DeprecationWarning)
-        return self.version == "HTTP/1.1"
-
     @property
     def cookies(self):
         """A dictionary of Cookie.Morsel objects."""
@@ -413,32 +376,6 @@ class HTTPServerRequest(object):
                             # with disallowed keys.
                             pass
         return self._cookies
-
-    def write(self, chunk, callback=None):
-        """Writes the given chunk to the response stream.
-
-        .. deprecated:: 4.0
-           Use ``request.connection`` and the `.HTTPConnection` methods
-           to write the response. This method will be removed in Tornado 6.0.
-        """
-        warnings.warn("req.write deprecated, use req.connection.write and write_headers instead",
-                      DeprecationWarning)
-        assert isinstance(chunk, bytes)
-        assert self.version.startswith("HTTP/1."), \
-            "deprecated interface only supported in HTTP/1.x"
-        self.connection.write(chunk, callback=callback)
-
-    def finish(self):
-        """Finishes this HTTP request on the open connection.
-
-        .. deprecated:: 4.0
-           Use ``request.connection`` and the `.HTTPConnection` methods
-           to write the response. This method will be removed in Tornado 6.0.
-        """
-        warnings.warn("req.finish deprecated, use req.connection.finish instead",
-                      DeprecationWarning)
-        self.connection.finish()
-        self._finish_time = time.time()
 
     def full_url(self):
         """Reconstructs the full URL for this request."""
@@ -579,7 +516,7 @@ class HTTPConnection(object):
 
     .. versionadded:: 4.0
     """
-    def write_headers(self, start_line, headers, chunk=None, callback=None):
+    def write_headers(self, start_line, headers, chunk=None):
         """Write an HTTP header block.
 
         :arg start_line: a `.RequestStartLine` or `.ResponseStartLine`.
@@ -593,23 +530,21 @@ class HTTPConnection(object):
 
         Returns a `.Future` if no callback is given.
 
-        .. deprecated:: 5.1
+        .. versionchanged:: 6.0
 
-           The ``callback`` argument is deprecated and will be removed
-           in Tornado 6.0.
+           The ``callback`` argument was removed.
         """
         raise NotImplementedError()
 
-    def write(self, chunk, callback=None):
+    def write(self, chunk):
         """Writes a chunk of body data.
 
         The callback will be run when the write is complete.  If no callback
         is given, returns a Future.
 
-        .. deprecated:: 5.1
+        .. versionchanged:: 6.0
 
-           The ``callback`` argument is deprecated and will be removed
-           in Tornado 6.0.
+           The ``callback`` argument was removed.
         """
         raise NotImplementedError()
 

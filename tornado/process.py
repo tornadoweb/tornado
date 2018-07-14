@@ -17,10 +17,9 @@
 the server into multiple processes and managing subprocesses.
 """
 
-from __future__ import absolute_import, division, print_function
-
 import errno
 import os
+import multiprocessing
 import signal
 import subprocess
 import sys
@@ -33,27 +32,10 @@ from tornado import ioloop
 from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
 from tornado.platform.auto import set_close_exec
-from tornado import stack_context
-from tornado.util import errno_from_exception, PY3
-
-try:
-    import multiprocessing
-except ImportError:
-    # Multiprocessing is not available on Google App Engine.
-    multiprocessing = None
-
-if PY3:
-    long = int
+from tornado.util import errno_from_exception
 
 # Re-export this exception for convenience.
-try:
-    CalledProcessError = subprocess.CalledProcessError
-except AttributeError:
-    # The subprocess module exists in Google App Engine, but is empty.
-    # This module isn't very useful in that case, but it should
-    # at least be importable.
-    if 'APPENGINE_RUNTIME' not in os.environ:
-        raise
+CalledProcessError = subprocess.CalledProcessError
 
 
 def cpu_count():
@@ -80,7 +62,7 @@ def _reseed_random():
     # random.seed (at least as of python 2.6).  If os.urandom is not
     # available, we mix in the pid in addition to a timestamp.
     try:
-        seed = long(hexlify(os.urandom(16)), 16)
+        seed = int(hexlify(os.urandom(16)), 16)
     except NotImplementedError:
         seed = int(time.time() * 1000) ^ os.getpid()
     random.seed(seed)
@@ -265,7 +247,7 @@ class Subprocess(object):
         can be used as an alternative to an exit callback if the
         signal handler is causing a problem.
         """
-        self._exit_callback = stack_context.wrap(callback)
+        self._exit_callback = callback
         Subprocess.initialize()
         Subprocess._waiting[self.pid] = self
         Subprocess._try_cleanup_process(self.pid)

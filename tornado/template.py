@@ -195,9 +195,8 @@ if you need to include a literal ``{{``, ``{%``, or ``{#`` in the output.
     `filter_whitespace` for available options. New in Tornado 4.3.
 """
 
-from __future__ import absolute_import, division, print_function
-
 import datetime
+from io import StringIO
 import linecache
 import os.path
 import posixpath
@@ -206,12 +205,7 @@ import threading
 
 from tornado import escape
 from tornado.log import app_log
-from tornado.util import ObjectDict, exec_in, unicode_type, PY3
-
-if PY3:
-    from io import StringIO
-else:
-    from cStringIO import StringIO
+from tornado.util import ObjectDict, exec_in, unicode_type
 
 _DEFAULT_AUTOESCAPE = "xhtml_escape"
 _UNSET = object()

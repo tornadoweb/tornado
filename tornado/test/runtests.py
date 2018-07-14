@@ -1,5 +1,4 @@
-from __future__ import absolute_import, division, print_function
-
+from functools import reduce
 import gc
 import io
 import locale  # system locale module, not tornado.locale
@@ -7,18 +6,13 @@ import logging
 import operator
 import textwrap
 import sys
+import unittest
 
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
-from tornado.ioloop import IOLoop
 from tornado.netutil import Resolver
-from tornado.options import define, options, add_parse_callback
-from tornado.test.util import unittest
+from tornado.options import define, add_parse_callback
 
-try:
-    reduce  # py2
-except NameError:
-    from functools import reduce  # py3
 
 TEST_MODULES = [
     'tornado.httputil.doctests',
@@ -47,7 +41,6 @@ TEST_MODULES = [
     'tornado.test.queues_test',
     'tornado.test.routing_test',
     'tornado.test.simple_httpclient_test',
-    'tornado.test.stack_context_test',
     'tornado.test.tcpclient_test',
     'tornado.test.tcpserver_test',
     'tornado.test.template_test',
@@ -85,8 +78,7 @@ def test_runner_factory(stderr):
 class LogCounter(logging.Filter):
     """Counts the number of WARNING or higher log records."""
     def __init__(self, *args, **kwargs):
-        # Can't use super() because logging.Filter is an old-style class in py26
-        logging.Filter.__init__(self, *args, **kwargs)
+        super(LogCounter, self).__init__(*args, **kwargs)
         self.info_count = self.warning_count = self.error_count = 0
 
     def filter(self, record):
@@ -157,8 +149,6 @@ def main():
                s, defaults=dict(allow_ipv6=False)))
     define('httpserver', type=str, default=None,
            callback=HTTPServer.configure)
-    define('ioloop', type=str, default=None)
-    define('ioloop_time_monotonic', default=False)
     define('resolver', type=str, default=None,
            callback=Resolver.configure)
     define('debug_gc', type=str, multiple=True,
@@ -168,17 +158,6 @@ def main():
                reduce(operator.or_, (getattr(gc, v) for v in values))))
     define('locale', type=str, default=None,
            callback=lambda x: locale.setlocale(locale.LC_ALL, x))
-
-    def configure_ioloop():
-        kwargs = {}
-        if options.ioloop_time_monotonic:
-            from tornado.platform.auto import monotonic_time
-            if monotonic_time is None:
-                raise RuntimeError("monotonic clock not found")
-            kwargs['time_func'] = monotonic_time
-        if options.ioloop or kwargs:
-            IOLoop.configure(options.ioloop, **kwargs)
-    add_parse_callback(configure_ioloop)
 
     log_counter = LogCounter()
     add_parse_callback(
@@ -192,13 +171,14 @@ def main():
 
     import tornado.testing
     kwargs = {}
-    if sys.version_info >= (3, 2):
-        # HACK:  unittest.main will make its own changes to the warning
-        # configuration, which may conflict with the settings above
-        # or command-line flags like -bb.  Passing warnings=False
-        # suppresses this behavior, although this looks like an implementation
-        # detail.  http://bugs.python.org/issue15626
-        kwargs['warnings'] = False
+
+    # HACK:  unittest.main will make its own changes to the warning
+    # configuration, which may conflict with the settings above
+    # or command-line flags like -bb.  Passing warnings=False
+    # suppresses this behavior, although this looks like an implementation
+    # detail.  http://bugs.python.org/issue15626
+    kwargs['warnings'] = False
+
     kwargs['testRunner'] = test_runner_factory(orig_stderr)
     try:
         tornado.testing.main(**kwargs)

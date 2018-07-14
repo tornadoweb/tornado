@@ -21,9 +21,9 @@
    .. _verbs:
 
    Implement any of the following methods (collectively known as the
-   HTTP verb methods) to handle the corresponding HTTP method.
-   These methods can be made asynchronous with one of the following
-   decorators: `.gen.coroutine`, `.return_future`, or `asynchronous`.
+   HTTP verb methods) to handle the corresponding HTTP method. These
+   methods can be made asynchronous with the ``async def`` keyword or
+   `.gen.coroutine` decorator.
 
    The arguments to these methods come from the `.URLSpec`: Any
    capturing groups in the regular expression become arguments to the
@@ -272,7 +272,6 @@
 
    Decorators
    ----------
-   .. autofunction:: asynchronous
    .. autofunction:: authenticated
    .. autofunction:: addslash
    .. autofunction:: removeslash

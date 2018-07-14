@@ -10,15 +10,13 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-
-from __future__ import absolute_import, division, print_function
 from datetime import timedelta
 from random import random
+import unittest
 
 from tornado import gen, queues
 from tornado.gen import TimeoutError
 from tornado.testing import gen_test, AsyncTestCase
-from tornado.test.util import unittest, skipBefore35, exec_test
 
 
 class QueueBasicTest(AsyncTestCase):
@@ -156,22 +154,19 @@ class QueueGetTest(AsyncTestCase):
         for getter in getters:
             self.assertRaises(TimeoutError, getter.result)
 
-    @skipBefore35
     @gen_test
     def test_async_for(self):
         q = queues.Queue()
         for i in range(5):
             q.put(i)
 
-        namespace = exec_test(globals(), locals(), """
         async def f():
             results = []
             async for i in q:
                 results.append(i)
                 if i == 4:
                     return results
-        """)
-        results = yield namespace['f']()
+        results = yield f()
         self.assertEqual(results, list(range(5)))
 
 

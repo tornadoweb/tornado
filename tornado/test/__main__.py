@@ -2,8 +2,6 @@
 
 This only works in python 2.7+.
 """
-from __future__ import absolute_import, division, print_function
-
 from tornado.test.runtests import all, main
 
 # tornado.testing.main autodiscovery relies on 'all' being present in

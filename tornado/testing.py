@@ -9,29 +9,7 @@
   for the tornado.autoreload module to rerun the tests when code changes.
 """
 
-from __future__ import absolute_import, division, print_function
-
-try:
-    from tornado import gen
-    from tornado.httpclient import AsyncHTTPClient
-    from tornado.httpserver import HTTPServer
-    from tornado.simple_httpclient import SimpleAsyncHTTPClient
-    from tornado.ioloop import IOLoop, TimeoutError
-    from tornado import netutil
-    from tornado.process import Subprocess
-except ImportError:
-    # These modules are not importable on app engine.  Parts of this module
-    # won't work, but e.g. main() will.
-    AsyncHTTPClient = None  # type: ignore
-    gen = None  # type: ignore
-    HTTPServer = None  # type: ignore
-    IOLoop = None  # type: ignore
-    netutil = None  # type: ignore
-    SimpleAsyncHTTPClient = None  # type: ignore
-    Subprocess = None  # type: ignore
-from tornado.log import app_log
-from tornado.stack_context import ExceptionStackContext
-from tornado.util import raise_exc_info, basestring_type, PY3
+from collections.abc import Generator
 import functools
 import inspect
 import logging
@@ -40,45 +18,20 @@ import re
 import signal
 import socket
 import sys
+import unittest
 
-try:
-    import asyncio
-except ImportError:
-    asyncio = None
-
-
-try:
-    from collections.abc import Generator as GeneratorType  # type: ignore
-except ImportError:
-    from types import GeneratorType  # type: ignore
-
-if sys.version_info >= (3, 5):
-    iscoroutine = inspect.iscoroutine  # type: ignore
-    iscoroutinefunction = inspect.iscoroutinefunction  # type: ignore
-else:
-    iscoroutine = iscoroutinefunction = lambda f: False
-
-# Tornado's own test suite requires the updated unittest module
-# (either py27+ or unittest2) so tornado.test.util enforces
-# this requirement, but for other users of tornado.testing we want
-# to allow the older version if unitest2 is not available.
-if PY3:
-    # On python 3, mixing unittest2 and unittest (including doctest)
-    # doesn't seem to work, so always use unittest.
-    import unittest
-else:
-    # On python 2, prefer unittest2 when available.
-    try:
-        import unittest2 as unittest  # type: ignore
-    except ImportError:
-        import unittest  # type: ignore
+from tornado import gen
+from tornado.httpclient import AsyncHTTPClient
+from tornado.httpserver import HTTPServer
+from tornado.ioloop import IOLoop, TimeoutError
+from tornado import netutil
+from tornado.platform.asyncio import AsyncIOMainLoop
+from tornado.process import Subprocess
+from tornado.log import app_log
+from tornado.util import raise_exc_info, basestring_type
 
 
-if asyncio is None:
-    _NON_OWNED_IOLOOPS = ()
-else:
-    import tornado.platform.asyncio
-    _NON_OWNED_IOLOOPS = tornado.platform.asyncio.AsyncIOMainLoop
+_NON_OWNED_IOLOOPS = AsyncIOMainLoop
 
 
 def bind_unused_port(reuse_port=False):
@@ -123,7 +76,7 @@ class _TestMethodWrapper(object):
 
     def __call__(self, *args, **kwargs):
         result = self.orig_method(*args, **kwargs)
-        if isinstance(result, GeneratorType) or iscoroutine(result):
+        if isinstance(result, Generator) or inspect.iscoroutine(result):
             raise TypeError("Generator and coroutine test methods should be"
                             " decorated with tornado.testing.gen_test")
         elif result is not None:
@@ -250,8 +203,7 @@ class AsyncTestCase(unittest.TestCase):
             raise_exc_info(failure)
 
     def run(self, result=None):
-        with ExceptionStackContext(self._handle_exception, delay_warning=True):
-            super(AsyncTestCase, self).run(result)
+        super(AsyncTestCase, self).run(result)
         # As a last resort, if an exception escaped super.run() and wasn't
         # re-raised in tearDown, raise it here.  This will cause the
         # unittest run to fail messily, but that's better than silently
@@ -531,13 +483,13 @@ def gen_test(func=None, timeout=None):
         @functools.wraps(f)
         def pre_coroutine(self, *args, **kwargs):
             result = f(self, *args, **kwargs)
-            if isinstance(result, GeneratorType) or iscoroutine(result):
+            if isinstance(result, Generator) or inspect.iscoroutine(result):
                 self._test_generator = result
             else:
                 self._test_generator = None
             return result
 
-        if iscoroutinefunction(f):
+        if inspect.iscoroutinefunction(f):
             coro = pre_coroutine
         else:
             coro = gen.coroutine(pre_coroutine)
@@ -645,7 +597,7 @@ def main(**kwargs):
 
     The easiest way to run a test is via the command line::
 
-        python -m tornado.testing tornado.test.stack_context_test
+        python -m tornado.testing tornado.test.web_test
 
     See the standard library unittest module for ways in which tests can
     be specified.
@@ -660,7 +612,7 @@ def main(**kwargs):
         # Runs all tests
         python -m tornado.test.runtests
         # Runs one test
-        python -m tornado.test.runtests tornado.test.stack_context_test
+        python -m tornado.test.runtests tornado.test.web_test
 
     Additional keyword arguments passed through to ``unittest.main()``.
     For example, use ``tornado.testing.main(verbosity=2)``

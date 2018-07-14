@@ -22,37 +22,11 @@ Most code that needs access to this functionality should do e.g.::
     from tornado.platform.auto import set_close_exec
 """
 
-from __future__ import absolute_import, division, print_function
-
 import os
 
-if 'APPENGINE_RUNTIME' in os.environ:
-    from tornado.platform.common import Waker
-
-    def set_close_exec(fd):
-        pass
-elif os.name == 'nt':
-    from tornado.platform.common import Waker
+if os.name == 'nt':
     from tornado.platform.windows import set_close_exec
 else:
-    from tornado.platform.posix import set_close_exec, Waker
+    from tornado.platform.posix import set_close_exec
 
-try:
-    # monotime monkey-patches the time module to have a monotonic function
-    # in versions of python before 3.3.
-    import monotime
-    # Silence pyflakes warning about this unused import
-    monotime
-except ImportError:
-    pass
-try:
-    # monotonic can provide a monotonic function in versions of python before
-    # 3.3, too.
-    from monotonic import monotonic as monotonic_time
-except ImportError:
-    try:
-        from time import monotonic as monotonic_time
-    except ImportError:
-        monotonic_time = None
-
-__all__ = ['Waker', 'set_close_exec', 'monotonic_time']
+__all__ = ['set_close_exec']

@@ -26,7 +26,7 @@ General
 ~~~~~~~~~~~~~
 
 * `.with_timeout` now accepts any yieldable object (except
-  `.YieldPoint`), not just `tornado.concurrent.Future`.
+  ``YieldPoint``), not just `tornado.concurrent.Future`.
 
 `tornado.httpclient`
 ~~~~~~~~~~~~~~~~~~~~

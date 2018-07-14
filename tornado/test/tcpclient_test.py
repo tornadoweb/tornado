@@ -12,12 +12,10 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-
-from __future__ import absolute_import, division, print_function
-
 from contextlib import closing
 import os
 import socket
+import unittest
 
 from tornado.concurrent import Future
 from tornado.netutil import bind_sockets, Resolver
@@ -25,7 +23,7 @@ from tornado.queues import Queue
 from tornado.tcpclient import TCPClient, _Connector
 from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncTestCase, gen_test
-from tornado.test.util import skipIfNoIPv6, unittest, refusing_port, skipIfNonUnix
+from tornado.test.util import skipIfNoIPv6, refusing_port, skipIfNonUnix
 from tornado.gen import TimeoutError
 
 # Fake address families for testing.  Used in place of AF_INET

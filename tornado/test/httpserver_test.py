@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from tornado import gen, netutil
 from tornado.concurrent import Future
 from tornado.escape import json_decode, json_encode, utf8, _unicode, recursive_unicode, native_str
@@ -13,7 +11,7 @@ from tornado.log import gen_log
 from tornado.netutil import ssl_options_to_context
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog, gen_test  # noqa: E501
-from tornado.test.util import unittest, skipOnTravis
+from tornado.test.util import skipOnTravis
 from tornado.web import Application, RequestHandler, stream_request_body
 
 from contextlib import closing
@@ -25,6 +23,7 @@ import socket
 import ssl
 import sys
 import tempfile
+import unittest
 from io import BytesIO
 
 
@@ -365,11 +364,7 @@ class HTTPServerTest(AsyncHTTPTestCase):
 
     def test_malformed_body(self):
         # parse_qs is pretty forgiving, but it will fail on python 3
-        # if the data is not utf8.  On python 2 parse_qs will work,
-        # but then the recursive_unicode call in EchoHandler will
-        # fail.
-        if str is bytes:
-            return
+        # if the data is not utf8.
         with ExpectLog(gen_log, 'Invalid x-www-form-urlencoded body'):
             response = self.fetch(
                 '/echo', method="POST",
@@ -970,8 +965,9 @@ class MaxHeaderSizeTest(AsyncHTTPTestCase):
             except HTTPError as e:
                 # 431 is "Request Header Fields Too Large", defined in RFC
                 # 6585. However, many implementations just close the
-                # connection in this case, resulting in a 599.
-                self.assertIn(e.response.code, (431, 599))
+                # connection in this case, resulting in a missing response.
+                if e.response is not None:
+                    self.assertIn(e.response.code, (431, 599))
 
 
 @skipOnTravis

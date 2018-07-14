@@ -57,8 +57,6 @@ the executor do not refer to Tornado objects.
 
 """
 
-from __future__ import absolute_import, division, print_function
-
 import base64
 import binascii
 import datetime
@@ -67,6 +65,9 @@ import functools
 import gzip
 import hashlib
 import hmac
+import http.cookies
+from inspect import isclass
+from io import BytesIO
 import mimetypes
 import numbers
 import os.path
@@ -78,36 +79,25 @@ import time
 import tornado
 import traceback
 import types
-import warnings
-from inspect import isclass
-from io import BytesIO
+import urllib.parse
+from urllib.parse import urlencode
 
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado import escape
 from tornado import gen
+from tornado.httpserver import HTTPServer
 from tornado import httputil
 from tornado import iostream
 from tornado import locale
 from tornado.log import access_log, app_log, gen_log
-from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
 from tornado.routing import (AnyMatches, DefaultHostMatches, HostMatches,
                              ReversibleRouter, Rule, ReversibleRuleRouter,
                              URLSpec)
-from tornado.util import (ObjectDict, raise_exc_info,
-                          unicode_type, _websocket_mask, PY3)
+from tornado.util import ObjectDict, unicode_type, _websocket_mask
 
 url = URLSpec
-
-if PY3:
-    import http.cookies as Cookie
-    import urllib.parse as urlparse
-    from urllib.parse import urlencode
-else:
-    import Cookie
-    import urlparse
-    from urllib import urlencode
 
 try:
     import typing  # noqa
@@ -247,8 +237,7 @@ class RequestHandler(object):
         of the request method.
 
         Asynchronous support: Decorate this method with `.gen.coroutine`
-        or use ``async def`` to make it asynchronous (the
-        `asynchronous` decorator cannot be used on `prepare`).
+        or use ``async def`` to make it asynchronous.
         If this method returns a `.Future` execution will not proceed
         until the `.Future` is done.
 
@@ -559,7 +548,7 @@ class RequestHandler(object):
             # Don't let us accidentally inject bad stuff
             raise ValueError("Invalid cookie %r: %r" % (name, value))
         if not hasattr(self, "_new_cookie"):
-            self._new_cookie = Cookie.SimpleCookie()
+            self._new_cookie = http.cookies.SimpleCookie()
         if name in self._new_cookie:
             del self._new_cookie[name]
         self._new_cookie[name] = value
@@ -950,7 +939,7 @@ class RequestHandler(object):
             kwargs["whitespace"] = settings["template_whitespace"]
         return template.Loader(template_path, **kwargs)
 
-    def flush(self, include_footers=False, callback=None):
+    def flush(self, include_footers=False):
         """Flushes the current output buffer to the network.
 
         The ``callback`` argument, if given, can be used for flow control:
@@ -962,10 +951,9 @@ class RequestHandler(object):
         .. versionchanged:: 4.0
            Now returns a `.Future` if no callback is given.
 
-        .. deprecated:: 5.1
+        .. versionchanged:: 6.0
 
-           The ``callback`` argument is deprecated and will be removed in
-           Tornado 6.0.
+           The ``callback`` argument was removed.
         """
         chunk = b"".join(self._write_buffer)
         self._write_buffer = []
@@ -991,13 +979,13 @@ class RequestHandler(object):
                                                     self._status_code,
                                                     self._reason)
             return self.request.connection.write_headers(
-                start_line, self._headers, chunk, callback=callback)
+                start_line, self._headers, chunk)
         else:
             for transform in self._transforms:
                 chunk = transform.transform_chunk(chunk, include_footers)
             # Ignore the chunk and only write the headers for HEAD requests
             if self.request.method != "HEAD":
-                return self.request.connection.write(chunk, callback=callback)
+                return self.request.connection.write(chunk)
             else:
                 future = Future()
                 future.set_result(None)
@@ -1539,17 +1527,6 @@ class RequestHandler(object):
                     break
         return match
 
-    def _stack_context_handle_exception(self, type, value, traceback):
-        try:
-            # For historical reasons _handle_request_exception only takes
-            # the exception value instead of the full triple,
-            # so re-raise the exception to ensure that it's in
-            # sys.exc_info()
-            raise_exc_info((type, value, traceback))
-        except Exception:
-            self._handle_request_exception(value)
-        return True
-
     @gen.coroutine
     def _execute(self, transforms, *args, **kwargs):
         """Executes this request with the given output transforms."""
@@ -1692,90 +1669,6 @@ class RequestHandler(object):
                    "Content-Type", "Last-Modified"]
         for h in headers:
             self.clear_header(h)
-
-
-def asynchronous(method):
-    """Wrap request handler methods with this if they are asynchronous.
-
-    This decorator is for callback-style asynchronous methods; for
-    coroutines, use the ``@gen.coroutine`` decorator without
-    ``@asynchronous``. (It is legal for legacy reasons to use the two
-    decorators together provided ``@asynchronous`` is first, but
-    ``@asynchronous`` will be ignored in this case)
-
-    This decorator should only be applied to the :ref:`HTTP verb
-    methods <verbs>`; its behavior is undefined for any other method.
-    This decorator does not *make* a method asynchronous; it tells
-    the framework that the method *is* asynchronous.  For this decorator
-    to be useful the method must (at least sometimes) do something
-    asynchronous.
-
-    If this decorator is given, the response is not finished when the
-    method returns. It is up to the request handler to call
-    `self.finish() <RequestHandler.finish>` to finish the HTTP
-    request. Without this decorator, the request is automatically
-    finished when the ``get()`` or ``post()`` method returns. Example:
-
-    .. testcode::
-
-       class MyRequestHandler(RequestHandler):
-           @asynchronous
-           def get(self):
-              http = httpclient.AsyncHTTPClient()
-              http.fetch("http://friendfeed.com/", self._on_download)
-
-           def _on_download(self, response):
-              self.write("Downloaded!")
-              self.finish()
-
-    .. testoutput::
-       :hide:
-
-    .. versionchanged:: 3.1
-       The ability to use ``@gen.coroutine`` without ``@asynchronous``.
-
-    .. versionchanged:: 4.3 Returning anything but ``None`` or a
-       yieldable object from a method decorated with ``@asynchronous``
-       is an error. Such return values were previously ignored silently.
-
-    .. deprecated:: 5.1
-
-       This decorator is deprecated and will be removed in Tornado 6.0.
-       Use coroutines instead.
-    """
-    warnings.warn("@asynchronous is deprecated, use coroutines instead",
-                  DeprecationWarning)
-    # Delay the IOLoop import because it's not available on app engine.
-    from tornado.ioloop import IOLoop
-
-    @functools.wraps(method)
-    def wrapper(self, *args, **kwargs):
-        self._auto_finish = False
-        with stack_context.ExceptionStackContext(
-                self._stack_context_handle_exception, delay_warning=True):
-            result = method(self, *args, **kwargs)
-            if result is not None:
-                result = gen.convert_yielded(result)
-
-                # If @asynchronous is used with @gen.coroutine, (but
-                # not @gen.engine), we can automatically finish the
-                # request when the future resolves.  Additionally,
-                # the Future will swallow any exceptions so we need
-                # to throw them back out to the stack context to finish
-                # the request.
-                def future_complete(f):
-                    f.result()
-                    if not self._finished:
-                        self.finish()
-                IOLoop.current().add_future(result, future_complete)
-                # Once we have done this, hide the Future from our
-                # caller (i.e. RequestHandler._when_complete), which
-                # would otherwise set up its own callback and
-                # exception handler (resulting in exceptions being
-                # logged twice).
-                return None
-            return result
-    return wrapper
 
 
 def stream_request_body(cls):
@@ -2035,9 +1928,6 @@ class Application(ReversibleRouter):
         .. versionchanged:: 4.3
            Now returns the `.HTTPServer` object.
         """
-        # import is here rather than top level because HTTPServer
-        # is not importable on appengine
-        from tornado.httpserver import HTTPServer
         server = HTTPServer(self, **kwargs)
         server.listen(port, address)
         return server
@@ -2994,7 +2884,7 @@ def authenticated(method):
             if self.request.method in ("GET", "HEAD"):
                 url = self.get_login_url()
                 if "?" not in url:
-                    if urlparse.urlsplit(url).scheme:
+                    if urllib.parse.urlsplit(url).scheme:
                         # if login url is absolute, make next absolute too
                         next_url = self.request.full_url()
                     else:

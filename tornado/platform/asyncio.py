@@ -19,12 +19,10 @@ the same event loop.
    Windows. Use the `~asyncio.SelectorEventLoop` instead.
 """
 
-from __future__ import absolute_import, division, print_function
 import functools
 
 from tornado.gen import convert_yielded
 from tornado.ioloop import IOLoop
-from tornado import stack_context
 
 import asyncio
 
@@ -74,7 +72,7 @@ class BaseAsyncIOLoop(IOLoop):
         fd, fileobj = self.split_fd(fd)
         if fd in self.handlers:
             raise ValueError("fd %s added twice" % fd)
-        self.handlers[fd] = (fileobj, stack_context.wrap(handler))
+        self.handlers[fd] = (fileobj, handler)
         if events & IOLoop.READ:
             self.asyncio_loop.add_reader(
                 fd, self._handle_events, fd, IOLoop.READ)
@@ -142,7 +140,7 @@ class BaseAsyncIOLoop(IOLoop):
         # convert from absolute to relative.
         return self.asyncio_loop.call_later(
             max(0, when - self.time()), self._run_callback,
-            functools.partial(stack_context.wrap(callback), *args, **kwargs))
+            functools.partial(callback, *args, **kwargs))
 
     def remove_timeout(self, timeout):
         timeout.cancel()
@@ -151,7 +149,7 @@ class BaseAsyncIOLoop(IOLoop):
         try:
             self.asyncio_loop.call_soon_threadsafe(
                 self._run_callback,
-                functools.partial(stack_context.wrap(callback), *args, **kwargs))
+                functools.partial(callback, *args, **kwargs))
         except RuntimeError:
             # "Event loop is closed". Swallow the exception for
             # consistency with PollIOLoop (and logical consistency

@@ -14,11 +14,11 @@
 # under the License.
 
 """A non-blocking, single-threaded TCP server."""
-from __future__ import absolute_import, division, print_function
 
 import errno
 import os
 import socket
+import ssl
 
 from tornado import gen
 from tornado.log import app_log
@@ -27,12 +27,6 @@ from tornado.iostream import IOStream, SSLIOStream
 from tornado.netutil import bind_sockets, add_accept_handler, ssl_wrap_socket
 from tornado import process
 from tornado.util import errno_from_exception
-
-try:
-    import ssl
-except ImportError:
-    # ssl is not available on Google App Engine.
-    ssl = None
 
 
 class TCPServer(object):

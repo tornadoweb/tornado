@@ -1,17 +1,15 @@
-from __future__ import absolute_import, division, print_function
-
 import socket
 import subprocess
 import sys
 import textwrap
+import unittest
 
 from tornado.escape import utf8, to_unicode
 from tornado import gen
 from tornado.iostream import IOStream
 from tornado.log import app_log
-from tornado.stack_context import NullContext
 from tornado.tcpserver import TCPServer
-from tornado.test.util import skipBefore35, skipIfNonUnix, exec_test, unittest
+from tornado.test.util import skipIfNonUnix
 from tornado.testing import AsyncTestCase, ExpectLog, bind_unused_port, gen_test
 
 
@@ -30,9 +28,8 @@ class TCPServerTest(AsyncTestCase):
         server = client = None
         try:
             sock, port = bind_unused_port()
-            with NullContext():
-                server = TestServer()
-                server.add_socket(sock)
+            server = TestServer()
+            server.add_socket(sock)
             client = IOStream(socket.socket())
             with ExpectLog(app_log, "Exception in callback"):
                 yield client.connect(('localhost', port))
@@ -45,20 +42,17 @@ class TCPServerTest(AsyncTestCase):
             if client is not None:
                 client.close()
 
-    @skipBefore35
     @gen_test
     def test_handle_stream_native_coroutine(self):
         # handle_stream may be a native coroutine.
 
-        namespace = exec_test(globals(), locals(), """
         class TestServer(TCPServer):
             async def handle_stream(self, stream, address):
                 stream.write(b'data')
                 stream.close()
-        """)
 
         sock, port = bind_unused_port()
-        server = namespace['TestServer']()
+        server = TestServer()
         server.add_socket(sock)
         client = IOStream(socket.socket())
         yield client.connect(('localhost', port))
@@ -145,7 +139,6 @@ class TestMultiprocess(unittest.TestCase):
         # As a sanity check, run the single-process version through this test
         # harness too.
         code = textwrap.dedent("""
-            from __future__ import print_function
             from tornado.ioloop import IOLoop
             from tornado.tcpserver import TCPServer
 
@@ -159,7 +152,6 @@ class TestMultiprocess(unittest.TestCase):
 
     def test_simple(self):
         code = textwrap.dedent("""
-            from __future__ import print_function
             from tornado.ioloop import IOLoop
             from tornado.process import task_id
             from tornado.tcpserver import TCPServer
@@ -175,7 +167,6 @@ class TestMultiprocess(unittest.TestCase):
 
     def test_advanced(self):
         code = textwrap.dedent("""
-            from __future__ import print_function
             from tornado.ioloop import IOLoop
             from tornado.netutil import bind_sockets
             from tornado.process import fork_processes, task_id

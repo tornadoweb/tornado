@@ -193,9 +193,8 @@ place:
    etc. If the URL regular expression contains capturing groups, they
    are passed as arguments to this method.
 5. When the request is finished, `~.RequestHandler.on_finish()` is
-   called. For most handlers this is immediately after ``get()`` (etc)
-   return; for handlers using the `tornado.web.asynchronous` decorator
-   it is after the call to `~.RequestHandler.finish()`.
+   called. This is generally after ``get()`` or another HTTP method
+   returns.
 
 All methods designed to be overridden are noted as such in the
 `.RequestHandler` documentation.  Some of the most commonly
@@ -298,11 +297,6 @@ Asynchronous handlers
 Certain handler methods (including ``prepare()`` and the HTTP verb
 methods ``get()``/``post()``/etc) may be overridden as coroutines to
 make the handler asynchronous.
-
-Tornado also supports a callback-based style of asynchronous handler
-with the `tornado.web.asynchronous` decorator, but this style is
-deprecated and will be removed in Tornado 6.0. New applications should
-use coroutines instead.
 
 For example, here is a simple handler using a coroutine:
 

@@ -33,9 +33,8 @@ This combination is encouraged as the wrapper catches syntax errors and
 other import-time failures, while debug mode catches changes once
 the server has started.
 
-This module depends on `.IOLoop`, so it will not work in WSGI applications
-and Google App Engine.  It also will not work correctly when `.HTTPServer`'s
-multi-process mode is used.
+This module will not work correctly when `.HTTPServer`'s multi-process
+mode is used.
 
 Reloading loses any Python interpreter command-line arguments (e.g. ``-u``)
 because it re-executes Python using ``sys.executable`` and ``sys.argv``.
@@ -43,8 +42,6 @@ Additionally, modifying these variables will cause reloading to behave
 incorrectly.
 
 """
-
-from __future__ import absolute_import, division, print_function
 
 import os
 import sys

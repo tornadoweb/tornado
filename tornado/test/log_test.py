@@ -12,8 +12,6 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-from __future__ import absolute_import, division, print_function
-
 import contextlib
 import glob
 import logging
@@ -22,12 +20,12 @@ import re
 import subprocess
 import sys
 import tempfile
+import unittest
 import warnings
 
 from tornado.escape import utf8
 from tornado.log import LogFormatter, define_logging_options, enable_pretty_logging
 from tornado.options import OptionParser
-from tornado.test.util import unittest
 from tornado.util import basestring_type
 
 
