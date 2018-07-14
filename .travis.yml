@@ -1,7 +1,9 @@
 # https://travis-ci.org/tornadoweb/tornado
-dist: trusty
 
-# Use containers instead of full VMs for faster startup.
+# Most tests run in container mode because it's faster to start up,
+# but a few below use different configurations (as of July 2018
+# only trusty is available in containers).
+dist: trusty
 sudo: false
 
 matrix:
@@ -10,21 +12,41 @@ matrix:
 language: python
 # For a list of available versions, run
 #     aws s3 ls s3://travis-python-archives/binaries/ubuntu/14.04/x86_64/
-python:
-    - 3.5
-    - 3.6
-    - pypy3.5-5.8.0
+#
+# Python 3.7+ needs a newer version of openssl than is available in trusty,
+# so these must run on a newer platform (and since travis doesn't yet have
+# containers for xenial, those must use VMs).
+# YAML magic from https://github.com/travis-ci/travis-ci/issues/9069#issuecomment-401924248
+.mixins:
+- &xenial-mixin
+  dist: xenial
+  sudo: true
+  addons:
+    apt:
+      packages:
+        - libgnutls-dev
+jobs:
+  include:
+    - python: 3.5
+    - python: 3.6
+    - python: pypy3.5-5.8.0
+    - <<: *xenial-mixin
+      python: 3.7
+    - <<: *xenial-mixin
+      python: nightly
 
 install:
     # On nightly, upgrade setuptools first to work around
     # https://github.com/pypa/setuptools/issues/1257
     - if [[ $TRAVIS_PYTHON_VERSION == 'nightly' ]]; then travis_retry pip install -U setuptools; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 'pypy' ]]; then travis_retry pip install mock; fi
     # TODO(bdarnell): pycares tests are currently disabled on travis due to ipv6 issues.
     #- if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then travis_retry pip install pycares; fi
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then travis_retry pip install pycurl; fi
     # Twisted is flaky on pypy (TODO: still? this note is quite old)
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then travis_retry pip install Twisted; fi
+    # Ideally we'd run the docs/lint stuff on the latest Python
+    # version supported. But Python 3.7 requires slower-to-start VMs,
+    # so we run it on 3.6 to minimize total CI run time.
     - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then travis_retry pip install sphinx sphinx_rtd_theme; fi
     - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then travis_retry pip install flake8; fi
     # On travis the extension should always be built
