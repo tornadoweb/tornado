@@ -22,12 +22,12 @@ import re
 import subprocess
 import sys
 import tempfile
+import unittest
 import warnings
 
 from tornado.escape import utf8
 from tornado.log import LogFormatter, define_logging_options, enable_pretty_logging
 from tornado.options import OptionParser
-from tornado.test.util import unittest
 from tornado.util import basestring_type
 
 

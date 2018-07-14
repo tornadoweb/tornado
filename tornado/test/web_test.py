@@ -12,7 +12,6 @@ from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
-from tornado.test.util import unittest
 from tornado.util import ObjectDict, unicode_type
 from tornado.web import (
     Application, RequestHandler, StaticFileHandler, RedirectHandler as WebRedirectHandler,
@@ -33,6 +32,7 @@ import logging
 import os
 import re
 import socket
+import unittest
 import urllib.parse
 
 

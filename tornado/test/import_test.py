@@ -3,8 +3,7 @@ from __future__ import absolute_import, division, print_function
 
 import subprocess
 import sys
-
-from tornado.test.util import unittest
+import unittest
 
 _import_everything = b"""
 # The event loop is not fork-safe, and it's easy to initialize an asyncio.Future

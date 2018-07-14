@@ -12,13 +12,14 @@ import threading
 import time
 import types
 from unittest import mock
+import unittest
 
 from tornado.escape import native_str
 from tornado import gen
 from tornado.ioloop import IOLoop, TimeoutError, PeriodicCallback
 from tornado.log import app_log
 from tornado.testing import AsyncTestCase, bind_unused_port, ExpectLog, gen_test
-from tornado.test.util import unittest, skipIfNonUnix, skipOnTravis
+from tornado.test.util import skipIfNonUnix, skipOnTravis
 
 
 class TestIOLoop(AsyncTestCase):

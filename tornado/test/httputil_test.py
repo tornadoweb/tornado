@@ -9,7 +9,6 @@ from tornado.httputil import (
 from tornado.escape import utf8, native_str
 from tornado.log import gen_log
 from tornado.testing import ExpectLog
-from tornado.test.util import unittest
 
 import copy
 import datetime
@@ -17,6 +16,7 @@ import logging
 import pickle
 import time
 import urllib.parse
+import unittest
 
 
 class TestUrlConcat(unittest.TestCase):

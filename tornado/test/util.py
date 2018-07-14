@@ -6,12 +6,10 @@ import platform
 import socket
 import sys
 import textwrap
+import unittest
 import warnings
 
 from tornado.testing import bind_unused_port
-
-# Delegate the choice of unittest or unittest2 to tornado.testing.
-from tornado.testing import unittest
 
 skipIfNonUnix = unittest.skipIf(os.name != 'posix' or sys.platform == 'cygwin',
                                 "non-unix platform")

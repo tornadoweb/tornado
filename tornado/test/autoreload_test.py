@@ -6,8 +6,7 @@ from subprocess import Popen
 import sys
 from tempfile import mkdtemp
 import time
-
-from tornado.test.util import unittest
+import unittest
 
 
 class AutoreloadTest(unittest.TestCase):

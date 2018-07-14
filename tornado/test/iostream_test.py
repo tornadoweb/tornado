@@ -9,7 +9,7 @@ from tornado.log import gen_log
 from tornado.netutil import ssl_wrap_socket
 from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog, gen_test  # noqa: E501
-from tornado.test.util import unittest, skipIfNonUnix, refusing_port, skipPypy3V58
+from tornado.test.util import skipIfNonUnix, refusing_port, skipPypy3V58
 from tornado.web import RequestHandler, Application
 import errno
 import hashlib
@@ -20,6 +20,7 @@ import socket
 import ssl
 import sys
 from unittest import mock
+import unittest
 
 
 def _server_ssl_options():

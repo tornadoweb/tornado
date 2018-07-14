@@ -13,7 +13,7 @@ from tornado.log import gen_log
 from tornado.netutil import ssl_options_to_context
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog, gen_test  # noqa: E501
-from tornado.test.util import unittest, skipOnTravis
+from tornado.test.util import skipOnTravis
 from tornado.web import Application, RequestHandler, stream_request_body
 
 from contextlib import closing
@@ -25,6 +25,7 @@ import socket
 import ssl
 import sys
 import tempfile
+import unittest
 from io import BytesIO
 
 

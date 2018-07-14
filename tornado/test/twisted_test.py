@@ -21,6 +21,7 @@ from __future__ import absolute_import, division, print_function
 
 import logging
 import signal
+import unittest
 import warnings
 
 from tornado.escape import utf8
@@ -29,7 +30,6 @@ from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.testing import bind_unused_port, AsyncTestCase, gen_test
-from tornado.test.util import unittest
 from tornado.web import RequestHandler, Application
 
 try:

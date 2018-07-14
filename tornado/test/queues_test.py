@@ -14,11 +14,11 @@
 from __future__ import absolute_import, division, print_function
 from datetime import timedelta
 from random import random
+import unittest
 
 from tornado import gen, queues
 from tornado.gen import TimeoutError
 from tornado.testing import gen_test, AsyncTestCase
-from tornado.test.util import unittest
 
 
 class QueueBasicTest(AsyncTestCase):

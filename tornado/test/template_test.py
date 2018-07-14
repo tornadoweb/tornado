@@ -3,10 +3,10 @@ from __future__ import absolute_import, division, print_function
 import os
 import sys
 import traceback
+import unittest
 
 from tornado.escape import utf8, native_str, to_unicode
 from tornado.template import Template, DictLoader, ParseError, Loader
-from tornado.test.util import unittest
 from tornado.util import ObjectDict
 
 

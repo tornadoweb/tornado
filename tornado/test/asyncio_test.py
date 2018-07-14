@@ -13,13 +13,13 @@
 from __future__ import absolute_import, division, print_function
 
 import asyncio
+import unittest
 
 from concurrent.futures import ThreadPoolExecutor
 from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.platform.asyncio import AsyncIOLoop, to_asyncio_future, AnyThreadEventLoopPolicy
 from tornado.testing import AsyncTestCase, gen_test
-from tornado.test.util import unittest
 
 
 class AsyncIOLoopTest(AsyncTestCase):

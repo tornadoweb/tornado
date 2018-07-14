@@ -8,12 +8,12 @@ import logging
 import operator
 import textwrap
 import sys
+import unittest
 
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 from tornado.netutil import Resolver
 from tornado.options import define, add_parse_callback
-from tornado.test.util import unittest
 
 
 TEST_MODULES = [

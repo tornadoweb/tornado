@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 from tornado import gen, ioloop
 from tornado.httpserver import HTTPServer
-from tornado.test.util import unittest
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, gen_test
 from tornado.web import Application
 import asyncio
@@ -10,6 +9,7 @@ import contextlib
 import os
 import platform
 import traceback
+import unittest
 import warnings
 
 

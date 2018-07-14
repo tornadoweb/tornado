@@ -2,11 +2,11 @@
 from __future__ import absolute_import, division, print_function
 
 from hashlib import md5
+import unittest
 
 from tornado.escape import utf8
 from tornado.testing import AsyncHTTPTestCase
 from tornado.test import httpclient_test
-from tornado.test.util import unittest
 from tornado.web import Application, RequestHandler
 
 

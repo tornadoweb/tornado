@@ -7,12 +7,13 @@ import socket
 from subprocess import Popen
 import sys
 import time
+import unittest
 
 from tornado.netutil import (
     BlockingResolver, OverrideResolver, ThreadedResolver, is_valid_ip, bind_sockets
 )
 from tornado.testing import AsyncTestCase, gen_test, bind_unused_port
-from tornado.test.util import unittest, skipIfNoNetwork
+from tornado.test.util import skipIfNoNetwork
 
 try:
     import pycares  # type: ignore

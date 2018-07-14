@@ -18,6 +18,7 @@ from concurrent import futures
 import logging
 import re
 import socket
+import unittest
 
 from tornado.concurrent import Future, run_on_executor, future_set_result_unless_cancelled
 from tornado.escape import utf8, to_unicode
@@ -25,7 +26,6 @@ from tornado import gen
 from tornado.iostream import IOStream
 from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncTestCase, bind_unused_port, gen_test
-from tornado.test.util import unittest
 
 
 class MiscFutureTest(AsyncTestCase):

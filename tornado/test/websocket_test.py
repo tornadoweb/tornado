@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import functools
 import traceback
+import unittest
 
 from tornado.concurrent import Future
 from tornado import gen
@@ -11,7 +12,6 @@ from tornado.log import gen_log, app_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
-from tornado.test.util import unittest
 from tornado.web import Application, RequestHandler
 
 try:
