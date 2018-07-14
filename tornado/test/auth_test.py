@@ -3,9 +3,6 @@
 # and ensure that it doesn't blow up (e.g. with unicode/bytes issues in
 # python 3)
 
-
-from __future__ import absolute_import, division, print_function
-
 from tornado.auth import (
     OpenIdMixin, OAuthMixin, OAuth2Mixin,
     GoogleOAuth2Mixin, FacebookGraphMixin, TwitterMixin,

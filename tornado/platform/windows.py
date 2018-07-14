@@ -1,8 +1,6 @@
 # NOTE: win32 support is currently experimental, and not recommended
 # for production use.
 
-
-from __future__ import absolute_import, division, print_function
 import ctypes  # type: ignore
 import ctypes.wintypes  # type: ignore
 

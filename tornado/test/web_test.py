@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from tornado.concurrent import Future
 from tornado import gen
 from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str, to_basestring  # noqa: E501

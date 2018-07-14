@@ -19,8 +19,6 @@ Also includes a few other miscellaneous string manipulation functions that
 have crept in over time.
 """
 
-from __future__ import absolute_import, division, print_function
-
 import html.entities
 import json
 import re

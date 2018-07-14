@@ -25,8 +25,6 @@ to those provided in the standard library's `asyncio package
 
 """
 
-from __future__ import absolute_import, division, print_function
-
 import collections
 import heapq
 

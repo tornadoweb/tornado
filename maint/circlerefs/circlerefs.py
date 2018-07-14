@@ -7,7 +7,6 @@ path from being used and instead rely on the slower full GC. This
 increases memory footprint and CPU overhead, so we try to eliminate
 circular references created by normal operation.
 """
-from __future__ import print_function
 
 import gc
 import traceback

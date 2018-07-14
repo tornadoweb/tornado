@@ -16,8 +16,6 @@ the protocol (known as "draft 76") and are not compatible with this module.
    Removed support for the draft 76 protocol version.
 """
 
-from __future__ import absolute_import, division, print_function
-
 import base64
 import hashlib
 import os

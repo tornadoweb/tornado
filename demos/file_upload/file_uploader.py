@@ -9,7 +9,6 @@ single file without encoding.
 See also file_receiver.py in this directory, a server that receives uploads.
 """
 
-from __future__ import print_function
 import mimetypes
 import os
 import sys

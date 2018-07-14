@@ -175,8 +175,6 @@ For more information on application-level routing see docs for `~.web.Applicatio
 
 """
 
-from __future__ import absolute_import, division, print_function
-
 import re
 from functools import partial
 

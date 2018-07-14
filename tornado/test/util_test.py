@@ -1,5 +1,4 @@
 # coding: utf-8
-from __future__ import absolute_import, division, print_function
 from io import StringIO
 import re
 import sys
@@ -193,10 +192,9 @@ class UnicodeLiteralTest(unittest.TestCase):
 
 
 class ExecInTest(unittest.TestCase):
-    # This test is python 2 only because there are no new future imports
-    # defined in python 3 yet.
-    @unittest.skipIf(sys.version_info >= print_function.getMandatoryRelease(),
-                     'no testable future imports')
+    # TODO(bdarnell): make a version of this test for one of the new
+    # future imports available in python 3.
+    @unittest.skip('no testable future imports')
     def test_no_inherit_future(self):
         # This file has from __future__ import print_function...
         f = StringIO()

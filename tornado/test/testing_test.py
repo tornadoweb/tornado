@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from tornado import gen, ioloop
 from tornado.httpserver import HTTPServer
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, gen_test

@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from tornado.escape import _unicode
 from tornado import gen
 from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main, _RequestProxy

@@ -26,7 +26,6 @@ While this package is an important part of Tornado's internal
 implementation, applications rarely need to interact with it
 directly.
 """
-from __future__ import absolute_import, division, print_function
 
 import asyncio
 from concurrent import futures

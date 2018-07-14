@@ -1,4 +1,3 @@
-from __future__ import absolute_import, division, print_function
 from wsgiref.validate import validator
 
 from tornado.testing import AsyncHTTPTestCase

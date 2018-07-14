@@ -10,8 +10,6 @@ interface of its subclasses, including `.AsyncHTTPClient`, `.IOLoop`,
 and `.Resolver`.
 """
 
-from __future__ import absolute_import, division, print_function
-
 import array
 import atexit
 from inspect import getfullargspec

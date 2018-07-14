@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from concurrent.futures import ThreadPoolExecutor
 from concurrent import futures
 import contextlib

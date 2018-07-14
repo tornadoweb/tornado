@@ -30,8 +30,6 @@ events. `IOLoop.add_timeout` is a non-blocking alternative to
 
 """
 
-from __future__ import absolute_import, division, print_function
-
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import datetime

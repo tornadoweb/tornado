@@ -22,8 +22,6 @@ Most code that needs access to this functionality should do e.g.::
     from tornado.platform.auto import set_close_exec
 """
 
-from __future__ import absolute_import, division, print_function
-
 import os
 
 if os.name == 'nt':

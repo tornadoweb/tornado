@@ -1,7 +1,4 @@
-from __future__ import absolute_import, division, print_function
-
 import os
-import sys
 import traceback
 import unittest
 
@@ -160,9 +157,12 @@ try{% set y = 1/x %}
         except ParseError:
             pass
 
-    @unittest.skipIf(sys.version_info >= division.getMandatoryRelease(),
-                     'no testable future imports')
+    @unittest.skip('no testable future imports')
     def test_no_inherit_future(self):
+        # TODO(bdarnell): make a test like this for one of the future
+        # imports available in python 3. Unfortunately they're harder
+        # to use in a template than division was.
+
         # This file has from __future__ import division...
         self.assertEqual(1 / 2, 0.5)
         # ...but the template doesn't

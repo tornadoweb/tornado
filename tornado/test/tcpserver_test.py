@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import socket
 import subprocess
 import sys
@@ -141,7 +139,6 @@ class TestMultiprocess(unittest.TestCase):
         # As a sanity check, run the single-process version through this test
         # harness too.
         code = textwrap.dedent("""
-            from __future__ import print_function
             from tornado.ioloop import IOLoop
             from tornado.tcpserver import TCPServer
 
@@ -155,7 +152,6 @@ class TestMultiprocess(unittest.TestCase):
 
     def test_simple(self):
         code = textwrap.dedent("""
-            from __future__ import print_function
             from tornado.ioloop import IOLoop
             from tornado.process import task_id
             from tornado.tcpserver import TCPServer
@@ -171,7 +167,6 @@ class TestMultiprocess(unittest.TestCase):
 
     def test_advanced(self):
         code = textwrap.dedent("""
-            from __future__ import print_function
             from tornado.ioloop import IOLoop
             from tornado.netutil import bind_sockets
             from tornado.process import fork_processes, task_id

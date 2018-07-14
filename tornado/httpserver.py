@@ -25,8 +25,6 @@ class except to start a server at the beginning of the process
    to `tornado.httputil.HTTPServerRequest`.  The old name remains as an alias.
 """
 
-from __future__ import absolute_import, division, print_function
-
 import socket
 
 from tornado.escape import native_str

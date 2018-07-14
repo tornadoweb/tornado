@@ -70,8 +70,6 @@ See the `convert_yielded` function to extend this mechanism.
    via ``singledispatch``.
 
 """
-from __future__ import absolute_import, division, print_function
-
 import asyncio
 import builtins
 import collections
