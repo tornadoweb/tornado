@@ -68,7 +68,7 @@ Other differences between the two forms of coroutine are:
   background" as soon as they are called. Note that for both kinds of
   coroutines it is important to use ``await`` or ``yield`` so that
   any exceptions have somewhere to go.
-- Decorated coroutines has additional integration with the
+- Decorated coroutines have additional integration with the
   `concurrent.futures` package, allowing the result of
   ``executor.submit`` to be yielded directly. For native coroutines,
   use `.IOLoop.run_in_executor` instead.
