@@ -411,7 +411,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             if chunk:
                 data += self._format_chunk(chunk)
             self._pending_write = self.stream.write(data)
-            self._pending_write.add_done_callback(self._on_write_complete)
+            future_add_done_callback(self._pending_write, self._on_write_complete)
         return future
 
     def _format_chunk(self, chunk):
