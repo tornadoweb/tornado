@@ -103,7 +103,7 @@ class PatchHandler(RequestHandler):
 
 
 class AllMethodsHandler(RequestHandler):
-    SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ('OTHER',)
+    SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ('OTHER',)  # type: ignore
 
     def method(self):
         self.write(self.request.method)

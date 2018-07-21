@@ -30,7 +30,7 @@ skipNotCPython = unittest.skipIf(platform.python_implementation() != 'CPython',
 # TODO: remove this after pypy3 5.8 is obsolete.
 skipPypy3V58 = unittest.skipIf(platform.python_implementation() == 'PyPy' and
                                sys.version_info > (3,) and
-                               sys.pypy_version_info < (5, 9),
+                               sys.pypy_version_info < (5, 9),  # type: ignore
                                'pypy3 5.8 has buggy ssl module')
 
 

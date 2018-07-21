@@ -24,24 +24,15 @@ bytes_type = bytes
 unicode_type = str
 basestring_type = str
 
-try:
-    import typing  # noqa
-    from typing import cast
+import typing
 
-    _ObjectDictBase = typing.Dict[str, typing.Any]
-except ImportError:
-    _ObjectDictBase = dict
+# More imports that are only needed in type annotations.
+import datetime  # noqa
+import types
+from typing import Any, AnyStr, Union, Optional, Dict, Mapping, List  # noqa
+from typing import Tuple, Match, Callable  # noqa
 
-    def cast(typ, x):
-        return x
-else:
-    # More imports that are only needed in type comments.
-    import datetime  # noqa
-    import types  # noqa
-    from typing import Any, AnyStr, Union, Optional, Dict, Mapping  # noqa
-    from typing import Tuple, Match, Callable  # noqa
-
-    _BaseString = str
+_BaseString = str
 
 try:
     from sys import is_finalizing
@@ -70,7 +61,7 @@ class TimeoutError(Exception):
     """
 
 
-class ObjectDict(_ObjectDictBase):
+class ObjectDict(typing.Dict[str, typing.Any]):
     """Makes a dictionary behave like an object, with attribute-style access.
     """
     def __getattr__(self, name):
@@ -151,10 +142,10 @@ def import_object(name):
         # on python 2 a byte string is required.
         name = name.encode('utf-8')
     if name.count('.') == 0:
-        return __import__(name, None, None)
+        return __import__(name)
 
     parts = name.split('.')
-    obj = __import__('.'.join(parts[:-1]), None, None, [parts[-1]], 0)
+    obj = __import__('.'.join(parts[:-1]), fromlist=[parts[-1]])
     try:
         return getattr(obj, parts[-1])
     except AttributeError:
@@ -170,10 +161,10 @@ def exec_in(code, glob, loc=None):
     exec(code, glob, loc)
 
 
-def raise_exc_info(exc_info):
-    # type: (Tuple[type, BaseException, types.TracebackType]) -> None
+def raise_exc_info(exc_info: Optional[Tuple[type, BaseException, types.TracebackType]]) -> None:
     try:
-        raise exc_info[1].with_traceback(exc_info[2])
+        if exc_info is not None:
+            raise exc_info[1].with_traceback(exc_info[2])
     finally:
         exc_info = None
 
@@ -356,7 +347,7 @@ class ArgReplacer(object):
         # type: (Callable, str) -> None
         self.name = name
         try:
-            self.arg_pos = self._getargnames(func).index(name)
+            self.arg_pos = self._getargnames(func).index(name)  # type: Optional[int]
         except ValueError:
             # Not a positional parameter
             self.arg_pos = None

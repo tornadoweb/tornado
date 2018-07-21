@@ -35,14 +35,14 @@ from tornado.escape import _unicode
 from tornado.util import unicode_type, basestring_type
 
 try:
-    import colorama
+    import colorama  # type: ignore
 except ImportError:
     colorama = None
 
 try:
     import curses  # type: ignore
 except ImportError:
-    curses = None
+    curses = None  # type: ignore
 
 # Logger objects for internal tornado use
 access_log = logging.getLogger("tornado.access")

@@ -268,7 +268,7 @@ def to_asyncio_future(tornado_future):
     return convert_yielded(tornado_future)
 
 
-class AnyThreadEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
+class AnyThreadEventLoopPolicy(asyncio.DefaultEventLoopPolicy):  # type: ignore
     """Event loop policy that allows loop creation on any thread.
 
     The default `asyncio` event loop policy only automatically creates

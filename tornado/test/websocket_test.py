@@ -30,7 +30,7 @@ from tornado.websocket import (
 try:
     from tornado import speedups
 except ImportError:
-    speedups = None
+    speedups = None  # type: ignore
 
 
 class TestWebSocketHandler(WebSocketHandler):

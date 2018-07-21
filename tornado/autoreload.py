@@ -93,7 +93,7 @@ from tornado.util import exec_in
 try:
     import signal
 except ImportError:
-    signal = None
+    signal = None  # type: ignore
 
 # os.execv is broken on Windows and can't properly parse command line
 # arguments and executable name if they contain whitespaces. subprocess
