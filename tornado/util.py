@@ -15,7 +15,18 @@ import atexit
 from inspect import getfullargspec
 import os
 import re
+import typing
 import zlib
+
+from typing import Any, Optional, Dict, Mapping, List, Tuple, Match, Callable
+
+if typing.TYPE_CHECKING:
+    # Additional imports only used in type comments.
+    # This lets us make these imports lazy.
+    import datetime  # noqa
+    import types  # noqa
+    from typing import Type, Union  # noqa
+    import unittest  # noqa
 
 # Aliases for types that are spelled differently in different Python
 # versions. bytes_type is deprecated and no longer used in Tornado
@@ -24,25 +35,15 @@ bytes_type = bytes
 unicode_type = str
 basestring_type = str
 
-import typing
-
-# More imports that are only needed in type annotations.
-import datetime  # noqa
-import types
-from typing import Any, AnyStr, Union, Optional, Dict, Mapping, List  # noqa
-from typing import Tuple, Match, Callable  # noqa
-
-_BaseString = str
-
 try:
     from sys import is_finalizing
 except ImportError:
     # Emulate it
-    def _get_emulated_is_finalizing():
-        L = []
+    def _get_emulated_is_finalizing() -> Callable[[], bool]:
+        L = []  # type: List[None]
         atexit.register(lambda: L.append(None))
 
-        def is_finalizing():
+        def is_finalizing() -> bool:
             # Not referencing any globals here
             return L != []
 
@@ -61,18 +62,16 @@ class TimeoutError(Exception):
     """
 
 
-class ObjectDict(typing.Dict[str, typing.Any]):
+class ObjectDict(Dict[str, Any]):
     """Makes a dictionary behave like an object, with attribute-style access.
     """
-    def __getattr__(self, name):
-        # type: (str) -> Any
+    def __getattr__(self, name: str) -> Any:
         try:
             return self[name]
         except KeyError:
             raise AttributeError(name)
 
-    def __setattr__(self, name, value):
-        # type: (str, Any) -> None
+    def __setattr__(self, name: str, value: Any) -> None:
         self[name] = value
 
 
@@ -82,14 +81,13 @@ class GzipDecompressor(object):
     The interface is like that of `zlib.decompressobj` (without some of the
     optional arguments, but it understands gzip headers and checksums.
     """
-    def __init__(self):
+    def __init__(self) -> None:
         # Magic parameter makes zlib module understand gzip header
         # http://stackoverflow.com/questions/1838699/how-can-i-decompress-a-gzip-stream-with-zlib
         # This works on cpython and pypy, but not jython.
         self.decompressobj = zlib.decompressobj(16 + zlib.MAX_WBITS)
 
-    def decompress(self, value, max_length=None):
-        # type: (bytes, Optional[int]) -> bytes
+    def decompress(self, value: bytes, max_length: int=0) -> bytes:
         """Decompress a chunk, returning newly-available data.
 
         Some data may be buffered for later processing; `flush` must
@@ -103,14 +101,12 @@ class GzipDecompressor(object):
         return self.decompressobj.decompress(value, max_length)
 
     @property
-    def unconsumed_tail(self):
-        # type: () -> bytes
+    def unconsumed_tail(self) -> bytes:
         """Returns the unconsumed portion left over
         """
         return self.decompressobj.unconsumed_tail
 
-    def flush(self):
-        # type: () -> bytes
+    def flush(self) -> bytes:
         """Return any remaining buffered data not yet returned by decompress.
 
         Also checks for errors such as truncated input.
@@ -119,8 +115,7 @@ class GzipDecompressor(object):
         return self.decompressobj.flush()
 
 
-def import_object(name):
-    # type: (_BaseString) -> Any
+def import_object(name: str) -> Any:
     """Imports an object by name.
 
     import_object('x') is equivalent to 'import x'.
@@ -138,9 +133,6 @@ def import_object(name):
         ...
     ImportError: No module named missing_module
     """
-    if not isinstance(name, str):
-        # on python 2 a byte string is required.
-        name = name.encode('utf-8')
     if name.count('.') == 0:
         return __import__(name)
 
@@ -152,25 +144,25 @@ def import_object(name):
         raise ImportError("No module named %s" % parts[-1])
 
 
-def exec_in(code, glob, loc=None):
-    # type: (Any, Dict[str, Any], Optional[Mapping[str, Any]]) -> Any
-    if isinstance(code, basestring_type):
+def exec_in(code: Any, glob: Dict[str, Any], loc: Mapping[str, Any]=None) -> None:
+    if isinstance(code, str):
         # exec(string) inherits the caller's future imports; compile
         # the string first to prevent that.
         code = compile(code, '<string>', 'exec', dont_inherit=True)
     exec(code, glob, loc)
 
 
-def raise_exc_info(exc_info: Optional[Tuple[type, BaseException, types.TracebackType]]) -> None:
+def raise_exc_info(exc_info):
+    # type: (Tuple[type, BaseException, types.TracebackType]) -> typing.NoReturn
     try:
-        if exc_info is not None:
-            raise exc_info[1].with_traceback(exc_info[2])
+        raise exc_info[1].with_traceback(exc_info[2])
     finally:
-        exc_info = None
+        # Clear the traceback reference from our stack frame to
+        # minimize circular references that slow down GC.
+        exc_info = None  # type: ignore
 
 
-def errno_from_exception(e):
-    # type: (BaseException) -> Optional[int]
+def errno_from_exception(e: BaseException) -> Optional[int]:
     """Provides the errno from an Exception object.
 
     There are cases that the errno attribute was not set so we pull
@@ -192,8 +184,7 @@ _alphanum = frozenset(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
 
-def _re_unescape_replacement(match):
-    # type: (Match[str]) -> str
+def _re_unescape_replacement(match: Match[str]) -> str:
     group = match.group(1)
     if group[0] in _alphanum:
         raise ValueError("cannot unescape '\\\\%s'" % group[0])
@@ -203,8 +194,7 @@ def _re_unescape_replacement(match):
 _re_unescape_pattern = re.compile(r'\\(.)', re.DOTALL)
 
 
-def re_unescape(s):
-    # type: (str) -> str
+def re_unescape(s: str) -> str:
     """Unescape a string escaped by `re.escape`.
 
     May raise ``ValueError`` for regular expressions which could not
@@ -242,12 +232,20 @@ class Configurable(object):
        multiple levels of a class hierarchy.
 
     """
-    __impl_class = None  # type: type
+    # Type annotations on this class are mostly done with comments
+    # because they need to refer to Configurable, which isn't defined
+    # until after the class definition block. These can use regular
+    # annotations when our minimum python version is 3.7.
+    #
+    # There may be a clever way to use generics here to get more
+    # precise types (i.e. for a particular Configurable subclass T,
+    # all the types are subclasses of T, not just Configurable).
+    __impl_class = None  # type: Optional[Type[Configurable]]
     __impl_kwargs = None  # type: Dict[str, Any]
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args: Any, **kwargs: Any) -> Any:
         base = cls.configurable_base()
-        init_kwargs = {}
+        init_kwargs = {}  # type: Dict[str, Any]
         if cls is base:
             impl = cls.configured_class()
             if base.__impl_kwargs:
@@ -267,9 +265,7 @@ class Configurable(object):
 
     @classmethod
     def configurable_base(cls):
-        # type: () -> Any
-        # TODO: This class needs https://github.com/python/typing/issues/107
-        # to be fully typeable.
+        # type: () -> Type[Configurable]
         """Returns the base class of a configurable hierarchy.
 
         This will normally return the class in which it is defined.
@@ -279,12 +275,11 @@ class Configurable(object):
 
     @classmethod
     def configurable_default(cls):
-        # type: () -> type
+        # type: () -> Type[Configurable]
         """Returns the implementation class to be used if none is configured."""
         raise NotImplementedError()
 
-    def initialize(self):
-        # type: () -> None
+    def initialize(self) -> None:
         """Initialize a `Configurable` subclass instance.
 
         Configurable classes should use `initialize` instead of ``__init__``.
@@ -295,7 +290,7 @@ class Configurable(object):
 
     @classmethod
     def configure(cls, impl, **kwargs):
-        # type: (Any, **Any) -> None
+        # type: (Union[None, str, Type[Configurable]], Any) -> None
         """Sets the class to use when the base class is instantiated.
 
         Keyword arguments will be saved and added to the arguments passed
@@ -303,8 +298,8 @@ class Configurable(object):
         some parameters.
         """
         base = cls.configurable_base()
-        if isinstance(impl, (str, unicode_type)):
-            impl = import_object(impl)
+        if isinstance(impl, str):
+            impl = typing.cast(Type[Configurable], import_object(impl))
         if impl is not None and not issubclass(impl, cls):
             raise ValueError("Invalid subclass of %s" % cls)
         base.__impl_class = impl
@@ -312,7 +307,7 @@ class Configurable(object):
 
     @classmethod
     def configured_class(cls):
-        # type: () -> type
+        # type: () -> Type[Configurable]
         """Returns the currently configured class."""
         base = cls.configurable_base()
         # Manually mangle the private name to see whether this base
@@ -320,17 +315,21 @@ class Configurable(object):
         # hierarchy).
         if base.__dict__.get('_Configurable__impl_class') is None:
             base.__impl_class = cls.configurable_default()
-        return base.__impl_class
+        if base.__impl_class is not None:
+            return base.__impl_class
+        else:
+            # Should be impossible, but mypy wants an explicit check.
+            raise ValueError("configured class not found")
 
     @classmethod
     def _save_configuration(cls):
-        # type: () -> Tuple[type, Dict[str, Any]]
+        # type: () -> Tuple[Optional[Type[Configurable]], Dict[str, Any]]
         base = cls.configurable_base()
         return (base.__impl_class, base.__impl_kwargs)
 
     @classmethod
     def _restore_configuration(cls, saved):
-        # type: (Tuple[type, Dict[str, Any]]) -> None
+        # type: (Tuple[Optional[Type[Configurable]], Dict[str, Any]]) -> None
         base = cls.configurable_base()
         base.__impl_class = saved[0]
         base.__impl_kwargs = saved[1]
@@ -343,8 +342,7 @@ class ArgReplacer(object):
     whether it is passed by position or keyword.  For use in decorators
     and similar wrappers.
     """
-    def __init__(self, func, name):
-        # type: (Callable, str) -> None
+    def __init__(self, func: Callable, name: str) -> None:
         self.name = name
         try:
             self.arg_pos = self._getargnames(func).index(name)  # type: Optional[int]
@@ -352,8 +350,7 @@ class ArgReplacer(object):
             # Not a positional parameter
             self.arg_pos = None
 
-    def _getargnames(self, func):
-        # type: (Callable) -> List[str]
+    def _getargnames(self, func: Callable) -> List[str]:
         try:
             return getfullargspec(func).args
         except TypeError:
@@ -368,8 +365,7 @@ class ArgReplacer(object):
                 return code.co_varnames[:code.co_argcount]
             raise
 
-    def get_old_value(self, args, kwargs, default=None):
-        # type: (List[Any], Dict[str, Any], Any) -> Any
+    def get_old_value(self, args: List[Any], kwargs: Dict[str, Any], default: Any=None) -> Any:
         """Returns the old value of the named argument without replacing it.
 
         Returns ``default`` if the argument is not present.
@@ -379,8 +375,8 @@ class ArgReplacer(object):
         else:
             return kwargs.get(self.name, default)
 
-    def replace(self, new_value, args, kwargs):
-        # type: (Any, List[Any], Dict[str, Any]) -> Tuple[Any, List[Any], Dict[str, Any]]
+    def replace(self, new_value: Any, args: List[Any],
+                kwargs: Dict[str, Any]) -> Tuple[Any, List[Any], Dict[str, Any]]:
         """Replace the named argument in ``args, kwargs`` with ``new_value``.
 
         Returns ``(old_value, args, kwargs)``.  The returned ``args`` and
@@ -408,8 +404,7 @@ def timedelta_to_seconds(td):
     return td.total_seconds()
 
 
-def _websocket_mask_python(mask, data):
-    # type: (bytes, bytes) -> bytes
+def _websocket_mask_python(mask: bytes, data: bytes) -> bytes:
     """Websocket masking function.
 
     `mask` is a `bytes` object of length 4; `data` is a `bytes` object of any length.
@@ -440,5 +435,6 @@ else:
 
 
 def doctests():
+    # type: () -> unittest.TestSuite
     import doctest
     return doctest.DocTestSuite()
