@@ -142,8 +142,22 @@ def parse_qs_bytes(qs, keep_blank_values=False, strict_parsing=False):
 _UTF8_TYPES = (bytes, type(None))
 
 
-def utf8(value):
-    # type: (typing.Union[bytes,unicode_type,None])->typing.Union[bytes,None]
+@typing.overload
+def utf8(value: bytes) -> bytes:
+    pass
+
+
+@typing.overload  # noqa: F811
+def utf8(value: str) -> bytes:
+    pass
+
+
+@typing.overload  # noqa: F811
+def utf8(value: None) -> None:
+    pass
+
+
+def utf8(value):  # noqa: F811
     """Converts a string argument to a byte string.
 
     If the argument is already a byte string or None, it is returned unchanged.
