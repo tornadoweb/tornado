@@ -102,8 +102,14 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC,
     if flags is None:
         flags = socket.AI_PASSIVE
     bound_port = None
-    for res in set(socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
-                                      0, flags)):
+    unique_addresses = set()
+    for res in sorted(socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
+                                      0, flags), key=lambda x: x[0]):
+        if res in unique_addresses:
+            continue
+
+        unique_addresses.add(res)
+
         af, socktype, proto, canonname, sockaddr = res
         if (sys.platform == 'darwin' and address == 'localhost' and
                 af == socket.AF_INET6 and sockaddr[3] != 0):
