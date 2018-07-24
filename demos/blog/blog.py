@@ -186,7 +186,7 @@ class ComposeHandler(BaseHandler):
             entry = await self.query("SELECT * FROM entries WHERE id = %s", int(id))
             if not entry:
                 raise tornado.web.HTTPError(404)
-            slug = entry.slug
+            slug = entry[0].slug
             await self.execute(
                 "UPDATE entries SET title = %s, markdown = %s, html = %s "
                 "WHERE id = %s", title, text, html, int(id))
