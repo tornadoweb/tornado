@@ -210,7 +210,7 @@ In decorated coroutines, it is possible to ``yield`` the list or dict directly::
     @gen.coroutine
     def parallel_fetch_decorated(url1, url2):
         resp1, resp2 = yield [http_client.fetch(url1),
-                              http_client.fetch(url2)])
+                              http_client.fetch(url2)]
 
 Interleaving
 ^^^^^^^^^^^^
