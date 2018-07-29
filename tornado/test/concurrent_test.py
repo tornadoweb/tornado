@@ -29,7 +29,7 @@ from tornado.testing import AsyncTestCase, bind_unused_port, gen_test
 class MiscFutureTest(AsyncTestCase):
 
     def test_future_set_result_unless_cancelled(self):
-        fut = Future()
+        fut = Future()  # type: Future[int]
         future_set_result_unless_cancelled(fut, 42)
         self.assertEqual(fut.result(), 42)
         self.assertFalse(fut.cancelled())
@@ -69,7 +69,10 @@ class BaseCapClient(object):
         self.port = port
 
     def process_response(self, data):
-        status, message = re.match('(.*)\t(.*)\n', to_unicode(data)).groups()
+        m = re.match('(.*)\t(.*)\n', to_unicode(data))
+        if m is None:
+            raise Exception("did not match")
+        status, message = m.groups()
         if status == 'ok':
             return message
         else:
