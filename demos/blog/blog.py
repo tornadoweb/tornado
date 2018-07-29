@@ -183,8 +183,9 @@ class ComposeHandler(BaseHandler):
         text = self.get_argument("markdown")
         html = markdown.markdown(text)
         if id:
-            entry = await self.query("SELECT * FROM entries WHERE id = %s", int(id))
-            if not entry:
+            try:
+                entry = await self.queryone("SELECT * FROM entries WHERE id = %s", int(id))
+            except NoResultError:
                 raise tornado.web.HTTPError(404)
             slug = entry.slug
             await self.execute(
