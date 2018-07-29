@@ -1940,7 +1940,7 @@ class AllHTTPMethodsTest(SimpleHandlerTestCase):
 
 class PatchMethodTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
-        SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ('OTHER',)
+        SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ('OTHER',)  # type: ignore
 
         def patch(self):
             self.write('patch')

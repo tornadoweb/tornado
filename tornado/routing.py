@@ -373,7 +373,7 @@ class ReversibleRuleRouter(ReversibleRouter, RuleRouter):
     """
 
     def __init__(self, rules=None):
-        self.named_rules = {}  # type: typing.Dict[str]
+        self.named_rules = {}  # type: typing.Dict[str, Any]
         super(ReversibleRuleRouter, self).__init__(rules)
 
     def process_rule(self, rule):

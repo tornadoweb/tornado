@@ -16,6 +16,8 @@ from tornado.testing import AsyncHTTPTestCase
 from tornado.web import Application, HTTPError, RequestHandler
 from tornado.wsgi import WSGIContainer
 
+import typing  # noqa
+
 
 class BasicRouter(Router):
     def find_handler(self, request, **kwargs):
@@ -44,7 +46,7 @@ class BasicRouterTestCase(AsyncHTTPTestCase):
         self.assertEqual(response.body, b"OK")
 
 
-resources = {}
+resources = {}  # type: typing.Dict[str, bytes]
 
 
 class GetResource(RequestHandler):

@@ -26,7 +26,8 @@ import urllib.parse
 
 from tornado.util import unicode_type, basestring_type
 
-import typing  # noqa
+import typing
+from typing import Union, Any, Optional, Dict, List, Callable
 
 
 _XHTML_ESCAPE_RE = re.compile('[&<>"\']')
@@ -34,7 +35,7 @@ _XHTML_ESCAPE_DICT = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;',
                       '\'': '&#39;'}
 
 
-def xhtml_escape(value):
+def xhtml_escape(value: Union[str, bytes]) -> str:
     """Escapes a string so it is valid within HTML or XML.
 
     Escapes the characters ``<``, ``>``, ``"``, ``'``, and ``&``.
@@ -49,7 +50,7 @@ def xhtml_escape(value):
                                 to_basestring(value))
 
 
-def xhtml_unescape(value):
+def xhtml_unescape(value: Union[str, bytes]) -> str:
     """Un-escapes an XML-escaped string."""
     return re.sub(r"&(#?)(\w+?);", _convert_entity, _unicode(value))
 
@@ -57,7 +58,7 @@ def xhtml_unescape(value):
 # The fact that json_encode wraps json.dumps is an implementation detail.
 # Please see https://github.com/tornadoweb/tornado/pull/706
 # before sending a pull request that adds **kwargs to this function.
-def json_encode(value):
+def json_encode(value: Any) -> str:
     """JSON-encodes the given Python object."""
     # JSON permits but does not require forward slashes to be escaped.
     # This is useful when json data is emitted in a <script> tag
@@ -68,17 +69,17 @@ def json_encode(value):
     return json.dumps(value).replace("</", "<\\/")
 
 
-def json_decode(value):
+def json_decode(value: Union[str, bytes]) -> Any:
     """Returns Python objects for the given JSON string."""
     return json.loads(to_basestring(value))
 
 
-def squeeze(value):
+def squeeze(value: str) -> str:
     """Replace all sequences of whitespace chars with a single space."""
     return re.sub(r"[\x00-\x20]+", " ", value).strip()
 
 
-def url_escape(value, plus=True):
+def url_escape(value: Union[str, bytes], plus: bool=True) -> str:
     """Returns a URL-encoded version of the given value.
 
     If ``plus`` is true (the default), spaces will be represented
@@ -93,7 +94,18 @@ def url_escape(value, plus=True):
     return quote(utf8(value))
 
 
-def url_unescape(value, encoding='utf-8', plus=True):
+@typing.overload
+def url_unescape(value: Union[str, bytes], encoding: None, plus: bool=True) -> bytes:
+    pass
+
+
+@typing.overload  # noqa: F811
+def url_unescape(value: Union[str, bytes], encoding: str='utf-8', plus: bool=True) -> str:
+    pass
+
+
+def url_unescape(value: Union[str, bytes], encoding: Optional[str]='utf-8',  # noqa: F811
+                 plus: bool=True) -> Union[str, bytes]:
     """Decodes the given value from a URL.
 
     The argument may be either a byte or unicode string.
@@ -121,7 +133,8 @@ def url_unescape(value, encoding='utf-8', plus=True):
         return unquote(to_basestring(value), encoding=encoding)
 
 
-def parse_qs_bytes(qs, keep_blank_values=False, strict_parsing=False):
+def parse_qs_bytes(qs: str, keep_blank_values: bool=False,
+                   strict_parsing: bool=False) -> Dict[str, List[bytes]]:
     """Parses a query string like urlparse.parse_qs, but returns the
     values as byte strings.
 
@@ -142,8 +155,22 @@ def parse_qs_bytes(qs, keep_blank_values=False, strict_parsing=False):
 _UTF8_TYPES = (bytes, type(None))
 
 
-def utf8(value):
-    # type: (typing.Union[bytes,unicode_type,None])->typing.Union[bytes,None]
+@typing.overload
+def utf8(value: bytes) -> bytes:
+    pass
+
+
+@typing.overload  # noqa: F811
+def utf8(value: str) -> bytes:
+    pass
+
+
+@typing.overload  # noqa: F811
+def utf8(value: None) -> None:
+    pass
+
+
+def utf8(value: Union[None, str, bytes]) -> Optional[bytes]:  # noqa: F811
     """Converts a string argument to a byte string.
 
     If the argument is already a byte string or None, it is returned unchanged.
@@ -161,7 +188,22 @@ def utf8(value):
 _TO_UNICODE_TYPES = (unicode_type, type(None))
 
 
-def to_unicode(value):
+@typing.overload
+def to_unicode(value: str) -> str:
+    pass
+
+
+@typing.overload  # noqa: F811
+def to_unicode(value: bytes) -> str:
+    pass
+
+
+@typing.overload  # noqa: F811
+def to_unicode(value: None) -> None:
+    pass
+
+
+def to_unicode(value: Union[None, str, bytes]) -> Optional[str]:  # noqa: F811
     """Converts a string argument to a unicode string.
 
     If the argument is already a unicode string or None, it is returned
@@ -187,7 +229,22 @@ native_str = to_unicode
 _BASESTRING_TYPES = (basestring_type, type(None))
 
 
-def to_basestring(value):
+@typing.overload
+def to_basestring(value: str) -> str:
+    pass
+
+
+@typing.overload  # noqa: F811
+def to_basestring(value: bytes) -> str:
+    pass
+
+
+@typing.overload  # noqa: F811
+def to_basestring(value: None) -> None:
+    pass
+
+
+def to_basestring(value: Union[None, str, bytes]) -> Optional[str]:  # noqa: F811
     """Converts a string argument to a subclass of basestring.
 
     In python2, byte and unicode strings are mostly interchangeable,
@@ -205,7 +262,7 @@ def to_basestring(value):
     return value.decode("utf-8")
 
 
-def recursive_unicode(obj):
+def recursive_unicode(obj: Any) -> Any:
     """Walks a simple data structure, converting byte strings to unicode.
 
     Supports lists, tuples, and dictionaries.
@@ -234,8 +291,9 @@ _URL_RE = re.compile(to_unicode(
 ))
 
 
-def linkify(text, shorten=False, extra_params="",
-            require_protocol=False, permitted_protocols=["http", "https"]):
+def linkify(text: Union[str, bytes], shorten: bool=False,
+            extra_params: Union[str, Callable[[str], str]]="",
+            require_protocol: bool=False, permitted_protocols: List[str]=["http", "https"]) -> str:
     """Converts plain text into HTML with links.
 
     For example: ``linkify("Hello http://tornadoweb.org!")`` would return
@@ -268,7 +326,7 @@ def linkify(text, shorten=False, extra_params="",
     if extra_params and not callable(extra_params):
         extra_params = " " + extra_params.strip()
 
-    def make_link(m):
+    def make_link(m: typing.Match) -> str:
         url = m.group(1)
         proto = m.group(2)
         if require_protocol and not proto:
@@ -330,7 +388,7 @@ def linkify(text, shorten=False, extra_params="",
     return _URL_RE.sub(make_link, text)
 
 
-def _convert_entity(m):
+def _convert_entity(m: typing.Match) -> str:
     if m.group(1) == "#":
         try:
             if m.group(2)[:1].lower() == 'x':
@@ -345,7 +403,7 @@ def _convert_entity(m):
         return "&%s;" % m.group(2)
 
 
-def _build_unicode_map():
+def _build_unicode_map() -> Dict[str, str]:
     unicode_map = {}
     for name, value in html.entities.name2codepoint.items():
         unicode_map[name] = chr(value)

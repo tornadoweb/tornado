@@ -45,6 +45,8 @@ from tornado.concurrent import Future, is_future, chain_future, future_set_exc_i
 from tornado.log import app_log
 from tornado.util import Configurable, TimeoutError, unicode_type, import_object
 
+import typing  # noqa
+
 
 class IOLoop(Configurable):
     """A level-triggered I/O loop.
@@ -135,7 +137,7 @@ class IOLoop(Configurable):
     ERROR = 0x018
 
     # In Python 3, _ioloop_for_asyncio maps from asyncio loops to IOLoops.
-    _ioloop_for_asyncio = dict()
+    _ioloop_for_asyncio = dict()  # type: typing.Dict[typing.Any, typing.Any]
 
     @classmethod
     def configure(cls, impl, **kwargs):

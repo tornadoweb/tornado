@@ -33,7 +33,7 @@ from tornado.web import RequestHandler, Application
 try:
     from twisted.internet.defer import Deferred, inlineCallbacks, returnValue  # type: ignore
     from twisted.internet.protocol import Protocol  # type: ignore
-    from twisted.internet.asyncioreactor import AsyncioSelectorReactor
+    from twisted.internet.asyncioreactor import AsyncioSelectorReactor  # type: ignore
     from twisted.web.client import Agent, readBody  # type: ignore
     from twisted.web.resource import Resource  # type: ignore
     from twisted.web.server import Site  # type: ignore
