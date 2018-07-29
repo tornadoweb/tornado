@@ -248,7 +248,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
            Consistently raises `WebSocketClosedError`. Previously could
            sometimes raise `.StreamClosedError`.
         """
-        if self.ws_connection is None:
+        if self.ws_connection is None or self.ws_connection.is_closing():
             raise WebSocketClosedError()
         if isinstance(message, dict):
             message = tornado.escape.json_encode(message)
@@ -355,7 +355,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         """
         data = utf8(data)
-        if self.ws_connection is None:
+        if self.ws_connection is None or self.ws_connection.is_closing():
             raise WebSocketClosedError()
         self.ws_connection.write_ping(data)
 
@@ -1046,6 +1046,17 @@ class WebSocketProtocol13(WebSocketProtocol):
             self._waiting = self.stream.io_loop.add_timeout(
                 self.stream.io_loop.time() + 5, self._abort)
 
+    def is_closing(self):
+        """Return true if this connection is closing.
+
+        The connection is considered closing if either side has
+        initiated its closing handshake or if the stream has been
+        shut down uncleanly.
+        """
+        return (self.stream.closed() or
+                self.client_terminated or
+                self.server_terminated)
+
     @property
     def ping_interval(self):
         interval = self.handler.ping_interval
@@ -1073,7 +1084,7 @@ class WebSocketProtocol13(WebSocketProtocol):
 
         Called periodically if the websocket_ping_interval is set and non-zero.
         """
-        if self.stream.closed() and self.ping_callback is not None:
+        if self.is_closing() and self.ping_callback is not None:
             self.ping_callback.stop()
             return
 
