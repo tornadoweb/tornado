@@ -7,6 +7,8 @@ from tornado.escape import (
 )
 from tornado.util import unicode_type
 
+from typing import List, Tuple, Union, Dict, Any  # noqa
+
 linkify_tests = [
     # (input, linkify_kwargs, expected_output)
 
@@ -132,7 +134,7 @@ linkify_tests = [
     ("www.external-link.com",
      {"extra_params": lambda href: '    rel="nofollow" class="external"  '},
      u'<a href="http://www.external-link.com" rel="nofollow" class="external">www.external-link.com</a>'),  # noqa: E501
-]
+]  # type: List[Tuple[Union[str, bytes], Dict[str, Any], str]]
 
 
 class EscapeTestCase(unittest.TestCase):
@@ -152,7 +154,7 @@ class EscapeTestCase(unittest.TestCase):
 
             (u"<\u00e9>", u"&lt;\u00e9&gt;"),
             (b"<\xc3\xa9>", b"&lt;\xc3\xa9&gt;"),
-        ]
+        ]  # type: List[Tuple[Union[str, bytes], Union[str, bytes]]]
         for unescaped, escaped in tests:
             self.assertEqual(utf8(xhtml_escape(unescaped)), utf8(escaped))
             self.assertEqual(utf8(unescaped), utf8(xhtml_unescape(escaped)))
@@ -178,7 +180,7 @@ class EscapeTestCase(unittest.TestCase):
 
             # unicode strings become utf8
             (u'\u00e9', '%C3%A9'),
-        ]
+        ]  # type: List[Tuple[Union[str, bytes], str]]
         for unescaped, escaped in tests:
             self.assertEqual(url_escape(unescaped), escaped)
 

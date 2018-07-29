@@ -2,7 +2,7 @@
 from tornado.httputil import (
     url_concat, parse_multipart_form_data, HTTPHeaders, format_timestamp,
     HTTPServerRequest, parse_request_start_line, parse_cookie, qs_to_qsl,
-    HTTPInputError,
+    HTTPInputError, HTTPFile
 )
 from tornado.escape import utf8, native_str
 from tornado.log import gen_log
@@ -15,6 +15,17 @@ import pickle
 import time
 import urllib.parse
 import unittest
+
+from typing import Tuple, Dict, List
+
+
+def form_data_args() -> Tuple[Dict[str, List[bytes]], Dict[str, List[HTTPFile]]]:
+    """Return two empty dicts suitable for use with parse_multipart_form_data.
+
+    mypy insists on type annotations for dict literals, so this lets us avoid
+    the verbose types throughout this test.
+    """
+    return {}, {}
 
 
 class TestUrlConcat(unittest.TestCase):
@@ -122,8 +133,7 @@ Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 Foo
 --1234--""".replace(b"\n", b"\r\n")
-        args = {}
-        files = {}
+        args, files = form_data_args()
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
         self.assertEqual(file["filename"], "ab.txt")
@@ -137,8 +147,7 @@ Content-Disposition: form-data; name=files; filename=ab.txt
 
 Foo
 --1234--""".replace(b"\n", b"\r\n")
-        args = {}
-        files = {}
+        args, files = form_data_args()
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
         self.assertEqual(file["filename"], "ab.txt")
@@ -155,15 +164,14 @@ Foo
                      ]
         for filename in filenames:
             logging.debug("trying filename %r", filename)
-            data = """\
+            str_data = """\
 --1234
 Content-Disposition: form-data; name="files"; filename="%s"
 
 Foo
 --1234--""" % filename.replace('\\', '\\\\').replace('"', '\\"')
-            data = utf8(data.replace("\n", "\r\n"))
-            args = {}
-            files = {}
+            data = utf8(str_data.replace("\n", "\r\n"))
+            args, files = form_data_args()
             parse_multipart_form_data(b"1234", data, args, files)
             file = files["files"][0]
             self.assertEqual(file["filename"], filename)
@@ -176,8 +184,7 @@ Content-Disposition: form-data; name="files"; filename="ab.txt"; filename*=UTF-8
 
 Foo
 --1234--""".replace(b"\n", b"\r\n")
-        args = {}
-        files = {}
+        args, files = form_data_args()
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
         self.assertEqual(file["filename"], u"áb.txt")
@@ -190,8 +197,7 @@ Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 Foo
 --1234--'''.replace(b"\n", b"\r\n")
-        args = {}
-        files = {}
+        args, files = form_data_args()
         parse_multipart_form_data(b'"1234"', data, args, files)
         file = files["files"][0]
         self.assertEqual(file["filename"], "ab.txt")
@@ -203,8 +209,7 @@ Foo
 
 Foo
 --1234--'''.replace(b"\n", b"\r\n")
-        args = {}
-        files = {}
+        args, files = form_data_args()
         with ExpectLog(gen_log, "multipart/form-data missing headers"):
             parse_multipart_form_data(b"1234", data, args, files)
         self.assertEqual(files, {})
@@ -216,8 +221,7 @@ Content-Disposition: invalid; name="files"; filename="ab.txt"
 
 Foo
 --1234--'''.replace(b"\n", b"\r\n")
-        args = {}
-        files = {}
+        args, files = form_data_args()
         with ExpectLog(gen_log, "Invalid multipart/form-data"):
             parse_multipart_form_data(b"1234", data, args, files)
         self.assertEqual(files, {})
@@ -228,8 +232,7 @@ Foo
 Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 Foo--1234--'''.replace(b"\n", b"\r\n")
-        args = {}
-        files = {}
+        args, files = form_data_args()
         with ExpectLog(gen_log, "Invalid multipart/form-data"):
             parse_multipart_form_data(b"1234", data, args, files)
         self.assertEqual(files, {})
@@ -241,8 +244,7 @@ Content-Disposition: form-data; filename="ab.txt"
 
 Foo
 --1234--""".replace(b"\n", b"\r\n")
-        args = {}
-        files = {}
+        args, files = form_data_args()
         with ExpectLog(gen_log, "multipart/form-data value missing name"):
             parse_multipart_form_data(b"1234", data, args, files)
         self.assertEqual(files, {})
@@ -258,8 +260,7 @@ Content-Disposition: form-data; name="files"; filename="ab.txt"
 Foo
 --1234--
 """.replace(b"\n", b"\r\n")
-        args = {}
-        files = {}
+        args, files = form_data_args()
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
         self.assertEqual(file["filename"], "ab.txt")
@@ -436,7 +437,7 @@ class HTTPServerRequestTest(unittest.TestCase):
         self.assertIsInstance(requets.body, bytes)
 
     def test_repr_does_not_contain_headers(self):
-        request = HTTPServerRequest(uri='/', headers={'Canary': 'Coal Mine'})
+        request = HTTPServerRequest(uri='/', headers=HTTPHeaders({'Canary': ['Coal Mine']}))
         self.assertTrue('Canary' not in repr(request))
 
 
