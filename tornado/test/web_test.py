@@ -185,6 +185,7 @@ class FinalReturnTest(WebTestCase):
             @gen.coroutine
             def get(self):
                 test.final_return = self.finish()
+                yield test.final_return
 
         class RenderHandler(RequestHandler):
             def create_template_loader(self, path):
@@ -204,6 +205,7 @@ class FinalReturnTest(WebTestCase):
         response = self.fetch(self.get_url('/finish'))
         self.assertEqual(response.code, 200)
         self.assertIsInstance(self.final_return, Future)
+        self.assertTrue(self.final_return.done())
 
     def test_render_method_return_future(self):
         response = self.fetch(self.get_url('/render'))
