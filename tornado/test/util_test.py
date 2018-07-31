@@ -120,6 +120,18 @@ class ConfigurableTest(unittest.TestCase):
 
         self.checkSubclasses()
 
+    def test_config_str(self):
+        TestConfigurable.configure('tornado.test.util_test.TestConfig2')
+        obj = TestConfigurable()
+        self.assertIsInstance(obj, TestConfig2)
+        self.assertIs(obj.b, None)
+
+        obj = TestConfigurable(b=2)
+        self.assertIsInstance(obj, TestConfig2)
+        self.assertEqual(obj.b, 2)
+
+        self.checkSubclasses()
+
     def test_config_args(self):
         TestConfigurable.configure(None, a=3)
         obj = TestConfigurable()
