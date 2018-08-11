@@ -34,7 +34,7 @@ import sys
 import types
 
 import typing
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple, Union
 
 _T = typing.TypeVar('_T')
 
@@ -53,9 +53,9 @@ def is_future(x: Any) -> bool:
     return isinstance(x, FUTURES)
 
 
-class DummyExecutor(object):
-    def submit(self, fn: Callable[..., _T], *args: Any, **kwargs: Any) -> 'Future[_T]':
-        future = Future()  # type: Future
+class DummyExecutor(futures.Executor):
+    def submit(self, fn: Callable[..., _T], *args: Any, **kwargs: Any) -> 'futures.Future[_T]':
+        future = futures.Future()  # type: futures.Future[_T]
         try:
             future_set_result_unless_cancelled(future, fn(*args, **kwargs))
         except Exception:
@@ -165,7 +165,8 @@ def chain_future(a: 'Future[_T]', b: 'Future[_T]') -> None:
         IOLoop.current().add_future(a, copy)
 
 
-def future_set_result_unless_cancelled(future: 'Future[_T]', value: _T) -> None:
+def future_set_result_unless_cancelled(future: Union['futures.Future[_T]', 'Future[_T]'],
+                                       value: _T) -> None:
     """Set the given ``value`` as the `Future`'s result, if not cancelled.
 
     Avoids asyncio.InvalidStateError when calling set_result() on
@@ -177,7 +178,7 @@ def future_set_result_unless_cancelled(future: 'Future[_T]', value: _T) -> None:
         future.set_result(value)
 
 
-def future_set_exc_info(future: 'Future[_T]',
+def future_set_exc_info(future: Union['futures.Future[_T]', 'Future[_T]'],
                         exc_info: Tuple[Optional[type], Optional[BaseException],
                                         Optional[types.TracebackType]]) -> None:
     """Set the given ``exc_info`` as the `Future`'s exception.
@@ -197,8 +198,20 @@ def future_set_exc_info(future: 'Future[_T]',
         future.set_exception(exc_info[1])
 
 
+@typing.overload
+def future_add_done_callback(future: 'futures.Future[_T]',
+                             callback: Callable[['futures.Future[_T]'], None]) -> None:
+    pass
+
+
+@typing.overload  # noqa: F811
 def future_add_done_callback(future: 'Future[_T]',
                              callback: Callable[['Future[_T]'], None]) -> None:
+    pass
+
+
+def future_add_done_callback(future: Union['futures.Future[_T]', 'Future[_T]'],  # noqa: F811
+                             callback: Callable[..., None]) -> None:
     """Arrange to call ``callback`` when ``future`` is complete.
 
     ``callback`` is invoked with one argument, the ``future``.
