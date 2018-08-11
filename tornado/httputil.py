@@ -347,7 +347,7 @@ class HTTPServerRequest(object):
 
     def __init__(self, method: str=None, uri: str=None, version: str="HTTP/1.0",
                  headers: HTTPHeaders=None, body: bytes=None, host: str=None,
-                 files: Dict[str, 'HTTPFile']=None, connection: 'HTTPConnection'=None,
+                 files: Dict[str, List['HTTPFile']]=None, connection: 'HTTPConnection'=None,
                  start_line: 'RequestStartLine'=None, server_connection: object=None) -> None:
         if start_line is not None:
             method, uri, version = start_line
@@ -578,7 +578,7 @@ class HTTPConnection(object):
         raise NotImplementedError()
 
 
-def url_concat(url: str, args: Union[Dict[str, str], List[Tuple[str, str]],
+def url_concat(url: str, args: Union[None, Dict[str, str], List[Tuple[str, str]],
                                      Tuple[Tuple[str, str], ...]]) -> str:
     """Concatenate url and arguments regardless of whether
     url has existing query parameters.
@@ -702,7 +702,7 @@ def _int_or_none(val: str) -> Optional[int]:
 
 
 def parse_body_arguments(content_type: str, body: bytes, arguments: Dict[str, List[bytes]],
-                         files: Dict[str, HTTPFile], headers: HTTPHeaders=None) -> None:
+                         files: Dict[str, List[HTTPFile]], headers: HTTPHeaders=None) -> None:
     """Parses a form request body.
 
     Supports ``application/x-www-form-urlencoded`` and
@@ -739,7 +739,7 @@ def parse_body_arguments(content_type: str, body: bytes, arguments: Dict[str, Li
 
 
 def parse_multipart_form_data(boundary: bytes, data: bytes, arguments: Dict[str, List[bytes]],
-                              files: Dict[str, HTTPFile]) -> None:
+                              files: Dict[str, List[HTTPFile]]) -> None:
     """Parses a ``multipart/form-data`` body.
 
     The ``boundary`` and ``data`` parameters are both byte strings.
@@ -783,7 +783,7 @@ def parse_multipart_form_data(boundary: bytes, data: bytes, arguments: Dict[str,
         name = disp_params["name"]
         if disp_params.get("filename"):
             ctype = headers.get("Content-Type", "application/unknown")
-            files.setdefault(name, []).append(HTTPFile(  # type: ignore
+            files.setdefault(name, []).append(HTTPFile(
                 filename=disp_params["filename"], body=value,
                 content_type=ctype))
         else:

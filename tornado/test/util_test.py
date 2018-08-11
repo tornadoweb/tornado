@@ -12,6 +12,12 @@ from tornado.util import (
     timedelta_to_seconds, import_object, re_unescape, is_finalizing
 )
 
+import typing
+from typing import cast
+
+if typing.TYPE_CHECKING:
+    from typing import Dict, Any  # noqa: F401
+
 
 class RaiseExcInfoTest(unittest.TestCase):
     def test_two_arg_exception(self):
@@ -94,15 +100,18 @@ class ConfigurableTest(unittest.TestCase):
 
         obj = TestConfig1(a=1)
         self.assertEqual(obj.a, 1)
-        obj = TestConfig2(b=2)
-        self.assertEqual(obj.b, 2)
+        obj2 = TestConfig2(b=2)
+        self.assertEqual(obj2.b, 2)
 
     def test_default(self):
-        obj = TestConfigurable()
+        # In these tests we combine a typing.cast to satisfy mypy with
+        # a runtime type-assertion. Without the cast, mypy would only
+        # let us access attributes of the base class.
+        obj = cast(TestConfig1, TestConfigurable())
         self.assertIsInstance(obj, TestConfig1)
         self.assertIs(obj.a, None)
 
-        obj = TestConfigurable(a=1)
+        obj = cast(TestConfig1, TestConfigurable(a=1))
         self.assertIsInstance(obj, TestConfig1)
         self.assertEqual(obj.a, 1)
 
@@ -110,11 +119,11 @@ class ConfigurableTest(unittest.TestCase):
 
     def test_config_class(self):
         TestConfigurable.configure(TestConfig2)
-        obj = TestConfigurable()
+        obj = cast(TestConfig2, TestConfigurable())
         self.assertIsInstance(obj, TestConfig2)
         self.assertIs(obj.b, None)
 
-        obj = TestConfigurable(b=2)
+        obj = cast(TestConfig2, TestConfigurable(b=2))
         self.assertIsInstance(obj, TestConfig2)
         self.assertEqual(obj.b, 2)
 
@@ -122,11 +131,11 @@ class ConfigurableTest(unittest.TestCase):
 
     def test_config_str(self):
         TestConfigurable.configure('tornado.test.util_test.TestConfig2')
-        obj = TestConfigurable()
+        obj = cast(TestConfig2, TestConfigurable())
         self.assertIsInstance(obj, TestConfig2)
         self.assertIs(obj.b, None)
 
-        obj = TestConfigurable(b=2)
+        obj = cast(TestConfig2, TestConfigurable(b=2))
         self.assertIsInstance(obj, TestConfig2)
         self.assertEqual(obj.b, 2)
 
@@ -134,11 +143,11 @@ class ConfigurableTest(unittest.TestCase):
 
     def test_config_args(self):
         TestConfigurable.configure(None, a=3)
-        obj = TestConfigurable()
+        obj = cast(TestConfig1, TestConfigurable())
         self.assertIsInstance(obj, TestConfig1)
         self.assertEqual(obj.a, 3)
 
-        obj = TestConfigurable(42, a=4)
+        obj = cast(TestConfig1, TestConfigurable(42, a=4))
         self.assertIsInstance(obj, TestConfig1)
         self.assertEqual(obj.a, 4)
         self.assertEqual(obj.pos_arg, 42)
@@ -150,11 +159,11 @@ class ConfigurableTest(unittest.TestCase):
 
     def test_config_class_args(self):
         TestConfigurable.configure(TestConfig2, b=5)
-        obj = TestConfigurable()
+        obj = cast(TestConfig2, TestConfigurable())
         self.assertIsInstance(obj, TestConfig2)
         self.assertEqual(obj.b, 5)
 
-        obj = TestConfigurable(42, b=6)
+        obj = cast(TestConfig2, TestConfigurable(42, b=6))
         self.assertIsInstance(obj, TestConfig2)
         self.assertEqual(obj.b, 6)
         self.assertEqual(obj.pos_arg, 42)
@@ -166,15 +175,15 @@ class ConfigurableTest(unittest.TestCase):
 
     def test_config_multi_level(self):
         TestConfigurable.configure(TestConfig3, a=1)
-        obj = TestConfigurable()
+        obj = cast(TestConfig3A, TestConfigurable())
         self.assertIsInstance(obj, TestConfig3A)
         self.assertEqual(obj.a, 1)
 
         TestConfigurable.configure(TestConfig3)
         TestConfig3.configure(TestConfig3B, b=2)
-        obj = TestConfigurable()
-        self.assertIsInstance(obj, TestConfig3B)
-        self.assertEqual(obj.b, 2)
+        obj2 = cast(TestConfig3B, TestConfigurable())
+        self.assertIsInstance(obj2, TestConfig3B)
+        self.assertEqual(obj2.b, 2)
 
     def test_config_inner_level(self):
         # The inner level can be used even when the outer level
@@ -187,12 +196,12 @@ class ConfigurableTest(unittest.TestCase):
         self.assertIsInstance(obj, TestConfig3B)
 
         # Configuring the base doesn't configure the inner.
-        obj = TestConfigurable()
-        self.assertIsInstance(obj, TestConfig1)
+        obj2 = TestConfigurable()
+        self.assertIsInstance(obj2, TestConfig1)
         TestConfigurable.configure(TestConfig2)
 
-        obj = TestConfigurable()
-        self.assertIsInstance(obj, TestConfig2)
+        obj3 = TestConfigurable()
+        self.assertIsInstance(obj3, TestConfig2)
 
         obj = TestConfig3()
         self.assertIsInstance(obj, TestConfig3B)
@@ -224,14 +233,14 @@ class ArgReplacerTest(unittest.TestCase):
 
     def test_omitted(self):
         args = (1, 2)
-        kwargs = dict()
+        kwargs = dict()  # type: Dict[str, Any]
         self.assertIs(self.replacer.get_old_value(args, kwargs), None)
         self.assertEqual(self.replacer.replace('new', args, kwargs),
                          (None, (1, 2), dict(callback='new')))
 
     def test_position(self):
         args = (1, 2, 'old', 3)
-        kwargs = dict()
+        kwargs = dict()  # type: Dict[str, Any]
         self.assertEqual(self.replacer.get_old_value(args, kwargs), 'old')
         self.assertEqual(self.replacer.replace('new', args, kwargs),
                          ('old', [1, 2, 'new', 3], dict()))

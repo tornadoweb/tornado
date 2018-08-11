@@ -19,14 +19,14 @@ import typing
 import zlib
 
 from typing import (
-    Any, Optional, Dict, Mapping, List, Tuple, Match, Callable, Type,
+    Any, Optional, Dict, Mapping, List, Tuple, Match, Callable, Type, Sequence
 )
 
 if typing.TYPE_CHECKING:
     # Additional imports only used in type comments.
     # This lets us make these imports lazy.
     import datetime  # noqa
-    import types  # noqa
+    from types import TracebackType  # noqa
     from typing import Union  # noqa
     import unittest  # noqa
 
@@ -154,14 +154,24 @@ def exec_in(code: Any, glob: Dict[str, Any], loc: Mapping[str, Any]=None) -> Non
     exec(code, glob, loc)
 
 
-def raise_exc_info(exc_info):
-    # type: (Tuple[type, BaseException, types.TracebackType]) -> typing.NoReturn
+def raise_exc_info(
+        exc_info,  # type: Tuple[Optional[type], Optional[BaseException], Optional[TracebackType]]
+):
+    # type: (...) -> typing.NoReturn
+    #
+    # This function's type annotation must use comments instead of
+    # real annotations because typing.NoReturn does not exist in
+    # python 3.5's typing module. The formatting is funky because this
+    # is apparently what flake8 wants.
     try:
-        raise exc_info[1].with_traceback(exc_info[2])
+        if exc_info[1] is not None:
+            raise exc_info[1].with_traceback(exc_info[2])
+        else:
+            raise TypeError("raise_exc_info called with no exception")
     finally:
         # Clear the traceback reference from our stack frame to
         # minimize circular references that slow down GC.
-        exc_info = None  # type: ignore
+        exc_info = (None, None, None)
 
 
 def errno_from_exception(e: BaseException) -> Optional[int]:
@@ -367,7 +377,7 @@ class ArgReplacer(object):
                 return code.co_varnames[:code.co_argcount]
             raise
 
-    def get_old_value(self, args: List[Any], kwargs: Dict[str, Any], default: Any=None) -> Any:
+    def get_old_value(self, args: Sequence[Any], kwargs: Dict[str, Any], default: Any=None) -> Any:
         """Returns the old value of the named argument without replacing it.
 
         Returns ``default`` if the argument is not present.
@@ -377,8 +387,8 @@ class ArgReplacer(object):
         else:
             return kwargs.get(self.name, default)
 
-    def replace(self, new_value: Any, args: List[Any],
-                kwargs: Dict[str, Any]) -> Tuple[Any, List[Any], Dict[str, Any]]:
+    def replace(self, new_value: Any, args: Sequence[Any],
+                kwargs: Dict[str, Any]) -> Tuple[Any, Sequence[Any], Dict[str, Any]]:
         """Replace the named argument in ``args, kwargs`` with ``new_value``.
 
         Returns ``(old_value, args, kwargs)``.  The returned ``args`` and
