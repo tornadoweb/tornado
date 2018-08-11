@@ -10,6 +10,10 @@ from tornado.options import OptionParser, Error
 from tornado.util import basestring_type
 from tornado.test.util import subTest
 
+import typing
+if typing.TYPE_CHECKING:
+    from typing import List  # noqa: F401
+
 
 class Email(object):
     def __init__(self, value):
@@ -113,7 +117,7 @@ class OptionsTest(unittest.TestCase):
             options.foo = '2'
 
     def test_setattr_with_callback(self):
-        values = []
+        values = []  # type: List[int]
         options = OptionParser()
         options.define('foo', default=1, type=int, callback=values.append)
         options.foo = 2
