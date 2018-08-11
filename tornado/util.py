@@ -18,14 +18,16 @@ import re
 import typing
 import zlib
 
-from typing import Any, Optional, Dict, Mapping, List, Tuple, Match, Callable
+from typing import (
+    Any, Optional, Dict, Mapping, List, Tuple, Match, Callable, Type,
+)
 
 if typing.TYPE_CHECKING:
     # Additional imports only used in type comments.
     # This lets us make these imports lazy.
     import datetime  # noqa
     import types  # noqa
-    from typing import Type, Union  # noqa
+    from typing import Union  # noqa
     import unittest  # noqa
 
 # Aliases for types that are spelled differently in different Python
