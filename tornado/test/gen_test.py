@@ -16,6 +16,11 @@ from tornado.web import Application, RequestHandler, HTTPError
 
 from tornado import gen
 
+import typing
+
+if typing.TYPE_CHECKING:
+    from typing import List, Optional  # noqa: F401
+
 
 class GenBasicTest(AsyncTestCase):
     @gen.coroutine
@@ -268,7 +273,7 @@ class GenCoroutineTest(AsyncTestCase):
         coro = gen.coroutine(f)
         self.assertEqual(coro.__name__, f.__name__)
         self.assertEqual(coro.__module__, f.__module__)
-        self.assertIs(coro.__wrapped__, f)
+        self.assertIs(coro.__wrapped__, f)  # type: ignore
 
     def test_is_coroutine_function(self):
         self.finished = True
@@ -484,7 +489,7 @@ class GenCoroutineTest(AsyncTestCase):
                 yield yieldable
         # First, confirm the behavior without moment: each coroutine
         # monopolizes the event loop until it finishes.
-        immediate = Future()
+        immediate = Future()  # type: Future[None]
         immediate.set_result(None)
         yield [f('a', immediate), f('b', immediate)]
         self.assertEqual(''.join(calls), 'aaaaabbbbb')
@@ -539,7 +544,10 @@ class GenCoroutineTest(AsyncTestCase):
                 pass
             local_var = Foo()
             self.local_ref = weakref.ref(local_var)
-            yield gen.coroutine(lambda: None)()
+
+            def dummy():
+                pass
+            yield gen.coroutine(dummy)()
             raise ValueError('Some error')
 
         @gen.coroutine
@@ -610,20 +618,11 @@ class GenCoroutineUnfinishedSequenceHandler(RequestHandler):
         self.write("3")
 
 
-class GenCoroutineExceptionHandler(RequestHandler):
-    @gen.coroutine
-    def get(self):
-        # This test depends on the order of the two decorators.
-        io_loop = self.request.connection.stream.io_loop
-        yield gen.Task(io_loop.add_callback)
-        raise Exception("oops")
-
-
 # "Undecorated" here refers to the absence of @asynchronous.
 class UndecoratedCoroutinesHandler(RequestHandler):
     @gen.coroutine
     def prepare(self):
-        self.chunks = []
+        self.chunks = []  # type: List[str]
         yield gen.moment
         self.chunks.append('1')
 
@@ -658,7 +657,6 @@ class GenWebTest(AsyncHTTPTestCase):
             ('/coroutine_sequence', GenCoroutineSequenceHandler),
             ('/coroutine_unfinished_sequence',
              GenCoroutineUnfinishedSequenceHandler),
-            ('/coroutine_exception', GenCoroutineExceptionHandler),
             ('/undecorated_coroutine', UndecoratedCoroutinesHandler),
             ('/async_prepare_error', AsyncPrepareErrorHandler),
             ('/native_coroutine', NativeCoroutineHandler),
@@ -671,12 +669,6 @@ class GenWebTest(AsyncHTTPTestCase):
     def test_coroutine_unfinished_sequence_handler(self):
         response = self.fetch('/coroutine_unfinished_sequence')
         self.assertEqual(response.body, b"123")
-
-    def test_coroutine_exception_handler(self):
-        # Make sure we get an error and not a timeout
-        with ExpectLog(app_log, "Uncaught exception GET /coroutine_exception"):
-            response = self.fetch('/coroutine_exception')
-        self.assertEqual(500, response.code)
 
     def test_undecorated_coroutines(self):
         response = self.fetch('/undecorated_coroutine')
@@ -701,7 +693,7 @@ class WithTimeoutTest(AsyncTestCase):
 
     @gen_test
     def test_completes_before_timeout(self):
-        future = Future()
+        future = Future()  # type: Future[str]
         self.io_loop.add_timeout(datetime.timedelta(seconds=0.1),
                                  lambda: future.set_result('asdf'))
         result = yield gen.with_timeout(datetime.timedelta(seconds=3600),
@@ -710,7 +702,7 @@ class WithTimeoutTest(AsyncTestCase):
 
     @gen_test
     def test_fails_before_timeout(self):
-        future = Future()
+        future = Future()  # type: Future[str]
         self.io_loop.add_timeout(
             datetime.timedelta(seconds=0.1),
             lambda: future.set_exception(ZeroDivisionError()))
@@ -720,7 +712,7 @@ class WithTimeoutTest(AsyncTestCase):
 
     @gen_test
     def test_already_resolved(self):
-        future = Future()
+        future = Future()  # type: Future[str]
         future.set_result('asdf')
         result = yield gen.with_timeout(datetime.timedelta(seconds=3600),
                                         future)
@@ -739,7 +731,9 @@ class WithTimeoutTest(AsyncTestCase):
         # A concurrent future that is resolved before we even submit it
         # to with_timeout.
         with futures.ThreadPoolExecutor(1) as executor:
-            f = executor.submit(lambda: None)
+            def dummy():
+                pass
+            f = executor.submit(dummy)
             f.result()  # wait for completion
             yield gen.with_timeout(datetime.timedelta(seconds=3600), f)
 
@@ -758,16 +752,16 @@ class WaitIteratorTest(AsyncTestCase):
         self.assertTrue(g.done(), 'empty generator iterated')
 
         with self.assertRaises(ValueError):
-            g = gen.WaitIterator(False, bar=False)
+            g = gen.WaitIterator(Future(), bar=Future())
 
         self.assertEqual(g.current_index, None, "bad nil current index")
         self.assertEqual(g.current_future, None, "bad nil current future")
 
     @gen_test
     def test_already_done(self):
-        f1 = Future()
-        f2 = Future()
-        f3 = Future()
+        f1 = Future()  # type: Future[int]
+        f2 = Future()  # type: Future[int]
+        f3 = Future()  # type: Future[int]
         f1.set_result(24)
         f2.set_result(42)
         f3.set_result(84)
@@ -828,7 +822,7 @@ class WaitIteratorTest(AsyncTestCase):
 
     @gen_test
     def test_iterator(self):
-        futures = [Future(), Future(), Future(), Future()]
+        futures = [Future(), Future(), Future(), Future()]  # type: List[Future[int]]
 
         self.finish_coroutines(0, futures)
 
@@ -858,7 +852,7 @@ class WaitIteratorTest(AsyncTestCase):
         # Recreate the previous test with py35 syntax. It's a little clunky
         # because of the way the previous test handles an exception on
         # a single iteration.
-        futures = [Future(), Future(), Future(), Future()]
+        futures = [Future(), Future(), Future(), Future()]  # type: List[Future[int]]
         self.finish_coroutines(0, futures)
         self.finished = False
 
@@ -908,15 +902,15 @@ class RunnerGCTest(AsyncTestCase):
     def test_gc(self):
         # Github issue 1769: Runner objects can get GCed unexpectedly
         # while their future is alive.
-        weakref_scope = [None]
+        weakref_scope = [None]  # type: List[Optional[weakref.ReferenceType]]
 
         def callback():
             gc.collect(2)
-            weakref_scope[0]().set_result(123)
+            weakref_scope[0]().set_result(123)  # type: ignore
 
         @gen.coroutine
         def tester():
-            fut = Future()
+            fut = Future()  # type: Future[int]
             weakref_scope[0] = weakref.ref(fut)
             self.io_loop.add_callback(callback)
             yield fut
@@ -931,7 +925,7 @@ class RunnerGCTest(AsyncTestCase):
         # their loop is closed, even if they're involved in a reference
         # cycle.
         loop = self.get_new_ioloop()
-        result = []
+        result = []  # type: List[Optional[bool]]
         wfut = []
 
         @gen.coroutine
@@ -947,7 +941,7 @@ class RunnerGCTest(AsyncTestCase):
         @gen.coroutine
         def do_something():
             fut = infinite_coro()
-            fut._refcycle = fut
+            fut._refcycle = fut  # type: ignore
             wfut.append(weakref.ref(fut))
             yield gen.sleep(0.2)
 
@@ -976,13 +970,13 @@ class RunnerGCTest(AsyncTestCase):
                 result.append(None)
 
         loop = self.get_new_ioloop()
-        result = []
+        result = []  # type: List[Optional[bool]]
         wfut = []
 
         @gen.coroutine
         def do_something():
             fut = asyncio.get_event_loop().create_task(infinite_coro(result))
-            fut._refcycle = fut
+            fut._refcycle = fut  # type: ignore
             wfut.append(weakref.ref(fut))
             yield gen.sleep(0.2)
 
