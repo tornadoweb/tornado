@@ -21,6 +21,6 @@ implementation from `tornado.platform.auto`.
 """
 
 
-def set_close_exec(fd):
+def set_close_exec(fd: int) -> None:
     """Sets the close-on-exec bit (``FD_CLOEXEC``)for a file descriptor."""
     raise NotImplementedError()

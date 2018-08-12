@@ -156,7 +156,7 @@ class AsyncTestCase(unittest.TestCase):
         self.__running = False
         self.__failure = None  # type: Optional[_ExcInfoTuple]
         self.__stop_args = None  # type: Any
-        self.__timeout = None
+        self.__timeout = None  # type: Optional[object]
 
         # It's easy to forget the @gen_test decorator, but if you do
         # the test will silently be ignored because nothing will consume

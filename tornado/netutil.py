@@ -231,7 +231,7 @@ def add_accept_handler(sock: socket.socket,
     io_loop = IOLoop.current()
     removed = [False]
 
-    def accept_handler(fd: int, events: int) -> None:
+    def accept_handler(fd: socket.socket, events: int) -> None:
         # More connections may come in while we're handling callbacks;
         # to prevent starvation of other tasks we must limit the number
         # of connections we accept at a time.  Ideally we would accept
