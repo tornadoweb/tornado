@@ -21,6 +21,7 @@ the same event loop.
 
 import functools
 
+from threading import get_ident
 from tornado.gen import convert_yielded
 from tornado.ioloop import IOLoop
 
@@ -51,6 +52,12 @@ class BaseAsyncIOLoop(IOLoop):
             if loop.is_closed():
                 del IOLoop._ioloop_for_asyncio[loop]
         IOLoop._ioloop_for_asyncio[asyncio_loop] = self
+
+        def assign_thread_ident():
+            self.thread_identity = get_ident()
+
+        self.thread_identity = 0
+        self.add_callback(assign_thread_ident)
         super(BaseAsyncIOLoop, self).initialize(**kwargs)
 
     def close(self, all_fds=False):
@@ -146,8 +153,13 @@ class BaseAsyncIOLoop(IOLoop):
         timeout.cancel()
 
     def add_callback(self, callback, *args, **kwargs):
+        if get_ident() == self.thread_identity:
+            call_soon = self.asyncio_loop.call_soon
+        else:
+            call_soon = self.asyncio_loop.call_soon_threadsafe
+
         try:
-            self.asyncio_loop.call_soon_threadsafe(
+            call_soon(
                 self._run_callback,
                 functools.partial(callback, *args, **kwargs))
         except RuntimeError:
