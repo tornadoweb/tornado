@@ -26,6 +26,7 @@ class except to start a server at the beginning of the process
 """
 
 import socket
+import ssl
 
 from tornado.escape import native_str
 from tornado.http1connection import HTTP1ServerConnection, HTTP1ConnectionParameters
@@ -35,6 +36,11 @@ from tornado import iostream
 from tornado import netutil
 from tornado.tcpserver import TCPServer
 from tornado.util import Configurable
+
+import typing
+from typing import Union, Any, Dict, Callable, List, Type, Generator, Tuple, Optional, Awaitable
+if typing.TYPE_CHECKING:
+    from typing import Set  # noqa: F401
 
 
 class HTTPServer(TCPServer, Configurable,
@@ -135,7 +141,7 @@ class HTTPServer(TCPServer, Configurable,
     .. versionchanged:: 5.0
        The ``io_loop`` argument has been removed.
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         # Ignore args to __init__; real initialization belongs in
         # initialize since we're Configurable. (there's something
         # weird in initialization order between this class,
@@ -143,13 +149,21 @@ class HTTPServer(TCPServer, Configurable,
         # completely)
         pass
 
-    def initialize(self, request_callback, no_keep_alive=False,
-                   xheaders=False, ssl_options=None, protocol=None,
-                   decompress_request=False,
-                   chunk_size=None, max_header_size=None,
-                   idle_connection_timeout=None, body_timeout=None,
-                   max_body_size=None, max_buffer_size=None,
-                   trusted_downstream=None):
+    def initialize(self,  # type: ignore
+                   request_callback: Union[httputil.HTTPServerConnectionDelegate,
+                                           Callable[[httputil.HTTPServerRequest], None]],
+                   no_keep_alive: bool=False,
+                   xheaders: bool=False,
+                   ssl_options: Union[Dict[str, Any], ssl.SSLContext]=None,
+                   protocol: str=None,
+                   decompress_request: bool=False,
+                   chunk_size: int=None,
+                   max_header_size: int=None,
+                   idle_connection_timeout: float=None,
+                   body_timeout: float=None,
+                   max_body_size: int=None,
+                   max_buffer_size: int=None,
+                   trusted_downstream: List[str]=None) -> None:
         self.request_callback = request_callback
         self.xheaders = xheaders
         self.protocol = protocol
@@ -164,25 +178,25 @@ class HTTPServer(TCPServer, Configurable,
         TCPServer.__init__(self, ssl_options=ssl_options,
                            max_buffer_size=max_buffer_size,
                            read_chunk_size=chunk_size)
-        self._connections = set()
+        self._connections = set()  # type: Set[HTTP1ServerConnection]
         self.trusted_downstream = trusted_downstream
 
     @classmethod
-    def configurable_base(cls):
+    def configurable_base(cls) -> Type[Configurable]:
         return HTTPServer
 
     @classmethod
-    def configurable_default(cls):
+    def configurable_default(cls) -> Type[Configurable]:
         return HTTPServer
 
     @gen.coroutine
-    def close_all_connections(self):
+    def close_all_connections(self) -> Generator[Any, Any, None]:
         while self._connections:
             # Peek at an arbitrary element of the set
             conn = next(iter(self._connections))
             yield conn.close()
 
-    def handle_stream(self, stream, address):
+    def handle_stream(self, stream: iostream.IOStream, address: Tuple) -> None:
         context = _HTTPRequestContext(stream, address,
                                       self.protocol,
                                       self.trusted_downstream)
@@ -191,7 +205,8 @@ class HTTPServer(TCPServer, Configurable,
         self._connections.add(conn)
         conn.start_serving(self)
 
-    def start_request(self, server_conn, request_conn):
+    def start_request(self, server_conn: object,
+                      request_conn: httputil.HTTPConnection) -> httputil.HTTPMessageDelegate:
         if isinstance(self.request_callback, httputil.HTTPServerConnectionDelegate):
             delegate = self.request_callback.start_request(server_conn, request_conn)
         else:
@@ -202,37 +217,46 @@ class HTTPServer(TCPServer, Configurable,
 
         return delegate
 
-    def on_close(self, server_conn):
-        self._connections.remove(server_conn)
+    def on_close(self, server_conn: object) -> None:
+        self._connections.remove(typing.cast(HTTP1ServerConnection, server_conn))
 
 
 class _CallableAdapter(httputil.HTTPMessageDelegate):
-    def __init__(self, request_callback, request_conn):
+    def __init__(self, request_callback: Callable[[httputil.HTTPServerRequest], None],
+                 request_conn: httputil.HTTPConnection) -> None:
         self.connection = request_conn
         self.request_callback = request_callback
-        self.request = None
+        self.request = None  # type: Optional[httputil.HTTPServerRequest]
         self.delegate = None
-        self._chunks = []
+        self._chunks = []  # type: List[bytes]
 
-    def headers_received(self, start_line, headers):
+    def headers_received(self, start_line: Union[httputil.RequestStartLine,
+                                                 httputil.ResponseStartLine],
+                         headers: httputil.HTTPHeaders) -> Optional[Awaitable[None]]:
         self.request = httputil.HTTPServerRequest(
-            connection=self.connection, start_line=start_line,
+            connection=self.connection,
+            start_line=typing.cast(httputil.RequestStartLine, start_line),
             headers=headers)
+        return None
 
-    def data_received(self, chunk):
+    def data_received(self, chunk: bytes) -> Optional[Awaitable[None]]:
         self._chunks.append(chunk)
+        return None
 
-    def finish(self):
+    def finish(self) -> None:
+        assert self.request is not None
         self.request.body = b''.join(self._chunks)
         self.request._parse_body()
         self.request_callback(self.request)
 
-    def on_connection_close(self):
-        self._chunks = None
+    def on_connection_close(self) -> None:
+        del self._chunks
 
 
 class _HTTPRequestContext(object):
-    def __init__(self, stream, address, protocol, trusted_downstream=None):
+    def __init__(self, stream: iostream.IOStream, address: Tuple,
+                 protocol: Optional[str],
+                 trusted_downstream: List[str]=None) -> None:
         self.address = address
         # Save the socket's address family now so we know how to
         # interpret self.address even after the stream is closed
@@ -258,7 +282,7 @@ class _HTTPRequestContext(object):
         self._orig_protocol = self.protocol
         self.trusted_downstream = set(trusted_downstream or [])
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.address_family in (socket.AF_INET, socket.AF_INET6):
             return self.remote_ip
         elif isinstance(self.address, bytes):
@@ -269,7 +293,7 @@ class _HTTPRequestContext(object):
         else:
             return str(self.address)
 
-    def _apply_xheaders(self, headers):
+    def _apply_xheaders(self, headers: httputil.HTTPHeaders) -> None:
         """Rewrite the ``remote_ip`` and ``protocol`` fields."""
         # Squid uses X-Forwarded-For, others use X-Real-Ip
         ip = headers.get("X-Forwarded-For", self.remote_ip)
@@ -291,7 +315,7 @@ class _HTTPRequestContext(object):
         if proto_header in ("http", "https"):
             self.protocol = proto_header
 
-    def _unapply_xheaders(self):
+    def _unapply_xheaders(self) -> None:
         """Undo changes from `_apply_xheaders`.
 
         Xheaders are per-request so they should not leak to the next
@@ -302,27 +326,32 @@ class _HTTPRequestContext(object):
 
 
 class _ProxyAdapter(httputil.HTTPMessageDelegate):
-    def __init__(self, delegate, request_conn):
+    def __init__(self, delegate: httputil.HTTPMessageDelegate,
+                 request_conn: httputil.HTTPConnection) -> None:
         self.connection = request_conn
         self.delegate = delegate
 
-    def headers_received(self, start_line, headers):
-        self.connection.context._apply_xheaders(headers)
+    def headers_received(self, start_line: Union[httputil.RequestStartLine,
+                                                 httputil.ResponseStartLine],
+                         headers: httputil.HTTPHeaders) -> Optional[Awaitable[None]]:
+        # TODO: either make context an official part of the
+        # HTTPConnection interface or figure out some other way to do this.
+        self.connection.context._apply_xheaders(headers)  # type: ignore
         return self.delegate.headers_received(start_line, headers)
 
-    def data_received(self, chunk):
+    def data_received(self, chunk: bytes) -> Optional[Awaitable[None]]:
         return self.delegate.data_received(chunk)
 
-    def finish(self):
+    def finish(self) -> None:
         self.delegate.finish()
         self._cleanup()
 
-    def on_connection_close(self):
+    def on_connection_close(self) -> None:
         self.delegate.on_connection_close()
         self._cleanup()
 
-    def _cleanup(self):
-        self.connection.context._unapply_xheaders()
+    def _cleanup(self) -> None:
+        self.connection.context._unapply_xheaders()  # type: ignore
 
 
 HTTPRequest = httputil.HTTPServerRequest

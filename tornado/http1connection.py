@@ -18,7 +18,9 @@
 .. versionadded:: 4.0
 """
 
+import logging
 import re
+import types
 
 from tornado.concurrent import (Future, future_add_done_callback,
                                 future_set_result_unless_cancelled)
@@ -30,8 +32,11 @@ from tornado.log import gen_log, app_log
 from tornado.util import GzipDecompressor
 
 
+from typing import cast, Optional, Type, Awaitable, Generator, Any, Callable, Union, Tuple
+
+
 class _QuietException(Exception):
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
 
@@ -40,14 +45,17 @@ class _ExceptionLoggingContext(object):
     log any exceptions with the given logger.  Any exceptions caught are
     converted to _QuietException
     """
-    def __init__(self, logger):
+    def __init__(self, logger: logging.Logger) -> None:
         self.logger = logger
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         pass
 
-    def __exit__(self, typ, value, tb):
+    def __exit__(self, typ: Optional[Type[BaseException]],
+                 value: Optional[BaseException],
+                 tb: types.TracebackType) -> None:
         if value is not None:
+            assert typ is not None
             self.logger.error("Uncaught exception", exc_info=(typ, value, tb))
             raise _QuietException
 
@@ -55,9 +63,10 @@ class _ExceptionLoggingContext(object):
 class HTTP1ConnectionParameters(object):
     """Parameters for `.HTTP1Connection` and `.HTTP1ServerConnection`.
     """
-    def __init__(self, no_keep_alive=False, chunk_size=None,
-                 max_header_size=None, header_timeout=None, max_body_size=None,
-                 body_timeout=None, decompress=False):
+    def __init__(self, no_keep_alive: bool=False, chunk_size: int=None,
+                 max_header_size: int=None, header_timeout: float=None,
+                 max_body_size: int=None, body_timeout: float=None,
+                 decompress: bool=False) -> None:
         """
         :arg bool no_keep_alive: If true, always close the connection after
             one request.
@@ -84,7 +93,8 @@ class HTTP1Connection(httputil.HTTPConnection):
     This class can be on its own for clients, or via `HTTP1ServerConnection`
     for servers.
     """
-    def __init__(self, stream, is_client, params=None, context=None):
+    def __init__(self, stream: iostream.IOStream, is_client: bool,
+                 params: HTTP1ConnectionParameters=None, context: object=None) -> None:
         """
         :arg stream: an `.IOStream`
         :arg bool is_client: client or server
@@ -112,7 +122,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         self._read_finished = False
         # _finish_future resolves when all data has been written and flushed
         # to the IOStream.
-        self._finish_future = Future()
+        self._finish_future = Future()  # type: Future[None]
         # If true, the connection should be closed after this request
         # (after the response has been written in the server side,
         # and after it has been read in the client)
@@ -121,18 +131,18 @@ class HTTP1Connection(httputil.HTTPConnection):
         # Save the start lines after we read or write them; they
         # affect later processing (e.g. 304 responses and HEAD methods
         # have content-length but no bodies)
-        self._request_start_line = None
-        self._response_start_line = None
-        self._request_headers = None
+        self._request_start_line = None  # type: Optional[httputil.RequestStartLine]
+        self._response_start_line = None  # type: Optional[httputil.ResponseStartLine]
+        self._request_headers = None  # type: Optional[httputil.HTTPHeaders]
         # True if we are writing output with chunked encoding.
-        self._chunking_output = None
+        self._chunking_output = False
         # While reading a body with a content-length, this is the
         # amount left to read.
-        self._expected_content_remaining = None
+        self._expected_content_remaining = None  # type: Optional[int]
         # A Future for our outgoing writes, returned by IOStream.write.
-        self._pending_write = None
+        self._pending_write = None  # type: Optional[Future[None]]
 
-    def read_response(self, delegate):
+    def read_response(self, delegate: httputil.HTTPMessageDelegate) -> Awaitable[bool]:
         """Read a single HTTP response.
 
         Typical client-mode usage is to write a request using `write_headers`,
@@ -140,15 +150,15 @@ class HTTP1Connection(httputil.HTTPConnection):
 
         :arg delegate: a `.HTTPMessageDelegate`
 
-        Returns a `.Future` that resolves to None after the full response has
-        been read.
+        Returns a `.Future` that resolves to a bool after the full response has
+        been read. The result is true if the stream is still open.
         """
         if self.params.decompress:
             delegate = _GzipMessageDelegate(delegate, self.params.chunk_size)
         return self._read_message(delegate)
 
     @gen.coroutine
-    def _read_message(self, delegate):
+    def _read_message(self, delegate: httputil.HTTPMessageDelegate) -> Generator[Any, Any, bool]:
         need_delegate_close = False
         try:
             header_future = self.stream.read_until_regex(
@@ -164,29 +174,34 @@ class HTTP1Connection(httputil.HTTPConnection):
                         quiet_exceptions=iostream.StreamClosedError)
                 except gen.TimeoutError:
                     self.close()
-                    raise gen.Return(False)
-            start_line, headers = self._parse_headers(header_data)
+                    return False
+            start_line_str, headers = self._parse_headers(header_data)
             if self.is_client:
-                start_line = httputil.parse_response_start_line(start_line)
-                self._response_start_line = start_line
+                resp_start_line = httputil.parse_response_start_line(start_line_str)
+                self._response_start_line = resp_start_line
+                start_line = resp_start_line \
+                    # type: Union[httputil.RequestStartLine, httputil.ResponseStartLine]
+                # TODO: this will need to change to support client-side keepalive
+                self._disconnect_on_finish = False
             else:
-                start_line = httputil.parse_request_start_line(start_line)
-                self._request_start_line = start_line
+                req_start_line = httputil.parse_request_start_line(start_line_str)
+                self._request_start_line = req_start_line
                 self._request_headers = headers
-
-            self._disconnect_on_finish = not self._can_keep_alive(
-                start_line, headers)
+                start_line = req_start_line
+                self._disconnect_on_finish = not self._can_keep_alive(
+                    req_start_line, headers)
             need_delegate_close = True
             with _ExceptionLoggingContext(app_log):
-                header_future = delegate.headers_received(start_line, headers)
-                if header_future is not None:
-                    yield header_future
+                header_recv_future = delegate.headers_received(start_line, headers)
+                if header_recv_future is not None:
+                    yield header_recv_future
             if self.stream is None:
                 # We've been detached.
                 need_delegate_close = False
-                raise gen.Return(False)
+                return False
             skip_body = False
             if self.is_client:
+                assert isinstance(start_line, httputil.ResponseStartLine)
                 if (self._request_start_line is not None and
                         self._request_start_line.method == 'HEAD'):
                     skip_body = True
@@ -212,7 +227,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                     self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
             if not skip_body:
                 body_future = self._read_body(
-                    start_line.code if self.is_client else 0, headers, delegate)
+                    resp_start_line.code if self.is_client else 0, headers, delegate)
                 if body_future is not None:
                     if self._body_timeout is None:
                         yield body_future
@@ -226,7 +241,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                             gen_log.info("Timeout reading body from %s",
                                          self.context)
                             self.stream.close()
-                            raise gen.Return(False)
+                            return False
             self._read_finished = True
             if not self._write_finished or self.is_client:
                 need_delegate_close = False
@@ -243,35 +258,35 @@ class HTTP1Connection(httputil.HTTPConnection):
             if self.is_client and self._disconnect_on_finish:
                 self.close()
             if self.stream is None:
-                raise gen.Return(False)
+                return False
         except httputil.HTTPInputError as e:
             gen_log.info("Malformed HTTP message from %s: %s",
                          self.context, e)
             if not self.is_client:
                 yield self.stream.write(b'HTTP/1.1 400 Bad Request\r\n\r\n')
             self.close()
-            raise gen.Return(False)
+            return False
         finally:
             if need_delegate_close:
                 with _ExceptionLoggingContext(app_log):
                     delegate.on_connection_close()
-            header_future = None
+            header_future = None  # type: ignore
             self._clear_callbacks()
-        raise gen.Return(True)
+        return True
 
-    def _clear_callbacks(self):
+    def _clear_callbacks(self) -> None:
         """Clears the callback attributes.
 
         This allows the request handler to be garbage collected more
         quickly in CPython by breaking up reference cycles.
         """
         self._write_callback = None
-        self._write_future = None
-        self._close_callback = None
+        self._write_future = None  # type: Optional[Future[None]]
+        self._close_callback = None  # type: Optional[Callable[[], None]]
         if self.stream is not None:
             self.stream.set_close_callback(None)
 
-    def set_close_callback(self, callback):
+    def set_close_callback(self, callback: Optional[Callable[[], None]]) -> None:
         """Sets a callback that will be run when the connection is closed.
 
         Note that this callback is slightly different from
@@ -285,7 +300,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         """
         self._close_callback = callback
 
-    def _on_connection_close(self):
+    def _on_connection_close(self) -> None:
         # Note that this callback is only registered on the IOStream
         # when we have finished reading the request and are waiting for
         # the application to produce its response.
@@ -297,14 +312,14 @@ class HTTP1Connection(httputil.HTTPConnection):
             future_set_result_unless_cancelled(self._finish_future, None)
         self._clear_callbacks()
 
-    def close(self):
+    def close(self) -> None:
         if self.stream is not None:
             self.stream.close()
         self._clear_callbacks()
         if not self._finish_future.done():
             future_set_result_unless_cancelled(self._finish_future, None)
 
-    def detach(self):
+    def detach(self) -> iostream.IOStream:
         """Take control of the underlying stream.
 
         Returns the underlying `.IOStream` object and stops all further
@@ -314,29 +329,32 @@ class HTTP1Connection(httputil.HTTPConnection):
         """
         self._clear_callbacks()
         stream = self.stream
-        self.stream = None
+        self.stream = None  # type: ignore
         if not self._finish_future.done():
             future_set_result_unless_cancelled(self._finish_future, None)
         return stream
 
-    def set_body_timeout(self, timeout):
+    def set_body_timeout(self, timeout: float) -> None:
         """Sets the body timeout for a single request.
 
         Overrides the value from `.HTTP1ConnectionParameters`.
         """
         self._body_timeout = timeout
 
-    def set_max_body_size(self, max_body_size):
+    def set_max_body_size(self, max_body_size: int) -> None:
         """Sets the body size limit for a single request.
 
         Overrides the value from `.HTTP1ConnectionParameters`.
         """
         self._max_body_size = max_body_size
 
-    def write_headers(self, start_line, headers, chunk=None):
+    def write_headers(self, start_line: Union[httputil.RequestStartLine,
+                                              httputil.ResponseStartLine],
+                      headers: httputil.HTTPHeaders, chunk: bytes=None) -> Awaitable[None]:
         """Implements `.HTTPConnection.write_headers`."""
         lines = []
         if self.is_client:
+            assert isinstance(start_line, httputil.RequestStartLine)
             self._request_start_line = start_line
             lines.append(utf8('%s %s HTTP/1.1' % (start_line[0], start_line[1])))
             # Client requests with a non-empty body must have either a
@@ -346,6 +364,9 @@ class HTTP1Connection(httputil.HTTPConnection):
                 'Content-Length' not in headers and
                 'Transfer-Encoding' not in headers)
         else:
+            assert isinstance(start_line, httputil.ResponseStartLine)
+            assert self._request_start_line is not None
+            assert self._request_headers is not None
             self._response_start_line = start_line
             lines.append(utf8('HTTP/1.1 %d %s' % (start_line[1], start_line[2])))
             self._chunking_output = (
@@ -374,7 +395,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             headers['Transfer-Encoding'] = 'chunked'
         if (not self.is_client and
             (self._request_start_line.method == 'HEAD' or
-             start_line.code == 304)):
+             cast(httputil.ResponseStartLine, start_line).code == 304)):
             self._expected_content_remaining = 0
         elif 'Content-Length' in headers:
             self._expected_content_remaining = int(headers['Content-Length'])
@@ -402,7 +423,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             future_add_done_callback(self._pending_write, self._on_write_complete)
         return future
 
-    def _format_chunk(self, chunk):
+    def _format_chunk(self, chunk: bytes) -> bytes:
         if self._expected_content_remaining is not None:
             self._expected_content_remaining -= len(chunk)
             if self._expected_content_remaining < 0:
@@ -417,7 +438,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         else:
             return chunk
 
-    def write(self, chunk):
+    def write(self, chunk: bytes) -> Awaitable[None]:
         """Implements `.HTTPConnection.write`.
 
         For backwards compatibility it is allowed but deprecated to
@@ -435,7 +456,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             self._pending_write.add_done_callback(self._on_write_complete)
         return future
 
-    def finish(self):
+    def finish(self) -> None:
         """Implements `.HTTPConnection.finish`."""
         if (self._expected_content_remaining is not None and
                 self._expected_content_remaining != 0 and
@@ -464,7 +485,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         else:
             future_add_done_callback(self._pending_write, self._finish_request)
 
-    def _on_write_complete(self, future):
+    def _on_write_complete(self, future: 'Future[None]') -> None:
         exc = future.exception()
         if exc is not None and not isinstance(exc, iostream.StreamClosedError):
             future.result()
@@ -477,7 +498,8 @@ class HTTP1Connection(httputil.HTTPConnection):
             self._write_future = None
             future_set_result_unless_cancelled(future, None)
 
-    def _can_keep_alive(self, start_line, headers):
+    def _can_keep_alive(self, start_line: httputil.RequestStartLine,
+                        headers: httputil.HTTPHeaders) -> bool:
         if self.params.no_keep_alive:
             return False
         connection_header = headers.get("Connection")
@@ -493,7 +515,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             return connection_header == "keep-alive"
         return False
 
-    def _finish_request(self, future):
+    def _finish_request(self, future: Optional['Future[None]']) -> None:
         self._clear_callbacks()
         if not self.is_client and self._disconnect_on_finish:
             self.close()
@@ -504,19 +526,20 @@ class HTTP1Connection(httputil.HTTPConnection):
         if not self._finish_future.done():
             future_set_result_unless_cancelled(self._finish_future, None)
 
-    def _parse_headers(self, data):
+    def _parse_headers(self, data: bytes) -> Tuple[str, httputil.HTTPHeaders]:
         # The lstrip removes newlines that some implementations sometimes
         # insert between messages of a reused connection.  Per RFC 7230,
         # we SHOULD ignore at least one empty line before the request.
         # http://tools.ietf.org/html/rfc7230#section-3.5
-        data = native_str(data.decode('latin1')).lstrip("\r\n")
+        data_str = native_str(data.decode('latin1')).lstrip("\r\n")
         # RFC 7230 section allows for both CRLF and bare LF.
-        eol = data.find("\n")
-        start_line = data[:eol].rstrip("\r")
-        headers = httputil.HTTPHeaders.parse(data[eol:])
+        eol = data_str.find("\n")
+        start_line = data_str[:eol].rstrip("\r")
+        headers = httputil.HTTPHeaders.parse(data_str[eol:])
         return start_line, headers
 
-    def _read_body(self, code, headers, delegate):
+    def _read_body(self, code: int, headers: httputil.HTTPHeaders,
+                   delegate: httputil.HTTPMessageDelegate) -> Optional[Awaitable[None]]:
         if "Content-Length" in headers:
             if "Transfer-Encoding" in headers:
                 # Response cannot contain both Content-Length and
@@ -536,13 +559,13 @@ class HTTP1Connection(httputil.HTTPConnection):
                 headers["Content-Length"] = pieces[0]
 
             try:
-                content_length = int(headers["Content-Length"])
+                content_length = int(headers["Content-Length"])  # type: Optional[int]
             except ValueError:
                 # Handles non-integer Content-Length value.
                 raise httputil.HTTPInputError(
                     "Only integer Content-Length is allowed: %s" % headers["Content-Length"])
 
-            if content_length > self._max_body_size:
+            if cast(int, content_length) > self._max_body_size:
                 raise httputil.HTTPInputError("Content-Length too long")
         else:
             content_length = None
@@ -566,7 +589,8 @@ class HTTP1Connection(httputil.HTTPConnection):
         return None
 
     @gen.coroutine
-    def _read_fixed_body(self, content_length, delegate):
+    def _read_fixed_body(self, content_length: int,
+                         delegate: httputil.HTTPMessageDelegate) -> Generator[Any, Any, None]:
         while content_length > 0:
             body = yield self.stream.read_bytes(
                 min(self.params.chunk_size, content_length), partial=True)
@@ -578,7 +602,8 @@ class HTTP1Connection(httputil.HTTPConnection):
                         yield ret
 
     @gen.coroutine
-    def _read_chunked_body(self, delegate):
+    def _read_chunked_body(
+            self, delegate: httputil.HTTPMessageDelegate) -> Generator[Any, Any, None]:
         # TODO: "chunk extensions" http://tools.ietf.org/html/rfc2616#section-3.6.1
         total_size = 0
         while True:
@@ -607,7 +632,8 @@ class HTTP1Connection(httputil.HTTPConnection):
             assert crlf == b"\r\n"
 
     @gen.coroutine
-    def _read_body_until_close(self, delegate):
+    def _read_body_until_close(
+            self, delegate: httputil.HTTPMessageDelegate) -> Generator[Any, Any, None]:
         body = yield self.stream.read_until_close()
         if not self._write_finished or self.is_client:
             with _ExceptionLoggingContext(app_log):
@@ -617,12 +643,14 @@ class HTTP1Connection(httputil.HTTPConnection):
 class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
     """Wraps an `HTTPMessageDelegate` to decode ``Content-Encoding: gzip``.
     """
-    def __init__(self, delegate, chunk_size):
+    def __init__(self, delegate: httputil.HTTPMessageDelegate, chunk_size: int) -> None:
         self._delegate = delegate
         self._chunk_size = chunk_size
-        self._decompressor = None
+        self._decompressor = None  # type: Optional[GzipDecompressor]
 
-    def headers_received(self, start_line, headers):
+    def headers_received(self, start_line: Union[httputil.RequestStartLine,
+                                                 httputil.ResponseStartLine],
+                         headers: httputil.HTTPHeaders) -> Optional[Awaitable[None]]:
         if headers.get("Content-Encoding") == "gzip":
             self._decompressor = GzipDecompressor()
             # Downstream delegates will only see uncompressed data,
@@ -634,7 +662,7 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
         return self._delegate.headers_received(start_line, headers)
 
     @gen.coroutine
-    def data_received(self, chunk):
+    def data_received(self, chunk: bytes) -> Generator[Any, Any, None]:
         if self._decompressor:
             compressed_data = chunk
             while compressed_data:
@@ -650,7 +678,7 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
             if ret is not None:
                 yield ret
 
-    def finish(self):
+    def finish(self) -> None:
         if self._decompressor is not None:
             tail = self._decompressor.flush()
             if tail:
@@ -662,13 +690,14 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
                 self._delegate.data_received(tail)
         return self._delegate.finish()
 
-    def on_connection_close(self):
+    def on_connection_close(self) -> None:
         return self._delegate.on_connection_close()
 
 
 class HTTP1ServerConnection(object):
     """An HTTP/1.x server."""
-    def __init__(self, stream, params=None, context=None):
+    def __init__(self, stream: iostream.IOStream,
+                 params: HTTP1ConnectionParameters=None, context: object=None) -> None:
         """
         :arg stream: an `.IOStream`
         :arg params: a `.HTTP1ConnectionParameters` or None
@@ -680,10 +709,10 @@ class HTTP1ServerConnection(object):
             params = HTTP1ConnectionParameters()
         self.params = params
         self.context = context
-        self._serving_future = None
+        self._serving_future = None  # type: Optional[Future[None]]
 
     @gen.coroutine
-    def close(self):
+    def close(self) -> Generator[Any, Any, None]:
         """Closes the connection.
 
         Returns a `.Future` that resolves after the serving loop has exited.
@@ -696,19 +725,20 @@ class HTTP1ServerConnection(object):
         except Exception:
             pass
 
-    def start_serving(self, delegate):
+    def start_serving(self, delegate: httputil.HTTPServerConnectionDelegate) -> None:
         """Starts serving requests on this connection.
 
         :arg delegate: a `.HTTPServerConnectionDelegate`
         """
         assert isinstance(delegate, httputil.HTTPServerConnectionDelegate)
-        self._serving_future = self._server_request_loop(delegate)
+        fut = self._server_request_loop(delegate)
+        self._serving_future = fut
         # Register the future on the IOLoop so its errors get logged.
-        self.stream.io_loop.add_future(self._serving_future,
-                                       lambda f: f.result())
+        self.stream.io_loop.add_future(fut, lambda f: f.result())
 
     @gen.coroutine
-    def _server_request_loop(self, delegate):
+    def _server_request_loop(
+            self, delegate: httputil.HTTPServerConnectionDelegate) -> Generator[Any, Any, None]:
         try:
             while True:
                 conn = HTTP1Connection(self.stream, False,

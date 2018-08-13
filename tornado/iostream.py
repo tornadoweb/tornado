@@ -497,7 +497,7 @@ class BaseIOStream(object):
             raise
         return future
 
-    def write(self, data: Union[bytes, memoryview]) -> Awaitable[None]:
+    def write(self, data: Union[bytes, memoryview]) -> 'Future[None]':
         """Asynchronously write the given data to this stream.
 
         This method returns a `.Future` that resolves (with a result

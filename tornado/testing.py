@@ -436,6 +436,10 @@ class AsyncHTTPSTestCase(AsyncHTTPTestCase):
 
         By default includes a self-signed testing certificate.
         """
+        return AsyncHTTPSTestCase.default_ssl_options()
+
+    @staticmethod
+    def default_ssl_options() -> Dict[str, Any]:
         # Testing keys were generated with:
         # openssl req -new -keyout tornado/test/test.key \
         #                     -out tornado/test/test.crt -nodes -days 3650 -x509
@@ -611,7 +615,7 @@ class ExpectLog(logging.Filter):
             return False
         return True
 
-    def __enter__(self) -> logging.Filter:
+    def __enter__(self) -> 'ExpectLog':
         self.logger.addFilter(self)
         return self
 
