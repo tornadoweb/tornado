@@ -101,7 +101,7 @@ class IOLoop(Configurable):
         import socket
 
         import tornado.ioloop
-        from tornado import gen
+        from tornado.gen import convert_yielded
         from tornado.iostream import IOStream
 
         async def handle_connection(connection, address):
@@ -118,7 +118,8 @@ class IOLoop(Configurable):
                         raise
                     return
                 connection.setblocking(0)
-                handle_connection(connection, address)
+                coro = handle_connection(connection, address)
+                convert_yielded(coro)
 
         if __name__ == '__main__':
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
