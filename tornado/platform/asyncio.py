@@ -170,7 +170,13 @@ class BaseAsyncIOLoop(IOLoop):
             # eventually execute).
             pass
 
-    add_callback_from_signal = add_callback
+    def add_callback_from_signal(self, callback, *args, **kwargs):
+        try:
+            self.asyncio_loop.call_soon_threadsafe(
+                self._run_callback,
+                functools.partial(callback, *args, **kwargs))
+        except RuntimeError:
+            pass
 
     def run_in_executor(self, executor, func, *args):
         return self.asyncio_loop.run_in_executor(executor, func, *args)
