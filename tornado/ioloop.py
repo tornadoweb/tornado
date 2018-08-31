@@ -473,14 +473,13 @@ class IOLoop(Configurable):
         The return value is a floating-point number relative to an
         unspecified time in the past.
 
-        By default, the `IOLoop`'s time function is `time.time`.  However,
-        it may be configured to use e.g. `time.monotonic` instead.
+        By default, the `IOLoop`'s time function is `time.monotonic`.
         Calls to `add_timeout` that pass a number instead of a
         `datetime.timedelta` should use this function to compute the
         appropriate time, so they can work no matter what time function
         is chosen.
         """
-        return time.time()
+        return time.monotonic()
 
     def add_timeout(self, deadline, callback, *args, **kwargs):
         """Runs the ``callback`` at the time ``deadline`` from the I/O loop.
