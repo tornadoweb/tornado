@@ -53,7 +53,7 @@ class BaseAsyncIOLoop(IOLoop):
                 del IOLoop._ioloop_for_asyncio[loop]
         IOLoop._ioloop_for_asyncio[asyncio_loop] = self
 
-        self.thread_identity = 0
+        self._thread_identity = 0
         super(BaseAsyncIOLoop, self).initialize(**kwargs)
 
     def close(self, all_fds=False):
@@ -123,7 +123,7 @@ class BaseAsyncIOLoop(IOLoop):
         handler_func(fileobj, events)
 
     def start(self):
-        self.thread_identity = get_ident()
+        self._thread_identity = get_ident()
         try:
             old_loop = asyncio.get_event_loop()
         except (RuntimeError, AssertionError):
@@ -150,7 +150,7 @@ class BaseAsyncIOLoop(IOLoop):
         timeout.cancel()
 
     def add_callback(self, callback, *args, **kwargs):
-        if get_ident() == self.thread_identity:
+        if get_ident() == self._thread_identity:
             call_soon = self.asyncio_loop.call_soon
         else:
             call_soon = self.asyncio_loop.call_soon_threadsafe
