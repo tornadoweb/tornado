@@ -547,6 +547,7 @@ class HTTPResponseTestCase(unittest.TestCase):
 class SyncHTTPClientTest(unittest.TestCase):
     def setUp(self):
         self.server_ioloop = IOLoop()
+        event = threading.Event()
 
         @gen.coroutine
         def init_server():
@@ -554,10 +555,15 @@ class SyncHTTPClientTest(unittest.TestCase):
             app = Application([('/', HelloWorldHandler)])
             self.server = HTTPServer(app)
             self.server.add_socket(sock)
-        self.server_ioloop.run_sync(init_server)
+            event.set()
 
-        self.server_thread = threading.Thread(target=self.server_ioloop.start)
+        def start():
+            self.server_ioloop.run_sync(init_server)
+            self.server_ioloop.start()
+
+        self.server_thread = threading.Thread(target=start)
         self.server_thread.start()
+        event.wait()
 
         self.http_client = HTTPClient()
 
