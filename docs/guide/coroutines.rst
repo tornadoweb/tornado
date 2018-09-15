@@ -177,7 +177,7 @@ use `.IOLoop.run_in_executor`, which returns
 ``Futures`` that are compatible with coroutines::
 
     async def call_blocking():
-        await IOLoop.current().run_in_executor(blocking_func, args)
+        await IOLoop.current().run_in_executor(None, blocking_func, args)
 
 Parallelism
 ^^^^^^^^^^^
