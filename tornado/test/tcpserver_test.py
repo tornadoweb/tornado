@@ -77,7 +77,7 @@ class TCPServerTest(AsyncTestCase):
         class TestServer(TCPServer):
             @gen.coroutine
             def handle_stream(self, stream, address):
-                server.stop()
+                server.stop()  # type: ignore
                 yield stream.read_until_close()
 
         sock, port = bind_unused_port()

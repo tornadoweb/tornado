@@ -296,6 +296,10 @@ class Configurable(object):
 
         Configurable classes should use `initialize` instead of ``__init__``.
 
+        When used with ``mypy``, subclasses will often need ``# type: ignore``
+        annotations on this method because ``mypy`` does not recognize that
+        its arguments may change in subclasses (as it does for ``__init__``).
+
         .. versionchanged:: 4.2
            Now accepts positional arguments in addition to keyword arguments.
         """

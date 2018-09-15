@@ -26,6 +26,11 @@ from tornado.testing import AsyncTestCase, gen_test
 from tornado.test.util import skipIfNoIPv6, refusing_port, skipIfNonUnix
 from tornado.gen import TimeoutError
 
+import typing
+if typing.TYPE_CHECKING:
+    from tornado.iostream import IOStream  # noqa: F401
+    from typing import List, Dict, Tuple  # noqa: F401
+
 # Fake address families for testing.  Used in place of AF_INET
 # and AF_INET6 because some installations do not have AF_INET6.
 AF1, AF2 = 1, 2
@@ -34,9 +39,9 @@ AF1, AF2 = 1, 2
 class TestTCPServer(TCPServer):
     def __init__(self, family):
         super(TestTCPServer, self).__init__()
-        self.streams = []
+        self.streams = []  # type: List[IOStream]
         self.queue = Queue()
-        sockets = bind_sockets(None, 'localhost', family)
+        sockets = bind_sockets(0, 'localhost', family)
         self.add_sockets(sockets)
         self.port = sockets[0].getsockname()[1]
 
@@ -197,8 +202,9 @@ class ConnectorTest(AsyncTestCase):
 
     def setUp(self):
         super(ConnectorTest, self).setUp()
-        self.connect_futures = {}
-        self.streams = {}
+        self.connect_futures = {} \
+            # type: Dict[Tuple[int, Tuple], Future[ConnectorTest.FakeStream]]
+        self.streams = {}  # type: Dict[Tuple, ConnectorTest.FakeStream]
         self.addrinfo = [(AF1, 'a'), (AF1, 'b'),
                          (AF2, 'c'), (AF2, 'd')]
 
@@ -212,7 +218,7 @@ class ConnectorTest(AsyncTestCase):
     def create_stream(self, af, addr):
         stream = ConnectorTest.FakeStream()
         self.streams[addr] = stream
-        future = Future()
+        future = Future()  # type: Future[ConnectorTest.FakeStream]
         self.connect_futures[(af, addr)] = future
         return stream, future
 

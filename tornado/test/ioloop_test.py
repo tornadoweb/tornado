@@ -19,6 +19,10 @@ from tornado.log import app_log
 from tornado.testing import AsyncTestCase, bind_unused_port, ExpectLog, gen_test
 from tornado.test.util import skipIfNonUnix, skipOnTravis
 
+import typing
+if typing.TYPE_CHECKING:
+    from typing import List  # noqa: F401
+
 
 class TestIOLoop(AsyncTestCase):
     def test_add_callback_return_sequence(self):
@@ -196,7 +200,7 @@ class TestIOLoop(AsyncTestCase):
 
     def test_timeout_with_arguments(self):
         # This tests that all the timeout methods pass through *args correctly.
-        results = []
+        results = []  # type: List[int]
         self.io_loop.add_timeout(self.io_loop.time(), results.append, 1)
         self.io_loop.add_timeout(datetime.timedelta(seconds=0),
                                  results.append, 2)
@@ -447,7 +451,9 @@ class TestIOLoopCurrentAsync(AsyncTestCase):
 class TestIOLoopFutures(AsyncTestCase):
     def test_add_future_threads(self):
         with futures.ThreadPoolExecutor(1) as pool:
-            self.io_loop.add_future(pool.submit(lambda: None),
+            def dummy():
+                pass
+            self.io_loop.add_future(pool.submit(dummy),
                                     lambda future: self.stop(future))
             future = self.wait()
             self.assertTrue(future.done())
@@ -590,8 +596,11 @@ class TestPeriodicCallbackMath(unittest.TestCase):
             now = pc._next_timeout + d
         return calls
 
+    def dummy(self):
+        pass
+
     def test_basic(self):
-        pc = PeriodicCallback(None, 10000)
+        pc = PeriodicCallback(self.dummy, 10000)
         self.assertEqual(self.simulate_calls(pc, [0] * 5),
                          [1010, 1020, 1030, 1040, 1050])
 
@@ -607,12 +616,12 @@ class TestPeriodicCallbackMath(unittest.TestCase):
             1220, 1230,  # then back on schedule.
         ]
 
-        pc = PeriodicCallback(None, 10000)
+        pc = PeriodicCallback(self.dummy, 10000)
         self.assertEqual(self.simulate_calls(pc, call_durations),
                          expected)
 
     def test_clock_backwards(self):
-        pc = PeriodicCallback(None, 10000)
+        pc = PeriodicCallback(self.dummy, 10000)
         # Backwards jumps are ignored, potentially resulting in a
         # slightly slow schedule (although we assume that when
         # time.time() and time.monotonic() are different, time.time()
@@ -632,7 +641,7 @@ class TestPeriodicCallbackMath(unittest.TestCase):
         random_times = [0.5, 1, 0, 0.75]
         expected = [1010, 1022.5, 1030, 1041.25]
         call_durations = [0] * len(random_times)
-        pc = PeriodicCallback(None, 10000, jitter=0.5)
+        pc = PeriodicCallback(self.dummy, 10000, jitter=0.5)
 
         def mock_random():
             return random_times.pop(0)
@@ -643,11 +652,11 @@ class TestPeriodicCallbackMath(unittest.TestCase):
 
 class TestIOLoopConfiguration(unittest.TestCase):
     def run_python(self, *statements):
-        statements = [
+        stmt_list = [
             'from tornado.ioloop import IOLoop',
             'classname = lambda x: x.__class__.__name__',
         ] + list(statements)
-        args = [sys.executable, '-c', '; '.join(statements)]
+        args = [sys.executable, '-c', '; '.join(stmt_list)]
         return native_str(subprocess.check_output(args)).strip()
 
     def test_default(self):

@@ -150,7 +150,7 @@ def _create_future() -> Future:
     return future
 
 
-def coroutine(func: Callable[..., _T]) -> Callable[..., 'Future[_T]']:
+def coroutine(func: Callable[..., 'Generator[Any, Any, _T]']) -> Callable[..., 'Future[_T]']:
     """Decorator for asynchronous generators.
 
     Any generator that yields objects from this module must be wrapped
