@@ -6,6 +6,7 @@
 
 from __future__ import absolute_import, division, print_function
 
+import unittest
 import warnings
 
 from tornado.auth import (
@@ -16,10 +17,15 @@ from tornado.concurrent import Future
 from tornado.escape import json_decode
 from tornado import gen
 from tornado.httputil import url_concat
-from tornado.log import gen_log
+from tornado.log import gen_log, app_log
 from tornado.testing import AsyncHTTPTestCase, ExpectLog
 from tornado.test.util import ignore_deprecation
 from tornado.web import RequestHandler, Application, asynchronous, HTTPError
+
+try:
+    from unittest import mock
+except ImportError:
+    mock = None
 
 
 class OpenIdClientLoginHandlerLegacy(RequestHandler, OpenIdMixin):
@@ -221,6 +227,7 @@ class TwitterClientHandler(RequestHandler, TwitterMixin):
         self._OAUTH_REQUEST_TOKEN_URL = test.get_url('/oauth1/server/request_token')
         self._OAUTH_ACCESS_TOKEN_URL = test.get_url('/twitter/server/access_token')
         self._OAUTH_AUTHORIZE_URL = test.get_url('/oauth1/server/authorize')
+        self._OAUTH_AUTHENTICATE_URL = test.get_url('/twitter/server/authenticate')
         self._TWITTER_BASE_URL = test.get_url('/twitter/api')
 
     def get_auth_http_client(self):
@@ -252,6 +259,20 @@ class TwitterClientLoginHandler(TwitterClientHandler):
             self.finish(user)
             return
         yield self.authorize_redirect()
+
+
+class TwitterClientAuthenticateHandler(TwitterClientHandler):
+    # Like TwitterClientLoginHandler, but uses authenticate_redirect
+    # instead of authorize_redirect.
+    @gen.coroutine
+    def get(self):
+        if self.get_argument("oauth_token", None):
+            user = yield self.get_authenticated_user()
+            if user is None:
+                raise Exception("user is None")
+            self.finish(user)
+            return
+        yield self.authenticate_redirect()
 
 
 class TwitterClientLoginGenEngineHandler(TwitterClientHandler):
@@ -376,6 +397,7 @@ class AuthTest(AsyncHTTPTestCase):
 
                 ('/legacy/twitter/client/login', TwitterClientLoginHandlerLegacy, dict(test=self)),
                 ('/twitter/client/login', TwitterClientLoginHandler, dict(test=self)),
+                ('/twitter/client/authenticate', TwitterClientAuthenticateHandler, dict(test=self)),
                 ('/twitter/client/login_gen_engine',
                  TwitterClientLoginGenEngineHandler, dict(test=self)),
                 ('/twitter/client/login_gen_coroutine',
@@ -511,6 +533,14 @@ class AuthTest(AsyncHTTPTestCase):
             '_oauth_request_token="enhjdg==|MTIzNA=="' in response.headers['Set-Cookie'],
             response.headers['Set-Cookie'])
 
+    @unittest.skipIf(mock is None, 'mock package not present')
+    def test_oauth10a_redirect_error(self):
+        with mock.patch.object(OAuth1ServerRequestTokenHandler, 'get') as get:
+            get.side_effect = Exception("boom")
+            with ExpectLog(app_log, "Uncaught exception"):
+                response = self.fetch('/oauth10a/client/login', follow_redirects=False)
+            self.assertEqual(response.code, 500)
+
     def test_oauth10a_get_user(self):
         response = self.fetch(
             '/oauth10a/client/login?oauth_token=zxcv',
@@ -572,6 +602,16 @@ class AuthTest(AsyncHTTPTestCase):
 
     def test_twitter_redirect_gen_coroutine(self):
         self.base_twitter_redirect('/twitter/client/login_gen_coroutine')
+
+    def test_twitter_authenticate_redirect(self):
+        response = self.fetch('/twitter/client/authenticate', follow_redirects=False)
+        self.assertEqual(response.code, 302)
+        self.assertTrue(response.headers['Location'].endswith(
+            '/twitter/server/authenticate?oauth_token=zxcv'), response.headers['Location'])
+        # the cookie is base64('zxcv')|base64('1234')
+        self.assertTrue(
+            '_oauth_request_token="enhjdg==|MTIzNA=="' in response.headers['Set-Cookie'],
+            response.headers['Set-Cookie'])
 
     def test_twitter_get_user(self):
         response = self.fetch(
