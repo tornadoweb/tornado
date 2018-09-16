@@ -82,7 +82,7 @@ from tornado import httpclient
 from tornado import escape
 from tornado.httputil import url_concat
 from tornado.log import gen_log
-from tornado.stack_context import ExceptionStackContext
+from tornado.stack_context import ExceptionStackContext, wrap
 from tornado.util import unicode_type, ArgReplacer, PY3
 
 if PY3:
@@ -127,7 +127,7 @@ def _auth_return_future(f):
             warnings.warn("callback arguments are deprecated, use the returned Future instead",
                           DeprecationWarning)
             future.add_done_callback(
-                functools.partial(_auth_future_to_callback, callback))
+                wrap(functools.partial(_auth_future_to_callback, callback)))
 
         def handle_exception(typ, value, tb):
             if future.done():
@@ -202,8 +202,8 @@ class OpenIdMixin(object):
         if http_client is None:
             http_client = self.get_auth_http_client()
         fut = http_client.fetch(url, method="POST", body=urllib_parse.urlencode(args))
-        fut.add_done_callback(functools.partial(
-            self._on_authentication_verified, callback))
+        fut.add_done_callback(wrap(functools.partial(
+            self._on_authentication_verified, callback)))
 
     def _openid_args(self, callback_uri, ax_attrs=[], oauth_scope=None):
         url = urlparse.urljoin(self.request.full_url(), callback_uri)
@@ -381,18 +381,18 @@ class OAuthMixin(object):
             fut = http_client.fetch(
                 self._oauth_request_token_url(callback_uri=callback_uri,
                                               extra_params=extra_params))
-            fut.add_done_callback(functools.partial(
+            fut.add_done_callback(wrap(functools.partial(
                 self._on_request_token,
                 self._OAUTH_AUTHORIZE_URL,
                 callback_uri,
-                callback))
+                callback)))
         else:
             fut = http_client.fetch(self._oauth_request_token_url())
             fut.add_done_callback(
-                functools.partial(
+                wrap(functools.partial(
                     self._on_request_token, self._OAUTH_AUTHORIZE_URL,
                     callback_uri,
-                    callback))
+                    callback)))
 
     @_auth_return_future
     def get_authenticated_user(self, callback, http_client=None):
@@ -432,7 +432,7 @@ class OAuthMixin(object):
         if http_client is None:
             http_client = self.get_auth_http_client()
         fut = http_client.fetch(self._oauth_access_token_url(token))
-        fut.add_done_callback(functools.partial(self._on_access_token, callback))
+        fut.add_done_callback(wrap(functools.partial(self._on_access_token, callback)))
 
     def _oauth_request_token_url(self, callback_uri=None, extra_params=None):
         consumer_token = self._oauth_consumer_token()
@@ -515,7 +515,7 @@ class OAuthMixin(object):
         fut = self._oauth_get_user_future(access_token)
         fut = gen.convert_yielded(fut)
         fut.add_done_callback(
-            functools.partial(self._on_oauth_get_user, access_token, future))
+            wrap(functools.partial(self._on_oauth_get_user, access_token, future)))
 
     def _oauth_consumer_token(self):
         """Subclasses must override this to return their OAuth consumer keys.
@@ -711,7 +711,7 @@ class OAuth2Mixin(object):
 
         if all_args:
             url += "?" + urllib_parse.urlencode(all_args)
-        callback = functools.partial(self._on_oauth2_request, callback)
+        callback = wrap(functools.partial(self._on_oauth2_request, callback))
         http = self.get_auth_http_client()
         if post_args is not None:
             fut = http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args))
@@ -797,9 +797,9 @@ class TwitterMixin(OAuthMixin):
         """
         http = self.get_auth_http_client()
         fut = http.fetch(self._oauth_request_token_url(callback_uri=callback_uri))
-        fut.add_done_callback(functools.partial(
+        fut.add_done_callback(wrap(functools.partial(
             self._on_request_token, self._OAUTH_AUTHENTICATE_URL,
-            None, callback))
+            None, callback)))
 
     @_auth_return_future
     def twitter_request(self, path, callback=None, access_token=None,
@@ -863,7 +863,7 @@ class TwitterMixin(OAuthMixin):
         if args:
             url += "?" + urllib_parse.urlencode(args)
         http = self.get_auth_http_client()
-        http_callback = functools.partial(self._on_twitter_request, callback, url)
+        http_callback = wrap(functools.partial(self._on_twitter_request, callback, url))
         if post_args is not None:
             fut = http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args))
         else:
@@ -977,7 +977,7 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
                          method="POST",
                          headers={'Content-Type': 'application/x-www-form-urlencoded'},
                          body=body)
-        fut.add_done_callback(functools.partial(self._on_access_token, callback))
+        fut.add_done_callback(wrap(functools.partial(self._on_access_token, callback)))
 
     def _on_access_token(self, future, response_fut):
         """Callback function for the exchange to the access token."""
@@ -1061,8 +1061,8 @@ class FacebookGraphMixin(OAuth2Mixin):
             fields.update(extra_fields)
 
         fut = http.fetch(self._oauth_request_token_url(**args))
-        fut.add_done_callback(functools.partial(self._on_access_token, redirect_uri, client_id,
-                                                client_secret, callback, fields))
+        fut.add_done_callback(wrap(functools.partial(self._on_access_token, redirect_uri, client_id,
+                                                     client_secret, callback, fields)))
 
     @gen.coroutine
     def _on_access_token(self, redirect_uri, client_id, client_secret,

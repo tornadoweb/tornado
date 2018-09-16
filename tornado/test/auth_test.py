@@ -6,6 +6,7 @@
 
 from __future__ import absolute_import, division, print_function
 
+import unittest
 import warnings
 
 from tornado.auth import (
@@ -16,10 +17,15 @@ from tornado.concurrent import Future
 from tornado.escape import json_decode
 from tornado import gen
 from tornado.httputil import url_concat
-from tornado.log import gen_log
+from tornado.log import gen_log, app_log
 from tornado.testing import AsyncHTTPTestCase, ExpectLog
 from tornado.test.util import ignore_deprecation
 from tornado.web import RequestHandler, Application, asynchronous, HTTPError
+
+try:
+    from unittest import mock
+except ImportError:
+    mock = None
 
 
 class OpenIdClientLoginHandlerLegacy(RequestHandler, OpenIdMixin):
@@ -526,6 +532,14 @@ class AuthTest(AsyncHTTPTestCase):
         self.assertTrue(
             '_oauth_request_token="enhjdg==|MTIzNA=="' in response.headers['Set-Cookie'],
             response.headers['Set-Cookie'])
+
+    @unittest.skipIf(mock is None, 'mock package not present')
+    def test_oauth10a_redirect_error(self):
+        with mock.patch.object(OAuth1ServerRequestTokenHandler, 'get') as get:
+            get.side_effect = Exception("boom")
+            with ExpectLog(app_log, "Uncaught exception"):
+                response = self.fetch('/oauth10a/client/login', follow_redirects=False)
+            self.assertEqual(response.code, 500)
 
     def test_oauth10a_get_user(self):
         response = self.fetch(

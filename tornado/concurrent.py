@@ -519,10 +519,10 @@ def return_future(f):
     """
     warnings.warn("@return_future is deprecated, use coroutines instead",
                   DeprecationWarning)
-    return _non_deprecated_return_future(f)
+    return _non_deprecated_return_future(f, warn=True)
 
 
-def _non_deprecated_return_future(f):
+def _non_deprecated_return_future(f, warn=False):
     # Allow auth.py to use this decorator without triggering
     # deprecation warnings. This will go away once auth.py has removed
     # its legacy interfaces in 6.0.
@@ -539,7 +539,15 @@ def _non_deprecated_return_future(f):
             future_set_exc_info(future, (typ, value, tb))
             return True
         exc_info = None
-        with ExceptionStackContext(handle_error, delay_warning=True):
+        esc = ExceptionStackContext(handle_error, delay_warning=True)
+        with esc:
+            if not warn:
+                # HACK: In non-deprecated mode (only used in auth.py),
+                # suppress the warning entirely. Since this is added
+                # in a 5.1 patch release and already removed in 6.0
+                # I'm prioritizing a minimial change instead of a
+                # clean solution.
+                esc.delay_warning = False
             try:
                 result = f(*args, **kwargs)
                 if result is not None:
