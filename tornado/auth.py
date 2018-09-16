@@ -796,10 +796,10 @@ class TwitterMixin(OAuthMixin):
            Use the returned awaitable object instead.
         """
         http = self.get_auth_http_client()
-        http.fetch(self._oauth_request_token_url(callback_uri=callback_uri),
-                   functools.partial(
-                       self._on_request_token, self._OAUTH_AUTHENTICATE_URL,
-                       None, callback))
+        fut = http.fetch(self._oauth_request_token_url(callback_uri=callback_uri))
+        fut.add_done_callback(functools.partial(
+            self._on_request_token, self._OAUTH_AUTHENTICATE_URL,
+            None, callback))
 
     @_auth_return_future
     def twitter_request(self, path, callback=None, access_token=None,

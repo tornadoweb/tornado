@@ -221,6 +221,7 @@ class TwitterClientHandler(RequestHandler, TwitterMixin):
         self._OAUTH_REQUEST_TOKEN_URL = test.get_url('/oauth1/server/request_token')
         self._OAUTH_ACCESS_TOKEN_URL = test.get_url('/twitter/server/access_token')
         self._OAUTH_AUTHORIZE_URL = test.get_url('/oauth1/server/authorize')
+        self._OAUTH_AUTHENTICATE_URL = test.get_url('/twitter/server/authenticate')
         self._TWITTER_BASE_URL = test.get_url('/twitter/api')
 
     def get_auth_http_client(self):
@@ -252,6 +253,20 @@ class TwitterClientLoginHandler(TwitterClientHandler):
             self.finish(user)
             return
         yield self.authorize_redirect()
+
+
+class TwitterClientAuthenticateHandler(TwitterClientHandler):
+    # Like TwitterClientLoginHandler, but uses authenticate_redirect
+    # instead of authorize_redirect.
+    @gen.coroutine
+    def get(self):
+        if self.get_argument("oauth_token", None):
+            user = yield self.get_authenticated_user()
+            if user is None:
+                raise Exception("user is None")
+            self.finish(user)
+            return
+        yield self.authenticate_redirect()
 
 
 class TwitterClientLoginGenEngineHandler(TwitterClientHandler):
@@ -376,6 +391,7 @@ class AuthTest(AsyncHTTPTestCase):
 
                 ('/legacy/twitter/client/login', TwitterClientLoginHandlerLegacy, dict(test=self)),
                 ('/twitter/client/login', TwitterClientLoginHandler, dict(test=self)),
+                ('/twitter/client/authenticate', TwitterClientAuthenticateHandler, dict(test=self)),
                 ('/twitter/client/login_gen_engine',
                  TwitterClientLoginGenEngineHandler, dict(test=self)),
                 ('/twitter/client/login_gen_coroutine',
@@ -572,6 +588,16 @@ class AuthTest(AsyncHTTPTestCase):
 
     def test_twitter_redirect_gen_coroutine(self):
         self.base_twitter_redirect('/twitter/client/login_gen_coroutine')
+
+    def test_twitter_authenticate_redirect(self):
+        response = self.fetch('/twitter/client/authenticate', follow_redirects=False)
+        self.assertEqual(response.code, 302)
+        self.assertTrue(response.headers['Location'].endswith(
+            '/twitter/server/authenticate?oauth_token=zxcv'), response.headers['Location'])
+        # the cookie is base64('zxcv')|base64('1234')
+        self.assertTrue(
+            '_oauth_request_token="enhjdg==|MTIzNA=="' in response.headers['Set-Cookie'],
+            response.headers['Set-Cookie'])
 
     def test_twitter_get_user(self):
         response = self.fetch(
