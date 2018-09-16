@@ -68,7 +68,7 @@ Other differences between the two forms of coroutine are:
   background" as soon as they are called. Note that for both kinds of
   coroutines it is important to use ``await`` or ``yield`` so that
   any exceptions have somewhere to go.
-- Decorated coroutines has additional integration with the
+- Decorated coroutines have additional integration with the
   `concurrent.futures` package, allowing the result of
   ``executor.submit`` to be yielded directly. For native coroutines,
   use `.IOLoop.run_in_executor` instead.
@@ -177,7 +177,7 @@ use `.IOLoop.run_in_executor`, which returns
 ``Futures`` that are compatible with coroutines::
 
     async def call_blocking():
-        await IOLoop.current().run_in_executor(blocking_func, args)
+        await IOLoop.current().run_in_executor(None, blocking_func, args)
 
 Parallelism
 ^^^^^^^^^^^
@@ -210,7 +210,7 @@ In decorated coroutines, it is possible to ``yield`` the list or dict directly::
     @gen.coroutine
     def parallel_fetch_decorated(url1, url2):
         resp1, resp2 = yield [http_client.fetch(url1),
-                              http_client.fetch(url2)])
+                              http_client.fetch(url2)]
 
 Interleaving
 ^^^^^^^^^^^^

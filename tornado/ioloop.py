@@ -101,7 +101,6 @@ class IOLoop(Configurable):
         import socket
 
         import tornado.ioloop
-        from tornado import gen
         from tornado.iostream import IOStream
 
         async def handle_connection(connection, address):
@@ -118,7 +117,8 @@ class IOLoop(Configurable):
                         raise
                     return
                 connection.setblocking(0)
-                handle_connection(connection, address)
+                io_loop = tornado.ioloop.IOLoop.current()
+                io_loop.spawn_callback(handle_connection, connection, address)
 
         if __name__ == '__main__':
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
