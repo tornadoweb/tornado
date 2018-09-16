@@ -61,7 +61,8 @@ def all():
 def test_runner_factory(stderr):
     class TornadoTextTestRunner(unittest.TextTestRunner):
         def __init__(self, *args, **kwargs):
-            super(TornadoTextTestRunner, self).__init__(*args, stream=stderr, **kwargs)
+            kwargs['stream'] = stderr
+            super(TornadoTextTestRunner, self).__init__(*args, **kwargs)
 
         def run(self, test):
             result = super(TornadoTextTestRunner, self).run(test)
@@ -156,8 +157,10 @@ def main():
            "e.g. DEBUG_STATS or DEBUG_COLLECTABLE,DEBUG_OBJECTS",
            callback=lambda values: gc.set_debug(
                reduce(operator.or_, (getattr(gc, v) for v in values))))
-    define('locale', type=str, default=None,
-           callback=lambda x: locale.setlocale(locale.LC_ALL, x))
+
+    def set_locale(x):
+        locale.setlocale(locale.LC_ALL, x)
+    define('locale', type=str, default=None, callback=set_locale)
 
     log_counter = LogCounter()
     add_parse_callback(
@@ -167,7 +170,8 @@ def main():
     # destructors) go directly to stderr instead of logging. Count
     # anything written by anything but the test runner as an error.
     orig_stderr = sys.stderr
-    sys.stderr = CountingStderr(orig_stderr)
+    counting_stderr = CountingStderr(orig_stderr)
+    sys.stderr = counting_stderr  # type: ignore
 
     import tornado.testing
     kwargs = {}
@@ -188,10 +192,10 @@ def main():
         if (log_counter.info_count > 0 or
                 log_counter.warning_count > 0 or
                 log_counter.error_count > 0 or
-                sys.stderr.byte_count > 0):
+                counting_stderr.byte_count > 0):
             logging.error("logged %d infos, %d warnings, %d errors, and %d bytes to stderr",
                           log_counter.info_count, log_counter.warning_count,
-                          log_counter.error_count, sys.stderr.byte_count)
+                          log_counter.error_count, counting_stderr.byte_count)
             sys.exit(1)
 
 

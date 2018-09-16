@@ -7,6 +7,7 @@ import threading
 import datetime
 from io import BytesIO
 import time
+import typing  # noqa: F401
 import unicodedata
 import unittest
 
@@ -161,7 +162,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
 
     def test_streaming_callback(self):
         # streaming_callback is also tested in test_chunked
-        chunks = []
+        chunks = []  # type: typing.List[bytes]
         response = self.fetch("/hello",
                               streaming_callback=chunks.append)
         # with streaming_callback, data goes to the callback and not response.body
@@ -178,7 +179,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         response = self.fetch("/chunk")
         self.assertEqual(response.body, b"asdfqwer")
 
-        chunks = []
+        chunks = []  # type: typing.List[bytes]
         response = self.fetch("/chunk",
                               streaming_callback=chunks.append)
         self.assertEqual(chunks, [b"asdf", b"qwer"])
@@ -209,7 +210,7 @@ Transfer-Encoding: chunked
 
 """.replace(b"\n", b"\r\n"))
                 stream.close()
-            netutil.add_accept_handler(sock, accept_callback)
+            netutil.add_accept_handler(sock, accept_callback)  # type: ignore
             resp = self.fetch("http://127.0.0.1:%d/" % port)
             resp.rethrow()
             self.assertEqual(resp.body, b"12")
@@ -374,7 +375,7 @@ X-XSS-Protection: 1;
 """.replace(b"\n", b"\r\n"))
                 stream.close()
 
-            netutil.add_accept_handler(sock, accept_callback)
+            netutil.add_accept_handler(sock, accept_callback)  # type: ignore
             resp = self.fetch("http://127.0.0.1:%d/" % port)
             resp.rethrow()
             self.assertEqual(resp.headers['X-XSS-Protection'], "1; mode=block")

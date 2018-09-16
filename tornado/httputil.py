@@ -26,7 +26,6 @@ import datetime
 import email.utils
 from http.client import responses
 import http.cookies
-import numbers
 import re
 from ssl import SSLError
 import time
@@ -794,7 +793,7 @@ def parse_multipart_form_data(boundary: bytes, data: bytes, arguments: Dict[str,
             arguments.setdefault(name, []).append(value)
 
 
-def format_timestamp(ts: Union[numbers.Real, tuple, time.struct_time, datetime.datetime]) -> str:
+def format_timestamp(ts: Union[int, float, tuple, time.struct_time, datetime.datetime]) -> str:
     """Formats a timestamp in the format used by HTTP.
 
     The argument may be a numeric timestamp as returned by `time.time`,
@@ -804,15 +803,15 @@ def format_timestamp(ts: Union[numbers.Real, tuple, time.struct_time, datetime.d
     >>> format_timestamp(1359312200)
     'Sun, 27 Jan 2013 18:43:20 GMT'
     """
-    if isinstance(ts, numbers.Real):
-        time_float = typing.cast(float, ts)
+    if isinstance(ts, (int, float)):
+        time_num = ts
     elif isinstance(ts, (tuple, time.struct_time)):
-        time_float = calendar.timegm(ts)
+        time_num = calendar.timegm(ts)
     elif isinstance(ts, datetime.datetime):
-        time_float = calendar.timegm(ts.utctimetuple())
+        time_num = calendar.timegm(ts.utctimetuple())
     else:
         raise TypeError("unknown timestamp type: %r" % ts)
-    return email.utils.formatdate(time_float, usegmt=True)
+    return email.utils.formatdate(time_num, usegmt=True)
 
 
 RequestStartLine = collections.namedtuple(

@@ -11,6 +11,7 @@
 # under the License.
 
 from datetime import timedelta
+import typing  # noqa: F401
 import unittest
 
 from tornado import gen, locks
@@ -21,7 +22,7 @@ from tornado.testing import gen_test, AsyncTestCase
 class ConditionTest(AsyncTestCase):
     def setUp(self):
         super(ConditionTest, self).setUp()
-        self.history = []
+        self.history = []  # type: typing.List[typing.Union[int, str]]
 
     def record_done(self, future, key):
         """Record the resolution of a Future returned by Condition.wait."""
@@ -97,7 +98,7 @@ class ConditionTest(AsyncTestCase):
 
         # Callbacks execute in the order they were registered.
         self.assertEqual(
-            list(range(4)) + ['notify_all'],
+            list(range(4)) + ['notify_all'],  # type: ignore
             self.history)
 
     @gen_test

@@ -8,6 +8,7 @@ import re
 import socket
 import ssl
 import sys
+import typing  # noqa: F401
 
 from tornado.escape import to_unicode, utf8
 from tornado import gen
@@ -135,7 +136,7 @@ class RespondInPrepareHandler(RequestHandler):
 class SimpleHTTPClientTestMixin(object):
     def get_app(self):
         # callable objects to finish pending /trigger requests
-        self.triggers = collections.deque()
+        self.triggers = collections.deque()  # type: typing.Deque[str]
         return Application([
             url("/trigger", TriggerHandler, dict(queue=self.triggers,
                                                  wake_callback=self.stop)),
@@ -165,8 +166,11 @@ class SimpleHTTPClientTestMixin(object):
                         SimpleAsyncHTTPClient(force_instance=True))
         # different IOLoops use different objects
         with closing(IOLoop()) as io_loop2:
-            client1 = self.io_loop.run_sync(gen.coroutine(SimpleAsyncHTTPClient))
-            client2 = io_loop2.run_sync(gen.coroutine(SimpleAsyncHTTPClient))
+            async def make_client():
+                await gen.sleep(0)
+                return SimpleAsyncHTTPClient()
+            client1 = self.io_loop.run_sync(make_client)
+            client2 = io_loop2.run_sync(make_client)
             self.assertTrue(client1 is not client2)
 
     def test_connection_limit(self):
@@ -176,8 +180,10 @@ class SimpleHTTPClientTestMixin(object):
             # Send 4 requests.  Two can be sent immediately, while the others
             # will be queued
             for i in range(4):
-                client.fetch(self.get_url("/trigger")).add_done_callback(
-                    lambda fut, i=i: (seen.append(i), self.stop()))
+                def cb(fut, i=i):
+                    seen.append(i)
+                    self.stop()
+                client.fetch(self.get_url("/trigger")).add_done_callback(cb)
             self.wait(condition=lambda: len(self.triggers) == 2)
             self.assertEqual(len(client.queue), 2)
 
@@ -273,7 +279,7 @@ class SimpleHTTPClientTestMixin(object):
 
     @skipIfNoIPv6
     def test_ipv6(self):
-        [sock] = bind_sockets(None, '::1', family=socket.AF_INET6)
+        [sock] = bind_sockets(0, '::1', family=socket.AF_INET6)
         port = sock.getsockname()[1]
         self.http_server.add_socket(sock)
         url = '%s://[::1]:%d/hello' % (self.get_protocol(), port)
@@ -339,7 +345,7 @@ class SimpleHTTPClientTestMixin(object):
             # cygwin returns EPERM instead of ECONNREFUSED here
             contains_errno = str(errno.ECONNREFUSED) in str(cm.exception)
             if not contains_errno and hasattr(errno, "WSAECONNREFUSED"):
-                contains_errno = str(errno.WSAECONNREFUSED) in str(cm.exception)
+                contains_errno = str(errno.WSAECONNREFUSED) in str(cm.exception)  # type: ignore
             self.assertTrue(contains_errno, cm.exception)
             # This is usually "Connection refused".
             # On windows, strerror is broken and returns "Unknown error".
@@ -447,12 +453,12 @@ class SimpleHTTPClientTestMixin(object):
         # simple_httpclient_test, but it fails with the version of libcurl
         # available on travis-ci. Move it when that has been upgraded
         # or we have a better framework to skip tests based on curl version.
-        headers = []
-        chunks = []
+        headers = []  # type: typing.List[str]
+        chunk_bytes = []  # type: typing.List[bytes]
         self.fetch("/redirect?url=/hello",
                    header_callback=headers.append,
-                   streaming_callback=chunks.append)
-        chunks = list(map(to_unicode, chunks))
+                   streaming_callback=chunk_bytes.append)
+        chunks = list(map(to_unicode, chunk_bytes))
         self.assertEqual(chunks, ['Hello world!'])
         # Make sure we only got one set of headers.
         num_start_lines = len([h for h in headers if h.startswith("HTTP/")])
@@ -524,22 +530,22 @@ class CreateAsyncHTTPClientTestCase(AsyncTestCase):
     def test_max_clients(self):
         AsyncHTTPClient.configure(SimpleAsyncHTTPClient)
         with closing(AsyncHTTPClient(force_instance=True)) as client:
-            self.assertEqual(client.max_clients, 10)
+            self.assertEqual(client.max_clients, 10)  # type: ignore
         with closing(AsyncHTTPClient(
                 max_clients=11, force_instance=True)) as client:
-            self.assertEqual(client.max_clients, 11)
+            self.assertEqual(client.max_clients, 11)  # type: ignore
 
         # Now configure max_clients statically and try overriding it
         # with each way max_clients can be passed
         AsyncHTTPClient.configure(SimpleAsyncHTTPClient, max_clients=12)
         with closing(AsyncHTTPClient(force_instance=True)) as client:
-            self.assertEqual(client.max_clients, 12)
+            self.assertEqual(client.max_clients, 12)  # type: ignore
         with closing(AsyncHTTPClient(
                 max_clients=13, force_instance=True)) as client:
-            self.assertEqual(client.max_clients, 13)
+            self.assertEqual(client.max_clients, 13)  # type: ignore
         with closing(AsyncHTTPClient(
                 max_clients=14, force_instance=True)) as client:
-            self.assertEqual(client.max_clients, 14)
+            self.assertEqual(client.max_clients, 14)  # type: ignore
 
 
 class HTTP100ContinueTestCase(AsyncHTTPTestCase):

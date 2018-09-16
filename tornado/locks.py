@@ -415,7 +415,8 @@ class Semaphore(_TimeoutGarbageCollector):
             "Use Semaphore like 'with (yield semaphore.acquire())', not like"
             " 'with semaphore'")
 
-    __exit__ = __enter__
+    def __exit__(self, typ, value, traceback):
+        self.__enter__()
 
     @gen.coroutine
     def __aenter__(self):
@@ -513,7 +514,8 @@ class Lock(object):
         raise RuntimeError(
             "Use Lock like 'with (yield lock)', not like 'with lock'")
 
-    __exit__ = __enter__
+    def __exit__(self, typ, value, tb):
+        self.__enter__()
 
     @gen.coroutine
     def __aenter__(self):

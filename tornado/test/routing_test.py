@@ -105,7 +105,7 @@ SecondHandler = _get_named_handler("second_handler")
 class CustomRouter(ReversibleRouter):
     def __init__(self):
         super(CustomRouter, self).__init__()
-        self.routes = {}
+        self.routes = {}  # type: typing.Dict[str, typing.Any]
 
     def add_routes(self, routes):
         self.routes.update(routes)
@@ -122,11 +122,12 @@ class CustomRouter(ReversibleRouter):
 
 class CustomRouterTestCase(AsyncHTTPTestCase):
     def get_app(self):
+        router = CustomRouter()
+
         class CustomApplication(Application):
             def reverse_url(self, name, *args):
                 return router.reverse_url(name, *args)
 
-        router = CustomRouter()
         app1 = CustomApplication(app_name="app1")
         app2 = CustomApplication(app_name="app2")
 

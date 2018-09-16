@@ -6,6 +6,8 @@ from tornado.escape import utf8, native_str, to_unicode
 from tornado.template import Template, DictLoader, ParseError, Loader
 from tornado.util import ObjectDict
 
+import typing  # noqa: F401
+
 
 class TemplateTest(unittest.TestCase):
     def test_simple(self):
@@ -198,9 +200,10 @@ three{%end%}
             self.assertTrue("# test.html:2" in traceback.format_exc())
 
     def test_error_line_number_module(self):
-        loader = None
+        loader = None  # type: typing.Optional[DictLoader]
 
         def load_generate(path, **kwargs):
+            assert loader is not None
             return loader.load(path).generate(**kwargs)
 
         loader = DictLoader({

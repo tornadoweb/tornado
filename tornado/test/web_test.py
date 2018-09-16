@@ -30,6 +30,7 @@ import logging
 import os
 import re
 import socket
+import typing  # noqa: F401
 import unittest
 import urllib.parse
 
@@ -73,7 +74,7 @@ class CookieTestRequestHandler(RequestHandler):
     # stub out enough methods to make the secure_cookie functions work
     def __init__(self, cookie_secret='0123456789', key_version=None):
         # don't call super.__init__
-        self._cookies = {}
+        self._cookies = {}  # type: typing.Dict[str, bytes]
         if key_version is None:
             self.application = ObjectDict(settings=dict(cookie_secret=cookie_secret))
         else:
@@ -102,7 +103,7 @@ class SecureCookieV1Test(unittest.TestCase):
                                   version=1)
         cookie = handler._cookies['foo']
         match = re.match(br'12345678\|([0-9]+)\|([0-9a-f]+)', cookie)
-        self.assertTrue(match)
+        assert match is not None
         timestamp = match.group(1)
         sig = match.group(2)
         self.assertEqual(
@@ -335,11 +336,12 @@ class CookieTest(WebTestCase):
         response = self.fetch("/set_expires_days")
         header = response.headers.get("Set-Cookie")
         match = re.match("foo=bar; expires=(?P<expires>.+); Path=/", header)
-        self.assertIsNotNone(match)
+        assert match is not None
 
         expires = datetime.datetime.utcnow() + datetime.timedelta(days=10)
-        header_expires = datetime.datetime(
-            *email.utils.parsedate(match.groupdict()["expires"])[:6])
+        parsed = email.utils.parsedate(match.groupdict()["expires"])
+        assert parsed is not None
+        header_expires = datetime.datetime(*parsed[:6])
         self.assertTrue(abs((expires - header_expires).total_seconds()) < 10)
 
     def test_set_cookie_false_flags(self):
@@ -491,7 +493,7 @@ class RequestEncodingTest(WebTestCase):
 
 class TypeCheckHandler(RequestHandler):
     def prepare(self):
-        self.errors = {}
+        self.errors = {}  # type: typing.Dict[str, str]
 
         self.check_type('status', self.get_status(), int)
 
@@ -1515,8 +1517,9 @@ class DateHeaderTest(SimpleHandlerTestCase):
 
     def test_date_header(self):
         response = self.fetch('/')
-        header_date = datetime.datetime(
-            *email.utils.parsedate(response.headers['Date'])[:6])
+        parsed = email.utils.parsedate(response.headers['Date'])
+        assert parsed is not None
+        header_date = datetime.datetime(*parsed[:6])
         self.assertTrue(header_date - datetime.datetime.utcnow() <
                         datetime.timedelta(seconds=2))
 
@@ -2085,9 +2088,9 @@ class StreamingRequestBodyTest(WebTestCase):
 
     @gen_test
     def test_streaming_body(self):
-        self.prepared = Future()
-        self.data = Future()
-        self.finished = Future()
+        self.prepared = Future()  # type: Future[None]
+        self.data = Future()  # type: Future[bytes]
+        self.finished = Future()  # type: Future[None]
 
         stream = self.connect(b"/stream_body", connection_close=True)
         yield self.prepared
@@ -2121,7 +2124,7 @@ class StreamingRequestBodyTest(WebTestCase):
 
     @gen_test
     def test_close_during_upload(self):
-        self.close_future = Future()
+        self.close_future = Future()  # type: Future[None]
         stream = self.connect(b"/close_detection", connection_close=False)
         stream.close()
         yield self.close_future
@@ -2136,7 +2139,7 @@ class BaseFlowControlHandler(RequestHandler):
     def initialize(self, test):
         self.test = test
         self.method = None
-        self.methods = []
+        self.methods = []  # type: typing.List[str]
 
     @contextlib.contextmanager
     def in_method(self, method):

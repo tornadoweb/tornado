@@ -4,6 +4,7 @@ import platform
 import socket
 import sys
 import textwrap
+import typing  # noqa: F401
 import unittest
 import warnings
 
@@ -65,7 +66,7 @@ def refusing_port():
     # ephemeral port number to ensure that nothing can listen on that
     # port.
     server_socket, port = bind_unused_port()
-    server_socket.setblocking(1)
+    server_socket.setblocking(True)
     client_socket = socket.socket()
     client_socket.connect(("127.0.0.1", port))
     conn, client_addr = server_socket.accept()
@@ -84,7 +85,7 @@ def exec_test(caller_globals, caller_locals, s):
     # globals: it's all global from the perspective of code defined
     # in s.
     global_namespace = dict(caller_globals, **caller_locals)  # type: ignore
-    local_namespace = {}
+    local_namespace = {}  # type: typing.Dict[str, typing.Any]
     exec(textwrap.dedent(s), global_namespace, local_namespace)
     return local_namespace
 

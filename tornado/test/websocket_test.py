@@ -199,7 +199,7 @@ class WebSocketBaseTestCase(AsyncHTTPTestCase):
 
 class WebSocketTest(WebSocketBaseTestCase):
     def get_app(self):
-        self.close_future = Future()
+        self.close_future = Future()  # type: Future[None]
         return Application([
             ('/echo', EchoHandler, dict(close_future=self.close_future)),
             ('/non_ws', NonWebSocketHandler),
@@ -525,7 +525,7 @@ class NativeCoroutineOnMessageHandler(TestWebSocketHandler):
 
 class WebSocketNativeCoroutineTest(WebSocketBaseTestCase):
     def get_app(self):
-        self.close_future = Future()
+        self.close_future = Future()  # type: Future[None]
         return Application([
             ('/native', NativeCoroutineOnMessageHandler,
              dict(close_future=self.close_future))])
@@ -546,7 +546,7 @@ class CompressionTestMixin(object):
     MESSAGE = 'Hello world. Testing 123 123'
 
     def get_app(self):
-        self.close_future = Future()
+        self.close_future = Future()  # type: Future[None]
 
         class LimitedHandler(TestWebSocketHandler):
             @property
@@ -677,7 +677,7 @@ class ServerPeriodicPingTest(WebSocketBaseTestCase):
             def on_pong(self, data):
                 self.write_message("got pong")
 
-        self.close_future = Future()
+        self.close_future = Future()  # type: Future[None]
         return Application([
             ('/', PingHandler, dict(close_future=self.close_future)),
         ], websocket_ping_interval=0.01)
@@ -698,7 +698,7 @@ class ClientPeriodicPingTest(WebSocketBaseTestCase):
             def on_ping(self, data):
                 self.write_message("got ping")
 
-        self.close_future = Future()
+        self.close_future = Future()  # type: Future[None]
         return Application([
             ('/', PingHandler, dict(close_future=self.close_future)),
         ])
@@ -719,7 +719,7 @@ class ManualPingTest(WebSocketBaseTestCase):
             def on_ping(self, data):
                 self.write_message(data, binary=isinstance(data, bytes))
 
-        self.close_future = Future()
+        self.close_future = Future()  # type: Future[None]
         return Application([
             ('/', PingHandler, dict(close_future=self.close_future)),
         ])
@@ -743,7 +743,7 @@ class ManualPingTest(WebSocketBaseTestCase):
 
 class MaxMessageSizeTest(WebSocketBaseTestCase):
     def get_app(self):
-        self.close_future = Future()
+        self.close_future = Future()  # type: Future[None]
         return Application([
             ('/', EchoHandler, dict(close_future=self.close_future)),
         ], websocket_max_message_size=1024)

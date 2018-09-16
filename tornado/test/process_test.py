@@ -208,7 +208,7 @@ class SubprocessTest(AsyncTestCase):
                              stdout=Subprocess.STREAM)
         self.addCleanup(subproc.stdout.close)
         subproc.set_exit_callback(self.stop)
-        os.kill(subproc.pid, signal.SIGTERM)
+        os.kill(subproc.pid, signal.SIGTERM)  # type: ignore
         try:
             ret = self.wait(timeout=1.0)
         except AssertionError:
