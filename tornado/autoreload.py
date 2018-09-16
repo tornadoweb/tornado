@@ -95,6 +95,11 @@ try:
 except ImportError:
     signal = None  # type: ignore
 
+import typing
+from typing import Callable, Dict
+if typing.TYPE_CHECKING:
+    from typing import List, Optional, Union  # noqa: F401
+
 # os.execv is broken on Windows and can't properly parse command line
 # arguments and executable name if they contain whitespaces. subprocess
 # fixes that behavior.
@@ -105,11 +110,11 @@ _reload_hooks = []
 _reload_attempted = False
 _io_loops = weakref.WeakKeyDictionary()  # type: ignore
 _autoreload_is_main = False
-_original_argv = None
+_original_argv = None  # type: Optional[List[str]]
 _original_spec = None
 
 
-def start(check_time=500):
+def start(check_time: int=500) -> None:
     """Begins watching source files for changes.
 
     .. versionchanged:: 5.0
@@ -121,13 +126,13 @@ def start(check_time=500):
     _io_loops[io_loop] = True
     if len(_io_loops) > 1:
         gen_log.warning("tornado.autoreload started more than once in the same process")
-    modify_times = {}
+    modify_times = {}  # type: Dict[str, float]
     callback = functools.partial(_reload_on_update, modify_times)
     scheduler = ioloop.PeriodicCallback(callback, check_time)
     scheduler.start()
 
 
-def wait():
+def wait() -> None:
     """Wait for a watched file to change, then restart the process.
 
     Intended to be used at the end of scripts like unit test runners,
@@ -139,7 +144,7 @@ def wait():
     io_loop.start()
 
 
-def watch(filename):
+def watch(filename: str) -> None:
     """Add a file to the watch list.
 
     All imported modules are watched by default.
@@ -147,7 +152,7 @@ def watch(filename):
     _watched_files.add(filename)
 
 
-def add_reload_hook(fn):
+def add_reload_hook(fn: Callable[[], None]) -> None:
     """Add a function to be called before reloading the process.
 
     Note that for open file and socket handles it is generally
@@ -158,7 +163,7 @@ def add_reload_hook(fn):
     _reload_hooks.append(fn)
 
 
-def _reload_on_update(modify_times):
+def _reload_on_update(modify_times: Dict[str, float]) -> None:
     if _reload_attempted:
         # We already tried to reload and it didn't work, so don't try again.
         return
@@ -184,7 +189,7 @@ def _reload_on_update(modify_times):
         _check_file(modify_times, path)
 
 
-def _check_file(modify_times, path):
+def _check_file(modify_times: Dict[str, float], path: str) -> None:
     try:
         modified = os.stat(path).st_mtime
     except Exception:
@@ -197,7 +202,7 @@ def _check_file(modify_times, path):
         _reload()
 
 
-def _reload():
+def _reload() -> None:
     global _reload_attempted
     _reload_attempted = True
     for fn in _reload_hooks:
@@ -215,6 +220,7 @@ def _reload():
     # sys.path[0] is an empty string and add the current directory to
     # $PYTHONPATH.
     if _autoreload_is_main:
+        assert _original_argv is not None
         spec = _original_spec
         argv = _original_argv
     else:
@@ -246,7 +252,7 @@ def _reload():
             # Unfortunately the errno returned in this case does not
             # appear to be consistent, so we can't easily check for
             # this error specifically.
-            os.spawnv(os.P_NOWAIT, sys.executable, [sys.executable] + argv)
+            os.spawnv(os.P_NOWAIT, sys.executable, [sys.executable] + argv)  # type: ignore
             # At this point the IOLoop has been closed and finally
             # blocks will experience errors if we allow the stack to
             # unwind, so just exit uncleanly.
@@ -260,7 +266,7 @@ Usage:
 """
 
 
-def main():
+def main() -> None:
     """Command-line wrapper to re-run a script whenever its source changes.
 
     Scripts may be specified by filename or module name::
@@ -342,7 +348,7 @@ def main():
         # no longer in sys.modules.  Figure out where it is and watch it.
         loader = pkgutil.get_loader(module)
         if loader is not None:
-            watch(loader.get_filename())
+            watch(loader.get_filename())  # type: ignore
 
     wait()
 

@@ -131,6 +131,10 @@ class ProcessTest(unittest.TestCase):
 
 @skipIfNonUnix
 class SubprocessTest(AsyncTestCase):
+    def term_and_wait(self, subproc):
+        subproc.proc.terminate()
+        subproc.proc.wait()
+
     @gen_test
     def test_subprocess(self):
         if IOLoop.configured_class().__name__.endswith('LayeredTwistedIOLoop'):
@@ -144,7 +148,7 @@ class SubprocessTest(AsyncTestCase):
         subproc = Subprocess([sys.executable, '-u', '-i'],
                              stdin=Subprocess.STREAM,
                              stdout=Subprocess.STREAM, stderr=subprocess.STDOUT)
-        self.addCleanup(lambda: (subproc.proc.terminate(), subproc.proc.wait()))
+        self.addCleanup(lambda: self.term_and_wait(subproc))
         self.addCleanup(subproc.stdout.close)
         self.addCleanup(subproc.stdin.close)
         yield subproc.stdout.read_until(b'>>> ')
@@ -163,7 +167,7 @@ class SubprocessTest(AsyncTestCase):
         subproc = Subprocess([sys.executable, '-u', '-i'],
                              stdin=Subprocess.STREAM,
                              stdout=Subprocess.STREAM, stderr=subprocess.STDOUT)
-        self.addCleanup(lambda: (subproc.proc.terminate(), subproc.proc.wait()))
+        self.addCleanup(lambda: self.term_and_wait(subproc))
         yield subproc.stdout.read_until(b'>>> ')
         subproc.stdin.close()
         data = yield subproc.stdout.read_until_close()
@@ -176,7 +180,7 @@ class SubprocessTest(AsyncTestCase):
         subproc = Subprocess([sys.executable, '-u', '-c',
                               r"import sys; sys.stderr.write('hello\n')"],
                              stderr=Subprocess.STREAM)
-        self.addCleanup(lambda: (subproc.proc.terminate(), subproc.proc.wait()))
+        self.addCleanup(lambda: self.term_and_wait(subproc))
         data = yield subproc.stderr.read_until(b'\n')
         self.assertEqual(data, b'hello\n')
         # More mysterious EBADF: This fails if done with self.addCleanup instead of here.
@@ -208,7 +212,7 @@ class SubprocessTest(AsyncTestCase):
                              stdout=Subprocess.STREAM)
         self.addCleanup(subproc.stdout.close)
         subproc.set_exit_callback(self.stop)
-        os.kill(subproc.pid, signal.SIGTERM)  # type: ignore
+        os.kill(subproc.pid, signal.SIGTERM)
         try:
             ret = self.wait(timeout=1.0)
         except AssertionError:
@@ -218,7 +222,8 @@ class SubprocessTest(AsyncTestCase):
             # (indicating that the problem is in the parent process's
             # signal handling) or did the child process somehow fail
             # to terminate?
-            subproc.stdout.read_until_close(callback=self.stop)
+            fut = subproc.stdout.read_until_close()
+            fut.add_done_callback(lambda f: self.stop())  # type: ignore
             try:
                 self.wait(timeout=1.0)
             except AssertionError:
