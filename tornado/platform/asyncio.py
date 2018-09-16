@@ -22,6 +22,7 @@ the same event loop.
 import concurrent.futures
 import functools
 
+from threading import get_ident
 from tornado.gen import convert_yielded
 from tornado.ioloop import IOLoop, _Selectable
 
@@ -60,7 +61,15 @@ class BaseAsyncIOLoop(IOLoop):
             if loop.is_closed():
                 del IOLoop._ioloop_for_asyncio[loop]
         IOLoop._ioloop_for_asyncio[asyncio_loop] = self
+
+        self._thread_identity = 0
+
         super(BaseAsyncIOLoop, self).initialize(**kwargs)
+
+        def assign_thread_identity() -> None:
+            self._thread_identity = get_ident()
+
+        self.add_callback(assign_thread_identity)
 
     def close(self, all_fds: bool=False) -> None:
         self.closing = True
@@ -157,8 +166,12 @@ class BaseAsyncIOLoop(IOLoop):
         timeout.cancel()  # type: ignore
 
     def add_callback(self, callback: Callable, *args: Any, **kwargs: Any) -> None:
+        if get_ident() == self._thread_identity:
+            call_soon = self.asyncio_loop.call_soon
+        else:
+            call_soon = self.asyncio_loop.call_soon_threadsafe
         try:
-            self.asyncio_loop.call_soon_threadsafe(
+            call_soon(
                 self._run_callback,
                 functools.partial(callback, *args, **kwargs))
         except RuntimeError:
@@ -169,7 +182,13 @@ class BaseAsyncIOLoop(IOLoop):
             # eventually execute).
             pass
 
-    add_callback_from_signal = add_callback
+    def add_callback_from_signal(self, callback: Callable, *args: Any, **kwargs: Any) -> None:
+        try:
+            self.asyncio_loop.call_soon_threadsafe(
+                self._run_callback,
+                functools.partial(callback, *args, **kwargs))
+        except RuntimeError:
+            pass
 
     def run_in_executor(self, executor: Optional[concurrent.futures.Executor],
                         func: Callable[..., _T], *args: Any) -> Awaitable[_T]:
