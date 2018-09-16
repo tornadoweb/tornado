@@ -12,7 +12,7 @@ SetHandleInformation.restype = ctypes.wintypes.BOOL
 HANDLE_FLAG_INHERIT = 0x00000001
 
 
-def set_close_exec(fd):
+def set_close_exec(fd: int) -> None:
     success = SetHandleInformation(fd, HANDLE_FLAG_INHERIT, 0)
     if not success:
-        raise ctypes.WinError()
+        raise ctypes.WinError()  # type: ignore

@@ -26,6 +26,10 @@ import tempfile
 import unittest
 from io import BytesIO
 
+import typing
+if typing.TYPE_CHECKING:
+    from typing import Dict, List  # noqa: F401
+
 
 def read_stream_body(stream, callback):
     """Reads an HTTP response from `stream` and runs callback with its
@@ -41,7 +45,7 @@ def read_stream_body(stream, callback):
             chunks.append(chunk)
 
         def finish(self):
-            conn.detach()
+            conn.detach()  # type: ignore
             callback((self.start_line, self.headers, b''.join(chunks)))
     conn = HTTP1Connection(stream, True)
     conn.read_response(Delegate())
@@ -88,8 +92,8 @@ class BaseSSLTest(AsyncHTTPSTestCase):
 
 class SSLTestMixin(object):
     def get_ssl_options(self):
-        return dict(ssl_version=self.get_ssl_version(),  # type: ignore
-                    **AsyncHTTPSTestCase.get_ssl_options())
+        return dict(ssl_version=self.get_ssl_version(),
+                    **AsyncHTTPSTestCase.default_ssl_options())
 
     def get_ssl_version(self):
         raise NotImplementedError()
@@ -284,7 +288,7 @@ class EchoHandler(RequestHandler):
 
 class TypeCheckHandler(RequestHandler):
     def prepare(self):
-        self.errors = {}
+        self.errors = {}  # type: Dict[str, str]
         fields = [
             ('method', str),
             ('uri', str),
@@ -874,7 +878,7 @@ class StreamingChunkSizeTest(AsyncHTTPTestCase):
             self.connection = connection
 
         def headers_received(self, start_line, headers):
-            self.chunk_lengths = []
+            self.chunk_lengths = []  # type: List[int]
 
         def data_received(self, chunk):
             self.chunk_lengths.append(len(chunk))
@@ -980,7 +984,7 @@ class IdleTimeoutTest(AsyncHTTPTestCase):
 
     def setUp(self):
         super(IdleTimeoutTest, self).setUp()
-        self.streams = []
+        self.streams = []  # type: List[IOStream]
 
     def tearDown(self):
         super(IdleTimeoutTest, self).tearDown()
@@ -1120,7 +1124,7 @@ class BodyLimitsTest(AsyncHTTPTestCase):
             stream.write(b'PUT /streaming?expected_size=10240 HTTP/1.1\r\n'
                          b'Content-Length: 10240\r\n\r\n')
             stream.write(b'a' * 10240)
-            fut = Future()
+            fut = Future()  # type: Future[bytes]
             read_stream_body(stream, callback=fut.set_result)
             start_line, headers, response = yield fut
             self.assertEqual(response, b'10240')

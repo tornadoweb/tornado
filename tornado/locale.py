@@ -42,7 +42,7 @@ the `Locale.translate` method will simply return the original string.
 import codecs
 import csv
 import datetime
-import numbers
+import gettext
 import os
 import re
 
@@ -51,14 +51,16 @@ from tornado.log import gen_log
 
 from tornado._locale_data import LOCALE_NAMES
 
+from typing import Iterable, Any, Union, Dict
+
 _default_locale = "en_US"
-_translations = {}  # type: dict
+_translations = {}  # type: Dict[str, Any]
 _supported_locales = frozenset([_default_locale])
 _use_gettext = False
 CONTEXT_SEPARATOR = "\x04"
 
 
-def get(*locale_codes):
+def get(*locale_codes: str) -> 'Locale':
     """Returns the closest match for the given locale codes.
 
     We iterate over all given locale codes in order. If we have a tight
@@ -72,7 +74,7 @@ def get(*locale_codes):
     return Locale.get_closest(*locale_codes)
 
 
-def set_default_locale(code):
+def set_default_locale(code: str) -> None:
     """Sets the default locale.
 
     The default locale is assumed to be the language used for all strings
@@ -86,7 +88,7 @@ def set_default_locale(code):
     _supported_locales = frozenset(list(_translations.keys()) + [_default_locale])
 
 
-def load_translations(directory, encoding=None):
+def load_translations(directory: str, encoding: str=None) -> None:
     """Loads translations from CSV files in a directory.
 
     Translations are strings with optional Python-style named placeholders
@@ -135,8 +137,8 @@ def load_translations(directory, encoding=None):
         full_path = os.path.join(directory, path)
         if encoding is None:
             # Try to autodetect encoding based on the BOM.
-            with open(full_path, 'rb') as f:
-                data = f.read(len(codecs.BOM_UTF16_LE))
+            with open(full_path, 'rb') as bf:
+                data = bf.read(len(codecs.BOM_UTF16_LE))
             if data in (codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE):
                 encoding = 'utf-16'
             else:
@@ -167,7 +169,7 @@ def load_translations(directory, encoding=None):
     gen_log.debug("Supported locales: %s", sorted(_supported_locales))
 
 
-def load_gettext_translations(directory, domain):
+def load_gettext_translations(directory: str, domain: str) -> None:
     """Loads translations from `gettext`'s locale tree
 
     Locale tree is similar to system's ``/usr/share/locale``, like::
@@ -210,7 +212,7 @@ def load_gettext_translations(directory, domain):
     gen_log.debug("Supported locales: %s", sorted(_supported_locales))
 
 
-def get_supported_locales():
+def get_supported_locales() -> Iterable[str]:
     """Returns a list of all the supported locale codes."""
     return _supported_locales
 
@@ -221,8 +223,10 @@ class Locale(object):
     After calling one of `load_translations` or `load_gettext_translations`,
     call `get` or `get_closest` to get a Locale object.
     """
+    _cache = {}  # type: Dict[str, Locale]
+
     @classmethod
-    def get_closest(cls, *locale_codes):
+    def get_closest(cls, *locale_codes: str) -> 'Locale':
         """Returns the closest match for the given locale code."""
         for code in locale_codes:
             if not code:
@@ -240,18 +244,16 @@ class Locale(object):
         return cls.get(_default_locale)
 
     @classmethod
-    def get(cls, code):
+    def get(cls, code: str) -> 'Locale':
         """Returns the Locale for the given locale code.
 
         If it is not supported, we raise an exception.
         """
-        if not hasattr(cls, "_cache"):
-            cls._cache = {}
         if code not in cls._cache:
             assert code in _supported_locales
             translations = _translations.get(code, None)
             if translations is None:
-                locale = CSVLocale(code, {})
+                locale = CSVLocale(code, {})  # type: Locale
             elif _use_gettext:
                 locale = GettextLocale(code, translations)
             else:
@@ -259,7 +261,7 @@ class Locale(object):
             cls._cache[code] = locale
         return cls._cache[code]
 
-    def __init__(self, code, translations):
+    def __init__(self, code: str) -> None:
         self.code = code
         self.name = LOCALE_NAMES.get(code, {}).get("name", u"Unknown")
         self.rtl = False
@@ -267,7 +269,6 @@ class Locale(object):
             if self.code.startswith(prefix):
                 self.rtl = True
                 break
-        self.translations = translations
 
         # Initialize strings for date formatting
         _ = self.translate
@@ -279,7 +280,7 @@ class Locale(object):
             _("Monday"), _("Tuesday"), _("Wednesday"), _("Thursday"),
             _("Friday"), _("Saturday"), _("Sunday")]
 
-    def translate(self, message, plural_message=None, count=None):
+    def translate(self, message: str, plural_message: str=None, count: int=None) -> str:
         """Returns the translation for the given message for this locale.
 
         If ``plural_message`` is given, you must also provide
@@ -289,11 +290,12 @@ class Locale(object):
         """
         raise NotImplementedError()
 
-    def pgettext(self, context, message, plural_message=None, count=None):
+    def pgettext(self, context: str, message: str, plural_message: str=None,
+                 count: int=None) -> str:
         raise NotImplementedError()
 
-    def format_date(self, date, gmt_offset=0, relative=True, shorter=False,
-                    full_format=False):
+    def format_date(self, date: Union[int, float, datetime.datetime], gmt_offset: int=0,
+                    relative: bool=True, shorter: bool=False, full_format: bool=False) -> str:
         """Formats the given date (which should be GMT).
 
         By default, we return a relative time (e.g., "2 minutes ago"). You
@@ -305,7 +307,7 @@ class Locale(object):
         This method is primarily intended for dates in the past.
         For dates in the future, we fall back to full format.
         """
-        if isinstance(date, numbers.Real):
+        if isinstance(date, (int, float)):
             date = datetime.datetime.utcfromtimestamp(date)
         now = datetime.datetime.utcnow()
         if date > now:
@@ -378,7 +380,7 @@ class Locale(object):
             "time": str_time
         }
 
-    def format_day(self, date, gmt_offset=0, dow=True):
+    def format_day(self, date: datetime.datetime, gmt_offset: int=0, dow: bool=True) -> bool:
         """Formats the given date as a day of week.
 
         Example: "Monday, January 22". You can remove the day of week with
@@ -398,7 +400,7 @@ class Locale(object):
                 "day": str(local_date.day),
             }
 
-    def list(self, parts):
+    def list(self, parts: Any) -> str:
         """Returns a comma-separated list for the given list of parts.
 
         The format is, e.g., "A, B and C", "A and B" or just "A" for lists
@@ -415,21 +417,25 @@ class Locale(object):
             "last": parts[len(parts) - 1],
         }
 
-    def friendly_number(self, value):
+    def friendly_number(self, value: int) -> str:
         """Returns a comma-separated number for the given integer."""
         if self.code not in ("en", "en_US"):
             return str(value)
-        value = str(value)
+        s = str(value)
         parts = []
-        while value:
-            parts.append(value[-3:])
-            value = value[:-3]
+        while s:
+            parts.append(s[-3:])
+            s = s[:-3]
         return ",".join(reversed(parts))
 
 
 class CSVLocale(Locale):
     """Locale implementation using tornado's CSV translation format."""
-    def translate(self, message, plural_message=None, count=None):
+    def __init__(self, code: str, translations: Dict[str, Dict[str, str]]) -> None:
+        self.translations = translations
+        super(CSVLocale, self).__init__(code)
+
+    def translate(self, message: str, plural_message: str=None, count: int=None) -> str:
         if plural_message is not None:
             assert count is not None
             if count != 1:
@@ -441,7 +447,8 @@ class CSVLocale(Locale):
             message_dict = self.translations.get("unknown", {})
         return message_dict.get(message, message)
 
-    def pgettext(self, context, message, plural_message=None, count=None):
+    def pgettext(self, context: str, message: str, plural_message: str=None,
+                 count: int=None) -> str:
         if self.translations:
             gen_log.warning('pgettext is not supported by CSVLocale')
         return self.translate(message, plural_message, count)
@@ -449,27 +456,22 @@ class CSVLocale(Locale):
 
 class GettextLocale(Locale):
     """Locale implementation using the `gettext` module."""
-    def __init__(self, code, translations):
-        try:
-            # python 2
-            self.ngettext = translations.ungettext
-            self.gettext = translations.ugettext
-        except AttributeError:
-            # python 3
-            self.ngettext = translations.ngettext
-            self.gettext = translations.gettext
+    def __init__(self, code: str, translations: gettext.NullTranslations) -> None:
+        self.ngettext = translations.ngettext
+        self.gettext = translations.gettext
         # self.gettext must exist before __init__ is called, since it
         # calls into self.translate
-        super(GettextLocale, self).__init__(code, translations)
+        super(GettextLocale, self).__init__(code)
 
-    def translate(self, message, plural_message=None, count=None):
+    def translate(self, message: str, plural_message: str=None, count: int=None) -> str:
         if plural_message is not None:
             assert count is not None
             return self.ngettext(message, plural_message, count)
         else:
             return self.gettext(message)
 
-    def pgettext(self, context, message, plural_message=None, count=None):
+    def pgettext(self, context: str, message: str, plural_message: str=None,
+                 count: int=None) -> str:
         """Allows to set context for translation, accepts plural forms.
 
         Usage example::

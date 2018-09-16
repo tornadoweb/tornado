@@ -13,6 +13,10 @@ from tornado.netutil import (
 from tornado.testing import AsyncTestCase, gen_test, bind_unused_port
 from tornado.test.util import skipIfNoNetwork
 
+import typing
+if typing.TYPE_CHECKING:
+    from typing import List  # noqa: F401
+
 try:
     import pycares  # type: ignore
 except ImportError:
@@ -193,7 +197,7 @@ class TestPortAllocation(unittest.TestCase):
     def test_same_port_allocation(self):
         if 'TRAVIS' in os.environ:
             self.skipTest("dual-stack servers often have port conflicts on travis")
-        sockets = bind_sockets(None, 'localhost')
+        sockets = bind_sockets(0, 'localhost')
         try:
             port = sockets[0].getsockname()[1]
             self.assertTrue(all(s.getsockname()[1] == port
@@ -204,7 +208,7 @@ class TestPortAllocation(unittest.TestCase):
 
     @unittest.skipIf(not hasattr(socket, "SO_REUSEPORT"), "SO_REUSEPORT is not supported")
     def test_reuse_port(self):
-        sockets = []
+        sockets = []  # type: List[socket.socket]
         socket, port = bind_unused_port(reuse_port=True)
         try:
             sockets = bind_sockets(port, '127.0.0.1', reuse_port=True)

@@ -649,7 +649,7 @@ class TestIOStreamMixin(TestReadWriteMixin):
     @gen.coroutine
     def make_iostream_pair(self, **kwargs):
         listener, port = bind_unused_port()
-        server_stream_fut = Future()
+        server_stream_fut = Future()  # type: Future[IOStream]
 
         def accept_callback(connection, address):
             server_stream_fut.set_result(self._make_server_iostream(connection, **kwargs))
@@ -679,11 +679,11 @@ class TestIOStreamMixin(TestReadWriteMixin):
 
         self.assertTrue(isinstance(stream.error, socket.error), stream.error)
         if sys.platform != 'cygwin':
-            _ERRNO_CONNREFUSED = (errno.ECONNREFUSED,)
+            _ERRNO_CONNREFUSED = [errno.ECONNREFUSED]
             if hasattr(errno, "WSAECONNREFUSED"):
-                _ERRNO_CONNREFUSED += (errno.WSAECONNREFUSED,)
+                _ERRNO_CONNREFUSED.append(errno.WSAECONNREFUSED)  # type: ignore
             # cygwin's errnos don't match those used on native windows python
-            self.assertTrue(stream.error.args[0] in _ERRNO_CONNREFUSED)
+            self.assertTrue(stream.error.args[0] in _ERRNO_CONNREFUSED)  # type: ignore
 
     @gen_test
     def test_gaierror(self):
@@ -849,7 +849,7 @@ class TestIOStreamStartTLS(AsyncTestCase):
             super(TestIOStreamStartTLS, self).setUp()
             self.listener, self.port = bind_unused_port()
             self.server_stream = None
-            self.server_accepted = Future()
+            self.server_accepted = Future()  # type: Future[None]
             netutil.add_accept_handler(self.listener, self.accept)
             self.client_stream = IOStream(socket.socket())
             self.io_loop.add_future(self.client_stream.connect(
@@ -969,7 +969,7 @@ class WaitForHandshakeTest(AsyncTestCase):
     @gen_test
     def test_wait_for_handshake_future(self):
         test = self
-        handshake_future = Future()
+        handshake_future = Future()  # type: Future[None]
 
         class TestServer(TCPServer):
             def handle_stream(self, stream, address):
@@ -987,7 +987,7 @@ class WaitForHandshakeTest(AsyncTestCase):
     @gen_test
     def test_wait_for_handshake_already_waiting_error(self):
         test = self
-        handshake_future = Future()
+        handshake_future = Future()  # type: Future[None]
 
         class TestServer(TCPServer):
             @gen.coroutine
@@ -1003,7 +1003,7 @@ class WaitForHandshakeTest(AsyncTestCase):
 
     @gen_test
     def test_wait_for_handshake_already_connected(self):
-        handshake_future = Future()
+        handshake_future = Future()  # type: Future[None]
 
         class TestServer(TCPServer):
             @gen.coroutine

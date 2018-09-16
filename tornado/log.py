@@ -40,9 +40,11 @@ except ImportError:
     colorama = None
 
 try:
-    import curses  # type: ignore
+    import curses
 except ImportError:
     curses = None  # type: ignore
+
+from typing import Dict, Any, cast
 
 # Logger objects for internal tornado use
 access_log = logging.getLogger("tornado.access")
@@ -50,7 +52,7 @@ app_log = logging.getLogger("tornado.application")
 gen_log = logging.getLogger("tornado.general")
 
 
-def _stderr_supports_color():
+def _stderr_supports_color() -> bool:
     try:
         if hasattr(sys.stderr, 'isatty') and sys.stderr.isatty():
             if curses:
@@ -68,7 +70,7 @@ def _stderr_supports_color():
     return False
 
 
-def _safe_unicode(s):
+def _safe_unicode(s: Any) -> str:
     try:
         return _unicode(s)
     except UnicodeDecodeError:
@@ -109,8 +111,8 @@ class LogFormatter(logging.Formatter):
         logging.ERROR: 1,  # Red
     }
 
-    def __init__(self, fmt=DEFAULT_FORMAT, datefmt=DEFAULT_DATE_FORMAT,
-                 style='%', color=True, colors=DEFAULT_COLORS):
+    def __init__(self, fmt: str=DEFAULT_FORMAT, datefmt: str=DEFAULT_DATE_FORMAT,
+                 style: str='%', color: bool=True, colors: Dict[int, int]=DEFAULT_COLORS) -> None:
         r"""
         :arg bool color: Enables color support.
         :arg str fmt: Log message format.
@@ -129,22 +131,16 @@ class LogFormatter(logging.Formatter):
         logging.Formatter.__init__(self, datefmt=datefmt)
         self._fmt = fmt
 
-        self._colors = {}
+        self._colors = {}  # type: Dict[int, str]
         if color and _stderr_supports_color():
             if curses is not None:
-                # The curses module has some str/bytes confusion in
-                # python3.  Until version 3.2.3, most methods return
-                # bytes, but only accept strings.  In addition, we want to
-                # output these strings with the logging module, which
-                # works with unicode strings.  The explicit calls to
-                # unicode() below are harmless in python2 but will do the
-                # right conversion in python 3.
                 fg_color = (curses.tigetstr("setaf") or
-                            curses.tigetstr("setf") or "")
-                if (3, 0) < sys.version_info < (3, 2, 3):
-                    fg_color = unicode_type(fg_color, "ascii")
+                            curses.tigetstr("setf") or b"")
 
                 for levelno, code in colors.items():
+                    # Convert the terminal control characters from
+                    # bytes to unicode strings for easier use with the
+                    # logging module.
                     self._colors[levelno] = unicode_type(curses.tparm(fg_color, code), "ascii")
                 self._normal = unicode_type(curses.tigetstr("sgr0"), "ascii")
             else:
@@ -156,7 +152,7 @@ class LogFormatter(logging.Formatter):
         else:
             self._normal = ''
 
-    def format(self, record):
+    def format(self, record: Any) -> str:
         try:
             message = record.getMessage()
             assert isinstance(message, basestring_type)  # guaranteed by logging
@@ -180,7 +176,7 @@ class LogFormatter(logging.Formatter):
         except Exception as e:
             record.message = "Bad message (%r): %r" % (e, record.__dict__)
 
-        record.asctime = self.formatTime(record, self.datefmt)
+        record.asctime = self.formatTime(record, cast(str, self.datefmt))
 
         if record.levelno in self._colors:
             record.color = self._colors[record.levelno]
@@ -203,7 +199,8 @@ class LogFormatter(logging.Formatter):
         return formatted.replace("\n", "\n    ")
 
 
-def enable_pretty_logging(options=None, logger=None):
+def enable_pretty_logging(options: Any=None,
+                          logger: logging.Logger=None) -> None:
     """Turns on formatted logging output as configured.
 
     This is called automatically by `tornado.options.parse_command_line`
@@ -223,7 +220,7 @@ def enable_pretty_logging(options=None, logger=None):
             channel = logging.handlers.RotatingFileHandler(
                 filename=options.log_file_prefix,
                 maxBytes=options.log_file_max_size,
-                backupCount=options.log_file_num_backups)
+                backupCount=options.log_file_num_backups)  # type: logging.Handler
         elif rotate_mode == 'time':
             channel = logging.handlers.TimedRotatingFileHandler(
                 filename=options.log_file_prefix,
@@ -245,7 +242,7 @@ def enable_pretty_logging(options=None, logger=None):
         logger.addHandler(channel)
 
 
-def define_logging_options(options=None):
+def define_logging_options(options: Any=None) -> None:
     """Add logging-related flags to ``options``.
 
     These options are present automatically on the default options instance;

@@ -121,6 +121,10 @@ class HTTPHeaders(collections.MutableMapping):
         pass
 
     @typing.overload  # noqa: F811
+    def __init__(self, __arg: Mapping[str, str]) -> None:
+        pass
+
+    @typing.overload  # noqa: F811
     def __init__(self, *args: Tuple[str, str]) -> None:
         pass
 

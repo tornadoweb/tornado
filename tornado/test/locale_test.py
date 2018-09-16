@@ -14,11 +14,10 @@ class TranslationLoaderTest(unittest.TestCase):
     SAVE_VARS = ['_translations', '_supported_locales', '_use_gettext']
 
     def clear_locale_cache(self):
-        if hasattr(tornado.locale.Locale, '_cache'):
-            del tornado.locale.Locale._cache
+        tornado.locale.Locale._cache = {}
 
     def setUp(self):
-        self.saved = {}
+        self.saved = {}  # type: dict
         for var in TranslationLoaderTest.SAVE_VARS:
             self.saved[var] = getattr(tornado.locale, var)
         self.clear_locale_cache()
