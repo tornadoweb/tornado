@@ -273,8 +273,11 @@ class QueuePutTest(AsyncTestCase):
 
     @gen_test
     def test_float_maxsize(self):
-        # Non-int maxsize must round down: http://bugs.python.org/issue21723
-        q = queues.Queue(maxsize=1.3)
+        # If a float is passed for maxsize, a reasonable limit should
+        # be enforced, instead of being treated as unlimited.
+        # It happens to be rounded up.
+        # http://bugs.python.org/issue21723
+        q = queues.Queue(maxsize=1.3)  # type: ignore
         self.assertTrue(q.empty())
         self.assertFalse(q.full())
         q.put_nowait(0)
