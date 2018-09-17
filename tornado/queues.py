@@ -26,11 +26,19 @@ to those provided in the standard library's `asyncio package
 """
 
 import collections
+import datetime
 import heapq
 
 from tornado import gen, ioloop
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado.locks import Event
+
+from typing import Union, TypeVar, Generic, Awaitable
+import typing
+if typing.TYPE_CHECKING:
+    from typing import Deque, Tuple, List, Any  # noqa: F401
+
+_T = TypeVar('_T')
 
 __all__ = ['Queue', 'PriorityQueue', 'LifoQueue', 'QueueFull', 'QueueEmpty']
 
@@ -45,9 +53,9 @@ class QueueFull(Exception):
     pass
 
 
-def _set_timeout(future, timeout):
+def _set_timeout(future: Future, timeout: Union[None, float, datetime.timedelta]) -> None:
     if timeout:
-        def on_timeout():
+        def on_timeout() -> None:
             if not future.done():
                 future.set_exception(gen.TimeoutError())
         io_loop = ioloop.IOLoop.current()
@@ -56,15 +64,15 @@ def _set_timeout(future, timeout):
             lambda _: io_loop.remove_timeout(timeout_handle))
 
 
-class _QueueIterator(object):
-    def __init__(self, q):
+class _QueueIterator(Generic[_T]):
+    def __init__(self, q: 'Queue[_T]') -> None:
         self.q = q
 
-    def __anext__(self):
+    def __anext__(self) -> Awaitable[_T]:
         return self.q.get()
 
 
-class Queue(object):
+class Queue(Generic[_T]):
     """Coordinate producer and consumer coroutines.
 
     If maxsize is 0 (the default) the queue size is unbounded.
@@ -131,7 +139,11 @@ class Queue(object):
        Added ``async for`` support in Python 3.5.
 
     """
-    def __init__(self, maxsize=0):
+    # Exact type depends on subclass. Could be another generic
+    # parameter and use protocols to be more precise here.
+    _queue = None  # type: Any
+
+    def __init__(self, maxsize: int=0) -> None:
         if maxsize is None:
             raise TypeError("maxsize can't be None")
 
@@ -140,31 +152,31 @@ class Queue(object):
 
         self._maxsize = maxsize
         self._init()
-        self._getters = collections.deque([])  # Futures.
-        self._putters = collections.deque([])  # Pairs of (item, Future).
+        self._getters = collections.deque([])  # type: Deque[Future[_T]]
+        self._putters = collections.deque([])  # type: Deque[Tuple[_T, Future[None]]]
         self._unfinished_tasks = 0
         self._finished = Event()
         self._finished.set()
 
     @property
-    def maxsize(self):
+    def maxsize(self) -> int:
         """Number of items allowed in the queue."""
         return self._maxsize
 
-    def qsize(self):
+    def qsize(self) -> int:
         """Number of items in the queue."""
         return len(self._queue)
 
-    def empty(self):
+    def empty(self) -> bool:
         return not self._queue
 
-    def full(self):
+    def full(self) -> bool:
         if self.maxsize == 0:
             return False
         else:
             return self.qsize() >= self.maxsize
 
-    def put(self, item, timeout=None):
+    def put(self, item: _T, timeout: Union[float, datetime.timedelta]=None) -> 'Future[None]':
         """Put an item into the queue, perhaps waiting until there is room.
 
         Returns a Future, which raises `tornado.util.TimeoutError` after a
@@ -175,7 +187,7 @@ class Queue(object):
         `datetime.timedelta` object for a deadline relative to the
         current time.
         """
-        future = Future()
+        future = Future()  # type: Future[None]
         try:
             self.put_nowait(item)
         except QueueFull:
@@ -185,7 +197,7 @@ class Queue(object):
             future.set_result(None)
         return future
 
-    def put_nowait(self, item):
+    def put_nowait(self, item: _T) -> None:
         """Put an item into the queue without blocking.
 
         If no free slot is immediately available, raise `QueueFull`.
@@ -201,7 +213,7 @@ class Queue(object):
         else:
             self.__put_internal(item)
 
-    def get(self, timeout=None):
+    def get(self, timeout: Union[float, datetime.timedelta]=None) -> 'Future[_T]':
         """Remove and return an item from the queue.
 
         Returns a Future which resolves once an item is available, or raises
@@ -212,7 +224,7 @@ class Queue(object):
         `datetime.timedelta` object for a deadline relative to the
         current time.
         """
-        future = Future()
+        future = Future()  # type: Future[_T]
         try:
             future.set_result(self.get_nowait())
         except QueueEmpty:
@@ -220,7 +232,7 @@ class Queue(object):
             _set_timeout(future, timeout)
         return future
 
-    def get_nowait(self):
+    def get_nowait(self) -> _T:
         """Remove and return an item from the queue without blocking.
 
         Return an item if one is immediately available, else raise
@@ -238,7 +250,7 @@ class Queue(object):
         else:
             raise QueueEmpty
 
-    def task_done(self):
+    def task_done(self) -> None:
         """Indicate that a formerly enqueued task is complete.
 
         Used by queue consumers. For each `.get` used to fetch a task, a
@@ -256,7 +268,7 @@ class Queue(object):
         if self._unfinished_tasks == 0:
             self._finished.set()
 
-    def join(self, timeout=None):
+    def join(self, timeout: Union[float, datetime.timedelta]=None) -> 'Future[None]':
         """Block until all items in the queue are processed.
 
         Returns a Future, which raises `tornado.util.TimeoutError` after a
@@ -264,26 +276,26 @@ class Queue(object):
         """
         return self._finished.wait(timeout)
 
-    def __aiter__(self):
+    def __aiter__(self) -> _QueueIterator[_T]:
         return _QueueIterator(self)
 
     # These three are overridable in subclasses.
-    def _init(self):
+    def _init(self) -> None:
         self._queue = collections.deque()
 
-    def _get(self):
+    def _get(self) -> _T:
         return self._queue.popleft()
 
-    def _put(self, item):
+    def _put(self, item: _T) -> None:
         self._queue.append(item)
     # End of the overridable methods.
 
-    def __put_internal(self, item):
+    def __put_internal(self, item: _T) -> None:
         self._unfinished_tasks += 1
         self._finished.clear()
         self._put(item)
 
-    def _consume_expired(self):
+    def _consume_expired(self) -> None:
         # Remove timed-out waiters.
         while self._putters and self._putters[0][1].done():
             self._putters.popleft()
@@ -291,14 +303,14 @@ class Queue(object):
         while self._getters and self._getters[0].done():
             self._getters.popleft()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return '<%s at %s %s>' % (
             type(self).__name__, hex(id(self)), self._format())
 
-    def __str__(self):
+    def __str__(self) -> str:
         return '<%s %s>' % (type(self).__name__, self._format())
 
-    def _format(self):
+    def _format(self) -> str:
         result = 'maxsize=%r' % (self.maxsize, )
         if getattr(self, '_queue', None):
             result += ' queue=%r' % self._queue
@@ -335,13 +347,13 @@ class PriorityQueue(Queue):
         (1, 'medium-priority item')
         (10, 'low-priority item')
     """
-    def _init(self):
+    def _init(self) -> None:
         self._queue = []
 
-    def _put(self, item):
+    def _put(self, item: _T) -> None:
         heapq.heappush(self._queue, item)
 
-    def _get(self):
+    def _get(self) -> _T:
         return heapq.heappop(self._queue)
 
 
@@ -367,11 +379,11 @@ class LifoQueue(Queue):
         2
         3
     """
-    def _init(self):
+    def _init(self) -> None:
         self._queue = []
 
-    def _put(self, item):
+    def _put(self, item: _T) -> None:
         self._queue.append(item)
 
-    def _get(self):
+    def _get(self) -> _T:
         return self._queue.pop()

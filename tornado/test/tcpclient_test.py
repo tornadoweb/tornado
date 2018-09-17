@@ -40,7 +40,7 @@ class TestTCPServer(TCPServer):
     def __init__(self, family):
         super(TestTCPServer, self).__init__()
         self.streams = []  # type: List[IOStream]
-        self.queue = Queue()
+        self.queue = Queue()  # type: Queue[IOStream]
         sockets = bind_sockets(0, 'localhost', family)
         self.add_sockets(sockets)
         self.port = sockets[0].getsockname()[1]
