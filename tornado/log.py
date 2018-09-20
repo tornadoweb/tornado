@@ -220,13 +220,15 @@ def enable_pretty_logging(options: Any=None,
             channel = logging.handlers.RotatingFileHandler(
                 filename=options.log_file_prefix,
                 maxBytes=options.log_file_max_size,
-                backupCount=options.log_file_num_backups)  # type: logging.Handler
+                backupCount=options.log_file_num_backups,
+                encoding="utf-8")  # type: logging.Handler
         elif rotate_mode == 'time':
             channel = logging.handlers.TimedRotatingFileHandler(
                 filename=options.log_file_prefix,
                 when=options.log_rotate_when,
                 interval=options.log_rotate_interval,
-                backupCount=options.log_file_num_backups)
+                backupCount=options.log_file_num_backups,
+                encoding="utf-8")
         else:
             error_message = 'The value of log_rotate_mode option should be ' +\
                             '"size" or "time", not "%s".' % rotate_mode
