@@ -1928,7 +1928,7 @@ class AllHTTPMethodsTest(SimpleHandlerTestCase):
         def method(self):
             self.write(self.request.method)
 
-        get = delete = options = post = put = method
+        get = delete = options = post = put = method  # type: ignore
 
     def test_standard_methods(self):
         response = self.fetch('/', method='HEAD')

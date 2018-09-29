@@ -43,10 +43,11 @@ responses
 
 import typing
 from typing import (Tuple, Iterable, List, Mapping, Iterator, Dict, Union, Optional,
-                    Awaitable, Generator)
+                    Awaitable, Generator, AnyStr)
 
 if typing.TYPE_CHECKING:
     from typing import Deque  # noqa
+    from asyncio import Future  # noqa
     import unittest  # noqa
 
 
@@ -348,6 +349,9 @@ class HTTPServerRequest(object):
     path = None  # type: str
     query = None  # type: str
 
+    # HACK: Used for stream_request_body
+    _body_future = None  # type: Future[None]
+
     def __init__(self, method: str=None, uri: str=None, version: str="HTTP/1.0",
                  headers: HTTPHeaders=None, body: bytes=None, host: str=None,
                  files: Dict[str, List['HTTPFile']]=None, connection: 'HTTPConnection'=None,
@@ -503,6 +507,7 @@ class HTTPMessageDelegate(object):
 
     .. versionadded:: 4.0
     """
+    # TODO: genericize this class to avoid exposing the Union.
     def headers_received(self, start_line: Union['RequestStartLine', 'ResponseStartLine'],
                          headers: HTTPHeaders) -> Optional[Awaitable[None]]:
         """Called when the HTTP headers have been received and parsed.
@@ -545,7 +550,7 @@ class HTTPConnection(object):
     .. versionadded:: 4.0
     """
     def write_headers(self, start_line: Union['RequestStartLine', 'ResponseStartLine'],
-                      headers: HTTPHeaders, chunk: bytes=None) -> Awaitable[None]:
+                      headers: HTTPHeaders, chunk: bytes=None) -> 'Future[None]':
         """Write an HTTP header block.
 
         :arg start_line: a `.RequestStartLine` or `.ResponseStartLine`.
@@ -556,7 +561,7 @@ class HTTPConnection(object):
 
         The ``version`` field of ``start_line`` is ignored.
 
-        Returns an awaitable for flow control.
+        Returns a future for flow control.
 
         .. versionchanged:: 6.0
 
@@ -564,10 +569,10 @@ class HTTPConnection(object):
         """
         raise NotImplementedError()
 
-    def write(self, chunk: bytes) -> Awaitable[None]:
+    def write(self, chunk: bytes) -> 'Future[None]':
         """Writes a chunk of body data.
 
-        Returns an awaitable for flow control.
+        Returns a future for flow control.
 
         .. versionchanged:: 6.0
 
@@ -970,7 +975,7 @@ def split_host_and_port(netloc: str) -> Tuple[str, Optional[int]]:
     return (host, port)
 
 
-def qs_to_qsl(qs: Dict[str, List[str]]) -> Iterable[Tuple[str, str]]:
+def qs_to_qsl(qs: Dict[str, List[AnyStr]]) -> Iterable[Tuple[str, AnyStr]]:
     """Generator converting a result of ``parse_qs`` back to name-value pairs.
 
     .. versionadded:: 5.0

@@ -184,17 +184,14 @@ from tornado.escape import url_escape, url_unescape, utf8
 from tornado.log import app_log
 from tornado.util import basestring_type, import_object, re_unescape, unicode_type
 
-try:
-    import typing  # noqa
-except ImportError:
-    pass
+from typing import Any, Union, Optional, Awaitable, List, Dict, Pattern, Tuple, overload
 
 
 class Router(httputil.HTTPServerConnectionDelegate):
     """Abstract router interface."""
 
-    def find_handler(self, request, **kwargs):
-        # type: (httputil.HTTPServerRequest, typing.Any)->httputil.HTTPMessageDelegate
+    def find_handler(self, request: httputil.HTTPServerRequest,
+                     **kwargs: Any) -> Optional[httputil.HTTPMessageDelegate]:
         """Must be implemented to return an appropriate instance of `~.httputil.HTTPMessageDelegate`
         that can serve the request.
         Routing implementations may pass additional kwargs to extend the routing logic.
@@ -206,7 +203,8 @@ class Router(httputil.HTTPServerConnectionDelegate):
         """
         raise NotImplementedError()
 
-    def start_request(self, server_conn, request_conn):
+    def start_request(self, server_conn: object,
+                      request_conn: httputil.HTTPConnection) -> httputil.HTTPMessageDelegate:
         return _RoutingDelegate(self, server_conn, request_conn)
 
 
@@ -215,7 +213,7 @@ class ReversibleRouter(Router):
     and support reversing them to original urls.
     """
 
-    def reverse_url(self, name, *args):
+    def reverse_url(self, name: str, *args: Any) -> Optional[str]:
         """Returns url string for a given route name and arguments
         or ``None`` if no match is found.
 
@@ -227,13 +225,17 @@ class ReversibleRouter(Router):
 
 
 class _RoutingDelegate(httputil.HTTPMessageDelegate):
-    def __init__(self, router, server_conn, request_conn):
+    def __init__(self, router: Router, server_conn: object,
+                 request_conn: httputil.HTTPConnection) -> None:
         self.server_conn = server_conn
         self.request_conn = request_conn
-        self.delegate = None
+        self.delegate = None  # type: Optional[httputil.HTTPMessageDelegate]
         self.router = router  # type: Router
 
-    def headers_received(self, start_line, headers):
+    def headers_received(self, start_line: Union[httputil.RequestStartLine,
+                                                 httputil.ResponseStartLine],
+                         headers: httputil.HTTPHeaders) -> Optional[Awaitable[None]]:
+        assert isinstance(start_line, httputil.RequestStartLine)
         request = httputil.HTTPServerRequest(
             connection=self.request_conn,
             server_connection=self.server_conn,
@@ -247,30 +249,42 @@ class _RoutingDelegate(httputil.HTTPMessageDelegate):
 
         return self.delegate.headers_received(start_line, headers)
 
-    def data_received(self, chunk):
+    def data_received(self, chunk: bytes) -> Optional[Awaitable[None]]:
+        assert self.delegate is not None
         return self.delegate.data_received(chunk)
 
-    def finish(self):
+    def finish(self) -> None:
+        assert self.delegate is not None
         self.delegate.finish()
 
-    def on_connection_close(self):
+    def on_connection_close(self) -> None:
+        assert self.delegate is not None
         self.delegate.on_connection_close()
 
 
 class _DefaultMessageDelegate(httputil.HTTPMessageDelegate):
-    def __init__(self, connection):
+    def __init__(self, connection: httputil.HTTPConnection) -> None:
         self.connection = connection
 
-    def finish(self):
+    def finish(self) -> None:
         self.connection.write_headers(
             httputil.ResponseStartLine("HTTP/1.1", 404, "Not Found"), httputil.HTTPHeaders())
         self.connection.finish()
 
 
+# _RuleList can either contain pre-constructed Rules or a sequence of
+# arguments to be passed to the Rule constructor.
+_RuleList = List[Union['Rule',
+                       List[Any],  # Can't do detailed typechecking of lists.
+                       Tuple[Union[str, 'Matcher'], Any],
+                       Tuple[Union[str, 'Matcher'], Any, Dict[str, Any]],
+                       Tuple[Union[str, 'Matcher'], Any, Dict[str, Any], str]]]
+
+
 class RuleRouter(Router):
     """Rule-based router implementation."""
 
-    def __init__(self, rules=None):
+    def __init__(self, rules: _RuleList=None) -> None:
         """Constructs a router from an ordered list of rules::
 
             RuleRouter([
@@ -297,11 +311,11 @@ class RuleRouter(Router):
         :arg rules: a list of `Rule` instances or tuples of `Rule`
             constructor arguments.
         """
-        self.rules = []  # type: typing.List[Rule]
+        self.rules = []  # type: List[Rule]
         if rules:
             self.add_rules(rules)
 
-    def add_rules(self, rules):
+    def add_rules(self, rules: _RuleList) -> None:
         """Appends new rules to the router.
 
         :arg rules: a list of Rule instances (or tuples of arguments, which are
@@ -317,7 +331,7 @@ class RuleRouter(Router):
 
             self.rules.append(self.process_rule(rule))
 
-    def process_rule(self, rule):
+    def process_rule(self, rule: 'Rule') -> 'Rule':
         """Override this method for additional preprocessing of each rule.
 
         :arg Rule rule: a rule to be processed.
@@ -325,7 +339,8 @@ class RuleRouter(Router):
         """
         return rule
 
-    def find_handler(self, request, **kwargs):
+    def find_handler(self, request: httputil.HTTPServerRequest,
+                     **kwargs: Any) -> Optional[httputil.HTTPMessageDelegate]:
         for rule in self.rules:
             target_params = rule.matcher.match(request)
             if target_params is not None:
@@ -340,7 +355,8 @@ class RuleRouter(Router):
 
         return None
 
-    def get_target_delegate(self, target, request, **target_params):
+    def get_target_delegate(self, target: Any, request: httputil.HTTPServerRequest,
+                            **target_params: Any) -> Optional[httputil.HTTPMessageDelegate]:
         """Returns an instance of `~.httputil.HTTPMessageDelegate` for a
         Rule's target. This method is called by `~.find_handler` and can be
         extended to provide additional target types.
@@ -354,9 +370,11 @@ class RuleRouter(Router):
             return target.find_handler(request, **target_params)
 
         elif isinstance(target, httputil.HTTPServerConnectionDelegate):
+            assert request.connection is not None
             return target.start_request(request.server_connection, request.connection)
 
         elif callable(target):
+            assert request.connection is not None
             return _CallableAdapter(
                 partial(target, **target_params), request.connection
             )
@@ -372,11 +390,11 @@ class ReversibleRuleRouter(ReversibleRouter, RuleRouter):
     in a rule's matcher (see `Matcher.reverse`).
     """
 
-    def __init__(self, rules=None):
-        self.named_rules = {}  # type: typing.Dict[str, Any]
+    def __init__(self, rules: _RuleList=None) -> None:
+        self.named_rules = {}  # type: Dict[str, Any]
         super(ReversibleRuleRouter, self).__init__(rules)
 
-    def process_rule(self, rule):
+    def process_rule(self, rule: 'Rule') -> 'Rule':
         rule = super(ReversibleRuleRouter, self).process_rule(rule)
 
         if rule.name:
@@ -388,7 +406,7 @@ class ReversibleRuleRouter(ReversibleRouter, RuleRouter):
 
         return rule
 
-    def reverse_url(self, name, *args):
+    def reverse_url(self, name: str, *args: Any) -> Optional[str]:
         if name in self.named_rules:
             return self.named_rules[name].matcher.reverse(*args)
 
@@ -404,7 +422,8 @@ class ReversibleRuleRouter(ReversibleRouter, RuleRouter):
 class Rule(object):
     """A routing rule."""
 
-    def __init__(self, matcher, target, target_kwargs=None, name=None):
+    def __init__(self, matcher: 'Matcher', target: Any,
+                 target_kwargs: Dict[str, Any]=None, name: str=None) -> None:
         """Constructs a Rule instance.
 
         :arg Matcher matcher: a `Matcher` instance used for determining
@@ -431,10 +450,10 @@ class Rule(object):
         self.target_kwargs = target_kwargs if target_kwargs else {}
         self.name = name
 
-    def reverse(self, *args):
+    def reverse(self, *args: Any) -> Optional[str]:
         return self.matcher.reverse(*args)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return '%s(%r, %s, kwargs=%r, name=%r)' % \
                (self.__class__.__name__, self.matcher,
                 self.target, self.target_kwargs, self.name)
@@ -443,7 +462,7 @@ class Rule(object):
 class Matcher(object):
     """Represents a matcher for request features."""
 
-    def match(self, request):
+    def match(self, request: httputil.HTTPServerRequest) -> Optional[Dict[str, Any]]:
         """Matches current instance against the request.
 
         :arg httputil.HTTPServerRequest request: current HTTP request
@@ -455,7 +474,7 @@ class Matcher(object):
             ``None`` must be returned to indicate that there is no match."""
         raise NotImplementedError()
 
-    def reverse(self, *args):
+    def reverse(self, *args: Any) -> Optional[str]:
         """Reconstructs full url from matcher instance and additional arguments."""
         return None
 
@@ -463,14 +482,14 @@ class Matcher(object):
 class AnyMatches(Matcher):
     """Matches any request."""
 
-    def match(self, request):
+    def match(self, request: httputil.HTTPServerRequest) -> Optional[Dict[str, Any]]:
         return {}
 
 
 class HostMatches(Matcher):
     """Matches requests from hosts specified by ``host_pattern`` regex."""
 
-    def __init__(self, host_pattern):
+    def __init__(self, host_pattern: Union[str, Pattern]) -> None:
         if isinstance(host_pattern, basestring_type):
             if not host_pattern.endswith("$"):
                 host_pattern += "$"
@@ -478,7 +497,7 @@ class HostMatches(Matcher):
         else:
             self.host_pattern = host_pattern
 
-    def match(self, request):
+    def match(self, request: httputil.HTTPServerRequest) -> Optional[Dict[str, Any]]:
         if self.host_pattern.match(request.host_name):
             return {}
 
@@ -490,11 +509,11 @@ class DefaultHostMatches(Matcher):
     Always returns no match if ``X-Real-Ip`` header is present.
     """
 
-    def __init__(self, application, host_pattern):
+    def __init__(self, application: Any, host_pattern: Pattern) -> None:
         self.application = application
         self.host_pattern = host_pattern
 
-    def match(self, request):
+    def match(self, request: httputil.HTTPServerRequest) -> Optional[Dict[str, Any]]:
         # Look for default host if not behind load balancer (for debugging)
         if "X-Real-Ip" not in request.headers:
             if self.host_pattern.match(self.application.default_host):
@@ -505,7 +524,7 @@ class DefaultHostMatches(Matcher):
 class PathMatches(Matcher):
     """Matches requests with paths specified by ``path_pattern`` regex."""
 
-    def __init__(self, path_pattern):
+    def __init__(self, path_pattern: Union[str, Pattern]) -> None:
         if isinstance(path_pattern, basestring_type):
             if not path_pattern.endswith('$'):
                 path_pattern += '$'
@@ -519,14 +538,15 @@ class PathMatches(Matcher):
 
         self._path, self._group_count = self._find_groups()
 
-    def match(self, request):
+    def match(self, request: httputil.HTTPServerRequest) -> Optional[Dict[str, Any]]:
         match = self.regex.match(request.path)
         if match is None:
             return None
         if not self.regex.groups:
             return {}
 
-        path_args, path_kwargs = [], {}
+        path_args = []  # type: List[bytes]
+        path_kwargs = {}  # type: Dict[str, bytes]
 
         # Pass matched groups to the handler.  Since
         # match.groups() includes both named and
@@ -541,7 +561,7 @@ class PathMatches(Matcher):
 
         return dict(path_args=path_args, path_kwargs=path_kwargs)
 
-    def reverse(self, *args):
+    def reverse(self, *args: Any) -> Optional[str]:
         if self._path is None:
             raise ValueError("Cannot reverse url regex " + self.regex.pattern)
         assert len(args) == self._group_count, "required number of arguments " \
@@ -555,7 +575,7 @@ class PathMatches(Matcher):
             converted_args.append(url_escape(utf8(a), plus=False))
         return self._path % tuple(converted_args)
 
-    def _find_groups(self):
+    def _find_groups(self) -> Tuple[Optional[str], Optional[int]]:
         """Returns a tuple (reverse string, group count) for a url.
 
         For example: Given the url pattern /([0-9]{4})/([a-z-]+)/, this method
@@ -597,7 +617,8 @@ class URLSpec(Rule):
        `URLSpec` is now a subclass of a `Rule` with `PathMatches` matcher and is preserved for
        backwards compatibility.
     """
-    def __init__(self, pattern, handler, kwargs=None, name=None):
+    def __init__(self, pattern: Union[str, Pattern], handler: Any,
+                 kwargs: Dict[str, Any]=None, name: str=None) -> None:
         """Parameters:
 
         * ``pattern``: Regular expression to be matched. Any capturing
@@ -615,19 +636,30 @@ class URLSpec(Rule):
           `~.web.Application.reverse_url`.
 
         """
-        super(URLSpec, self).__init__(PathMatches(pattern), handler, kwargs, name)
+        matcher = PathMatches(pattern)
+        super(URLSpec, self).__init__(matcher, handler, kwargs, name)
 
-        self.regex = self.matcher.regex
+        self.regex = matcher.regex
         self.handler_class = self.target
         self.kwargs = kwargs
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return '%s(%r, %s, kwargs=%r, name=%r)' % \
                (self.__class__.__name__, self.regex.pattern,
                 self.handler_class, self.kwargs, self.name)
 
 
-def _unquote_or_none(s):
+@overload
+def _unquote_or_none(s: str) -> bytes:
+    pass
+
+
+@overload  # noqa: F811
+def _unquote_or_none(s: None) -> None:
+    pass
+
+
+def _unquote_or_none(s: Optional[str]) -> Optional[bytes]:  # noqa: F811
     """None-safe wrapper around url_unescape to handle unmatched optional
     groups correctly.
 

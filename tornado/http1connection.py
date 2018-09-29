@@ -350,7 +350,7 @@ class HTTP1Connection(httputil.HTTPConnection):
 
     def write_headers(self, start_line: Union[httputil.RequestStartLine,
                                               httputil.ResponseStartLine],
-                      headers: httputil.HTTPHeaders, chunk: bytes=None) -> Awaitable[None]:
+                      headers: httputil.HTTPHeaders, chunk: bytes=None) -> 'Future[None]':
         """Implements `.HTTPConnection.write_headers`."""
         lines = []
         if self.is_client:
@@ -438,7 +438,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         else:
             return chunk
 
-    def write(self, chunk: bytes) -> Awaitable[None]:
+    def write(self, chunk: bytes) -> 'Future[None]':
         """Implements `.HTTPConnection.write`.
 
         For backwards compatibility it is allowed but deprecated to

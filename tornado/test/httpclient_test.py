@@ -109,7 +109,7 @@ class AllMethodsHandler(RequestHandler):
     def method(self):
         self.write(self.request.method)
 
-    get = post = put = delete = options = patch = other = method
+    get = post = put = delete = options = patch = other = method  # type: ignore
 
 
 class SetHeaderHandler(RequestHandler):
