@@ -538,7 +538,7 @@ class RequestProxyTest(unittest.TestCase):
 
 class HTTPResponseTestCase(unittest.TestCase):
     def test_str(self):
-        response = HTTPResponse(HTTPRequest('http://example.com'),
+        response = HTTPResponse(HTTPRequest('http://example.com'),  # type: ignore
                                 200, headers={}, buffer=BytesIO())
         s = str(response)
         self.assertTrue(s.startswith('HTTPResponse('))
@@ -606,12 +606,12 @@ class HTTPRequestTestCase(unittest.TestCase):
 
     def test_headers_setter(self):
         request = HTTPRequest('http://example.com')
-        request.headers = {'bar': 'baz'}
+        request.headers = {'bar': 'baz'}  # type: ignore
         self.assertEqual(request.headers, {'bar': 'baz'})
 
     def test_null_headers_setter(self):
         request = HTTPRequest('http://example.com')
-        request.headers = None
+        request.headers = None  # type: ignore
         self.assertEqual(request.headers, {})
 
     def test_body(self):
@@ -620,7 +620,7 @@ class HTTPRequestTestCase(unittest.TestCase):
 
     def test_body_setter(self):
         request = HTTPRequest('http://example.com')
-        request.body = 'foo'
+        request.body = 'foo'  # type: ignore
         self.assertEqual(request.body, utf8('foo'))
 
     def test_if_modified_since(self):

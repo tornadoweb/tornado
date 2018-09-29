@@ -1,10 +1,11 @@
 from tornado.escape import _unicode
 from tornado import gen
-from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main, _RequestProxy
+from tornado.httpclient import (HTTPResponse, HTTPError, AsyncHTTPClient, main,
+                                _RequestProxy, HTTPRequest)
 from tornado import httputil
 from tornado.http1connection import HTTP1Connection, HTTP1ConnectionParameters
 from tornado.ioloop import IOLoop
-from tornado.iostream import StreamClosedError
+from tornado.iostream import StreamClosedError, IOStream
 from tornado.netutil import Resolver, OverrideResolver, _client_ssl_defaults
 from tornado.log import gen_log
 from tornado.tcpclient import TCPClient
@@ -21,6 +22,12 @@ import time
 from io import BytesIO
 import urllib.parse
 
+from typing import Dict, Any, Generator, Callable, Optional, Type, Union
+from types import TracebackType
+import typing
+if typing.TYPE_CHECKING:
+    from typing import Deque, Tuple, List  # noqa: F401
+
 
 class HTTPTimeoutError(HTTPError):
     """Error raised by SimpleAsyncHTTPClient on timeout.
@@ -30,11 +37,11 @@ class HTTPTimeoutError(HTTPError):
 
     .. versionadded:: 5.1
     """
-    def __init__(self, message):
+    def __init__(self, message: str) -> None:
         super(HTTPTimeoutError, self).__init__(599, message=message)
 
-    def __str__(self):
-        return self.message
+    def __str__(self) -> str:
+        return self.message or "Timeout"
 
 
 class HTTPStreamClosedError(HTTPError):
@@ -48,11 +55,11 @@ class HTTPStreamClosedError(HTTPError):
 
     .. versionadded:: 5.1
     """
-    def __init__(self, message):
+    def __init__(self, message: str) -> None:
         super(HTTPStreamClosedError, self).__init__(599, message=message)
 
-    def __str__(self):
-        return self.message
+    def __str__(self) -> str:
+        return self.message or "Stream closed"
 
 
 class SimpleAsyncHTTPClient(AsyncHTTPClient):
@@ -64,10 +71,10 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     are not reused, and callers cannot select the network interface to be
     used.
     """
-    def initialize(self, max_clients=10,
-                   hostname_mapping=None, max_buffer_size=104857600,
-                   resolver=None, defaults=None, max_header_size=None,
-                   max_body_size=None):
+    def initialize(self, max_clients: int=10,  # type: ignore
+                   hostname_mapping: Dict[str, str]=None, max_buffer_size: int=104857600,
+                   resolver: Resolver=None, defaults: Dict[str, Any]=None,
+                   max_header_size: int=None, max_body_size: int=None) -> None:
         """Creates a AsyncHTTPClient.
 
         Only a single AsyncHTTPClient instance exists per IOLoop
@@ -102,9 +109,11 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         """
         super(SimpleAsyncHTTPClient, self).initialize(defaults=defaults)
         self.max_clients = max_clients
-        self.queue = collections.deque()
-        self.active = {}
-        self.waiting = {}
+        self.queue = collections.deque() \
+            # type: Deque[Tuple[object, HTTPRequest, Callable[[HTTPResponse], None]]]
+        self.active = {}  # type: Dict[object, Tuple[HTTPRequest, Callable[[HTTPResponse], None]]]
+        self.waiting = {} \
+            # type: Dict[object, Tuple[HTTPRequest, Callable[[HTTPResponse], None], object]]
         self.max_buffer_size = max_buffer_size
         self.max_header_size = max_header_size
         self.max_body_size = max_body_size
@@ -121,16 +130,18 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
                                              mapping=hostname_mapping)
         self.tcp_client = TCPClient(resolver=self.resolver)
 
-    def close(self):
+    def close(self) -> None:
         super(SimpleAsyncHTTPClient, self).close()
         if self.own_resolver:
             self.resolver.close()
         self.tcp_client.close()
 
-    def fetch_impl(self, request, callback):
+    def fetch_impl(self, request: HTTPRequest, callback: Callable[[HTTPResponse], None]) -> None:
         key = object()
         self.queue.append((key, request, callback))
         if not len(self.active) < self.max_clients:
+            assert request.connect_timeout is not None
+            assert request.request_timeout is not None
             timeout_handle = self.io_loop.add_timeout(
                 self.io_loop.time() + min(request.connect_timeout,
                                           request.request_timeout),
@@ -144,7 +155,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
                           "%d active, %d queued requests." % (
                               len(self.active), len(self.queue)))
 
-    def _process_queue(self):
+    def _process_queue(self) -> None:
         while self.queue and len(self.active) < self.max_clients:
             key, request, callback = self.queue.popleft()
             if key not in self.waiting:
@@ -154,27 +165,28 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
             release_callback = functools.partial(self._release_fetch, key)
             self._handle_request(request, release_callback, callback)
 
-    def _connection_class(self):
+    def _connection_class(self) -> type:
         return _HTTPConnection
 
-    def _handle_request(self, request, release_callback, final_callback):
+    def _handle_request(self, request: HTTPRequest, release_callback: Callable[[], None],
+                        final_callback: Callable[[HTTPResponse], None]) -> None:
         self._connection_class()(
             self, request, release_callback,
             final_callback, self.max_buffer_size, self.tcp_client,
             self.max_header_size, self.max_body_size)
 
-    def _release_fetch(self, key):
+    def _release_fetch(self, key: object) -> None:
         del self.active[key]
         self._process_queue()
 
-    def _remove_timeout(self, key):
+    def _remove_timeout(self, key: object) -> None:
         if key in self.waiting:
             request, callback, timeout_handle = self.waiting[key]
             if timeout_handle is not None:
                 self.io_loop.remove_timeout(timeout_handle)
             del self.waiting[key]
 
-    def _on_timeout(self, key, info=None):
+    def _on_timeout(self, key: object, info: str=None) -> None:
         """Timeout callback of request.
 
         Construct a timeout HTTPResponse when a timeout occurs.
@@ -196,9 +208,10 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 class _HTTPConnection(httputil.HTTPMessageDelegate):
     _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 
-    def __init__(self, client, request, release_callback,
-                 final_callback, max_buffer_size, tcp_client,
-                 max_header_size, max_body_size):
+    def __init__(self, client: SimpleAsyncHTTPClient, request: HTTPRequest,
+                 release_callback: Callable[[], None],
+                 final_callback: Callable[[HTTPResponse], None], max_buffer_size: int,
+                 tcp_client: TCPClient, max_header_size: int, max_body_size: int) -> None:
         self.io_loop = IOLoop.current()
         self.start_time = self.io_loop.time()
         self.start_wall_time = time.time()
@@ -210,17 +223,17 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self.tcp_client = tcp_client
         self.max_header_size = max_header_size
         self.max_body_size = max_body_size
-        self.code = None
-        self.headers = None
-        self.chunks = []
+        self.code = None  # type: Optional[int]
+        self.headers = None  # type: Optional[httputil.HTTPHeaders]
+        self.chunks = []  # type: List[bytes]
         self._decompressor = None
         # Timeout handle returned by IOLoop.add_timeout
-        self._timeout = None
+        self._timeout = None  # type: object
         self._sockaddr = None
         IOLoop.current().add_callback(self.run)
 
     @gen.coroutine
-    def run(self):
+    def run(self) -> Generator[Any, Any, None]:
         try:
             self.parsed = urllib.parse.urlsplit(_unicode(self.request.url))
             if self.parsed.scheme not in ("http", "https"):
@@ -292,12 +305,13 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     username = self.request.auth_username
                     password = self.request.auth_password or ''
                 if username is not None:
+                    assert password is not None
                     if self.request.auth_mode not in (None, "basic"):
                         raise ValueError("unsupported auth_mode %s",
                                          self.request.auth_mode)
                     self.request.headers["Authorization"] = (
-                        b"Basic " + base64.b64encode(
-                            httputil.encode_username_password(username, password)))
+                        "Basic " + _unicode(base64.b64encode(
+                            httputil.encode_username_password(username, password))))
                 if self.request.user_agent:
                     self.request.headers["User-Agent"] = self.request.user_agent
                 if not self.request.allow_nonstandard_methods:
@@ -339,7 +353,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             if not self._handle_exception(*sys.exc_info()):
                 raise
 
-    def _get_ssl_options(self, scheme):
+    def _get_ssl_options(self, scheme: str) -> Union[None, Dict[str, Any], ssl.SSLContext]:
         if scheme == "https":
             if self.request.ssl_options is not None:
                 return self.request.ssl_options
@@ -365,7 +379,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             return ssl_ctx
         return None
 
-    def _on_timeout(self, info=None):
+    def _on_timeout(self, info: str=None) -> None:
         """Timeout callback of _HTTPConnection instance.
 
         Raise a `HTTPTimeoutError` when a timeout occurs.
@@ -378,12 +392,12 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self._handle_exception(HTTPTimeoutError, HTTPTimeoutError(error_message),
                                    None)
 
-    def _remove_timeout(self):
+    def _remove_timeout(self) -> None:
         if self._timeout is not None:
             self.io_loop.remove_timeout(self._timeout)
             self._timeout = None
 
-    def _create_connection(self, stream):
+    def _create_connection(self, stream: IOStream) -> HTTP1Connection:
         stream.set_nodelay(True)
         connection = HTTP1Connection(
             stream, True,
@@ -391,12 +405,12 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 no_keep_alive=True,
                 max_header_size=self.max_header_size,
                 max_body_size=self.max_body_size,
-                decompress=self.request.decompress_response),
+                decompress=bool(self.request.decompress_response)),
             self._sockaddr)
         return connection
 
     @gen.coroutine
-    def _write_body(self, start_read):
+    def _write_body(self, start_read: bool) -> Generator[Any, Any, None]:
         if self.request.body is not None:
             self.connection.write(self.request.body)
         elif self.request.body_producer is not None:
@@ -411,20 +425,22 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 if not self._handle_exception(*sys.exc_info()):
                     raise
 
-    def _release(self):
+    def _release(self) -> None:
         if self.release_callback is not None:
             release_callback = self.release_callback
-            self.release_callback = None
+            self.release_callback = None  # type: ignore
             release_callback()
 
-    def _run_callback(self, response):
+    def _run_callback(self, response: HTTPResponse) -> None:
         self._release()
         if self.final_callback is not None:
             final_callback = self.final_callback
-            self.final_callback = None
+            self.final_callback = None  # type: ignore
             self.io_loop.add_callback(final_callback, response)
 
-    def _handle_exception(self, typ, value, tb):
+    def _handle_exception(self, typ: Optional[Type[BaseException]],
+                          value: Optional[BaseException],
+                          tb: Optional[TracebackType]) -> bool:
         if self.final_callback:
             self._remove_timeout()
             if isinstance(value, StreamClosedError):
@@ -450,7 +466,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             # pass it along, unless it's just the stream being closed.
             return isinstance(value, StreamClosedError)
 
-    def on_connection_close(self):
+    def on_connection_close(self) -> None:
         if self.final_callback is not None:
             message = "Connection closed"
             if self.stream.error:
@@ -460,7 +476,10 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             except HTTPStreamClosedError:
                 self._handle_exception(*sys.exc_info())
 
-    def headers_received(self, first_line, headers):
+    def headers_received(self, first_line: Union[httputil.ResponseStartLine,
+                                                 httputil.RequestStartLine],
+                         headers: httputil.HTTPHeaders) -> None:
+        assert isinstance(first_line, httputil.ResponseStartLine)
         if self.request.expect_100_continue and first_line.code == 100:
             self._write_body(False)
             return
@@ -478,12 +497,15 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 self.request.header_callback("%s: %s\r\n" % (k, v))
             self.request.header_callback('\r\n')
 
-    def _should_follow_redirect(self):
-        return (self.request.follow_redirects and
-                self.request.max_redirects > 0 and
-                self.code in (301, 302, 303, 307, 308))
+    def _should_follow_redirect(self) -> bool:
+        if self.request.follow_redirects:
+            assert self.request.max_redirects is not None
+            return (self.code in (301, 302, 303, 307, 308) and
+                    self.request.max_redirects > 0)
+        return False
 
-    def finish(self):
+    def finish(self) -> None:
+        assert self.code is not None
         data = b''.join(self.chunks)
         self._remove_timeout()
         original_request = getattr(self.request, "original_request",
@@ -533,10 +555,10 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self._run_callback(response)
         self._on_end_request()
 
-    def _on_end_request(self):
+    def _on_end_request(self) -> None:
         self.stream.close()
 
-    def data_received(self, chunk):
+    def data_received(self, chunk: bytes) -> None:
         if self._should_follow_redirect():
             # We're going to follow a redirect so just discard the body.
             return

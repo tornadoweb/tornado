@@ -27,22 +27,30 @@ from tornado import httputil
 from tornado import ioloop
 
 from tornado.escape import utf8, native_str
-from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main
+from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main
+from tornado.log import app_log
+
+from typing import Dict, Any, Callable, Union
+import typing
+if typing.TYPE_CHECKING:
+    from typing import Deque, Tuple, Optional  # noqa: F401
 
 curl_log = logging.getLogger('tornado.curl_httpclient')
 
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):
-    def initialize(self, max_clients=10, defaults=None):
+    def initialize(self, max_clients: int=10,  # type: ignore
+                   defaults: Dict[str, Any]=None) -> None:
         super(CurlAsyncHTTPClient, self).initialize(defaults=defaults)
         self._multi = pycurl.CurlMulti()
         self._multi.setopt(pycurl.M_TIMERFUNCTION, self._set_timeout)
         self._multi.setopt(pycurl.M_SOCKETFUNCTION, self._handle_socket)
         self._curls = [self._curl_create() for i in range(max_clients)]
         self._free_list = self._curls[:]
-        self._requests = collections.deque()
-        self._fds = {}
-        self._timeout = None
+        self._requests = collections.deque() \
+            # type: Deque[Tuple[HTTPRequest, Callable[[HTTPResponse], None], float]]
+        self._fds = {}  # type: Dict[int, int]
+        self._timeout = None  # type: Optional[object]
 
         # libcurl has bugs that sometimes cause it to not report all
         # relevant file descriptors and timeouts to TIMERFUNCTION/
@@ -61,7 +69,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         self._multi.add_handle(dummy_curl_handle)
         self._multi.remove_handle(dummy_curl_handle)
 
-    def close(self):
+    def close(self) -> None:
         self._force_timeout_callback.stop()
         if self._timeout is not None:
             self.io_loop.remove_timeout(self._timeout)
@@ -73,15 +81,15 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         # Set below properties to None to reduce the reference count of current
         # instance, because those properties hold some methods of current
         # instance that will case circular reference.
-        self._force_timeout_callback = None
+        self._force_timeout_callback = None  # type: ignore
         self._multi = None
 
-    def fetch_impl(self, request, callback):
+    def fetch_impl(self, request: HTTPRequest, callback: Callable[[HTTPResponse], None]) -> None:
         self._requests.append((request, callback, self.io_loop.time()))
         self._process_queue()
         self._set_timeout(0)
 
-    def _handle_socket(self, event, fd, multi, data):
+    def _handle_socket(self, event: int, fd: int, multi: Any, data: bytes) -> None:
         """Called by libcurl when it wants to change the file descriptors
         it cares about.
         """
@@ -111,14 +119,14 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                                      ioloop_event)
             self._fds[fd] = ioloop_event
 
-    def _set_timeout(self, msecs):
+    def _set_timeout(self, msecs: int) -> None:
         """Called by libcurl to schedule a timeout."""
         if self._timeout is not None:
             self.io_loop.remove_timeout(self._timeout)
         self._timeout = self.io_loop.add_timeout(
             self.io_loop.time() + msecs / 1000.0, self._handle_timeout)
 
-    def _handle_events(self, fd, events):
+    def _handle_events(self, fd: int, events: int) -> None:
         """Called by IOLoop when there is activity on one of our
         file descriptors.
         """
@@ -136,7 +144,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 break
         self._finish_pending_requests()
 
-    def _handle_timeout(self):
+    def _handle_timeout(self) -> None:
         """Called by IOLoop when the requested timeout has passed."""
         self._timeout = None
         while True:
@@ -166,7 +174,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if new_timeout >= 0:
             self._set_timeout(new_timeout)
 
-    def _handle_force_timeout(self):
+    def _handle_force_timeout(self) -> None:
         """Called by IOLoop periodically to ask libcurl to process any
         events it may have forgotten about.
         """
@@ -179,7 +187,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 break
         self._finish_pending_requests()
 
-    def _finish_pending_requests(self):
+    def _finish_pending_requests(self) -> None:
         """Process any requests that were completed by the last
         call to multi.socket_action.
         """
@@ -193,7 +201,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 break
         self._process_queue()
 
-    def _process_queue(self):
+    def _process_queue(self) -> None:
         while True:
             started = 0
             while self._free_list and self._requests:
@@ -233,14 +241,16 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             if not started:
                 break
 
-    def _finish(self, curl, curl_error=None, curl_message=None):
+    def _finish(self, curl: pycurl.Curl, curl_error: int=None, curl_message: str=None) -> None:
         info = curl.info
         curl.info = None
         self._multi.remove_handle(curl)
         self._free_list.append(curl)
         buffer = info["buffer"]
         if curl_error:
-            error = CurlError(curl_error, curl_message)
+            assert curl_message is not None
+            error = CurlError(curl_error, curl_message)  # type: Optional[CurlError]
+            assert error is not None
             code = error.code
             effective_url = None
             buffer.close()
@@ -273,10 +283,10 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         except Exception:
             self.handle_callback_exception(info["callback"])
 
-    def handle_callback_exception(self, callback):
-        self.io_loop.handle_callback_exception(callback)
+    def handle_callback_exception(self, callback: Any) -> None:
+        app_log.error("Exception in callback %r", callback, exc_info=True)
 
-    def _curl_create(self):
+    def _curl_create(self) -> pycurl.Curl:
         curl = pycurl.Curl()
         if curl_log.isEnabledFor(logging.DEBUG):
             curl.setopt(pycurl.VERBOSE, 1)
@@ -286,7 +296,8 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             curl.setopt(pycurl.REDIR_PROTOCOLS, pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS)
         return curl
 
-    def _curl_setup_request(self, curl, request, buffer, headers):
+    def _curl_setup_request(self, curl: pycurl.Curl, request: HTTPRequest,
+                            buffer: BytesIO, headers: httputil.HTTPHeaders) -> None:
         curl.setopt(pycurl.URL, native_str(request.url))
 
         # libcurl's magic "Expect: 100-continue" behavior causes delays
@@ -312,14 +323,18 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                     functools.partial(self._curl_header_callback,
                                       headers, request.header_callback))
         if request.streaming_callback:
-            def write_function(chunk):
-                self.io_loop.add_callback(request.streaming_callback, chunk)
+            def write_function(b: Union[bytes, bytearray]) -> int:
+                assert request.streaming_callback is not None
+                self.io_loop.add_callback(request.streaming_callback, b)
+                return len(b)
         else:
             write_function = buffer.write
         curl.setopt(pycurl.WRITEFUNCTION, write_function)
         curl.setopt(pycurl.FOLLOWLOCATION, request.follow_redirects)
         curl.setopt(pycurl.MAXREDIRS, request.max_redirects)
+        assert request.connect_timeout is not None
         curl.setopt(pycurl.CONNECTTIMEOUT_MS, int(1000 * request.connect_timeout))
+        assert request.request_timeout is not None
         curl.setopt(pycurl.TIMEOUT_MS, int(1000 * request.request_timeout))
         if request.user_agent:
             curl.setopt(pycurl.USERAGENT, native_str(request.user_agent))
@@ -335,6 +350,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             curl.setopt(pycurl.PROXY, request.proxy_host)
             curl.setopt(pycurl.PROXYPORT, request.proxy_port)
             if request.proxy_username:
+                assert request.proxy_password is not None
                 credentials = httputil.encode_username_password(request.proxy_username,
                                                                 request.proxy_password)
                 curl.setopt(pycurl.PROXYUSERPWD, credentials)
@@ -416,7 +432,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 raise ValueError('Body must be None for GET request')
             request_buffer = BytesIO(utf8(request.body or ''))
 
-            def ioctl(cmd):
+            def ioctl(cmd: int) -> None:
                 if cmd == curl.IOCMD_RESTARTREAD:
                     request_buffer.seek(0)
             curl.setopt(pycurl.READFUNCTION, request_buffer.read)
@@ -428,6 +444,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 curl.setopt(pycurl.INFILESIZE, len(request.body or ''))
 
         if request.auth_username is not None:
+            assert request.auth_password is not None
             if request.auth_mode is None or request.auth_mode == "basic":
                 curl.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_BASIC)
             elif request.auth_mode == "digest":
@@ -453,7 +470,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if request.ssl_options is not None:
             raise ValueError("ssl_options not supported in curl_httpclient")
 
-        if threading.activeCount() > 1:
+        if threading.active_count() > 1:
             # libcurl/pycurl is not thread-safe by default.  When multiple threads
             # are used, signals should be disabled.  This has the side effect
             # of disabling DNS timeouts in some environments (when libcurl is
@@ -466,8 +483,10 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if request.prepare_curl_callback is not None:
             request.prepare_curl_callback(curl)
 
-    def _curl_header_callback(self, headers, header_callback, header_line):
-        header_line = native_str(header_line.decode('latin1'))
+    def _curl_header_callback(self, headers: httputil.HTTPHeaders,
+                              header_callback: Callable[[str], None],
+                              header_line_bytes: bytes) -> None:
+        header_line = native_str(header_line_bytes.decode('latin1'))
         if header_callback is not None:
             self.io_loop.add_callback(header_callback, header_line)
         # header_line as returned by curl includes the end-of-line characters.
@@ -484,7 +503,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             return
         headers.parse_line(header_line)
 
-    def _curl_debug(self, debug_type, debug_msg):
+    def _curl_debug(self, debug_type: int, debug_msg: str) -> None:
         debug_types = ('I', '<', '>', '<', '>')
         if debug_type == 0:
             debug_msg = native_str(debug_msg)
@@ -498,7 +517,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
 
 
 class CurlError(HTTPError):
-    def __init__(self, errno, message):
+    def __init__(self, errno: int, message: str) -> None:
         HTTPError.__init__(self, 599, message)
         self.errno = errno
 
