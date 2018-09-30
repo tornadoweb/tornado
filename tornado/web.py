@@ -100,7 +100,7 @@ from tornado.util import ObjectDict, unicode_type, _websocket_mask
 url = URLSpec
 
 from typing import (Dict, Any, Union, Optional, Awaitable, Tuple, List, Callable, Iterable,
-                    Generator, Type, cast)
+                    Generator, Type, cast, overload)
 from types import TracebackType
 import typing
 if typing.TYPE_CHECKING:
@@ -396,7 +396,21 @@ class RequestHandler(object):
             raise ValueError("Unsafe header value %r", retval)
         return retval
 
-    def get_argument(self, name: str, default: Union[None, str, _ArgDefaultMarker]=_ARG_DEFAULT,
+    @overload
+    def get_argument(self, name: str, default: str, strip: bool=True) -> str:
+        pass
+
+    @overload  # noqa: F811
+    def get_argument(self, name: str, default: _ArgDefaultMarker=_ARG_DEFAULT,
+                     strip: bool=True) -> str:
+        pass
+
+    @overload  # noqa: F811
+    def get_argument(self, name: str, default: None, strip: bool=True) -> Optional[str]:
+        pass
+
+    def get_argument(self, name: str,  # noqa: F811
+                     default: Union[None, str, _ArgDefaultMarker]=_ARG_DEFAULT,
                      strip: bool=True) -> Optional[str]:
         """Returns the value of the argument with the given name.
 

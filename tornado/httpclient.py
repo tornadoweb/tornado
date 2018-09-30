@@ -610,9 +610,9 @@ class HTTPResponse(object):
         self.time_info = time_info or {}
 
     @property
-    def body(self) -> Optional[bytes]:
+    def body(self) -> bytes:
         if self.buffer is None:
-            return None
+            raise ValueError("body not set")
         elif self._body is None:
             self._body = self.buffer.getvalue()
 
