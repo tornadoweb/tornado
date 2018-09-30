@@ -35,12 +35,18 @@ from tornado import escape
 from tornado import httputil
 from tornado.log import access_log
 
+from typing import List, Tuple, Optional, Type, Callable, Any, Dict, Text
+from types import TracebackType
+import typing
+if typing.TYPE_CHECKING:
+    from wsgiref.types import WSGIApplication as WSGIAppType  # noqa: F401
+
 
 # PEP 3333 specifies that WSGI on python 3 generally deals with byte strings
 # that are smuggled inside objects of type unicode (via the latin1 encoding).
 # This function is like those in the tornado.escape module, but defined
 # here to minimize the temptation to use it in non-wsgi contexts.
-def to_wsgi_str(s):
+def to_wsgi_str(s: bytes) -> str:
     assert isinstance(s, bytes)
     return s.decode('latin1')
 
@@ -79,14 +85,19 @@ class WSGIContainer(object):
     Tornado and WSGI apps in the same server.  See
     https://github.com/bdarnell/django-tornado-demo for a complete example.
     """
-    def __init__(self, wsgi_application):
+    def __init__(self, wsgi_application: 'WSGIAppType') -> None:
         self.wsgi_application = wsgi_application
 
-    def __call__(self, request):
-        data = {}
-        response = []
+    def __call__(self, request: httputil.HTTPServerRequest) -> None:
+        data = {}  # type: Dict[str, Any]
+        response = []  # type: List[bytes]
 
-        def start_response(status, response_headers, exc_info=None):
+        def start_response(
+                status: str, response_headers: List[Tuple[str, str]],
+                exc_info: Optional[Tuple[Optional[Type[BaseException]],
+                                         Optional[BaseException],
+                                         Optional[TracebackType]]]=None
+        ) -> Callable[[bytes], Any]:
             data["status"] = status
             data["headers"] = response_headers
             return response.append
@@ -97,13 +108,13 @@ class WSGIContainer(object):
             body = b"".join(response)
         finally:
             if hasattr(app_response, "close"):
-                app_response.close()
+                app_response.close()  # type: ignore
         if not data:
             raise Exception("WSGI app did not call start_response")
 
-        status_code, reason = data["status"].split(' ', 1)
-        status_code = int(status_code)
-        headers = data["headers"]
+        status_code_str, reason = data["status"].split(' ', 1)
+        status_code = int(status_code_str)
+        headers = data["headers"]  # type: List[Tuple[str, str]]
         header_set = set(k.lower() for (k, v) in headers)
         body = escape.utf8(body)
         if status_code != 304:
@@ -118,12 +129,13 @@ class WSGIContainer(object):
         header_obj = httputil.HTTPHeaders()
         for key, value in headers:
             header_obj.add(key, value)
+        assert request.connection is not None
         request.connection.write_headers(start_line, header_obj, chunk=body)
         request.connection.finish()
         self._log(status_code, request)
 
     @staticmethod
-    def environ(request):
+    def environ(request: httputil.HTTPServerRequest) -> Dict[Text, Any]:
         """Converts a `tornado.httputil.HTTPServerRequest` to a WSGI environment.
         """
         hostport = request.host.split(":")
@@ -159,7 +171,7 @@ class WSGIContainer(object):
             environ["HTTP_" + key.replace("-", "_").upper()] = value
         return environ
 
-    def _log(self, status_code, request):
+    def _log(self, status_code: int, request: httputil.HTTPServerRequest) -> None:
         if status_code < 400:
             log_method = access_log.info
         elif status_code < 500:
@@ -167,6 +179,8 @@ class WSGIContainer(object):
         else:
             log_method = access_log.error
         request_time = 1000.0 * request.request_time()
+        assert request.method is not None
+        assert request.uri is not None
         summary = request.method + " " + request.uri + " (" + \
             request.remote_ip + ")"
         log_method("%d %s %.2fms", status_code, summary, request_time)
