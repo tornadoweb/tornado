@@ -208,7 +208,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 class _HTTPConnection(httputil.HTTPMessageDelegate):
     _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 
-    def __init__(self, client: SimpleAsyncHTTPClient, request: HTTPRequest,
+    def __init__(self, client: Optional[SimpleAsyncHTTPClient], request: HTTPRequest,
                  release_callback: Callable[[], None],
                  final_callback: Callable[[HTTPResponse], None], max_buffer_size: int,
                  tcp_client: TCPClient, max_header_size: int, max_body_size: int) -> None:
