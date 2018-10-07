@@ -48,7 +48,7 @@ install:
     # version supported. But Python 3.7 requires slower-to-start VMs,
     # so we run it on 3.6 to minimize total CI run time.
     - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then travis_retry pip install -r docs/requirements.txt; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then travis_retry pip install flake8 mypy==0.630; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then travis_retry pip install flake8 mypy==0.630 black; fi
     # On travis the extension should always be built
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then export TORNADO_EXTENSION=1; fi
     - travis_retry python setup.py install
@@ -94,6 +94,7 @@ script:
     - if [[ $TRAVIS_PYTHON_VERSION == 3.6 ]]; then (cd ../docs && mkdir sphinx-out && sphinx-build -E -n -W -b html . sphinx-out); fi
     - if [[ $TRAVIS_PYTHON_VERSION == 3.6 ]]; then (cd ../docs && mkdir sphinx-doctest-out && sphinx-build -E -n -b doctest . sphinx-out); fi
     - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then (cd .. && flake8); fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then (cd .. && black --check --diff tornado); fi
     - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then (cd .. && mypy tornado); fi
 
 after_success:
