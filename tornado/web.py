@@ -2560,9 +2560,7 @@ class StaticFileHandler(RequestHandler):
     _static_hashes = {}  # type: Dict[str, Optional[str]]
     _lock = threading.Lock()  # protects _static_hashes
 
-    def initialize(
-        self, path: str, default_filename: str = None
-    ) -> None:
+    def initialize(self, path: str, default_filename: str = None) -> None:
         self.root = path
         self.default_filename = default_filename
 
