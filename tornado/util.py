@@ -34,10 +34,10 @@ from typing import (
 if typing.TYPE_CHECKING:
     # Additional imports only used in type comments.
     # This lets us make these imports lazy.
-    import datetime  # noqa
-    from types import TracebackType  # noqa
-    from typing import Union  # noqa
-    import unittest  # noqa
+    import datetime  # noqa: F401
+    from types import TracebackType  # noqa: F401
+    from typing import Union  # noqa: F401
+    import unittest  # noqa: F401
 
 # Aliases for types that are spelled differently in different Python
 # versions. bytes_type is deprecated and no longer used in Tornado

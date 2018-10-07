@@ -44,7 +44,7 @@ class ReturnValueIgnoredError(Exception):
     pass
 
 
-Future = asyncio.Future  # noqa
+Future = asyncio.Future
 
 FUTURES = (futures.Future, Future)
 

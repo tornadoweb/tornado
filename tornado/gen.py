@@ -784,7 +784,7 @@ class Runner(object):
 
             def inner(f: Any) -> None:
                 # Break a reference cycle to speed GC.
-                f = None  # noqa
+                f = None  # noqa: F841
                 self.run()
 
             self.io_loop.add_future(self.future, inner)

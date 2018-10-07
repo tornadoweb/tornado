@@ -15,7 +15,7 @@ from tornado.httputil import (
     HTTPMessageDelegate,
     HTTPServerConnectionDelegate,
     ResponseStartLine,
-)  # noqa: E501
+)
 from tornado.routing import (
     HostMatches,
     PathMatches,
@@ -28,7 +28,7 @@ from tornado.testing import AsyncHTTPTestCase
 from tornado.web import Application, HTTPError, RequestHandler
 from tornado.wsgi import WSGIContainer
 
-import typing  # noqa
+import typing  # noqa: F401
 
 
 class BasicRouter(Router):

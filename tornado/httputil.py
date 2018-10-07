@@ -57,9 +57,9 @@ from typing import (
 )
 
 if typing.TYPE_CHECKING:
-    from typing import Deque  # noqa
-    from asyncio import Future  # noqa
-    import unittest  # noqa
+    from typing import Deque  # noqa: F401
+    from asyncio import Future  # noqa: F401
+    import unittest  # noqa: F401
 
 
 # RFC 7230 section 3.5: a recipient MAY recognize a single LF as a line

@@ -7,7 +7,7 @@ from tornado.escape import (
     recursive_unicode,
     native_str,
     to_basestring,
-)  # noqa: E501
+)
 from tornado.httpclient import HTTPClientError
 from tornado.httputil import format_timestamp
 from tornado.iostream import IOStream

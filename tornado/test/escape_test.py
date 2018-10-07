@@ -15,7 +15,7 @@ from tornado.escape import (
 )
 from tornado.util import unicode_type
 
-from typing import List, Tuple, Union, Dict, Any  # noqa
+from typing import List, Tuple, Union, Dict, Any  # noqa: F401
 
 linkify_tests = [
     # (input, linkify_kwargs, expected_output)

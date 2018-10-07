@@ -10,7 +10,7 @@ SetHandleInformation.argtypes = (
     ctypes.wintypes.HANDLE,
     ctypes.wintypes.DWORD,
     ctypes.wintypes.DWORD,
-)  # noqa: E501
+)
 SetHandleInformation.restype = ctypes.wintypes.BOOL
 
 HANDLE_FLAG_INHERIT = 0x00000001

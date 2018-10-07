@@ -16,7 +16,7 @@ from tornado.httputil import (
     HTTPMessageDelegate,
     HTTPServerConnectionDelegate,
     ResponseStartLine,
-)  # noqa: E501
+)
 from tornado.iostream import IOStream
 from tornado.locks import Event
 from tornado.log import gen_log
@@ -28,7 +28,7 @@ from tornado.testing import (
     AsyncTestCase,
     ExpectLog,
     gen_test,
-)  # noqa: E501
+)
 from tornado.test.util import skipOnTravis
 from tornado.web import Application, RequestHandler, stream_request_body
 

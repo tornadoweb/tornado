@@ -13,7 +13,7 @@ from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, Expec
 from tornado.web import Application, RequestHandler
 
 try:
-    import tornado.websocket  # noqa
+    import tornado.websocket  # noqa: F401
     from tornado.util import _websocket_mask_python
 except ImportError:
     # The unittest module presents misleading errors on ImportError

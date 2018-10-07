@@ -30,7 +30,7 @@ from tornado.test.httpclient_test import (
     CountdownHandler,
     HelloWorldHandler,
     RedirectHandler,
-)  # noqa: E501
+)
 from tornado.test import httpclient_test
 from tornado.testing import (
     AsyncHTTPTestCase,

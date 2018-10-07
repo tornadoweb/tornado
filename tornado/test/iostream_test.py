@@ -20,7 +20,7 @@ from tornado.testing import (
     bind_unused_port,
     ExpectLog,
     gen_test,
-)  # noqa: E501
+)
 from tornado.test.util import skipIfNonUnix, refusing_port, skipPypy3V58
 from tornado.web import RequestHandler, Application
 import errno

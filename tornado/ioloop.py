@@ -47,7 +47,7 @@ from tornado.concurrent import (
     chain_future,
     future_set_exc_info,
     future_add_done_callback,
-)  # noqa: E501
+)
 from tornado.log import app_log
 from tornado.util import Configurable, TimeoutError, import_object
 
