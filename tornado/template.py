@@ -207,21 +207,11 @@ from tornado import escape
 from tornado.log import app_log
 from tornado.util import ObjectDict, exec_in, unicode_type
 
-from typing import (
-    Any,
-    Union,
-    Callable,
-    List,
-    Dict,
-    Iterable,
-    Optional,
-    TextIO,
-    ContextManager,
-)
+from typing import Any, Union, Callable, List, Dict, Iterable, Optional, TextIO
 import typing
 
 if typing.TYPE_CHECKING:
-    from typing import Tuple  # noqa: F401
+    from typing import Tuple, ContextManager  # noqa: F401
 
 _DEFAULT_AUTOESCAPE = "xhtml_escape"
 
@@ -747,7 +737,7 @@ class _CodeWriter(object):
     def indent_size(self) -> int:
         return self._indent
 
-    def indent(self) -> ContextManager:
+    def indent(self) -> "ContextManager":
         class Indenter(object):
             def __enter__(_) -> "_CodeWriter":
                 self._indent += 1
@@ -759,7 +749,7 @@ class _CodeWriter(object):
 
         return Indenter()
 
-    def include(self, template: Template, line: int) -> ContextManager:
+    def include(self, template: Template, line: int) -> "ContextManager":
         self.include_stack.append((self.current_template, line))
         self.current_template = template
 

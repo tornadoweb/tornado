@@ -1795,7 +1795,7 @@ class RequestHandler(object):
             )
 
     def _ui_module(self, name: str, module: Type["UIModule"]) -> Callable[..., str]:
-        def render(*args: Any, **kwargs: Any) -> str:
+        def render(*args, **kwargs) -> str:  # type: ignore
             if not hasattr(self, "_active_modules"):
                 self._active_modules = {}  # type: Dict[str, UIModule]
             if name not in self._active_modules:
@@ -1871,8 +1871,8 @@ def removeslash(
     """
 
     @functools.wraps(method)
-    def wrapper(
-        self: RequestHandler, *args: Any, **kwargs: Any
+    def wrapper(  # type: ignore
+        self: RequestHandler, *args, **kwargs
     ) -> Optional[Awaitable[None]]:
         if self.request.path.endswith("/"):
             if self.request.method in ("GET", "HEAD"):
@@ -1900,8 +1900,8 @@ def addslash(
     """
 
     @functools.wraps(method)
-    def wrapper(
-        self: RequestHandler, *args: Any, **kwargs: Any
+    def wrapper(  # type: ignore
+        self: RequestHandler, *args, **kwargs
     ) -> Optional[Awaitable[None]]:
         if not self.request.path.endswith("/"):
             if self.request.method in ("GET", "HEAD"):
@@ -3150,8 +3150,8 @@ def authenticated(
     """
 
     @functools.wraps(method)
-    def wrapper(
-        self: RequestHandler, *args: Any, **kwargs: Any
+    def wrapper(  # type: ignore
+        self: RequestHandler, *args, **kwargs
     ) -> Optional[Awaitable[None]]:
         if not self.current_user:
             if self.request.method in ("GET", "HEAD"):
@@ -3272,7 +3272,7 @@ class TemplateModule(UIModule):
         self._resource_dict = {}  # type: Dict[str, Dict[str, Any]]
 
     def render(self, path: str, **kwargs: Any) -> bytes:  # type: ignore
-        def set_resources(**kwargs: Any) -> str:
+        def set_resources(**kwargs) -> str:  # type: ignore
             if path not in self._resource_dict:
                 self._resource_list.append(kwargs)
                 self._resource_dict[path] = kwargs
