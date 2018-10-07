@@ -27,11 +27,11 @@ class QueueBasicTest(AsyncTestCase):
         q.get()
 
         for q_str in repr(q), str(q):
-            self.assertTrue(q_str.startswith('<Queue'))
-            self.assertIn('maxsize=1', q_str)
-            self.assertIn('getters[1]', q_str)
-            self.assertNotIn('putters', q_str)
-            self.assertNotIn('tasks', q_str)
+            self.assertTrue(q_str.startswith("<Queue"))
+            self.assertIn("maxsize=1", q_str)
+            self.assertIn("getters[1]", q_str)
+            self.assertNotIn("putters", q_str)
+            self.assertNotIn("tasks", q_str)
 
         q.put(None)
         q.put(None)
@@ -39,9 +39,9 @@ class QueueBasicTest(AsyncTestCase):
         q.put(None)
 
         for q_str in repr(q), str(q):
-            self.assertNotIn('getters', q_str)
-            self.assertIn('putters[1]', q_str)
-            self.assertIn('tasks=2', q_str)
+            self.assertNotIn("getters", q_str)
+            self.assertIn("putters[1]", q_str)
+            self.assertIn("tasks=2", q_str)
 
     def test_order(self):
         q = queues.Queue()  # type: queues.Queue[int]
@@ -166,6 +166,7 @@ class QueueGetTest(AsyncTestCase):
                 results.append(i)
                 if i == 4:
                     return results
+
         results = yield f()
         self.assertEqual(results, list(range(5)))
 
@@ -360,15 +361,15 @@ class PriorityQueueJoinTest(QueueJoinTest):
     @gen_test
     def test_order(self):
         q = self.queue_class(maxsize=2)
-        q.put_nowait((1, 'a'))
-        q.put_nowait((0, 'b'))
+        q.put_nowait((1, "a"))
+        q.put_nowait((0, "b"))
         self.assertTrue(q.full())
-        q.put((3, 'c'))
-        q.put((2, 'd'))
-        self.assertEqual((0, 'b'), q.get_nowait())
-        self.assertEqual((1, 'a'), (yield q.get()))
-        self.assertEqual((2, 'd'), q.get_nowait())
-        self.assertEqual((3, 'c'), (yield q.get()))
+        q.put((3, "c"))
+        q.put((2, "d"))
+        self.assertEqual((0, "b"), q.get_nowait())
+        self.assertEqual((1, "a"), (yield q.get()))
+        self.assertEqual((2, "d"), q.get_nowait())
+        self.assertEqual((3, "c"), (yield q.get()))
         self.assertTrue(q.empty())
 
 
@@ -417,5 +418,5 @@ class ProducerConsumerTest(AsyncTestCase):
         self.assertEqual(list(range(10)), history)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

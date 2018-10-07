@@ -26,8 +26,7 @@ class HTTP1ConnectionTest(AsyncTestCase):
         add_accept_handler(listener, accept_callback)
         self.client_stream = IOStream(socket.socket())
         self.addCleanup(self.client_stream.close)
-        yield [self.client_stream.connect(('127.0.0.1', port)),
-               event.wait()]
+        yield [self.client_stream.connect(("127.0.0.1", port)), event.wait()]
         self.io_loop.remove_handler(listener)
         listener.close()
 
@@ -56,4 +55,4 @@ class HTTP1ConnectionTest(AsyncTestCase):
         yield conn.read_response(Delegate())
         yield event.wait()
         self.assertEqual(self.code, 200)
-        self.assertEqual(b''.join(body), b'hello')
+        self.assertEqual(b"".join(body), b"hello")

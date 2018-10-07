@@ -10,4 +10,8 @@ ignore =
     E402,
     # E722 do not use bare except
     E722,
+    # flake8 and black disagree about
+    # W503 line break before binary operator
+    # E203 whitespace before ':'
+    W503,E203
 doctests = true

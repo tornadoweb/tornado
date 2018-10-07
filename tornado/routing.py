@@ -190,8 +190,9 @@ from typing import Any, Union, Optional, Awaitable, List, Dict, Pattern, Tuple, 
 class Router(httputil.HTTPServerConnectionDelegate):
     """Abstract router interface."""
 
-    def find_handler(self, request: httputil.HTTPServerRequest,
-                     **kwargs: Any) -> Optional[httputil.HTTPMessageDelegate]:
+    def find_handler(
+        self, request: httputil.HTTPServerRequest, **kwargs: Any
+    ) -> Optional[httputil.HTTPMessageDelegate]:
         """Must be implemented to return an appropriate instance of `~.httputil.HTTPMessageDelegate`
         that can serve the request.
         Routing implementations may pass additional kwargs to extend the routing logic.
@@ -203,8 +204,9 @@ class Router(httputil.HTTPServerConnectionDelegate):
         """
         raise NotImplementedError()
 
-    def start_request(self, server_conn: object,
-                      request_conn: httputil.HTTPConnection) -> httputil.HTTPMessageDelegate:
+    def start_request(
+        self, server_conn: object, request_conn: httputil.HTTPConnection
+    ) -> httputil.HTTPMessageDelegate:
         return _RoutingDelegate(self, server_conn, request_conn)
 
 
@@ -225,26 +227,34 @@ class ReversibleRouter(Router):
 
 
 class _RoutingDelegate(httputil.HTTPMessageDelegate):
-    def __init__(self, router: Router, server_conn: object,
-                 request_conn: httputil.HTTPConnection) -> None:
+    def __init__(
+        self, router: Router, server_conn: object, request_conn: httputil.HTTPConnection
+    ) -> None:
         self.server_conn = server_conn
         self.request_conn = request_conn
         self.delegate = None  # type: Optional[httputil.HTTPMessageDelegate]
         self.router = router  # type: Router
 
-    def headers_received(self, start_line: Union[httputil.RequestStartLine,
-                                                 httputil.ResponseStartLine],
-                         headers: httputil.HTTPHeaders) -> Optional[Awaitable[None]]:
+    def headers_received(
+        self,
+        start_line: Union[httputil.RequestStartLine, httputil.ResponseStartLine],
+        headers: httputil.HTTPHeaders,
+    ) -> Optional[Awaitable[None]]:
         assert isinstance(start_line, httputil.RequestStartLine)
         request = httputil.HTTPServerRequest(
             connection=self.request_conn,
             server_connection=self.server_conn,
-            start_line=start_line, headers=headers)
+            start_line=start_line,
+            headers=headers,
+        )
 
         self.delegate = self.router.find_handler(request)
         if self.delegate is None:
-            app_log.debug("Delegate for %s %s request not found",
-                          start_line.method, start_line.path)
+            app_log.debug(
+                "Delegate for %s %s request not found",
+                start_line.method,
+                start_line.path,
+            )
             self.delegate = _DefaultMessageDelegate(self.request_conn)
 
         return self.delegate.headers_received(start_line, headers)
@@ -268,23 +278,29 @@ class _DefaultMessageDelegate(httputil.HTTPMessageDelegate):
 
     def finish(self) -> None:
         self.connection.write_headers(
-            httputil.ResponseStartLine("HTTP/1.1", 404, "Not Found"), httputil.HTTPHeaders())
+            httputil.ResponseStartLine("HTTP/1.1", 404, "Not Found"),
+            httputil.HTTPHeaders(),
+        )
         self.connection.finish()
 
 
 # _RuleList can either contain pre-constructed Rules or a sequence of
 # arguments to be passed to the Rule constructor.
-_RuleList = List[Union['Rule',
-                       List[Any],  # Can't do detailed typechecking of lists.
-                       Tuple[Union[str, 'Matcher'], Any],
-                       Tuple[Union[str, 'Matcher'], Any, Dict[str, Any]],
-                       Tuple[Union[str, 'Matcher'], Any, Dict[str, Any], str]]]
+_RuleList = List[
+    Union[
+        "Rule",
+        List[Any],  # Can't do detailed typechecking of lists.
+        Tuple[Union[str, "Matcher"], Any],
+        Tuple[Union[str, "Matcher"], Any, Dict[str, Any]],
+        Tuple[Union[str, "Matcher"], Any, Dict[str, Any], str],
+    ]
+]
 
 
 class RuleRouter(Router):
     """Rule-based router implementation."""
 
-    def __init__(self, rules: _RuleList=None) -> None:
+    def __init__(self, rules: _RuleList = None) -> None:
         """Constructs a router from an ordered list of rules::
 
             RuleRouter([
@@ -331,7 +347,7 @@ class RuleRouter(Router):
 
             self.rules.append(self.process_rule(rule))
 
-    def process_rule(self, rule: 'Rule') -> 'Rule':
+    def process_rule(self, rule: "Rule") -> "Rule":
         """Override this method for additional preprocessing of each rule.
 
         :arg Rule rule: a rule to be processed.
@@ -339,24 +355,27 @@ class RuleRouter(Router):
         """
         return rule
 
-    def find_handler(self, request: httputil.HTTPServerRequest,
-                     **kwargs: Any) -> Optional[httputil.HTTPMessageDelegate]:
+    def find_handler(
+        self, request: httputil.HTTPServerRequest, **kwargs: Any
+    ) -> Optional[httputil.HTTPMessageDelegate]:
         for rule in self.rules:
             target_params = rule.matcher.match(request)
             if target_params is not None:
                 if rule.target_kwargs:
-                    target_params['target_kwargs'] = rule.target_kwargs
+                    target_params["target_kwargs"] = rule.target_kwargs
 
                 delegate = self.get_target_delegate(
-                    rule.target, request, **target_params)
+                    rule.target, request, **target_params
+                )
 
                 if delegate is not None:
                     return delegate
 
         return None
 
-    def get_target_delegate(self, target: Any, request: httputil.HTTPServerRequest,
-                            **target_params: Any) -> Optional[httputil.HTTPMessageDelegate]:
+    def get_target_delegate(
+        self, target: Any, request: httputil.HTTPServerRequest, **target_params: Any
+    ) -> Optional[httputil.HTTPMessageDelegate]:
         """Returns an instance of `~.httputil.HTTPMessageDelegate` for a
         Rule's target. This method is called by `~.find_handler` and can be
         extended to provide additional target types.
@@ -390,18 +409,18 @@ class ReversibleRuleRouter(ReversibleRouter, RuleRouter):
     in a rule's matcher (see `Matcher.reverse`).
     """
 
-    def __init__(self, rules: _RuleList=None) -> None:
+    def __init__(self, rules: _RuleList = None) -> None:
         self.named_rules = {}  # type: Dict[str, Any]
         super(ReversibleRuleRouter, self).__init__(rules)
 
-    def process_rule(self, rule: 'Rule') -> 'Rule':
+    def process_rule(self, rule: "Rule") -> "Rule":
         rule = super(ReversibleRuleRouter, self).process_rule(rule)
 
         if rule.name:
             if rule.name in self.named_rules:
                 app_log.warning(
-                    "Multiple handlers named %s; replacing previous value",
-                    rule.name)
+                    "Multiple handlers named %s; replacing previous value", rule.name
+                )
             self.named_rules[rule.name] = rule
 
         return rule
@@ -422,8 +441,13 @@ class ReversibleRuleRouter(ReversibleRouter, RuleRouter):
 class Rule(object):
     """A routing rule."""
 
-    def __init__(self, matcher: 'Matcher', target: Any,
-                 target_kwargs: Dict[str, Any]=None, name: str=None) -> None:
+    def __init__(
+        self,
+        matcher: "Matcher",
+        target: Any,
+        target_kwargs: Dict[str, Any] = None,
+        name: str = None,
+    ) -> None:
         """Constructs a Rule instance.
 
         :arg Matcher matcher: a `Matcher` instance used for determining
@@ -454,9 +478,13 @@ class Rule(object):
         return self.matcher.reverse(*args)
 
     def __repr__(self) -> str:
-        return '%s(%r, %s, kwargs=%r, name=%r)' % \
-               (self.__class__.__name__, self.matcher,
-                self.target, self.target_kwargs, self.name)
+        return "%s(%r, %s, kwargs=%r, name=%r)" % (
+            self.__class__.__name__,
+            self.matcher,
+            self.target,
+            self.target_kwargs,
+            self.name,
+        )
 
 
 class Matcher(object):
@@ -526,15 +554,16 @@ class PathMatches(Matcher):
 
     def __init__(self, path_pattern: Union[str, Pattern]) -> None:
         if isinstance(path_pattern, basestring_type):
-            if not path_pattern.endswith('$'):
-                path_pattern += '$'
+            if not path_pattern.endswith("$"):
+                path_pattern += "$"
             self.regex = re.compile(path_pattern)
         else:
             self.regex = path_pattern
 
-        assert len(self.regex.groupindex) in (0, self.regex.groups), \
-            ("groups in url regexes must either be all named or all "
-             "positional: %r" % self.regex.pattern)
+        assert len(self.regex.groupindex) in (0, self.regex.groups), (
+            "groups in url regexes must either be all named or all "
+            "positional: %r" % self.regex.pattern
+        )
 
         self._path, self._group_count = self._find_groups()
 
@@ -554,8 +583,8 @@ class PathMatches(Matcher):
         # or groupdict but not both.
         if self.regex.groupindex:
             path_kwargs = dict(
-                (str(k), _unquote_or_none(v))
-                for (k, v) in match.groupdict().items())
+                (str(k), _unquote_or_none(v)) for (k, v) in match.groupdict().items()
+            )
         else:
             path_args = [_unquote_or_none(s) for s in match.groups()]
 
@@ -564,8 +593,9 @@ class PathMatches(Matcher):
     def reverse(self, *args: Any) -> Optional[str]:
         if self._path is None:
             raise ValueError("Cannot reverse url regex " + self.regex.pattern)
-        assert len(args) == self._group_count, "required number of arguments " \
-                                               "not found"
+        assert len(args) == self._group_count, (
+            "required number of arguments " "not found"
+        )
         if not len(args):
             return self._path
         converted_args = []
@@ -582,22 +612,22 @@ class PathMatches(Matcher):
         would return ('/%s/%s/', 2).
         """
         pattern = self.regex.pattern
-        if pattern.startswith('^'):
+        if pattern.startswith("^"):
             pattern = pattern[1:]
-        if pattern.endswith('$'):
+        if pattern.endswith("$"):
             pattern = pattern[:-1]
 
-        if self.regex.groups != pattern.count('('):
+        if self.regex.groups != pattern.count("("):
             # The pattern is too complicated for our simplistic matching,
             # so we can't support reversing it.
             return None, None
 
         pieces = []
-        for fragment in pattern.split('('):
-            if ')' in fragment:
-                paren_loc = fragment.index(')')
+        for fragment in pattern.split("("):
+            if ")" in fragment:
+                paren_loc = fragment.index(")")
                 if paren_loc >= 0:
-                    pieces.append('%s' + fragment[paren_loc + 1:])
+                    pieces.append("%s" + fragment[paren_loc + 1 :])
             else:
                 try:
                     unescaped_fragment = re_unescape(fragment)
@@ -607,7 +637,7 @@ class PathMatches(Matcher):
                     return (None, None)
                 pieces.append(unescaped_fragment)
 
-        return ''.join(pieces), self.regex.groups
+        return "".join(pieces), self.regex.groups
 
 
 class URLSpec(Rule):
@@ -617,8 +647,14 @@ class URLSpec(Rule):
        `URLSpec` is now a subclass of a `Rule` with `PathMatches` matcher and is preserved for
        backwards compatibility.
     """
-    def __init__(self, pattern: Union[str, Pattern], handler: Any,
-                 kwargs: Dict[str, Any]=None, name: str=None) -> None:
+
+    def __init__(
+        self,
+        pattern: Union[str, Pattern],
+        handler: Any,
+        kwargs: Dict[str, Any] = None,
+        name: str = None,
+    ) -> None:
         """Parameters:
 
         * ``pattern``: Regular expression to be matched. Any capturing
@@ -644,9 +680,13 @@ class URLSpec(Rule):
         self.kwargs = kwargs
 
     def __repr__(self) -> str:
-        return '%s(%r, %s, kwargs=%r, name=%r)' % \
-               (self.__class__.__name__, self.regex.pattern,
-                self.handler_class, self.kwargs, self.name)
+        return "%s(%r, %s, kwargs=%r, name=%r)" % (
+            self.__class__.__name__,
+            self.regex.pattern,
+            self.handler_class,
+            self.kwargs,
+            self.name,
+        )
 
 
 @overload

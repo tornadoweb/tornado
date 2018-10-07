@@ -29,15 +29,17 @@ import asyncio
 
 import typing
 from typing import Any, TypeVar, Awaitable, Callable, Union, Optional
+
 if typing.TYPE_CHECKING:
     from typing import Set, Dict, Tuple  # noqa: F401
 
-_T = TypeVar('_T')
+_T = TypeVar("_T")
 
 
 class BaseAsyncIOLoop(IOLoop):
-    def initialize(self, asyncio_loop: asyncio.AbstractEventLoop,  # type: ignore
-                   **kwargs: Any) -> None:
+    def initialize(  # type: ignore
+        self, asyncio_loop: asyncio.AbstractEventLoop, **kwargs: Any
+    ) -> None:
         self.asyncio_loop = asyncio_loop
         # Maps fd to (fileobj, handler function) pair (as in IOLoop.add_handler)
         self.handlers = {}  # type: Dict[int, Tuple[Union[int, _Selectable], Callable]]
@@ -62,7 +64,7 @@ class BaseAsyncIOLoop(IOLoop):
         IOLoop._ioloop_for_asyncio[asyncio_loop] = self
         super(BaseAsyncIOLoop, self).initialize(**kwargs)
 
-    def close(self, all_fds: bool=False) -> None:
+    def close(self, all_fds: bool = False) -> None:
         self.closing = True
         for fd in list(self.handlers):
             fileobj, handler_func = self.handlers[fd]
@@ -77,27 +79,25 @@ class BaseAsyncIOLoop(IOLoop):
         del IOLoop._ioloop_for_asyncio[self.asyncio_loop]
         self.asyncio_loop.close()
 
-    def add_handler(self, fd: Union[int, _Selectable],
-                    handler: Callable[..., None], events: int) -> None:
+    def add_handler(
+        self, fd: Union[int, _Selectable], handler: Callable[..., None], events: int
+    ) -> None:
         fd, fileobj = self.split_fd(fd)
         if fd in self.handlers:
             raise ValueError("fd %s added twice" % fd)
         self.handlers[fd] = (fileobj, handler)
         if events & IOLoop.READ:
-            self.asyncio_loop.add_reader(
-                fd, self._handle_events, fd, IOLoop.READ)
+            self.asyncio_loop.add_reader(fd, self._handle_events, fd, IOLoop.READ)
             self.readers.add(fd)
         if events & IOLoop.WRITE:
-            self.asyncio_loop.add_writer(
-                fd, self._handle_events, fd, IOLoop.WRITE)
+            self.asyncio_loop.add_writer(fd, self._handle_events, fd, IOLoop.WRITE)
             self.writers.add(fd)
 
     def update_handler(self, fd: Union[int, _Selectable], events: int) -> None:
         fd, fileobj = self.split_fd(fd)
         if events & IOLoop.READ:
             if fd not in self.readers:
-                self.asyncio_loop.add_reader(
-                    fd, self._handle_events, fd, IOLoop.READ)
+                self.asyncio_loop.add_reader(fd, self._handle_events, fd, IOLoop.READ)
                 self.readers.add(fd)
         else:
             if fd in self.readers:
@@ -105,8 +105,7 @@ class BaseAsyncIOLoop(IOLoop):
                 self.readers.remove(fd)
         if events & IOLoop.WRITE:
             if fd not in self.writers:
-                self.asyncio_loop.add_writer(
-                    fd, self._handle_events, fd, IOLoop.WRITE)
+                self.asyncio_loop.add_writer(fd, self._handle_events, fd, IOLoop.WRITE)
                 self.writers.add(fd)
         else:
             if fd in self.writers:
@@ -144,14 +143,17 @@ class BaseAsyncIOLoop(IOLoop):
     def stop(self) -> None:
         self.asyncio_loop.stop()
 
-    def call_at(self, when: float, callback: Callable[..., None],
-                *args: Any, **kwargs: Any) -> object:
+    def call_at(
+        self, when: float, callback: Callable[..., None], *args: Any, **kwargs: Any
+    ) -> object:
         # asyncio.call_at supports *args but not **kwargs, so bind them here.
         # We do not synchronize self.time and asyncio_loop.time, so
         # convert from absolute to relative.
         return self.asyncio_loop.call_later(
-            max(0, when - self.time()), self._run_callback,
-            functools.partial(callback, *args, **kwargs))
+            max(0, when - self.time()),
+            self._run_callback,
+            functools.partial(callback, *args, **kwargs),
+        )
 
     def remove_timeout(self, timeout: object) -> None:
         timeout.cancel()  # type: ignore
@@ -159,8 +161,8 @@ class BaseAsyncIOLoop(IOLoop):
     def add_callback(self, callback: Callable, *args: Any, **kwargs: Any) -> None:
         try:
             self.asyncio_loop.call_soon_threadsafe(
-                self._run_callback,
-                functools.partial(callback, *args, **kwargs))
+                self._run_callback, functools.partial(callback, *args, **kwargs)
+            )
         except RuntimeError:
             # "Event loop is closed". Swallow the exception for
             # consistency with PollIOLoop (and logical consistency
@@ -171,8 +173,12 @@ class BaseAsyncIOLoop(IOLoop):
 
     add_callback_from_signal = add_callback
 
-    def run_in_executor(self, executor: Optional[concurrent.futures.Executor],
-                        func: Callable[..., _T], *args: Any) -> Awaitable[_T]:
+    def run_in_executor(
+        self,
+        executor: Optional[concurrent.futures.Executor],
+        func: Callable[..., _T],
+        *args: Any
+    ) -> Awaitable[_T]:
         return self.asyncio_loop.run_in_executor(executor, func, *args)
 
     def set_default_executor(self, executor: concurrent.futures.Executor) -> None:
@@ -193,6 +199,7 @@ class AsyncIOMainLoop(BaseAsyncIOLoop):
 
        Closing an `AsyncIOMainLoop` now closes the underlying asyncio loop.
     """
+
     def initialize(self, **kwargs: Any) -> None:  # type: ignore
         super(AsyncIOMainLoop, self).initialize(asyncio.get_event_loop(), **kwargs)
 
@@ -221,6 +228,7 @@ class AsyncIOLoop(BaseAsyncIOLoop):
        Now used automatically when appropriate; it is no longer necessary
        to refer to this class directly.
     """
+
     def initialize(self, **kwargs: Any) -> None:  # type: ignore
         self.is_current = False
         loop = asyncio.new_event_loop()
@@ -232,7 +240,7 @@ class AsyncIOLoop(BaseAsyncIOLoop):
             loop.close()
             raise
 
-    def close(self, all_fds: bool=False) -> None:
+    def close(self, all_fds: bool = False) -> None:
         if self.is_current:
             self.clear_current()
         super(AsyncIOLoop, self).close(all_fds=all_fds)
@@ -297,6 +305,7 @@ class AnyThreadEventLoopPolicy(asyncio.DefaultEventLoopPolicy):  # type: ignore
     .. versionadded:: 5.0
 
     """
+
     def get_event_loop(self) -> asyncio.AbstractEventLoop:
         try:
             return super().get_event_loop()

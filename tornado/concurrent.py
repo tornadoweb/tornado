@@ -36,7 +36,7 @@ import types
 import typing
 from typing import Any, Callable, Optional, Tuple, Union
 
-_T = typing.TypeVar('_T')
+_T = typing.TypeVar("_T")
 
 
 class ReturnValueIgnoredError(Exception):
@@ -54,7 +54,9 @@ def is_future(x: Any) -> bool:
 
 
 class DummyExecutor(futures.Executor):
-    def submit(self, fn: Callable[..., _T], *args: Any, **kwargs: Any) -> 'futures.Future[_T]':
+    def submit(
+        self, fn: Callable[..., _T], *args: Any, **kwargs: Any
+    ) -> "futures.Future[_T]":
         future = futures.Future()  # type: futures.Future[_T]
         try:
             future_set_result_unless_cancelled(future, fn(*args, **kwargs))
@@ -62,7 +64,7 @@ class DummyExecutor(futures.Executor):
             future_set_exc_info(future, sys.exc_info())
         return future
 
-    def shutdown(self, wait: bool=True) -> None:
+    def shutdown(self, wait: bool = True) -> None:
         pass
 
 
@@ -121,7 +123,9 @@ def run_on_executor(*args: Any, **kwargs: Any) -> Callable:
             conc_future = getattr(self, executor).submit(fn, self, *args, **kwargs)
             chain_future(conc_future, async_future)
             return async_future
+
         return wrapper
+
     if args and kwargs:
         raise ValueError("cannot combine positional and keyword args")
     if len(args) == 1:
@@ -134,7 +138,7 @@ def run_on_executor(*args: Any, **kwargs: Any) -> Callable:
 _NO_RESULT = object()
 
 
-def chain_future(a: 'Future[_T]', b: 'Future[_T]') -> None:
+def chain_future(a: "Future[_T]", b: "Future[_T]") -> None:
     """Chain two futures together so that when one completes, so does the other.
 
     The result (success or failure) of ``a`` will be copied to ``b``, unless
@@ -146,27 +150,30 @@ def chain_future(a: 'Future[_T]', b: 'Future[_T]') -> None:
        `concurrent.futures.Future`.
 
     """
-    def copy(future: 'Future[_T]') -> None:
+
+    def copy(future: "Future[_T]") -> None:
         assert future is a
         if b.done():
             return
-        if (hasattr(a, 'exc_info') and
-                a.exc_info() is not None):  # type: ignore
+        if hasattr(a, "exc_info") and a.exc_info() is not None:  # type: ignore
             future_set_exc_info(b, a.exc_info())  # type: ignore
         elif a.exception() is not None:
             b.set_exception(a.exception())
         else:
             b.set_result(a.result())
+
     if isinstance(a, Future):
         future_add_done_callback(a, copy)
     else:
         # concurrent.futures.Future
         from tornado.ioloop import IOLoop
+
         IOLoop.current().add_future(a, copy)
 
 
-def future_set_result_unless_cancelled(future: Union['futures.Future[_T]', 'Future[_T]'],
-                                       value: _T) -> None:
+def future_set_result_unless_cancelled(
+    future: Union["futures.Future[_T]", "Future[_T]"], value: _T
+) -> None:
     """Set the given ``value`` as the `Future`'s result, if not cancelled.
 
     Avoids asyncio.InvalidStateError when calling set_result() on
@@ -178,9 +185,12 @@ def future_set_result_unless_cancelled(future: Union['futures.Future[_T]', 'Futu
         future.set_result(value)
 
 
-def future_set_exc_info(future: Union['futures.Future[_T]', 'Future[_T]'],
-                        exc_info: Tuple[Optional[type], Optional[BaseException],
-                                        Optional[types.TracebackType]]) -> None:
+def future_set_exc_info(
+    future: Union["futures.Future[_T]", "Future[_T]"],
+    exc_info: Tuple[
+        Optional[type], Optional[BaseException], Optional[types.TracebackType]
+    ],
+) -> None:
     """Set the given ``exc_info`` as the `Future`'s exception.
 
     Understands both `asyncio.Future` and Tornado's extensions to
@@ -188,7 +198,7 @@ def future_set_exc_info(future: Union['futures.Future[_T]', 'Future[_T]'],
 
     .. versionadded:: 5.0
     """
-    if hasattr(future, 'set_exc_info'):
+    if hasattr(future, "set_exc_info"):
         # Tornado's Future
         future.set_exc_info(exc_info)  # type: ignore
     else:
@@ -199,19 +209,22 @@ def future_set_exc_info(future: Union['futures.Future[_T]', 'Future[_T]'],
 
 
 @typing.overload
-def future_add_done_callback(future: 'futures.Future[_T]',
-                             callback: Callable[['futures.Future[_T]'], None]) -> None:
+def future_add_done_callback(
+    future: "futures.Future[_T]", callback: Callable[["futures.Future[_T]"], None]
+) -> None:
     pass
 
 
 @typing.overload  # noqa: F811
-def future_add_done_callback(future: 'Future[_T]',
-                             callback: Callable[['Future[_T]'], None]) -> None:
+def future_add_done_callback(
+    future: "Future[_T]", callback: Callable[["Future[_T]"], None]
+) -> None:
     pass
 
 
-def future_add_done_callback(future: Union['futures.Future[_T]', 'Future[_T]'],  # noqa: F811
-                             callback: Callable[..., None]) -> None:
+def future_add_done_callback(  # noqa: F811
+    future: Union["futures.Future[_T]", "Future[_T]"], callback: Callable[..., None]
+) -> None:
     """Arrange to call ``callback`` when ``future`` is complete.
 
     ``callback`` is invoked with one argument, the ``future``.

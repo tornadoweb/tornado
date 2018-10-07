@@ -30,9 +30,14 @@ import typing
 from typing import Union, Any, Optional, Dict, List, Callable
 
 
-_XHTML_ESCAPE_RE = re.compile('[&<>"\']')
-_XHTML_ESCAPE_DICT = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;',
-                      '\'': '&#39;'}
+_XHTML_ESCAPE_RE = re.compile("[&<>\"']")
+_XHTML_ESCAPE_DICT = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+}
 
 
 def xhtml_escape(value: Union[str, bytes]) -> str:
@@ -46,8 +51,9 @@ def xhtml_escape(value: Union[str, bytes]) -> str:
 
        Added the single quote to the list of escaped characters.
     """
-    return _XHTML_ESCAPE_RE.sub(lambda match: _XHTML_ESCAPE_DICT[match.group(0)],
-                                to_basestring(value))
+    return _XHTML_ESCAPE_RE.sub(
+        lambda match: _XHTML_ESCAPE_DICT[match.group(0)], to_basestring(value)
+    )
 
 
 def xhtml_unescape(value: Union[str, bytes]) -> str:
@@ -79,7 +85,7 @@ def squeeze(value: str) -> str:
     return re.sub(r"[\x00-\x20]+", " ", value).strip()
 
 
-def url_escape(value: Union[str, bytes], plus: bool=True) -> str:
+def url_escape(value: Union[str, bytes], plus: bool = True) -> str:
     """Returns a URL-encoded version of the given value.
 
     If ``plus`` is true (the default), spaces will be represented
@@ -95,17 +101,20 @@ def url_escape(value: Union[str, bytes], plus: bool=True) -> str:
 
 
 @typing.overload
-def url_unescape(value: Union[str, bytes], encoding: None, plus: bool=True) -> bytes:
+def url_unescape(value: Union[str, bytes], encoding: None, plus: bool = True) -> bytes:
     pass
 
 
 @typing.overload  # noqa: F811
-def url_unescape(value: Union[str, bytes], encoding: str='utf-8', plus: bool=True) -> str:
+def url_unescape(
+    value: Union[str, bytes], encoding: str = "utf-8", plus: bool = True
+) -> str:
     pass
 
 
-def url_unescape(value: Union[str, bytes], encoding: Optional[str]='utf-8',  # noqa: F811
-                 plus: bool=True) -> Union[str, bytes]:
+def url_unescape(  # noqa: F811
+    value: Union[str, bytes], encoding: Optional[str] = "utf-8", plus: bool = True
+) -> Union[str, bytes]:
     """Decodes the given value from a URL.
 
     The argument may be either a byte or unicode string.
@@ -125,16 +134,16 @@ def url_unescape(value: Union[str, bytes], encoding: Optional[str]='utf-8',  # n
     if encoding is None:
         if plus:
             # unquote_to_bytes doesn't have a _plus variant
-            value = to_basestring(value).replace('+', ' ')
+            value = to_basestring(value).replace("+", " ")
         return urllib.parse.unquote_to_bytes(value)
     else:
-        unquote = (urllib.parse.unquote_plus if plus
-                   else urllib.parse.unquote)
+        unquote = urllib.parse.unquote_plus if plus else urllib.parse.unquote
         return unquote(to_basestring(value), encoding=encoding)
 
 
-def parse_qs_bytes(qs: str, keep_blank_values: bool=False,
-                   strict_parsing: bool=False) -> Dict[str, List[bytes]]:
+def parse_qs_bytes(
+    qs: str, keep_blank_values: bool = False, strict_parsing: bool = False
+) -> Dict[str, List[bytes]]:
     """Parses a query string like urlparse.parse_qs, but returns the
     values as byte strings.
 
@@ -144,11 +153,12 @@ def parse_qs_bytes(qs: str, keep_blank_values: bool=False,
     """
     # This is gross, but python3 doesn't give us another way.
     # Latin1 is the universal donor of character encodings.
-    result = urllib.parse.parse_qs(qs, keep_blank_values, strict_parsing,
-                                   encoding='latin1', errors='strict')
+    result = urllib.parse.parse_qs(
+        qs, keep_blank_values, strict_parsing, encoding="latin1", errors="strict"
+    )
     encoded = {}
     for k, v in result.items():
-        encoded[k] = [i.encode('latin1') for i in v]
+        encoded[k] = [i.encode("latin1") for i in v]
     return encoded
 
 
@@ -179,9 +189,7 @@ def utf8(value: Union[None, str, bytes]) -> Optional[bytes]:  # noqa: F811
     if isinstance(value, _UTF8_TYPES):
         return value
     if not isinstance(value, unicode_type):
-        raise TypeError(
-            "Expected bytes, unicode, or None; got %r" % type(value)
-        )
+        raise TypeError("Expected bytes, unicode, or None; got %r" % type(value))
     return value.encode("utf-8")
 
 
@@ -212,9 +220,7 @@ def to_unicode(value: Union[None, str, bytes]) -> Optional[str]:  # noqa: F811
     if isinstance(value, _TO_UNICODE_TYPES):
         return value
     if not isinstance(value, bytes):
-        raise TypeError(
-            "Expected bytes, unicode, or None; got %r" % type(value)
-        )
+        raise TypeError("Expected bytes, unicode, or None; got %r" % type(value))
     return value.decode("utf-8")
 
 
@@ -256,9 +262,7 @@ def to_basestring(value: Union[None, str, bytes]) -> Optional[str]:  # noqa: F81
     if isinstance(value, _BASESTRING_TYPES):
         return value
     if not isinstance(value, bytes):
-        raise TypeError(
-            "Expected bytes, unicode, or None; got %r" % type(value)
-        )
+        raise TypeError("Expected bytes, unicode, or None; got %r" % type(value))
     return value.decode("utf-8")
 
 
@@ -268,7 +272,9 @@ def recursive_unicode(obj: Any) -> Any:
     Supports lists, tuples, and dictionaries.
     """
     if isinstance(obj, dict):
-        return dict((recursive_unicode(k), recursive_unicode(v)) for (k, v) in obj.items())
+        return dict(
+            (recursive_unicode(k), recursive_unicode(v)) for (k, v) in obj.items()
+        )
     elif isinstance(obj, list):
         return list(recursive_unicode(i) for i in obj)
     elif isinstance(obj, tuple):
@@ -286,14 +292,20 @@ def recursive_unicode(obj: Any) -> Any:
 # This regex should avoid those problems.
 # Use to_unicode instead of tornado.util.u - we don't want backslashes getting
 # processed as escapes.
-_URL_RE = re.compile(to_unicode(
-    r"""\b((?:([\w-]+):(/{1,3})|www[.])(?:(?:(?:[^\s&()]|&amp;|&quot;)*(?:[^!"#$%&'()*+,.:;<=>?@\[\]^`{|}~\s]))|(?:\((?:[^\s&()]|&amp;|&quot;)*\)))+)"""  # noqa: E501
-))
+_URL_RE = re.compile(
+    to_unicode(
+        r"""\b((?:([\w-]+):(/{1,3})|www[.])(?:(?:(?:[^\s&()]|&amp;|&quot;)*(?:[^!"#$%&'()*+,.:;<=>?@\[\]^`{|}~\s]))|(?:\((?:[^\s&()]|&amp;|&quot;)*\)))+)"""  # noqa: E501
+    )
+)
 
 
-def linkify(text: Union[str, bytes], shorten: bool=False,
-            extra_params: Union[str, Callable[[str], str]]="",
-            require_protocol: bool=False, permitted_protocols: List[str]=["http", "https"]) -> str:
+def linkify(
+    text: Union[str, bytes],
+    shorten: bool = False,
+    extra_params: Union[str, Callable[[str], str]] = "",
+    require_protocol: bool = False,
+    permitted_protocols: List[str] = ["http", "https"],
+) -> str:
     """Converts plain text into HTML with links.
 
     For example: ``linkify("Hello http://tornadoweb.org!")`` would return
@@ -337,7 +349,7 @@ def linkify(text: Union[str, bytes], shorten: bool=False,
 
         href = m.group(1)
         if not proto:
-            href = "http://" + href   # no proto specified, use http
+            href = "http://" + href  # no proto specified, use http
 
         if callable(extra_params):
             params = " " + extra_params(href).strip()
@@ -359,14 +371,18 @@ def linkify(text: Union[str, bytes], shorten: bool=False,
                 # The path is usually not that interesting once shortened
                 # (no more slug, etc), so it really just provides a little
                 # extra indication of shortening.
-                url = url[:proto_len] + parts[0] + "/" + \
-                    parts[1][:8].split('?')[0].split('.')[0]
+                url = (
+                    url[:proto_len]
+                    + parts[0]
+                    + "/"
+                    + parts[1][:8].split("?")[0].split(".")[0]
+                )
 
             if len(url) > max_len * 1.5:  # still too long
                 url = url[:max_len]
 
             if url != before_clip:
-                amp = url.rfind('&')
+                amp = url.rfind("&")
                 # avoid splitting html char entities
                 if amp > max_len - 5:
                     url = url[:amp]
@@ -391,7 +407,7 @@ def linkify(text: Union[str, bytes], shorten: bool=False,
 def _convert_entity(m: typing.Match) -> str:
     if m.group(1) == "#":
         try:
-            if m.group(2)[:1].lower() == 'x':
+            if m.group(2)[:1].lower() == "x":
                 return chr(int(m.group(2)[1:], 16))
             else:
                 return chr(int(m.group(2)))

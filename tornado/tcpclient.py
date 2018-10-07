@@ -32,6 +32,7 @@ from tornado.gen import TimeoutError
 
 import typing
 from typing import Generator, Any, Union, Dict, Tuple, List, Callable, Iterator
+
 if typing.TYPE_CHECKING:
     from typing import Optional, Set  # noqa: F401
 
@@ -55,13 +56,20 @@ class _Connector(object):
     http://tools.ietf.org/html/rfc6555
 
     """
-    def __init__(self, addrinfo: List[Tuple],
-                 connect: Callable[[socket.AddressFamily, Tuple],
-                                   Tuple[IOStream, 'Future[IOStream]']]) -> None:
+
+    def __init__(
+        self,
+        addrinfo: List[Tuple],
+        connect: Callable[
+            [socket.AddressFamily, Tuple], Tuple[IOStream, "Future[IOStream]"]
+        ],
+    ) -> None:
         self.io_loop = IOLoop.current()
         self.connect = connect
 
-        self.future = Future()  # type: Future[Tuple[socket.AddressFamily, Any, IOStream]]
+        self.future = (
+            Future()
+        )  # type: Future[Tuple[socket.AddressFamily, Any, IOStream]]
         self.timeout = None  # type: Optional[object]
         self.connect_timeout = None  # type: Optional[object]
         self.last_error = None  # type: Optional[Exception]
@@ -70,8 +78,12 @@ class _Connector(object):
         self.streams = set()  # type: Set[IOStream]
 
     @staticmethod
-    def split(addrinfo: List[Tuple]) -> Tuple[List[Tuple[socket.AddressFamily, Tuple]],
-                                              List[Tuple[socket.AddressFamily, Tuple]]]:
+    def split(
+        addrinfo: List[Tuple]
+    ) -> Tuple[
+        List[Tuple[socket.AddressFamily, Tuple]],
+        List[Tuple[socket.AddressFamily, Tuple]],
+    ]:
         """Partition the ``addrinfo`` list by address family.
 
         Returns two lists.  The first list contains the first entry from
@@ -91,9 +103,10 @@ class _Connector(object):
         return primary, secondary
 
     def start(
-            self, timeout: float=_INITIAL_CONNECT_TIMEOUT,
-            connect_timeout: Union[float, datetime.timedelta]=None,
-    ) -> 'Future[Tuple[socket.AddressFamily, Any, IOStream]]':
+        self,
+        timeout: float = _INITIAL_CONNECT_TIMEOUT,
+        connect_timeout: Union[float, datetime.timedelta] = None,
+    ) -> "Future[Tuple[socket.AddressFamily, Any, IOStream]]":
         self.try_connect(iter(self.primary_addrs))
         self.set_timeout(timeout)
         if connect_timeout is not None:
@@ -108,17 +121,23 @@ class _Connector(object):
             # might still be working.  Send a final error on the future
             # only when both queues are finished.
             if self.remaining == 0 and not self.future.done():
-                self.future.set_exception(self.last_error or
-                                          IOError("connection failed"))
+                self.future.set_exception(
+                    self.last_error or IOError("connection failed")
+                )
             return
         stream, future = self.connect(af, addr)
         self.streams.add(stream)
         future_add_done_callback(
-            future, functools.partial(self.on_connect_done, addrs, af, addr))
+            future, functools.partial(self.on_connect_done, addrs, af, addr)
+        )
 
-    def on_connect_done(self, addrs: Iterator[Tuple[socket.AddressFamily, Tuple]],
-                        af: socket.AddressFamily, addr: Tuple,
-                        future: 'Future[IOStream]') -> None:
+    def on_connect_done(
+        self,
+        addrs: Iterator[Tuple[socket.AddressFamily, Tuple]],
+        af: socket.AddressFamily,
+        addr: Tuple,
+        future: "Future[IOStream]",
+    ) -> None:
         self.remaining -= 1
         try:
             stream = future.result()
@@ -145,8 +164,9 @@ class _Connector(object):
             self.close_streams()
 
     def set_timeout(self, timeout: float) -> None:
-        self.timeout = self.io_loop.add_timeout(self.io_loop.time() + timeout,
-                                                self.on_timeout)
+        self.timeout = self.io_loop.add_timeout(
+            self.io_loop.time() + timeout, self.on_timeout
+        )
 
     def on_timeout(self) -> None:
         self.timeout = None
@@ -157,9 +177,12 @@ class _Connector(object):
         if self.timeout is not None:
             self.io_loop.remove_timeout(self.timeout)
 
-    def set_connect_timeout(self, connect_timeout: Union[float, datetime.timedelta]) -> None:
+    def set_connect_timeout(
+        self, connect_timeout: Union[float, datetime.timedelta]
+    ) -> None:
         self.connect_timeout = self.io_loop.add_timeout(
-            connect_timeout, self.on_connect_timeout)
+            connect_timeout, self.on_connect_timeout
+        )
 
     def on_connect_timeout(self) -> None:
         if not self.future.done():
@@ -183,7 +206,8 @@ class TCPClient(object):
     .. versionchanged:: 5.0
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
     """
-    def __init__(self, resolver: Resolver=None) -> None:
+
+    def __init__(self, resolver: Resolver = None) -> None:
         if resolver is not None:
             self.resolver = resolver
             self._own_resolver = False
@@ -196,10 +220,17 @@ class TCPClient(object):
             self.resolver.close()
 
     @gen.coroutine
-    def connect(self, host: str, port: int, af: socket.AddressFamily=socket.AF_UNSPEC,
-                ssl_options: Union[Dict[str, Any], ssl.SSLContext]=None,
-                max_buffer_size: int=None, source_ip: str=None, source_port: int=None,
-                timeout: Union[float, datetime.timedelta]=None) -> Generator[Any, Any, IOStream]:
+    def connect(
+        self,
+        host: str,
+        port: int,
+        af: socket.AddressFamily = socket.AF_UNSPEC,
+        ssl_options: Union[Dict[str, Any], ssl.SSLContext] = None,
+        max_buffer_size: int = None,
+        source_ip: str = None,
+        source_port: int = None,
+        timeout: Union[float, datetime.timedelta] = None,
+    ) -> Generator[Any, Any, IOStream]:
         """Connect to the given host and port.
 
         Asynchronously returns an `.IOStream` (or `.SSLIOStream` if
@@ -234,13 +265,18 @@ class TCPClient(object):
                 raise TypeError("Unsupported timeout %r" % timeout)
         if timeout is not None:
             addrinfo = yield gen.with_timeout(
-                timeout, self.resolver.resolve(host, port, af))
+                timeout, self.resolver.resolve(host, port, af)
+            )
         else:
             addrinfo = yield self.resolver.resolve(host, port, af)
         connector = _Connector(
             addrinfo,
-            functools.partial(self._create_stream, max_buffer_size,
-                              source_ip=source_ip, source_port=source_port)
+            functools.partial(
+                self._create_stream,
+                max_buffer_size,
+                source_ip=source_ip,
+                source_port=source_port,
+            ),
         )
         af, addr, stream = yield connector.start(connect_timeout=timeout)
         # TODO: For better performance we could cache the (af, addr)
@@ -248,16 +284,26 @@ class TCPClient(object):
         # the same host. (http://tools.ietf.org/html/rfc6555#section-4.2)
         if ssl_options is not None:
             if timeout is not None:
-                stream = yield gen.with_timeout(timeout, stream.start_tls(
-                    False, ssl_options=ssl_options, server_hostname=host))
+                stream = yield gen.with_timeout(
+                    timeout,
+                    stream.start_tls(
+                        False, ssl_options=ssl_options, server_hostname=host
+                    ),
+                )
             else:
-                stream = yield stream.start_tls(False, ssl_options=ssl_options,
-                                                server_hostname=host)
+                stream = yield stream.start_tls(
+                    False, ssl_options=ssl_options, server_hostname=host
+                )
         return stream
 
-    def _create_stream(self, max_buffer_size: int, af: socket.AddressFamily,
-                       addr: Tuple, source_ip: str=None,
-                       source_port: int=None) -> Tuple[IOStream, 'Future[IOStream]']:
+    def _create_stream(
+        self,
+        max_buffer_size: int,
+        af: socket.AddressFamily,
+        addr: Tuple,
+        source_ip: str = None,
+        source_port: int = None,
+    ) -> Tuple[IOStream, "Future[IOStream]"]:
         # Always connect in plaintext; we'll convert to ssl if necessary
         # after one connection has completed.
         source_port_bind = source_port if isinstance(source_port, int) else 0
@@ -265,7 +311,7 @@ class TCPClient(object):
         if source_port_bind and not source_ip:
             # User required a specific port, but did not specify
             # a certain source IP, will bind to the default loopback.
-            source_ip_bind = '::1' if af == socket.AF_INET6 else '127.0.0.1'
+            source_ip_bind = "::1" if af == socket.AF_INET6 else "127.0.0.1"
             # Trying to use the same address family as the requested af socket:
             # - 127.0.0.1 for IPv4
             # - ::1 for IPv6
@@ -280,8 +326,7 @@ class TCPClient(object):
                 # Fail loudly if unable to use the IP/port.
                 raise
         try:
-            stream = IOStream(socket_obj,
-                              max_buffer_size=max_buffer_size)
+            stream = IOStream(socket_obj, max_buffer_size=max_buffer_size)
         except socket.error as e:
             fu = Future()  # type: Future[IOStream]
             fu.set_exception(e)

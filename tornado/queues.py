@@ -35,37 +35,43 @@ from tornado.locks import Event
 
 from typing import Union, TypeVar, Generic, Awaitable
 import typing
+
 if typing.TYPE_CHECKING:
     from typing import Deque, Tuple, List, Any  # noqa: F401
 
-_T = TypeVar('_T')
+_T = TypeVar("_T")
 
-__all__ = ['Queue', 'PriorityQueue', 'LifoQueue', 'QueueFull', 'QueueEmpty']
+__all__ = ["Queue", "PriorityQueue", "LifoQueue", "QueueFull", "QueueEmpty"]
 
 
 class QueueEmpty(Exception):
     """Raised by `.Queue.get_nowait` when the queue has no items."""
+
     pass
 
 
 class QueueFull(Exception):
     """Raised by `.Queue.put_nowait` when a queue is at its maximum size."""
+
     pass
 
 
-def _set_timeout(future: Future, timeout: Union[None, float, datetime.timedelta]) -> None:
+def _set_timeout(
+    future: Future, timeout: Union[None, float, datetime.timedelta]
+) -> None:
     if timeout:
+
         def on_timeout() -> None:
             if not future.done():
                 future.set_exception(gen.TimeoutError())
+
         io_loop = ioloop.IOLoop.current()
         timeout_handle = io_loop.add_timeout(timeout, on_timeout)
-        future.add_done_callback(
-            lambda _: io_loop.remove_timeout(timeout_handle))
+        future.add_done_callback(lambda _: io_loop.remove_timeout(timeout_handle))
 
 
 class _QueueIterator(Generic[_T]):
-    def __init__(self, q: 'Queue[_T]') -> None:
+    def __init__(self, q: "Queue[_T]") -> None:
         self.q = q
 
     def __anext__(self) -> Awaitable[_T]:
@@ -139,11 +145,12 @@ class Queue(Generic[_T]):
        Added ``async for`` support in Python 3.5.
 
     """
+
     # Exact type depends on subclass. Could be another generic
     # parameter and use protocols to be more precise here.
     _queue = None  # type: Any
 
-    def __init__(self, maxsize: int=0) -> None:
+    def __init__(self, maxsize: int = 0) -> None:
         if maxsize is None:
             raise TypeError("maxsize can't be None")
 
@@ -176,7 +183,9 @@ class Queue(Generic[_T]):
         else:
             return self.qsize() >= self.maxsize
 
-    def put(self, item: _T, timeout: Union[float, datetime.timedelta]=None) -> 'Future[None]':
+    def put(
+        self, item: _T, timeout: Union[float, datetime.timedelta] = None
+    ) -> "Future[None]":
         """Put an item into the queue, perhaps waiting until there is room.
 
         Returns a Future, which raises `tornado.util.TimeoutError` after a
@@ -213,7 +222,7 @@ class Queue(Generic[_T]):
         else:
             self.__put_internal(item)
 
-    def get(self, timeout: Union[float, datetime.timedelta]=None) -> 'Future[_T]':
+    def get(self, timeout: Union[float, datetime.timedelta] = None) -> "Future[_T]":
         """Remove and return an item from the queue.
 
         Returns a Future which resolves once an item is available, or raises
@@ -263,12 +272,12 @@ class Queue(Generic[_T]):
         Raises `ValueError` if called more times than `.put`.
         """
         if self._unfinished_tasks <= 0:
-            raise ValueError('task_done() called too many times')
+            raise ValueError("task_done() called too many times")
         self._unfinished_tasks -= 1
         if self._unfinished_tasks == 0:
             self._finished.set()
 
-    def join(self, timeout: Union[float, datetime.timedelta]=None) -> 'Future[None]':
+    def join(self, timeout: Union[float, datetime.timedelta] = None) -> "Future[None]":
         """Block until all items in the queue are processed.
 
         Returns a Future, which raises `tornado.util.TimeoutError` after a
@@ -288,6 +297,7 @@ class Queue(Generic[_T]):
 
     def _put(self, item: _T) -> None:
         self._queue.append(item)
+
     # End of the overridable methods.
 
     def __put_internal(self, item: _T) -> None:
@@ -304,22 +314,21 @@ class Queue(Generic[_T]):
             self._getters.popleft()
 
     def __repr__(self) -> str:
-        return '<%s at %s %s>' % (
-            type(self).__name__, hex(id(self)), self._format())
+        return "<%s at %s %s>" % (type(self).__name__, hex(id(self)), self._format())
 
     def __str__(self) -> str:
-        return '<%s %s>' % (type(self).__name__, self._format())
+        return "<%s %s>" % (type(self).__name__, self._format())
 
     def _format(self) -> str:
-        result = 'maxsize=%r' % (self.maxsize, )
-        if getattr(self, '_queue', None):
-            result += ' queue=%r' % self._queue
+        result = "maxsize=%r" % (self.maxsize,)
+        if getattr(self, "_queue", None):
+            result += " queue=%r" % self._queue
         if self._getters:
-            result += ' getters[%s]' % len(self._getters)
+            result += " getters[%s]" % len(self._getters)
         if self._putters:
-            result += ' putters[%s]' % len(self._putters)
+            result += " putters[%s]" % len(self._putters)
         if self._unfinished_tasks:
-            result += ' tasks=%s' % self._unfinished_tasks
+            result += " tasks=%s" % self._unfinished_tasks
         return result
 
 
@@ -347,6 +356,7 @@ class PriorityQueue(Queue):
         (1, 'medium-priority item')
         (10, 'low-priority item')
     """
+
     def _init(self) -> None:
         self._queue = []
 
@@ -379,6 +389,7 @@ class LifoQueue(Queue):
         2
         3
     """
+
     def _init(self) -> None:
         self._queue = []
 

@@ -31,7 +31,11 @@ from tornado.testing import bind_unused_port, AsyncTestCase, gen_test
 from tornado.web import RequestHandler, Application
 
 try:
-    from twisted.internet.defer import Deferred, inlineCallbacks, returnValue  # type: ignore
+    from twisted.internet.defer import (  # type: ignore
+        Deferred,
+        inlineCallbacks,
+        returnValue,
+    )
     from twisted.internet.protocol import Protocol  # type: ignore
     from twisted.internet.asyncioreactor import AsyncioSelectorReactor  # type: ignore
     from twisted.web.client import Agent, readBody  # type: ignore
@@ -45,8 +49,7 @@ else:
     # Not used directly but needed for `yield deferred` to work.
     import tornado.platform.twisted  # noqa: F401
 
-skipIfNoTwisted = unittest.skipUnless(have_twisted,
-                                      "twisted module not present")
+skipIfNoTwisted = unittest.skipUnless(have_twisted, "twisted module not present")
 
 
 def save_signal_handlers():
@@ -88,16 +91,17 @@ class CompatibilityTests(unittest.TestCase):
 
             def render_GET(self, request):
                 return b"Hello from twisted!"
+
         site = Site(HelloResource())
-        port = self.reactor.listenTCP(0, site, interface='127.0.0.1')
+        port = self.reactor.listenTCP(0, site, interface="127.0.0.1")
         self.twisted_port = port.getHost().port
 
     def start_tornado_server(self):
         class HelloHandler(RequestHandler):
             def get(self):
                 self.write("Hello from tornado!")
-        app = Application([('/', HelloHandler)],
-                          log_function=lambda x: None)
+
+        app = Application([("/", HelloHandler)], log_function=lambda x: None)
         server = HTTPServer(app)
         sock, self.tornado_port = bind_unused_port()
         server.add_sockets([sock])
@@ -125,7 +129,7 @@ class CompatibilityTests(unittest.TestCase):
         # http://twistedmatrix.com/documents/current/web/howto/client.html
         chunks = []
         client = Agent(self.reactor)
-        d = client.request(b'GET', utf8(url))
+        d = client.request(b"GET", utf8(url))
 
         class Accumulator(Protocol):
             def __init__(self, finished):
@@ -141,10 +145,11 @@ class CompatibilityTests(unittest.TestCase):
             finished = Deferred()
             response.deliverBody(Accumulator(finished))
             return finished
+
         d.addCallback(callback)
 
         def shutdown(failure):
-            if hasattr(self, 'stop_loop'):
+            if hasattr(self, "stop_loop"):
                 self.stop_loop()
             elif failure is not None:
                 # loop hasn't been initialized yet; try our best to
@@ -153,11 +158,12 @@ class CompatibilityTests(unittest.TestCase):
                 try:
                     failure.raiseException()
                 except:
-                    logging.error('exception before starting loop', exc_info=True)
+                    logging.error("exception before starting loop", exc_info=True)
+
         d.addBoth(shutdown)
         runner()
         self.assertTrue(chunks)
-        return b''.join(chunks)
+        return b"".join(chunks)
 
     def twisted_coroutine_fetch(self, url, runner):
         body = [None]
@@ -168,13 +174,14 @@ class CompatibilityTests(unittest.TestCase):
             # by reading the body in one blob instead of streaming it with
             # a Protocol.
             client = Agent(self.reactor)
-            response = yield client.request(b'GET', utf8(url))
+            response = yield client.request(b"GET", utf8(url))
             with warnings.catch_warnings():
                 # readBody has a buggy DeprecationWarning in Twisted 15.0:
                 # https://twistedmatrix.com/trac/changeset/43379
-                warnings.simplefilter('ignore', category=DeprecationWarning)
+                warnings.simplefilter("ignore", category=DeprecationWarning)
                 body[0] = yield readBody(response)
             self.stop_loop()
+
         self.io_loop.add_callback(f)
         runner()
         return body[0]
@@ -182,20 +189,23 @@ class CompatibilityTests(unittest.TestCase):
     def testTwistedServerTornadoClientReactor(self):
         self.start_twisted_server()
         response = self.tornado_fetch(
-            'http://127.0.0.1:%d' % self.twisted_port, self.run_reactor)
-        self.assertEqual(response.body, b'Hello from twisted!')
+            "http://127.0.0.1:%d" % self.twisted_port, self.run_reactor
+        )
+        self.assertEqual(response.body, b"Hello from twisted!")
 
     def testTornadoServerTwistedClientReactor(self):
         self.start_tornado_server()
         response = self.twisted_fetch(
-            'http://127.0.0.1:%d' % self.tornado_port, self.run_reactor)
-        self.assertEqual(response, b'Hello from tornado!')
+            "http://127.0.0.1:%d" % self.tornado_port, self.run_reactor
+        )
+        self.assertEqual(response, b"Hello from tornado!")
 
     def testTornadoServerTwistedCoroutineClientReactor(self):
         self.start_tornado_server()
         response = self.twisted_coroutine_fetch(
-            'http://127.0.0.1:%d' % self.tornado_port, self.run_reactor)
-        self.assertEqual(response, b'Hello from tornado!')
+            "http://127.0.0.1:%d" % self.tornado_port, self.run_reactor
+        )
+        self.assertEqual(response, b"Hello from tornado!")
 
 
 @skipIfNoTwisted
@@ -209,6 +219,7 @@ class ConvertDeferredTest(AsyncTestCase):
                 # must have a yield even if it's unreachable.
                 yield
             returnValue(42)
+
         res = yield fn()
         self.assertEqual(res, 42)
 
@@ -219,6 +230,7 @@ class ConvertDeferredTest(AsyncTestCase):
             if False:
                 yield
             1 / 0
+
         with self.assertRaises(ZeroDivisionError):
             yield fn()
 

@@ -36,6 +36,7 @@ from tornado.util import errno_from_exception
 
 import typing
 from typing import Tuple, Optional, Any, Callable
+
 if typing.TYPE_CHECKING:
     from typing import List  # noqa: F401
 
@@ -60,9 +61,10 @@ def cpu_count() -> int:
 
 
 def _reseed_random() -> None:
-    if 'random' not in sys.modules:
+    if "random" not in sys.modules:
         return
     import random
+
     # If os.urandom is available, this method does the same thing as
     # random.seed (at least as of python 2.6).  If os.urandom is not
     # available, we mix in the pid in addition to a timestamp.
@@ -83,7 +85,7 @@ def _pipe_cloexec() -> Tuple[int, int]:
 _task_id = None
 
 
-def fork_processes(num_processes: Optional[int], max_restarts: int=100) -> int:
+def fork_processes(num_processes: Optional[int], max_restarts: int = 100) -> int:
     """Starts multiple worker processes.
 
     If ``num_processes`` is None or <= 0, we detect the number of cores
@@ -143,11 +145,19 @@ def fork_processes(num_processes: Optional[int], max_restarts: int=100) -> int:
             continue
         id = children.pop(pid)
         if os.WIFSIGNALED(status):
-            gen_log.warning("child %d (pid %d) killed by signal %d, restarting",
-                            id, pid, os.WTERMSIG(status))
+            gen_log.warning(
+                "child %d (pid %d) killed by signal %d, restarting",
+                id,
+                pid,
+                os.WTERMSIG(status),
+            )
         elif os.WEXITSTATUS(status) != 0:
-            gen_log.warning("child %d (pid %d) exited with status %d, restarting",
-                            id, pid, os.WEXITSTATUS(status))
+            gen_log.warning(
+                "child %d (pid %d) exited with status %d, restarting",
+                id,
+                pid,
+                os.WEXITSTATUS(status),
+            )
         else:
             gen_log.info("child %d (pid %d) exited normally", id, pid)
             continue
@@ -194,6 +204,7 @@ class Subprocess(object):
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
 
     """
+
     STREAM = object()
 
     _initialized = False
@@ -206,21 +217,21 @@ class Subprocess(object):
         # should be closed in the parent process on success.
         pipe_fds = []  # type: List[int]
         to_close = []  # type: List[int]
-        if kwargs.get('stdin') is Subprocess.STREAM:
+        if kwargs.get("stdin") is Subprocess.STREAM:
             in_r, in_w = _pipe_cloexec()
-            kwargs['stdin'] = in_r
+            kwargs["stdin"] = in_r
             pipe_fds.extend((in_r, in_w))
             to_close.append(in_r)
             self.stdin = PipeIOStream(in_w)
-        if kwargs.get('stdout') is Subprocess.STREAM:
+        if kwargs.get("stdout") is Subprocess.STREAM:
             out_r, out_w = _pipe_cloexec()
-            kwargs['stdout'] = out_w
+            kwargs["stdout"] = out_w
             pipe_fds.extend((out_r, out_w))
             to_close.append(out_w)
             self.stdout = PipeIOStream(out_r)
-        if kwargs.get('stderr') is Subprocess.STREAM:
+        if kwargs.get("stderr") is Subprocess.STREAM:
             err_r, err_w = _pipe_cloexec()
-            kwargs['stderr'] = err_w
+            kwargs["stderr"] = err_w
             pipe_fds.extend((err_r, err_w))
             to_close.append(err_w)
             self.stderr = PipeIOStream(err_r)
@@ -233,7 +244,7 @@ class Subprocess(object):
         for fd in to_close:
             os.close(fd)
         self.pid = self.proc.pid
-        for attr in ['stdin', 'stdout', 'stderr']:
+        for attr in ["stdin", "stdout", "stderr"]:
             if not hasattr(self, attr):  # don't clobber streams set above
                 setattr(self, attr, getattr(self.proc, attr))
         self._exit_callback = None  # type: Optional[Callable[[int], None]]
@@ -259,7 +270,7 @@ class Subprocess(object):
         Subprocess._waiting[self.pid] = self
         Subprocess._try_cleanup_process(self.pid)
 
-    def wait_for_exit(self, raise_error: bool=True) -> 'Future[int]':
+    def wait_for_exit(self, raise_error: bool = True) -> "Future[int]":
         """Returns a `.Future` which resolves when the process exits.
 
         Usage::
@@ -280,9 +291,10 @@ class Subprocess(object):
         def callback(ret: int) -> None:
             if ret != 0 and raise_error:
                 # Unfortunately we don't have the original args any more.
-                future.set_exception(CalledProcessError(ret, 'unknown'))
+                future.set_exception(CalledProcessError(ret, "unknown"))
             else:
                 future_set_result_unless_cancelled(future, ret)
+
         self.set_exit_callback(callback)
         return future
 
@@ -304,7 +316,8 @@ class Subprocess(object):
         io_loop = ioloop.IOLoop.current()
         cls._old_sigchld = signal.signal(
             signal.SIGCHLD,
-            lambda sig, frame: io_loop.add_callback_from_signal(cls._cleanup))
+            lambda sig, frame: io_loop.add_callback_from_signal(cls._cleanup),
+        )
         cls._initialized = True
 
     @classmethod
@@ -331,8 +344,7 @@ class Subprocess(object):
             return
         assert ret_pid == pid
         subproc = cls._waiting.pop(pid)
-        subproc.io_loop.add_callback_from_signal(
-            subproc._set_returncode, status)
+        subproc.io_loop.add_callback_from_signal(subproc._set_returncode, status)
 
     def _set_returncode(self, status: int) -> None:
         if os.WIFSIGNALED(status):

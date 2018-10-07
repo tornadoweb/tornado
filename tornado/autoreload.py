@@ -97,13 +97,14 @@ except ImportError:
 
 import typing
 from typing import Callable, Dict
+
 if typing.TYPE_CHECKING:
     from typing import List, Optional, Union  # noqa: F401
 
 # os.execv is broken on Windows and can't properly parse command line
 # arguments and executable name if they contain whitespaces. subprocess
 # fixes that behavior.
-_has_execv = sys.platform != 'win32'
+_has_execv = sys.platform != "win32"
 
 _watched_files = set()
 _reload_hooks = []
@@ -114,7 +115,7 @@ _original_argv = None  # type: Optional[List[str]]
 _original_spec = None
 
 
-def start(check_time: int=500) -> None:
+def start(check_time: int = 500) -> None:
     """Begins watching source files for changes.
 
     .. versionchanged:: 5.0
@@ -224,16 +225,16 @@ def _reload() -> None:
         spec = _original_spec
         argv = _original_argv
     else:
-        spec = getattr(sys.modules['__main__'], '__spec__', None)
+        spec = getattr(sys.modules["__main__"], "__spec__", None)
         argv = sys.argv
     if spec:
-        argv = ['-m', spec.name] + argv[1:]
+        argv = ["-m", spec.name] + argv[1:]
     else:
-        path_prefix = '.' + os.pathsep
-        if (sys.path[0] == '' and
-                not os.environ.get("PYTHONPATH", "").startswith(path_prefix)):
-            os.environ["PYTHONPATH"] = (path_prefix +
-                                        os.environ.get("PYTHONPATH", ""))
+        path_prefix = "." + os.pathsep
+        if sys.path[0] == "" and not os.environ.get("PYTHONPATH", "").startswith(
+            path_prefix
+        ):
+            os.environ["PYTHONPATH"] = path_prefix + os.environ.get("PYTHONPATH", "")
     if not _has_execv:
         subprocess.Popen([sys.executable] + argv)
         os._exit(0)
@@ -252,7 +253,9 @@ def _reload() -> None:
             # Unfortunately the errno returned in this case does not
             # appear to be consistent, so we can't easily check for
             # this error specifically.
-            os.spawnv(os.P_NOWAIT, sys.executable, [sys.executable] + argv)  # type: ignore
+            os.spawnv(  # type: ignore
+                os.P_NOWAIT, sys.executable, [sys.executable] + argv
+            )
             # At this point the IOLoop has been closed and finally
             # blocks will experience errors if we allow the stack to
             # unwind, so just exit uncleanly.
@@ -283,12 +286,13 @@ def main() -> None:
     # The main module can be tricky; set the variables both in our globals
     # (which may be __main__) and the real importable version.
     import tornado.autoreload
+
     global _autoreload_is_main
     global _original_argv, _original_spec
     tornado.autoreload._autoreload_is_main = _autoreload_is_main = True
     original_argv = sys.argv
     tornado.autoreload._original_argv = _original_argv = original_argv
-    original_spec = getattr(sys.modules['__main__'], '__spec__', None)
+    original_spec = getattr(sys.modules["__main__"], "__spec__", None)
     tornado.autoreload._original_spec = _original_spec = original_spec
     sys.argv = sys.argv[:]
     if len(sys.argv) >= 3 and sys.argv[1] == "-m":
@@ -306,6 +310,7 @@ def main() -> None:
     try:
         if mode == "module":
             import runpy
+
             runpy.run_module(module, run_name="__main__", alter_sys=True)
         elif mode == "script":
             with open(script) as f:
@@ -343,7 +348,7 @@ def main() -> None:
     # restore sys.argv so subsequent executions will include autoreload
     sys.argv = original_argv
 
-    if mode == 'module':
+    if mode == "module":
         # runpy did a fake import of the module as __main__, but now it's
         # no longer in sys.modules.  Figure out where it is and watch it.
         loader = pkgutil.get_loader(module)

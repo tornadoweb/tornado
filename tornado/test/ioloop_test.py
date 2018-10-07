@@ -20,6 +20,7 @@ from tornado.testing import AsyncTestCase, bind_unused_port, ExpectLog, gen_test
 from tornado.test.util import skipIfNonUnix, skipOnTravis
 
 import typing
+
 if typing.TYPE_CHECKING:
     from typing import List  # noqa: F401
 
@@ -57,6 +58,7 @@ class TestIOLoop(AsyncTestCase):
             self.io_loop.add_callback(callback)
             # Store away the time so we can check if we woke up immediately
             self.start_time = time.time()
+
         self.io_loop.add_timeout(self.io_loop.time(), schedule_callback)
         self.wait()
         self.assertAlmostEqual(time.time(), self.start_time, places=2)
@@ -69,6 +71,7 @@ class TestIOLoop(AsyncTestCase):
             time.sleep(0.01)
             self.stop_time = time.time()
             self.io_loop.add_callback(self.stop)
+
         thread = threading.Thread(target=target)
         self.io_loop.add_callback(thread.start)
         self.wait()
@@ -83,13 +86,18 @@ class TestIOLoop(AsyncTestCase):
     def test_multiple_add(self):
         sock, port = bind_unused_port()
         try:
-            self.io_loop.add_handler(sock.fileno(), lambda fd, events: None,
-                                     IOLoop.READ)
+            self.io_loop.add_handler(
+                sock.fileno(), lambda fd, events: None, IOLoop.READ
+            )
             # Attempting to add the same handler twice fails
             # (with a platform-dependent exception)
-            self.assertRaises(Exception, self.io_loop.add_handler,
-                              sock.fileno(), lambda fd, events: None,
-                              IOLoop.READ)
+            self.assertRaises(
+                Exception,
+                self.io_loop.add_handler,
+                sock.fileno(),
+                lambda fd, events: None,
+                IOLoop.READ,
+            )
         finally:
             self.io_loop.remove_handler(sock.fileno())
             sock.close()
@@ -131,6 +139,7 @@ class TestIOLoop(AsyncTestCase):
             other_ioloop.start()
             closing.set()
             other_ioloop.close(all_fds=True)
+
         other_ioloop = IOLoop()
         thread = threading.Thread(target=target)
         thread.start()
@@ -145,12 +154,15 @@ class TestIOLoop(AsyncTestCase):
         # difficult to test for)
         client, server = socket.socketpair()
         try:
+
             def handler(fd, events):
                 self.assertEqual(events, IOLoop.READ)
                 self.stop()
+
             self.io_loop.add_handler(client.fileno(), handler, IOLoop.READ)
-            self.io_loop.add_timeout(self.io_loop.time() + 0.01,
-                                     functools.partial(server.send, b'asdf'))
+            self.io_loop.add_timeout(
+                self.io_loop.time() + 0.01, functools.partial(server.send, b"asdf")
+            )
             self.wait()
             self.io_loop.remove_handler(client.fileno())
         finally:
@@ -170,8 +182,7 @@ class TestIOLoop(AsyncTestCase):
         # on PollIOLoop subclasses, but it should run silently on any
         # implementation.
         for i in range(2000):
-            timeout = self.io_loop.add_timeout(self.io_loop.time() + 3600,
-                                               lambda: None)
+            timeout = self.io_loop.add_timeout(self.io_loop.time() + 3600, lambda: None)
             self.io_loop.remove_timeout(timeout)
         # HACK: wait two IOLoop iterations for the GC to happen.
         self.io_loop.add_callback(lambda: self.io_loop.add_callback(self.stop))
@@ -188,10 +199,12 @@ class TestIOLoop(AsyncTestCase):
         def t1():
             calls[0] = True
             self.io_loop.remove_timeout(t2_handle)
+
         self.io_loop.add_timeout(now + 0.01, t1)
 
         def t2():
             calls[1] = True
+
         t2_handle = self.io_loop.add_timeout(now + 0.02, t2)
         self.io_loop.add_timeout(now + 0.03, self.stop)
         time.sleep(0.03)
@@ -202,8 +215,7 @@ class TestIOLoop(AsyncTestCase):
         # This tests that all the timeout methods pass through *args correctly.
         results = []  # type: List[int]
         self.io_loop.add_timeout(self.io_loop.time(), results.append, 1)
-        self.io_loop.add_timeout(datetime.timedelta(seconds=0),
-                                 results.append, 2)
+        self.io_loop.add_timeout(datetime.timedelta(seconds=0), results.append, 2)
         self.io_loop.call_at(self.io_loop.time(), results.append, 3)
         self.io_loop.call_later(0, results.append, 4)
         self.io_loop.call_later(0, self.stop)
@@ -248,11 +260,11 @@ class TestIOLoop(AsyncTestCase):
             def close(self):
                 self.closed = True
                 self.sockobj.close()
+
         sockobj, port = bind_unused_port()
         socket_wrapper = SocketWrapper(sockobj)
         io_loop = IOLoop()
-        io_loop.add_handler(socket_wrapper, lambda fd, events: None,
-                            IOLoop.READ)
+        io_loop.add_handler(socket_wrapper, lambda fd, events: None, IOLoop.READ)
         io_loop.close(all_fds=True)
         self.assertTrue(socket_wrapper.closed)
 
@@ -266,15 +278,15 @@ class TestIOLoop(AsyncTestCase):
             conn, addr = server_sock.accept()
             conn.close()
             self.stop()
+
         self.io_loop.add_handler(server_sock, handle_connection, IOLoop.READ)
         with contextlib.closing(socket.socket()) as client_sock:
-            client_sock.connect(('127.0.0.1', port))
+            client_sock.connect(("127.0.0.1", port))
             self.wait()
         self.io_loop.remove_handler(server_sock)
-        self.io_loop.add_handler(server_sock.fileno(), handle_connection,
-                                 IOLoop.READ)
+        self.io_loop.add_handler(server_sock.fileno(), handle_connection, IOLoop.READ)
         with contextlib.closing(socket.socket()) as client_sock:
-            client_sock.connect(('127.0.0.1', port))
+            client_sock.connect(("127.0.0.1", port))
             self.wait()
         self.assertIs(fds[0], server_sock)
         self.assertEqual(fds[1], server_sock.fileno())
@@ -286,6 +298,7 @@ class TestIOLoop(AsyncTestCase):
 
         def f(fd, events):
             pass
+
         self.io_loop.add_handler(server_sock, f, IOLoop.READ)
         with self.assertRaises(Exception):
             # The exact error is unspecified - some implementations use
@@ -306,6 +319,7 @@ class TestIOLoop(AsyncTestCase):
             except Exception:
                 got_exception[0] = True
             self.stop()
+
         self.io_loop.add_callback(callback)
         self.wait()
         self.assertTrue(got_exception[0])
@@ -320,21 +334,25 @@ class TestIOLoop(AsyncTestCase):
 
     def test_exception_logging_future(self):
         """The IOLoop examines exceptions from Futures and logs them."""
+
         @gen.coroutine
         def callback():
             self.io_loop.add_callback(self.stop)
             1 / 0
+
         self.io_loop.add_callback(callback)
         with ExpectLog(app_log, "Exception in callback"):
             self.wait()
 
     def test_exception_logging_native_coro(self):
         """The IOLoop examines exceptions from awaitables and logs them."""
+
         async def callback():
             # Stop the IOLoop two iterations after raising an exception
             # to give the exception time to be logged.
             self.io_loop.add_callback(self.io_loop.add_callback, self.stop)
             1 / 0
+
         self.io_loop.add_callback(callback)
         with ExpectLog(app_log, "Exception in callback"):
             self.wait()
@@ -358,8 +376,8 @@ class TestIOLoop(AsyncTestCase):
         # Create two sockets with simultaneous read events.
         client, server = socket.socketpair()
         try:
-            client.send(b'abc')
-            server.send(b'abc')
+            client.send(b"abc")
+            server.send(b"abc")
 
             # After reading from one fd, remove the other from the IOLoop.
             chunks = []
@@ -370,13 +388,14 @@ class TestIOLoop(AsyncTestCase):
                     self.io_loop.remove_handler(server)
                 else:
                     self.io_loop.remove_handler(client)
+
             self.io_loop.add_handler(client, handle_read, self.io_loop.READ)
             self.io_loop.add_handler(server, handle_read, self.io_loop.READ)
             self.io_loop.call_later(0.1, self.stop)
             self.wait()
 
             # Only one fd was read; the other was cleanly removed.
-            self.assertEqual(chunks, [b'abc'])
+            self.assertEqual(chunks, [b"abc"])
         finally:
             client.close()
             server.close()
@@ -419,9 +438,11 @@ class TestIOLoopCurrent(unittest.TestCase):
         # Starting the IOLoop makes it current, and stopping the loop
         # makes it non-current. This process is repeatable.
         for i in range(3):
+
             def f():
                 self.current_io_loop = IOLoop.current()
                 self.io_loop.stop()
+
             self.io_loop.add_callback(f)
             self.io_loop.start()
             self.assertIs(self.current_io_loop, self.io_loop)
@@ -451,10 +472,13 @@ class TestIOLoopCurrentAsync(AsyncTestCase):
 class TestIOLoopFutures(AsyncTestCase):
     def test_add_future_threads(self):
         with futures.ThreadPoolExecutor(1) as pool:
+
             def dummy():
                 pass
-            self.io_loop.add_future(pool.submit(dummy),
-                                    lambda future: self.stop(future))
+
+            self.io_loop.add_future(
+                pool.submit(dummy), lambda future: self.stop(future)
+            )
             future = self.wait()
             self.assertTrue(future.done())
             self.assertTrue(future.result() is None)
@@ -476,7 +500,7 @@ class TestIOLoopFutures(AsyncTestCase):
         # run in parallel.
         res = yield [
             IOLoop.current().run_in_executor(None, sync_func, event1, event2),
-            IOLoop.current().run_in_executor(None, sync_func, event2, event1)
+            IOLoop.current().run_in_executor(None, sync_func, event2, event1),
         ]
 
         self.assertEqual([event1, event2], res)
@@ -496,12 +520,10 @@ class TestIOLoopFutures(AsyncTestCase):
         # (simply passing the underlying concurrrent future would do that).
         async def async_wrapper(self_event, other_event):
             return await IOLoop.current().run_in_executor(
-                None, sync_func, self_event, other_event)
+                None, sync_func, self_event, other_event
+            )
 
-        res = yield [
-            async_wrapper(event1, event2),
-            async_wrapper(event2, event1)
-        ]
+        res = yield [async_wrapper(event1, event2), async_wrapper(event2, event1)]
 
         self.assertEqual([event1, event2], res)
 
@@ -547,6 +569,7 @@ class TestIOLoopRunSync(unittest.TestCase):
         def f():
             yield gen.moment
             raise gen.Return(42)
+
         self.assertEqual(self.io_loop.run_sync(f), 42)
 
     def test_async_exception(self):
@@ -554,18 +577,21 @@ class TestIOLoopRunSync(unittest.TestCase):
         def f():
             yield gen.moment
             1 / 0
+
         with self.assertRaises(ZeroDivisionError):
             self.io_loop.run_sync(f)
 
     def test_current(self):
         def f():
             self.assertIs(IOLoop.current(), self.io_loop)
+
         self.io_loop.run_sync(f)
 
     def test_timeout(self):
         @gen.coroutine
         def f():
             yield gen.sleep(1)
+
         self.assertRaises(TimeoutError, self.io_loop.run_sync, f, timeout=0.01)
 
     def test_native_coroutine(self):
@@ -575,6 +601,7 @@ class TestIOLoopRunSync(unittest.TestCase):
 
         async def f2():
             await f1()
+
         self.io_loop.run_sync(f2)
 
 
@@ -601,24 +628,30 @@ class TestPeriodicCallbackMath(unittest.TestCase):
 
     def test_basic(self):
         pc = PeriodicCallback(self.dummy, 10000)
-        self.assertEqual(self.simulate_calls(pc, [0] * 5),
-                         [1010, 1020, 1030, 1040, 1050])
+        self.assertEqual(
+            self.simulate_calls(pc, [0] * 5), [1010, 1020, 1030, 1040, 1050]
+        )
 
     def test_overrun(self):
         # If a call runs for too long, we skip entire cycles to get
         # back on schedule.
         call_durations = [9, 9, 10, 11, 20, 20, 35, 35, 0, 0, 0]
         expected = [
-            1010, 1020, 1030,  # first 3 calls on schedule
-            1050, 1070,  # next 2 delayed one cycle
-            1100, 1130,  # next 2 delayed 2 cycles
-            1170, 1210,  # next 2 delayed 3 cycles
-            1220, 1230,  # then back on schedule.
+            1010,
+            1020,
+            1030,  # first 3 calls on schedule
+            1050,
+            1070,  # next 2 delayed one cycle
+            1100,
+            1130,  # next 2 delayed 2 cycles
+            1170,
+            1210,  # next 2 delayed 3 cycles
+            1220,
+            1230,  # then back on schedule.
         ]
 
         pc = PeriodicCallback(self.dummy, 10000)
-        self.assertEqual(self.simulate_calls(pc, call_durations),
-                         expected)
+        self.assertEqual(self.simulate_calls(pc, call_durations), expected)
 
     def test_clock_backwards(self):
         pc = PeriodicCallback(self.dummy, 10000)
@@ -626,16 +659,16 @@ class TestPeriodicCallbackMath(unittest.TestCase):
         # slightly slow schedule (although we assume that when
         # time.time() and time.monotonic() are different, time.time()
         # is getting adjusted by NTP and is therefore more accurate)
-        self.assertEqual(self.simulate_calls(pc, [-2, -1, -3, -2, 0]),
-                         [1010, 1020, 1030, 1040, 1050])
+        self.assertEqual(
+            self.simulate_calls(pc, [-2, -1, -3, -2, 0]), [1010, 1020, 1030, 1040, 1050]
+        )
 
         # For big jumps, we should perhaps alter the schedule, but we
         # don't currently. This trace shows that we run callbacks
         # every 10s of time.time(), but the first and second calls are
         # 110s of real time apart because the backwards jump is
         # ignored.
-        self.assertEqual(self.simulate_calls(pc, [-100, 0, 0]),
-                         [1010, 1020, 1030])
+        self.assertEqual(self.simulate_calls(pc, [-100, 0, 0]), [1010, 1020, 1030])
 
     def test_jitter(self):
         random_times = [0.5, 1, 0, 0.75]
@@ -645,39 +678,41 @@ class TestPeriodicCallbackMath(unittest.TestCase):
 
         def mock_random():
             return random_times.pop(0)
-        with mock.patch('random.random', mock_random):
-            self.assertEqual(self.simulate_calls(pc, call_durations),
-                             expected)
+
+        with mock.patch("random.random", mock_random):
+            self.assertEqual(self.simulate_calls(pc, call_durations), expected)
 
 
 class TestIOLoopConfiguration(unittest.TestCase):
     def run_python(self, *statements):
         stmt_list = [
-            'from tornado.ioloop import IOLoop',
-            'classname = lambda x: x.__class__.__name__',
+            "from tornado.ioloop import IOLoop",
+            "classname = lambda x: x.__class__.__name__",
         ] + list(statements)
-        args = [sys.executable, '-c', '; '.join(stmt_list)]
+        args = [sys.executable, "-c", "; ".join(stmt_list)]
         return native_str(subprocess.check_output(args)).strip()
 
     def test_default(self):
         # When asyncio is available, it is used by default.
-        cls = self.run_python('print(classname(IOLoop.current()))')
-        self.assertEqual(cls, 'AsyncIOMainLoop')
-        cls = self.run_python('print(classname(IOLoop()))')
-        self.assertEqual(cls, 'AsyncIOLoop')
+        cls = self.run_python("print(classname(IOLoop.current()))")
+        self.assertEqual(cls, "AsyncIOMainLoop")
+        cls = self.run_python("print(classname(IOLoop()))")
+        self.assertEqual(cls, "AsyncIOLoop")
 
     def test_asyncio(self):
         cls = self.run_python(
             'IOLoop.configure("tornado.platform.asyncio.AsyncIOLoop")',
-            'print(classname(IOLoop.current()))')
-        self.assertEqual(cls, 'AsyncIOMainLoop')
+            "print(classname(IOLoop.current()))",
+        )
+        self.assertEqual(cls, "AsyncIOMainLoop")
 
     def test_asyncio_main(self):
         cls = self.run_python(
-            'from tornado.platform.asyncio import AsyncIOMainLoop',
-            'AsyncIOMainLoop().install()',
-            'print(classname(IOLoop.current()))')
-        self.assertEqual(cls, 'AsyncIOMainLoop')
+            "from tornado.platform.asyncio import AsyncIOMainLoop",
+            "AsyncIOMainLoop().install()",
+            "print(classname(IOLoop.current()))",
+        )
+        self.assertEqual(cls, "AsyncIOMainLoop")
 
 
 if __name__ == "__main__":

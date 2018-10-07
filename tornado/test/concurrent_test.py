@@ -18,7 +18,11 @@ import re
 import socket
 import unittest
 
-from tornado.concurrent import Future, run_on_executor, future_set_result_unless_cancelled
+from tornado.concurrent import (
+    Future,
+    run_on_executor,
+    future_set_result_unless_cancelled,
+)
 from tornado.escape import utf8, to_unicode
 from tornado import gen
 from tornado.iostream import IOStream
@@ -27,7 +31,6 @@ from tornado.testing import AsyncTestCase, bind_unused_port, gen_test
 
 
 class MiscFutureTest(AsyncTestCase):
-
     def test_future_set_result_unless_cancelled(self):
         fut = Future()  # type: Future[int]
         future_set_result_unless_cancelled(fut, 42)
@@ -69,11 +72,11 @@ class BaseCapClient(object):
         self.port = port
 
     def process_response(self, data):
-        m = re.match('(.*)\t(.*)\n', to_unicode(data))
+        m = re.match("(.*)\t(.*)\n", to_unicode(data))
         if m is None:
             raise Exception("did not match")
         status, message = m.groups()
-        if status == 'ok':
+        if status == "ok":
             return message
         else:
             raise CapError(message)
@@ -82,14 +85,14 @@ class BaseCapClient(object):
 class GeneratorCapClient(BaseCapClient):
     @gen.coroutine
     def capitalize(self, request_data):
-        logging.debug('capitalize')
+        logging.debug("capitalize")
         stream = IOStream(socket.socket())
-        logging.debug('connecting')
-        yield stream.connect(('127.0.0.1', self.port))
-        stream.write(utf8(request_data + '\n'))
-        logging.debug('reading')
-        data = yield stream.read_until(b'\n')
-        logging.debug('returning')
+        logging.debug("connecting")
+        yield stream.connect(("127.0.0.1", self.port))
+        stream.write(utf8(request_data + "\n"))
+        logging.debug("reading")
+        data = yield stream.read_until(b"\n")
+        logging.debug("returning")
         stream.close()
         raise gen.Return(self.process_response(data))
 
@@ -123,6 +126,7 @@ class ClientTestMixin(object):
         def f():
             result = yield self.client.capitalize("hello")
             self.assertEqual(result, "HELLO")
+
         self.io_loop.run_sync(f)
 
     def test_generator_error(self):
@@ -130,6 +134,7 @@ class ClientTestMixin(object):
         def f():
             with self.assertRaisesRegexp(CapError, "already capitalized"):
                 yield self.client.capitalize("HELLO")
+
         self.io_loop.run_sync(f)
 
 
@@ -172,7 +177,7 @@ class RunOnExecutorTest(AsyncTestCase):
             def __init__(self):
                 self.__executor = futures.thread.ThreadPoolExecutor(1)
 
-            @run_on_executor(executor='_Object__executor')
+            @run_on_executor(executor="_Object__executor")
             def f(self):
                 return 42
 
@@ -195,9 +200,10 @@ class RunOnExecutorTest(AsyncTestCase):
         async def f():
             answer = await o.f()
             return answer
+
         result = yield f()
         self.assertEqual(result, 42)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

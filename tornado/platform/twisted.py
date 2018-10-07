@@ -40,6 +40,7 @@ from tornado import gen
 from tornado.netutil import Resolver
 
 import typing
+
 if typing.TYPE_CHECKING:
     from typing import Generator, Any, List, Tuple  # noqa: F401
 
@@ -61,22 +62,25 @@ class TwistedResolver(Resolver):
     .. versionchanged:: 5.0
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
     """
+
     def initialize(self) -> None:
         # partial copy of twisted.names.client.createResolver, which doesn't
         # allow for a reactor to be passed in.
         self.reactor = twisted.internet.asyncioreactor.AsyncioSelectorReactor()
 
-        host_resolver = twisted.names.hosts.Resolver('/etc/hosts')
+        host_resolver = twisted.names.hosts.Resolver("/etc/hosts")
         cache_resolver = twisted.names.cache.CacheResolver(reactor=self.reactor)
-        real_resolver = twisted.names.client.Resolver('/etc/resolv.conf',
-                                                      reactor=self.reactor)
+        real_resolver = twisted.names.client.Resolver(
+            "/etc/resolv.conf", reactor=self.reactor
+        )
         self.resolver = twisted.names.resolve.ResolverChain(
-            [host_resolver, cache_resolver, real_resolver])
+            [host_resolver, cache_resolver, real_resolver]
+        )
 
     @gen.coroutine
     def resolve(
-            self, host: str, port: int, family: int=0,
-    ) -> 'Generator[Any, Any, List[Tuple[int, Any]]]':
+        self, host: str, port: int, family: int = 0
+    ) -> "Generator[Any, Any, List[Tuple[int, Any]]]":
         # getHostByName doesn't accept IP addresses, so if the input
         # looks like an IP address just return it immediately.
         if twisted.internet.abstract.isIPAddress(host):
@@ -102,15 +106,15 @@ class TwistedResolver(Resolver):
             else:
                 resolved_family = socket.AF_UNSPEC
         if family != socket.AF_UNSPEC and family != resolved_family:
-            raise Exception('Requested socket family %d but got %d' %
-                            (family, resolved_family))
-        result = [
-            (typing.cast(int, resolved_family), (resolved, port)),
-        ]
+            raise Exception(
+                "Requested socket family %d but got %d" % (family, resolved_family)
+            )
+        result = [(typing.cast(int, resolved_family), (resolved, port))]
         return result
 
 
-if hasattr(gen.convert_yielded, 'register'):
+if hasattr(gen.convert_yielded, "register"):
+
     @gen.convert_yielded.register(Deferred)  # type: ignore
     def _(d: Deferred) -> Future:
         f = Future()  # type: Future[Any]
@@ -122,5 +126,6 @@ if hasattr(gen.convert_yielded, 'register'):
                 raise Exception("errback called without error")
             except:
                 future_set_exc_info(f, sys.exc_info())
+
         d.addCallbacks(f.set_result, errback)
         return f

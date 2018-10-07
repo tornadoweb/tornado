@@ -8,8 +8,14 @@ import unittest
 import tornado.escape
 from tornado.escape import utf8
 from tornado.util import (
-    raise_exc_info, Configurable, exec_in, ArgReplacer,
-    timedelta_to_seconds, import_object, re_unescape, is_finalizing
+    raise_exc_info,
+    Configurable,
+    exec_in,
+    ArgReplacer,
+    timedelta_to_seconds,
+    import_object,
+    re_unescape,
+    is_finalizing,
 )
 
 import typing
@@ -130,7 +136,7 @@ class ConfigurableTest(unittest.TestCase):
         self.checkSubclasses()
 
     def test_config_str(self):
-        TestConfigurable.configure('tornado.test.util_test.TestConfig2')
+        TestConfigurable.configure("tornado.test.util_test.TestConfig2")
         obj = cast(TestConfig2, TestConfigurable())
         self.assertIsInstance(obj, TestConfig2)
         self.assertIs(obj.b, None)
@@ -209,48 +215,55 @@ class ConfigurableTest(unittest.TestCase):
 
 class UnicodeLiteralTest(unittest.TestCase):
     def test_unicode_escapes(self):
-        self.assertEqual(utf8(u'\u00e9'), b'\xc3\xa9')
+        self.assertEqual(utf8(u"\u00e9"), b"\xc3\xa9")
 
 
 class ExecInTest(unittest.TestCase):
     # TODO(bdarnell): make a version of this test for one of the new
     # future imports available in python 3.
-    @unittest.skip('no testable future imports')
+    @unittest.skip("no testable future imports")
     def test_no_inherit_future(self):
         # This file has from __future__ import print_function...
         f = StringIO()
-        print('hello', file=f)
+        print("hello", file=f)
         # ...but the template doesn't
         exec_in('print >> f, "world"', dict(f=f))
-        self.assertEqual(f.getvalue(), 'hello\nworld\n')
+        self.assertEqual(f.getvalue(), "hello\nworld\n")
 
 
 class ArgReplacerTest(unittest.TestCase):
     def setUp(self):
         def function(x, y, callback=None, z=None):
             pass
-        self.replacer = ArgReplacer(function, 'callback')
+
+        self.replacer = ArgReplacer(function, "callback")
 
     def test_omitted(self):
         args = (1, 2)
         kwargs = dict()  # type: Dict[str, Any]
         self.assertIs(self.replacer.get_old_value(args, kwargs), None)
-        self.assertEqual(self.replacer.replace('new', args, kwargs),
-                         (None, (1, 2), dict(callback='new')))
+        self.assertEqual(
+            self.replacer.replace("new", args, kwargs),
+            (None, (1, 2), dict(callback="new")),
+        )
 
     def test_position(self):
-        args = (1, 2, 'old', 3)
+        args = (1, 2, "old", 3)
         kwargs = dict()  # type: Dict[str, Any]
-        self.assertEqual(self.replacer.get_old_value(args, kwargs), 'old')
-        self.assertEqual(self.replacer.replace('new', args, kwargs),
-                         ('old', [1, 2, 'new', 3], dict()))
+        self.assertEqual(self.replacer.get_old_value(args, kwargs), "old")
+        self.assertEqual(
+            self.replacer.replace("new", args, kwargs),
+            ("old", [1, 2, "new", 3], dict()),
+        )
 
     def test_keyword(self):
         args = (1,)
-        kwargs = dict(y=2, callback='old', z=3)
-        self.assertEqual(self.replacer.get_old_value(args, kwargs), 'old')
-        self.assertEqual(self.replacer.replace('new', args, kwargs),
-                         ('old', (1,), dict(y=2, callback='new', z=3)))
+        kwargs = dict(y=2, callback="old", z=3)
+        self.assertEqual(self.replacer.get_old_value(args, kwargs), "old")
+        self.assertEqual(
+            self.replacer.replace("new", args, kwargs),
+            ("old", (1,), dict(y=2, callback="new", z=3)),
+        )
 
 
 class TimedeltaToSecondsTest(unittest.TestCase):
@@ -261,39 +274,34 @@ class TimedeltaToSecondsTest(unittest.TestCase):
 
 class ImportObjectTest(unittest.TestCase):
     def test_import_member(self):
-        self.assertIs(import_object('tornado.escape.utf8'), utf8)
+        self.assertIs(import_object("tornado.escape.utf8"), utf8)
 
     def test_import_member_unicode(self):
-        self.assertIs(import_object(u'tornado.escape.utf8'), utf8)
+        self.assertIs(import_object(u"tornado.escape.utf8"), utf8)
 
     def test_import_module(self):
-        self.assertIs(import_object('tornado.escape'), tornado.escape)
+        self.assertIs(import_object("tornado.escape"), tornado.escape)
 
     def test_import_module_unicode(self):
         # The internal implementation of __import__ differs depending on
         # whether the thing being imported is a module or not.
         # This variant requires a byte string in python 2.
-        self.assertIs(import_object(u'tornado.escape'), tornado.escape)
+        self.assertIs(import_object(u"tornado.escape"), tornado.escape)
 
 
 class ReUnescapeTest(unittest.TestCase):
     def test_re_unescape(self):
-        test_strings = (
-            '/favicon.ico',
-            'index.html',
-            'Hello, World!',
-            '!$@#%;',
-        )
+        test_strings = ("/favicon.ico", "index.html", "Hello, World!", "!$@#%;")
         for string in test_strings:
             self.assertEqual(string, re_unescape(re.escape(string)))
 
     def test_re_unescape_raises_error_on_invalid_input(self):
         with self.assertRaises(ValueError):
-            re_unescape('\\d')
+            re_unescape("\\d")
         with self.assertRaises(ValueError):
-            re_unescape('\\b')
+            re_unescape("\\b")
         with self.assertRaises(ValueError):
-            re_unescape('\\Z')
+            re_unescape("\\Z")
 
 
 class IsFinalizingTest(unittest.TestCase):

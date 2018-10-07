@@ -5,7 +5,7 @@ import unittest
 
 from tornado.platform.auto import set_close_exec
 
-skipIfNonWindows = unittest.skipIf(os.name != 'nt', 'non-windows platform')
+skipIfNonWindows = unittest.skipIf(os.name != "nt", "non-windows platform")
 
 
 @skipIfNonWindows
