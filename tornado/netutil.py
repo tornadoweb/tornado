@@ -525,7 +525,7 @@ class OverrideResolver(Resolver):
        Added support for host-port-family triplets.
     """
 
-    def initialize(self, resolver: Resolver, mapping: dict) -> None:  # type: ignore
+    def initialize(self, resolver: Resolver, mapping: dict) -> None:
         self.resolver = resolver
         self.mapping = mapping
 

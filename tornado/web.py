@@ -227,26 +227,28 @@ class RequestHandler(object):
         )
         self.initialize(**kwargs)  # type: ignore
 
-    def initialize(self) -> None:
-        """Hook for subclass initialization. Called for each request.
-
-        A dictionary passed as the third argument of a url spec will be
-        supplied as keyword arguments to initialize().
-
-        Example::
-
-            class ProfileHandler(RequestHandler):
-                def initialize(self, database):
-                    self.database = database
-
-                def get(self, username):
-                    ...
-
-            app = Application([
-                (r'/user/(.*)', ProfileHandler, dict(database=database)),
-                ])
-        """
+    def _initialize(self) -> None:
         pass
+
+    initialize = _initialize  # type: Callable[..., None]
+    """Hook for subclass initialization. Called for each request.
+
+    A dictionary passed as the third argument of a url spec will be
+    supplied as keyword arguments to initialize().
+
+    Example::
+
+        class ProfileHandler(RequestHandler):
+            def initialize(self, database):
+                self.database = database
+
+            def get(self, username):
+                ...
+
+        app = Application([
+            (r'/user/(.*)', ProfileHandler, dict(database=database)),
+            ])
+    """
 
     @property
     def settings(self) -> Dict[str, Any]:
@@ -2425,7 +2427,7 @@ class MissingArgumentError(HTTPError):
 class ErrorHandler(RequestHandler):
     """Generates an error response with ``status_code`` for all requests."""
 
-    def initialize(self, status_code: int) -> None:  # type: ignore
+    def initialize(self, status_code: int) -> None:
         self.set_status(status_code)
 
     def prepare(self) -> None:
@@ -2471,7 +2473,7 @@ class RedirectHandler(RequestHandler):
        destination URL.
     """
 
-    def initialize(self, url: str, permanent: bool = True) -> None:  # type: ignore
+    def initialize(self, url: str, permanent: bool = True) -> None:
         self._url = url
         self._permanent = permanent
 
@@ -2558,7 +2560,7 @@ class StaticFileHandler(RequestHandler):
     _static_hashes = {}  # type: Dict[str, Optional[str]]
     _lock = threading.Lock()  # protects _static_hashes
 
-    def initialize(  # type: ignore
+    def initialize(
         self, path: str, default_filename: str = None
     ) -> None:
         self.root = path
@@ -3009,7 +3011,7 @@ class FallbackHandler(RequestHandler):
         ])
     """
 
-    def initialize(  # type: ignore
+    def initialize(
         self, fallback: Callable[[httputil.HTTPServerRequest], None]
     ) -> None:
         self.fallback = fallback

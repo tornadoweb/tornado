@@ -302,18 +302,17 @@ class Configurable(object):
         """Returns the implementation class to be used if none is configured."""
         raise NotImplementedError()
 
-    def initialize(self) -> None:
-        """Initialize a `Configurable` subclass instance.
+    def _initialize(self) -> None:
+        pass
 
-        Configurable classes should use `initialize` instead of ``__init__``.
+    initialize = _initialize  # type: Callable[..., None]
+    """Initialize a `Configurable` subclass instance.
 
-        When used with ``mypy``, subclasses will often need ``# type: ignore``
-        annotations on this method because ``mypy`` does not recognize that
-        its arguments may change in subclasses (as it does for ``__init__``).
+    Configurable classes should use `initialize` instead of ``__init__``.
 
-        .. versionchanged:: 4.2
-           Now accepts positional arguments in addition to keyword arguments.
-        """
+    .. versionchanged:: 4.2
+       Now accepts positional arguments in addition to keyword arguments.
+    """
 
     @classmethod
     def configure(cls, impl, **kwargs):

@@ -161,7 +161,7 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
         # completely)
         pass
 
-    def initialize(  # type: ignore
+    def initialize(
         self,
         request_callback: Union[
             httputil.HTTPServerConnectionDelegate,
