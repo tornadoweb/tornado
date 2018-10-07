@@ -93,13 +93,13 @@ class WSGIContainer(object):
         response = []  # type: List[bytes]
 
         def start_response(
-                status: str, response_headers: List[Tuple[str, str]],
+                status: str, headers: List[Tuple[str, str]],
                 exc_info: Optional[Tuple[Optional[Type[BaseException]],
                                          Optional[BaseException],
                                          Optional[TracebackType]]]=None
         ) -> Callable[[bytes], Any]:
             data["status"] = status
-            data["headers"] = response_headers
+            data["headers"] = headers
             return response.append
         app_response = self.wsgi_application(
             WSGIContainer.environ(request), start_response)
