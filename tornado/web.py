@@ -253,26 +253,16 @@ class RequestHandler(object):
         """An alias for `self.application.settings <Application.settings>`."""
         return self.application.settings
 
-    def head(self, *args: str, **kwargs: str) -> Optional[Awaitable[None]]:
+    def _unimplemented_method(self, *args: str, **kwargs: str) -> None:
         raise HTTPError(405)
 
-    def get(self, *args: str, **kwargs: str) -> Optional[Awaitable[None]]:
-        raise HTTPError(405)
-
-    def post(self, *args: str, **kwargs: str) -> Optional[Awaitable[None]]:
-        raise HTTPError(405)
-
-    def delete(self, *args: str, **kwargs: str) -> Optional[Awaitable[None]]:
-        raise HTTPError(405)
-
-    def patch(self, *args: str, **kwargs: str) -> Optional[Awaitable[None]]:
-        raise HTTPError(405)
-
-    def put(self, *args: str, **kwargs: str) -> Optional[Awaitable[None]]:
-        raise HTTPError(405)
-
-    def options(self, *args: str, **kwargs: str) -> Optional[Awaitable[None]]:
-        raise HTTPError(405)
+    head = _unimplemented_method  # type: Callable[..., Optional[Awaitable[None]]]
+    get = _unimplemented_method  # type: Callable[..., Optional[Awaitable[None]]]
+    post = _unimplemented_method  # type: Callable[..., Optional[Awaitable[None]]]
+    delete = _unimplemented_method  # type: Callable[..., Optional[Awaitable[None]]]
+    patch = _unimplemented_method  # type: Callable[..., Optional[Awaitable[None]]]
+    put = _unimplemented_method  # type: Callable[..., Optional[Awaitable[None]]]
+    options = _unimplemented_method  # type: Callable[..., Optional[Awaitable[None]]]
 
     def prepare(self) -> Optional[Awaitable[None]]:
         """Called at the beginning of a request before  `get`/`post`/etc.
@@ -2485,7 +2475,7 @@ class RedirectHandler(RequestHandler):
         self._url = url
         self._permanent = permanent
 
-    def get(self, *args: Any) -> None:  # type: ignore
+    def get(self, *args: Any) -> None:
         to_url = self._url.format(*args)
         if self.request.query_arguments:
             # TODO: figure out typing for the next line.
@@ -2579,7 +2569,7 @@ class StaticFileHandler(RequestHandler):
         with cls._lock:
             cls._static_hashes = {}
 
-    def head(self, path: str) -> "Future[None]":  # type: ignore
+    def head(self, path: str) -> "Future[None]":
         return self.get(path, include_body=False)
 
     @gen.coroutine

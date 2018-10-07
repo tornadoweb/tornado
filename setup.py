@@ -144,6 +144,7 @@ setup(
         # data files need to be listed both here (which determines what gets
         # installed) and in MANIFEST.in (which determines what gets included
         # in the sdist tarball)
+        "tornado": ["py.typed"],
         "tornado.test": [
             "README",
             "csv_translations/fr_FR.csv",
@@ -161,7 +162,7 @@ setup(
             "templates/utf8.html",
             "test.crt",
             "test.key",
-        ]
+        ],
     },
     author="Facebook",
     author_email="python-tornado@googlegroups.com",
