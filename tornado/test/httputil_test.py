@@ -1,8 +1,15 @@
 # -*- coding: utf-8 -*-
 from tornado.httputil import (
-    url_concat, parse_multipart_form_data, HTTPHeaders, format_timestamp,
-    HTTPServerRequest, parse_request_start_line, parse_cookie, qs_to_qsl,
-    HTTPInputError, HTTPFile
+    url_concat,
+    parse_multipart_form_data,
+    HTTPHeaders,
+    format_timestamp,
+    HTTPServerRequest,
+    parse_request_start_line,
+    parse_cookie,
+    qs_to_qsl,
+    HTTPInputError,
+    HTTPFile,
 )
 from tornado.escape import utf8, native_str
 from tornado.log import gen_log
@@ -30,99 +37,62 @@ def form_data_args() -> Tuple[Dict[str, List[bytes]], Dict[str, List[HTTPFile]]]
 
 class TestUrlConcat(unittest.TestCase):
     def test_url_concat_no_query_params(self):
-        url = url_concat(
-            "https://localhost/path",
-            [('y', 'y'), ('z', 'z')],
-        )
+        url = url_concat("https://localhost/path", [("y", "y"), ("z", "z")])
         self.assertEqual(url, "https://localhost/path?y=y&z=z")
 
     def test_url_concat_encode_args(self):
-        url = url_concat(
-            "https://localhost/path",
-            [('y', '/y'), ('z', 'z')],
-        )
+        url = url_concat("https://localhost/path", [("y", "/y"), ("z", "z")])
         self.assertEqual(url, "https://localhost/path?y=%2Fy&z=z")
 
     def test_url_concat_trailing_q(self):
-        url = url_concat(
-            "https://localhost/path?",
-            [('y', 'y'), ('z', 'z')],
-        )
+        url = url_concat("https://localhost/path?", [("y", "y"), ("z", "z")])
         self.assertEqual(url, "https://localhost/path?y=y&z=z")
 
     def test_url_concat_q_with_no_trailing_amp(self):
-        url = url_concat(
-            "https://localhost/path?x",
-            [('y', 'y'), ('z', 'z')],
-        )
+        url = url_concat("https://localhost/path?x", [("y", "y"), ("z", "z")])
         self.assertEqual(url, "https://localhost/path?x=&y=y&z=z")
 
     def test_url_concat_trailing_amp(self):
-        url = url_concat(
-            "https://localhost/path?x&",
-            [('y', 'y'), ('z', 'z')],
-        )
+        url = url_concat("https://localhost/path?x&", [("y", "y"), ("z", "z")])
         self.assertEqual(url, "https://localhost/path?x=&y=y&z=z")
 
     def test_url_concat_mult_params(self):
-        url = url_concat(
-            "https://localhost/path?a=1&b=2",
-            [('y', 'y'), ('z', 'z')],
-        )
+        url = url_concat("https://localhost/path?a=1&b=2", [("y", "y"), ("z", "z")])
         self.assertEqual(url, "https://localhost/path?a=1&b=2&y=y&z=z")
 
     def test_url_concat_no_params(self):
-        url = url_concat(
-            "https://localhost/path?r=1&t=2",
-            [],
-        )
+        url = url_concat("https://localhost/path?r=1&t=2", [])
         self.assertEqual(url, "https://localhost/path?r=1&t=2")
 
     def test_url_concat_none_params(self):
-        url = url_concat(
-            "https://localhost/path?r=1&t=2",
-            None,
-        )
+        url = url_concat("https://localhost/path?r=1&t=2", None)
         self.assertEqual(url, "https://localhost/path?r=1&t=2")
 
     def test_url_concat_with_frag(self):
-        url = url_concat(
-            "https://localhost/path#tab",
-            [('y', 'y')],
-        )
+        url = url_concat("https://localhost/path#tab", [("y", "y")])
         self.assertEqual(url, "https://localhost/path?y=y#tab")
 
     def test_url_concat_multi_same_params(self):
-        url = url_concat(
-            "https://localhost/path",
-            [('y', 'y1'), ('y', 'y2')],
-        )
+        url = url_concat("https://localhost/path", [("y", "y1"), ("y", "y2")])
         self.assertEqual(url, "https://localhost/path?y=y1&y=y2")
 
     def test_url_concat_multi_same_query_params(self):
-        url = url_concat(
-            "https://localhost/path?r=1&r=2",
-            [('y', 'y')],
-        )
+        url = url_concat("https://localhost/path?r=1&r=2", [("y", "y")])
         self.assertEqual(url, "https://localhost/path?r=1&r=2&y=y")
 
     def test_url_concat_dict_params(self):
-        url = url_concat(
-            "https://localhost/path",
-            dict(y='y'),
-        )
+        url = url_concat("https://localhost/path", dict(y="y"))
         self.assertEqual(url, "https://localhost/path?y=y")
 
 
 class QsParseTest(unittest.TestCase):
-
     def test_parsing(self):
         qsstring = "a=1&b=2&a=3"
         qs = urllib.parse.parse_qs(qsstring)
         qsl = list(qs_to_qsl(qs))
-        self.assertIn(('a', '1'), qsl)
-        self.assertIn(('a', '3'), qsl)
-        self.assertIn(('b', '2'), qsl)
+        self.assertIn(("a", "1"), qsl)
+        self.assertIn(("a", "3"), qsl)
+        self.assertIn(("b", "2"), qsl)
 
 
 class MultipartFormDataTest(unittest.TestCase):
@@ -132,7 +102,9 @@ class MultipartFormDataTest(unittest.TestCase):
 Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 Foo
---1234--""".replace(b"\n", b"\r\n")
+--1234--""".replace(
+            b"\n", b"\r\n"
+        )
         args, files = form_data_args()
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
@@ -146,7 +118,9 @@ Foo
 Content-Disposition: form-data; name=files; filename=ab.txt
 
 Foo
---1234--""".replace(b"\n", b"\r\n")
+--1234--""".replace(
+            b"\n", b"\r\n"
+        )
         args, files = form_data_args()
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
@@ -154,14 +128,15 @@ Foo
         self.assertEqual(file["body"], b"Foo")
 
     def test_special_filenames(self):
-        filenames = ['a;b.txt',
-                     'a"b.txt',
-                     'a";b.txt',
-                     'a;"b.txt',
-                     'a";";.txt',
-                     'a\\"b.txt',
-                     'a\\b.txt',
-                     ]
+        filenames = [
+            "a;b.txt",
+            'a"b.txt',
+            'a";b.txt',
+            'a;"b.txt',
+            'a";";.txt',
+            'a\\"b.txt',
+            "a\\b.txt",
+        ]
         for filename in filenames:
             logging.debug("trying filename %r", filename)
             str_data = """\
@@ -169,7 +144,11 @@ Foo
 Content-Disposition: form-data; name="files"; filename="%s"
 
 Foo
---1234--""" % filename.replace('\\', '\\\\').replace('"', '\\"')
+--1234--""" % filename.replace(
+                "\\", "\\\\"
+            ).replace(
+                '"', '\\"'
+            )
             data = utf8(str_data.replace("\n", "\r\n"))
             args, files = form_data_args()
             parse_multipart_form_data(b"1234", data, args, files)
@@ -183,7 +162,9 @@ Foo
 Content-Disposition: form-data; name="files"; filename="ab.txt"; filename*=UTF-8''%C3%A1b.txt
 
 Foo
---1234--""".replace(b"\n", b"\r\n")
+--1234--""".replace(
+            b"\n", b"\r\n"
+        )
         args, files = form_data_args()
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
@@ -191,12 +172,14 @@ Foo
         self.assertEqual(file["body"], b"Foo")
 
     def test_boundary_starts_and_ends_with_quotes(self):
-        data = b'''\
+        data = b"""\
 --1234
 Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 Foo
---1234--'''.replace(b"\n", b"\r\n")
+--1234--""".replace(
+            b"\n", b"\r\n"
+        )
         args, files = form_data_args()
         parse_multipart_form_data(b'"1234"', data, args, files)
         file = files["files"][0]
@@ -204,34 +187,40 @@ Foo
         self.assertEqual(file["body"], b"Foo")
 
     def test_missing_headers(self):
-        data = b'''\
+        data = b"""\
 --1234
 
 Foo
---1234--'''.replace(b"\n", b"\r\n")
+--1234--""".replace(
+            b"\n", b"\r\n"
+        )
         args, files = form_data_args()
         with ExpectLog(gen_log, "multipart/form-data missing headers"):
             parse_multipart_form_data(b"1234", data, args, files)
         self.assertEqual(files, {})
 
     def test_invalid_content_disposition(self):
-        data = b'''\
+        data = b"""\
 --1234
 Content-Disposition: invalid; name="files"; filename="ab.txt"
 
 Foo
---1234--'''.replace(b"\n", b"\r\n")
+--1234--""".replace(
+            b"\n", b"\r\n"
+        )
         args, files = form_data_args()
         with ExpectLog(gen_log, "Invalid multipart/form-data"):
             parse_multipart_form_data(b"1234", data, args, files)
         self.assertEqual(files, {})
 
     def test_line_does_not_end_with_correct_line_break(self):
-        data = b'''\
+        data = b"""\
 --1234
 Content-Disposition: form-data; name="files"; filename="ab.txt"
 
-Foo--1234--'''.replace(b"\n", b"\r\n")
+Foo--1234--""".replace(
+            b"\n", b"\r\n"
+        )
         args, files = form_data_args()
         with ExpectLog(gen_log, "Invalid multipart/form-data"):
             parse_multipart_form_data(b"1234", data, args, files)
@@ -243,7 +232,9 @@ Foo--1234--'''.replace(b"\n", b"\r\n")
 Content-Disposition: form-data; filename="ab.txt"
 
 Foo
---1234--""".replace(b"\n", b"\r\n")
+--1234--""".replace(
+            b"\n", b"\r\n"
+        )
         args, files = form_data_args()
         with ExpectLog(gen_log, "multipart/form-data value missing name"):
             parse_multipart_form_data(b"1234", data, args, files)
@@ -259,7 +250,9 @@ Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 Foo
 --1234--
-""".replace(b"\n", b"\r\n")
+""".replace(
+            b"\n", b"\r\n"
+        )
         args, files = form_data_args()
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
@@ -281,16 +274,18 @@ Asdf: qwer
 Foo: even
      more
      lines
-""".replace("\n", "\r\n")
+""".replace(
+            "\n", "\r\n"
+        )
         headers = HTTPHeaders.parse(data)
         self.assertEqual(headers["asdf"], "qwer zxcv")
         self.assertEqual(headers.get_list("asdf"), ["qwer zxcv"])
         self.assertEqual(headers["Foo"], "bar baz,even more lines")
         self.assertEqual(headers.get_list("foo"), ["bar baz", "even more lines"])
-        self.assertEqual(sorted(list(headers.get_all())),
-                         [("Asdf", "qwer zxcv"),
-                          ("Foo", "bar baz"),
-                          ("Foo", "even more lines")])
+        self.assertEqual(
+            sorted(list(headers.get_all())),
+            [("Asdf", "qwer zxcv"), ("Foo", "bar baz"), ("Foo", "even more lines")],
+        )
 
     def test_malformed_continuation(self):
         # If the first line starts with whitespace, it's a
@@ -307,51 +302,50 @@ Foo: even
         # and cpython's unicodeobject.c (which defines the implementation
         # of unicode_type.splitlines(), and uses a different list than TR13).
         newlines = [
-            u'\u001b',  # VERTICAL TAB
-            u'\u001c',  # FILE SEPARATOR
-            u'\u001d',  # GROUP SEPARATOR
-            u'\u001e',  # RECORD SEPARATOR
-            u'\u0085',  # NEXT LINE
-            u'\u2028',  # LINE SEPARATOR
-            u'\u2029',  # PARAGRAPH SEPARATOR
+            u"\u001b",  # VERTICAL TAB
+            u"\u001c",  # FILE SEPARATOR
+            u"\u001d",  # GROUP SEPARATOR
+            u"\u001e",  # RECORD SEPARATOR
+            u"\u0085",  # NEXT LINE
+            u"\u2028",  # LINE SEPARATOR
+            u"\u2029",  # PARAGRAPH SEPARATOR
         ]
         for newline in newlines:
             # Try the utf8 and latin1 representations of each newline
-            for encoding in ['utf8', 'latin1']:
+            for encoding in ["utf8", "latin1"]:
                 try:
                     try:
                         encoded = newline.encode(encoding)
                     except UnicodeEncodeError:
                         # Some chars cannot be represented in latin1
                         continue
-                    data = b'Cookie: foo=' + encoded + b'bar'
+                    data = b"Cookie: foo=" + encoded + b"bar"
                     # parse() wants a native_str, so decode through latin1
                     # in the same way the real parser does.
-                    headers = HTTPHeaders.parse(
-                        native_str(data.decode('latin1')))
-                    expected = [('Cookie', 'foo=' +
-                                 native_str(encoded.decode('latin1')) + 'bar')]
-                    self.assertEqual(
-                        expected, list(headers.get_all()))
+                    headers = HTTPHeaders.parse(native_str(data.decode("latin1")))
+                    expected = [
+                        (
+                            "Cookie",
+                            "foo=" + native_str(encoded.decode("latin1")) + "bar",
+                        )
+                    ]
+                    self.assertEqual(expected, list(headers.get_all()))
                 except Exception:
-                    gen_log.warning("failed while trying %r in %s",
-                                    newline, encoding)
+                    gen_log.warning("failed while trying %r in %s", newline, encoding)
                     raise
 
     def test_optional_cr(self):
         # Both CRLF and LF should be accepted as separators. CR should not be
         # part of the data when followed by LF, but it is a normal char
         # otherwise (or should bare CR be an error?)
-        headers = HTTPHeaders.parse(
-            'CRLF: crlf\r\nLF: lf\nCR: cr\rMore: more\r\n')
-        self.assertEqual(sorted(headers.get_all()),
-                         [('Cr', 'cr\rMore: more'),
-                          ('Crlf', 'crlf'),
-                          ('Lf', 'lf'),
-                          ])
+        headers = HTTPHeaders.parse("CRLF: crlf\r\nLF: lf\nCR: cr\rMore: more\r\n")
+        self.assertEqual(
+            sorted(headers.get_all()),
+            [("Cr", "cr\rMore: more"), ("Crlf", "crlf"), ("Lf", "lf")],
+        )
 
     def test_copy(self):
-        all_pairs = [('A', '1'), ('A', '2'), ('B', 'c')]
+        all_pairs = [("A", "1"), ("A", "2"), ("B", "c")]
         h1 = HTTPHeaders()
         for k, v in all_pairs:
             h1.add(k, v)
@@ -365,13 +359,13 @@ Foo: even
         for headers in [h2, h3, h4]:
             # Neither the dict or its member lists are reused.
             self.assertIsNot(headers, h1)
-            self.assertIsNot(headers.get_list('A'), h1.get_list('A'))
+            self.assertIsNot(headers.get_list("A"), h1.get_list("A"))
 
     def test_pickle_roundtrip(self):
         headers = HTTPHeaders()
-        headers.add('Set-Cookie', 'a=b')
-        headers.add('Set-Cookie', 'c=d')
-        headers.add('Content-Type', 'text/html')
+        headers.add("Set-Cookie", "a=b")
+        headers.add("Set-Cookie", "c=d")
+        headers.add("Content-Type", "text/html")
         pickled = pickle.dumps(headers)
         unpickled = pickle.loads(pickled)
         self.assertEqual(sorted(headers.get_all()), sorted(unpickled.get_all()))
@@ -379,14 +373,14 @@ Foo: even
 
     def test_setdefault(self):
         headers = HTTPHeaders()
-        headers['foo'] = 'bar'
+        headers["foo"] = "bar"
         # If a value is present, setdefault returns it without changes.
-        self.assertEqual(headers.setdefault('foo', 'baz'), 'bar')
-        self.assertEqual(headers['foo'], 'bar')
+        self.assertEqual(headers.setdefault("foo", "baz"), "bar")
+        self.assertEqual(headers["foo"], "bar")
         # If a value is not present, setdefault sets it for future use.
-        self.assertEqual(headers.setdefault('quux', 'xyzzy'), 'xyzzy')
-        self.assertEqual(headers['quux'], 'xyzzy')
-        self.assertEqual(sorted(headers.get_all()), [('Foo', 'bar'), ('Quux', 'xyzzy')])
+        self.assertEqual(headers.setdefault("quux", "xyzzy"), "xyzzy")
+        self.assertEqual(headers["quux"], "xyzzy")
+        self.assertEqual(sorted(headers.get_all()), [("Foo", "bar"), ("Quux", "xyzzy")])
 
     def test_string(self):
         headers = HTTPHeaders()
@@ -400,7 +394,7 @@ Foo: even
 class FormatTimestampTest(unittest.TestCase):
     # Make sure that all the input types are supported.
     TIMESTAMP = 1359312200.503611
-    EXPECTED = 'Sun, 27 Jan 2013 18:43:20 GMT'
+    EXPECTED = "Sun, 27 Jan 2013 18:43:20 GMT"
 
     def check(self, value):
         self.assertEqual(format_timestamp(value), self.EXPECTED)
@@ -430,15 +424,17 @@ class HTTPServerRequestTest(unittest.TestCase):
         # All parameters are formally optional, but uri is required
         # (and has been for some time).  This test ensures that no
         # more required parameters slip in.
-        HTTPServerRequest(uri='/')
+        HTTPServerRequest(uri="/")
 
     def test_body_is_a_byte_string(self):
-        requets = HTTPServerRequest(uri='/')
+        requets = HTTPServerRequest(uri="/")
         self.assertIsInstance(requets.body, bytes)
 
     def test_repr_does_not_contain_headers(self):
-        request = HTTPServerRequest(uri='/', headers=HTTPHeaders({'Canary': ['Coal Mine']}))
-        self.assertTrue('Canary' not in repr(request))
+        request = HTTPServerRequest(
+            uri="/", headers=HTTPHeaders({"Canary": ["Coal Mine"]})
+        )
+        self.assertTrue("Canary" not in repr(request))
 
 
 class ParseRequestStartLineTest(unittest.TestCase):
@@ -461,29 +457,35 @@ class ParseCookieTest(unittest.TestCase):
         """
         Test cases copied from Python's Lib/test/test_http_cookies.py
         """
-        self.assertEqual(parse_cookie('chips=ahoy; vienna=finger'),
-                         {'chips': 'ahoy', 'vienna': 'finger'})
+        self.assertEqual(
+            parse_cookie("chips=ahoy; vienna=finger"),
+            {"chips": "ahoy", "vienna": "finger"},
+        )
         # Here parse_cookie() differs from Python's cookie parsing in that it
         # treats all semicolons as delimiters, even within quotes.
         self.assertEqual(
             parse_cookie('keebler="E=mc2; L=\\"Loves\\"; fudge=\\012;"'),
-            {'keebler': '"E=mc2', 'L': '\\"Loves\\"', 'fudge': '\\012', '': '"'}
+            {"keebler": '"E=mc2', "L": '\\"Loves\\"', "fudge": "\\012", "": '"'},
         )
         # Illegal cookies that have an '=' char in an unquoted value.
-        self.assertEqual(parse_cookie('keebler=E=mc2'), {'keebler': 'E=mc2'})
+        self.assertEqual(parse_cookie("keebler=E=mc2"), {"keebler": "E=mc2"})
         # Cookies with ':' character in their name.
-        self.assertEqual(parse_cookie('key:term=value:term'), {'key:term': 'value:term'})
+        self.assertEqual(
+            parse_cookie("key:term=value:term"), {"key:term": "value:term"}
+        )
         # Cookies with '[' and ']'.
-        self.assertEqual(parse_cookie('a=b; c=[; d=r; f=h'),
-                         {'a': 'b', 'c': '[', 'd': 'r', 'f': 'h'})
+        self.assertEqual(
+            parse_cookie("a=b; c=[; d=r; f=h"), {"a": "b", "c": "[", "d": "r", "f": "h"}
+        )
 
     def test_cookie_edgecases(self):
         # Cookies that RFC6265 allows.
-        self.assertEqual(parse_cookie('a=b; Domain=example.com'),
-                         {'a': 'b', 'Domain': 'example.com'})
+        self.assertEqual(
+            parse_cookie("a=b; Domain=example.com"), {"a": "b", "Domain": "example.com"}
+        )
         # parse_cookie() has historically kept only the last cookie with the
         # same name.
-        self.assertEqual(parse_cookie('a=b; h=i; a=c'), {'a': 'c', 'h': 'i'})
+        self.assertEqual(parse_cookie("a=b; h=i; a=c"), {"a": "c", "h": "i"})
 
     def test_invalid_cookies(self):
         """
@@ -492,19 +494,29 @@ class ParseCookieTest(unittest.TestCase):
         """
         # Chunks without an equals sign appear as unnamed values per
         # https://bugzilla.mozilla.org/show_bug.cgi?id=169091
-        self.assertIn('django_language',
-                      parse_cookie('abc=def; unnamed; django_language=en').keys())
+        self.assertIn(
+            "django_language",
+            parse_cookie("abc=def; unnamed; django_language=en").keys(),
+        )
         # Even a double quote may be an unamed value.
-        self.assertEqual(parse_cookie('a=b; "; c=d'), {'a': 'b', '': '"', 'c': 'd'})
+        self.assertEqual(parse_cookie('a=b; "; c=d'), {"a": "b", "": '"', "c": "d"})
         # Spaces in names and values, and an equals sign in values.
-        self.assertEqual(parse_cookie('a b c=d e = f; gh=i'), {'a b c': 'd e = f', 'gh': 'i'})
+        self.assertEqual(
+            parse_cookie("a b c=d e = f; gh=i"), {"a b c": "d e = f", "gh": "i"}
+        )
         # More characters the spec forbids.
-        self.assertEqual(parse_cookie('a   b,c<>@:/[]?{}=d  "  =e,f g'),
-                         {'a   b,c<>@:/[]?{}': 'd  "  =e,f g'})
+        self.assertEqual(
+            parse_cookie('a   b,c<>@:/[]?{}=d  "  =e,f g'),
+            {"a   b,c<>@:/[]?{}": 'd  "  =e,f g'},
+        )
         # Unicode characters. The spec only allows ASCII.
-        self.assertEqual(parse_cookie('saint=André Bessette'),
-                         {'saint': native_str('André Bessette')})
+        self.assertEqual(
+            parse_cookie("saint=André Bessette"),
+            {"saint": native_str("André Bessette")},
+        )
         # Browsers don't send extra whitespace or semicolons in Cookie headers,
         # but parse_cookie() should parse whitespace the same way
         # document.cookie parses whitespace.
-        self.assertEqual(parse_cookie('  =  b  ;  ;  =  ;   c  =  ;  '), {'': 'b', 'c': ''})
+        self.assertEqual(
+            parse_cookie("  =  b  ;  ;  =  ;   c  =  ;  "), {"": "b", "c": ""}
+        )

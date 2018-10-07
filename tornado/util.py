@@ -19,16 +19,25 @@ import typing
 import zlib
 
 from typing import (
-    Any, Optional, Dict, Mapping, List, Tuple, Match, Callable, Type, Sequence
+    Any,
+    Optional,
+    Dict,
+    Mapping,
+    List,
+    Tuple,
+    Match,
+    Callable,
+    Type,
+    Sequence,
 )
 
 if typing.TYPE_CHECKING:
     # Additional imports only used in type comments.
     # This lets us make these imports lazy.
-    import datetime  # noqa
-    from types import TracebackType  # noqa
-    from typing import Union  # noqa
-    import unittest  # noqa
+    import datetime  # noqa: F401
+    from types import TracebackType  # noqa: F401
+    from typing import Union  # noqa: F401
+    import unittest  # noqa: F401
 
 # Aliases for types that are spelled differently in different Python
 # versions. bytes_type is deprecated and no longer used in Tornado
@@ -67,6 +76,7 @@ class TimeoutError(Exception):
 class ObjectDict(Dict[str, Any]):
     """Makes a dictionary behave like an object, with attribute-style access.
     """
+
     def __getattr__(self, name: str) -> Any:
         try:
             return self[name]
@@ -83,13 +93,14 @@ class GzipDecompressor(object):
     The interface is like that of `zlib.decompressobj` (without some of the
     optional arguments, but it understands gzip headers and checksums.
     """
+
     def __init__(self) -> None:
         # Magic parameter makes zlib module understand gzip header
         # http://stackoverflow.com/questions/1838699/how-can-i-decompress-a-gzip-stream-with-zlib
         # This works on cpython and pypy, but not jython.
         self.decompressobj = zlib.decompressobj(16 + zlib.MAX_WBITS)
 
-    def decompress(self, value: bytes, max_length: int=0) -> bytes:
+    def decompress(self, value: bytes, max_length: int = 0) -> bytes:
         """Decompress a chunk, returning newly-available data.
 
         Some data may be buffered for later processing; `flush` must
@@ -135,27 +146,27 @@ def import_object(name: str) -> Any:
         ...
     ImportError: No module named missing_module
     """
-    if name.count('.') == 0:
+    if name.count(".") == 0:
         return __import__(name)
 
-    parts = name.split('.')
-    obj = __import__('.'.join(parts[:-1]), fromlist=[parts[-1]])
+    parts = name.split(".")
+    obj = __import__(".".join(parts[:-1]), fromlist=[parts[-1]])
     try:
         return getattr(obj, parts[-1])
     except AttributeError:
         raise ImportError("No module named %s" % parts[-1])
 
 
-def exec_in(code: Any, glob: Dict[str, Any], loc: Mapping[str, Any]=None) -> None:
+def exec_in(code: Any, glob: Dict[str, Any], loc: Mapping[str, Any] = None) -> None:
     if isinstance(code, str):
         # exec(string) inherits the caller's future imports; compile
         # the string first to prevent that.
-        code = compile(code, '<string>', 'exec', dont_inherit=True)
+        code = compile(code, "<string>", "exec", dont_inherit=True)
     exec(code, glob, loc)
 
 
 def raise_exc_info(
-        exc_info,  # type: Tuple[Optional[type], Optional[BaseException], Optional[TracebackType]]
+    exc_info,  # type: Tuple[Optional[type], Optional[BaseException], Optional[TracebackType]]
 ):
     # type: (...) -> typing.NoReturn
     #
@@ -184,7 +195,7 @@ def errno_from_exception(e: BaseException) -> Optional[int]:
     errno.
     """
 
-    if hasattr(e, 'errno'):
+    if hasattr(e, "errno"):
         return e.errno  # type: ignore
     elif e.args:
         return e.args[0]
@@ -192,8 +203,7 @@ def errno_from_exception(e: BaseException) -> Optional[int]:
         return None
 
 
-_alphanum = frozenset(
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+_alphanum = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
 
 def _re_unescape_replacement(match: Match[str]) -> str:
@@ -203,7 +213,7 @@ def _re_unescape_replacement(match: Match[str]) -> str:
     return group
 
 
-_re_unescape_pattern = re.compile(r'\\(.)', re.DOTALL)
+_re_unescape_pattern = re.compile(r"\\(.)", re.DOTALL)
 
 
 def re_unescape(s: str) -> str:
@@ -244,6 +254,7 @@ class Configurable(object):
        multiple levels of a class hierarchy.
 
     """
+
     # Type annotations on this class are mostly done with comments
     # because they need to refer to Configurable, which isn't defined
     # until after the class definition block. These can use regular
@@ -291,18 +302,17 @@ class Configurable(object):
         """Returns the implementation class to be used if none is configured."""
         raise NotImplementedError()
 
-    def initialize(self) -> None:
-        """Initialize a `Configurable` subclass instance.
+    def _initialize(self) -> None:
+        pass
 
-        Configurable classes should use `initialize` instead of ``__init__``.
+    initialize = _initialize  # type: Callable[..., None]
+    """Initialize a `Configurable` subclass instance.
 
-        When used with ``mypy``, subclasses will often need ``# type: ignore``
-        annotations on this method because ``mypy`` does not recognize that
-        its arguments may change in subclasses (as it does for ``__init__``).
+    Configurable classes should use `initialize` instead of ``__init__``.
 
-        .. versionchanged:: 4.2
-           Now accepts positional arguments in addition to keyword arguments.
-        """
+    .. versionchanged:: 4.2
+       Now accepts positional arguments in addition to keyword arguments.
+    """
 
     @classmethod
     def configure(cls, impl, **kwargs):
@@ -329,7 +339,7 @@ class Configurable(object):
         # Manually mangle the private name to see whether this base
         # has been configured (and not another base higher in the
         # hierarchy).
-        if base.__dict__.get('_Configurable__impl_class') is None:
+        if base.__dict__.get("_Configurable__impl_class") is None:
             base.__impl_class = cls.configurable_default()
         if base.__impl_class is not None:
             return base.__impl_class
@@ -358,6 +368,7 @@ class ArgReplacer(object):
     whether it is passed by position or keyword.  For use in decorators
     and similar wrappers.
     """
+
     def __init__(self, func: Callable, name: str) -> None:
         self.name = name
         try:
@@ -370,7 +381,7 @@ class ArgReplacer(object):
         try:
             return getfullargspec(func).args
         except TypeError:
-            if hasattr(func, 'func_code'):
+            if hasattr(func, "func_code"):
                 # Cython-generated code has all the attributes needed
                 # by inspect.getfullargspec, but the inspect module only
                 # works with ordinary functions. Inline the portion of
@@ -378,10 +389,12 @@ class ArgReplacer(object):
                 # functions the @cython.binding(True) decorator must
                 # be used (for methods it works out of the box).
                 code = func.func_code  # type: ignore
-                return code.co_varnames[:code.co_argcount]
+                return code.co_varnames[: code.co_argcount]
             raise
 
-    def get_old_value(self, args: Sequence[Any], kwargs: Dict[str, Any], default: Any=None) -> Any:
+    def get_old_value(
+        self, args: Sequence[Any], kwargs: Dict[str, Any], default: Any = None
+    ) -> Any:
         """Returns the old value of the named argument without replacing it.
 
         Returns ``default`` if the argument is not present.
@@ -391,8 +404,9 @@ class ArgReplacer(object):
         else:
             return kwargs.get(self.name, default)
 
-    def replace(self, new_value: Any, args: Sequence[Any],
-                kwargs: Dict[str, Any]) -> Tuple[Any, Sequence[Any], Dict[str, Any]]:
+    def replace(
+        self, new_value: Any, args: Sequence[Any], kwargs: Dict[str, Any]
+    ) -> Tuple[Any, Sequence[Any], Dict[str, Any]]:
         """Replace the named argument in ``args, kwargs`` with ``new_value``.
 
         Returns ``(old_value, args, kwargs)``.  The returned ``args`` and
@@ -436,8 +450,7 @@ def _websocket_mask_python(mask: bytes, data: bytes) -> bytes:
     return unmasked_arr.tobytes()
 
 
-if (os.environ.get('TORNADO_NO_EXTENSION') or
-        os.environ.get('TORNADO_EXTENSION') == '0'):
+if os.environ.get("TORNADO_NO_EXTENSION") or os.environ.get("TORNADO_EXTENSION") == "0":
     # These environment variables exist to make it easier to do performance
     # comparisons; they are not guaranteed to remain supported in the future.
     _websocket_mask = _websocket_mask_python
@@ -445,7 +458,7 @@ else:
     try:
         from tornado.speedups import websocket_mask as _websocket_mask
     except ImportError:
-        if os.environ.get('TORNADO_EXTENSION') == '1':
+        if os.environ.get("TORNADO_EXTENSION") == "1":
             raise
         _websocket_mask = _websocket_mask_python
 
@@ -453,4 +466,5 @@ else:
 def doctests():
     # type: () -> unittest.TestSuite
     import doctest
+
     return doctest.DocTestSuite()

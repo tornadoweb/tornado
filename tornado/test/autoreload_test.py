@@ -42,23 +42,26 @@ if 'TESTAPP_STARTED' not in os.environ:
 """
 
         # Create temporary test application
-        os.mkdir(os.path.join(self.path, 'testapp'))
-        open(os.path.join(self.path, 'testapp/__init__.py'), 'w').close()
-        with open(os.path.join(self.path, 'testapp/__main__.py'), 'w') as f:
+        os.mkdir(os.path.join(self.path, "testapp"))
+        open(os.path.join(self.path, "testapp/__init__.py"), "w").close()
+        with open(os.path.join(self.path, "testapp/__main__.py"), "w") as f:
             f.write(main)
 
         # Make sure the tornado module under test is available to the test
         # application
         pythonpath = os.getcwd()
-        if 'PYTHONPATH' in os.environ:
-            pythonpath += os.pathsep + os.environ['PYTHONPATH']
+        if "PYTHONPATH" in os.environ:
+            pythonpath += os.pathsep + os.environ["PYTHONPATH"]
 
         p = Popen(
-            [sys.executable, '-m', 'testapp'], stdout=subprocess.PIPE,
-            cwd=self.path, env=dict(os.environ, PYTHONPATH=pythonpath),
-            universal_newlines=True)
+            [sys.executable, "-m", "testapp"],
+            stdout=subprocess.PIPE,
+            cwd=self.path,
+            env=dict(os.environ, PYTHONPATH=pythonpath),
+            universal_newlines=True,
+        )
         out = p.communicate()[0]
-        self.assertEqual(out, 'Starting\nStarting\n')
+        self.assertEqual(out, "Starting\nStarting\n")
 
     def test_reload_wrapper_preservation(self):
         # This test verifies that when `python -m tornado.autoreload`
@@ -89,24 +92,26 @@ else:
 """
 
         # Create temporary test application
-        os.mkdir(os.path.join(self.path, 'testapp'))
-        init_file = os.path.join(self.path, 'testapp', '__init__.py')
-        open(init_file, 'w').close()
-        main_file = os.path.join(self.path, 'testapp', '__main__.py')
-        with open(main_file, 'w') as f:
+        os.mkdir(os.path.join(self.path, "testapp"))
+        init_file = os.path.join(self.path, "testapp", "__init__.py")
+        open(init_file, "w").close()
+        main_file = os.path.join(self.path, "testapp", "__main__.py")
+        with open(main_file, "w") as f:
             f.write(main)
 
         # Make sure the tornado module under test is available to the test
         # application
         pythonpath = os.getcwd()
-        if 'PYTHONPATH' in os.environ:
-            pythonpath += os.pathsep + os.environ['PYTHONPATH']
+        if "PYTHONPATH" in os.environ:
+            pythonpath += os.pathsep + os.environ["PYTHONPATH"]
 
         autoreload_proc = Popen(
-            [sys.executable, '-m', 'tornado.autoreload', '-m', 'testapp'],
-            stdout=subprocess.PIPE, cwd=self.path,
+            [sys.executable, "-m", "tornado.autoreload", "-m", "testapp"],
+            stdout=subprocess.PIPE,
+            cwd=self.path,
             env=dict(os.environ, PYTHONPATH=pythonpath),
-            universal_newlines=True)
+            universal_newlines=True,
+        )
 
         # This timeout needs to be fairly generous for pypy due to jit
         # warmup costs.
@@ -119,4 +124,4 @@ else:
             raise Exception("subprocess failed to terminate")
 
         out = autoreload_proc.communicate()[0]
-        self.assertEqual(out, 'Starting\n' * 2)
+        self.assertEqual(out, "Starting\n" * 2)

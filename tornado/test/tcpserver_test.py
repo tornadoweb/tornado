@@ -21,7 +21,7 @@ class TCPServerTest(AsyncTestCase):
         class TestServer(TCPServer):
             @gen.coroutine
             def handle_stream(self, stream, address):
-                yield stream.read_bytes(len(b'hello'))
+                yield stream.read_bytes(len(b"hello"))
                 stream.close()
                 1 / 0
 
@@ -32,8 +32,8 @@ class TCPServerTest(AsyncTestCase):
             server.add_socket(sock)
             client = IOStream(socket.socket())
             with ExpectLog(app_log, "Exception in callback"):
-                yield client.connect(('localhost', port))
-                yield client.write(b'hello')
+                yield client.connect(("localhost", port))
+                yield client.write(b"hello")
                 yield client.read_until_close()
                 yield gen.moment
         finally:
@@ -48,16 +48,16 @@ class TCPServerTest(AsyncTestCase):
 
         class TestServer(TCPServer):
             async def handle_stream(self, stream, address):
-                stream.write(b'data')
+                stream.write(b"data")
                 stream.close()
 
         sock, port = bind_unused_port()
         server = TestServer()
         server.add_socket(sock)
         client = IOStream(socket.socket())
-        yield client.connect(('localhost', port))
+        yield client.connect(("localhost", port))
         result = yield client.read_until_close()
-        self.assertEqual(result, b'data')
+        self.assertEqual(result, b"data")
         server.stop()
         client.close()
 
@@ -83,7 +83,7 @@ class TCPServerTest(AsyncTestCase):
         sock, port = bind_unused_port()
         server = TestServer()
         server.add_socket(sock)
-        server_addr = ('localhost', port)
+        server_addr = ("localhost", port)
         N = 40
         clients = [IOStream(socket.socket()) for i in range(N)]
         connected_clients = []
@@ -99,14 +99,15 @@ class TCPServerTest(AsyncTestCase):
 
         yield [connect(c) for c in clients]
 
-        self.assertGreater(len(connected_clients), 0,
-                           "all clients failed connecting")
+        self.assertGreater(len(connected_clients), 0, "all clients failed connecting")
         try:
             if len(connected_clients) == N:
                 # Ideally we'd make the test deterministic, but we're testing
                 # for a race condition in combination with the system's TCP stack...
-                self.skipTest("at least one client should fail connecting "
-                              "for the test to be meaningful")
+                self.skipTest(
+                    "at least one client should fail connecting "
+                    "for the test to be meaningful"
+                )
         finally:
             for c in connected_clients:
                 c.close()
@@ -122,23 +123,25 @@ class TestMultiprocess(unittest.TestCase):
     # byte, so we don't have to worry about atomicity of the shared
     # stdout stream) and then exits.
     def run_subproc(self, code):
-        proc = subprocess.Popen(sys.executable,
-                                stdin=subprocess.PIPE,
-                                stdout=subprocess.PIPE)
+        proc = subprocess.Popen(
+            sys.executable, stdin=subprocess.PIPE, stdout=subprocess.PIPE
+        )
         proc.stdin.write(utf8(code))
         proc.stdin.close()
         proc.wait()
         stdout = proc.stdout.read()
         proc.stdout.close()
         if proc.returncode != 0:
-            raise RuntimeError("Process returned %d. stdout=%r" % (
-                proc.returncode, stdout))
+            raise RuntimeError(
+                "Process returned %d. stdout=%r" % (proc.returncode, stdout)
+            )
         return to_unicode(stdout)
 
     def test_single(self):
         # As a sanity check, run the single-process version through this test
         # harness too.
-        code = textwrap.dedent("""
+        code = textwrap.dedent(
+            """
             from tornado.ioloop import IOLoop
             from tornado.tcpserver import TCPServer
 
@@ -146,12 +149,14 @@ class TestMultiprocess(unittest.TestCase):
             server.listen(0, address='127.0.0.1')
             IOLoop.current().run_sync(lambda: None)
             print('012', end='')
-        """)
+        """
+        )
         out = self.run_subproc(code)
-        self.assertEqual(''.join(sorted(out)), "012")
+        self.assertEqual("".join(sorted(out)), "012")
 
     def test_simple(self):
-        code = textwrap.dedent("""
+        code = textwrap.dedent(
+            """
             from tornado.ioloop import IOLoop
             from tornado.process import task_id
             from tornado.tcpserver import TCPServer
@@ -161,12 +166,14 @@ class TestMultiprocess(unittest.TestCase):
             server.start(3)
             IOLoop.current().run_sync(lambda: None)
             print(task_id(), end='')
-        """)
+        """
+        )
         out = self.run_subproc(code)
-        self.assertEqual(''.join(sorted(out)), "012")
+        self.assertEqual("".join(sorted(out)), "012")
 
     def test_advanced(self):
-        code = textwrap.dedent("""
+        code = textwrap.dedent(
+            """
             from tornado.ioloop import IOLoop
             from tornado.netutil import bind_sockets
             from tornado.process import fork_processes, task_id
@@ -179,6 +186,7 @@ class TestMultiprocess(unittest.TestCase):
             server.add_sockets(sockets)
             IOLoop.current().run_sync(lambda: None)
             print(task_id(), end='')
-        """)
+        """
+        )
         out = self.run_subproc(code)
-        self.assertEqual(''.join(sorted(out)), "012")
+        self.assertEqual("".join(sorted(out)), "012")

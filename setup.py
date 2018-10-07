@@ -79,11 +79,16 @@ MacOS users should run:
             build_ext.run(self)
         except Exception:
             e = sys.exc_info()[1]
-            sys.stdout.write('%s\n' % str(e))
-            warnings.warn(self.warning_message % ("Extension modules",
-                                                  "There was an issue with "
-                                                  "your platform configuration"
-                                                  " - see above."))
+            sys.stdout.write("%s\n" % str(e))
+            warnings.warn(
+                self.warning_message
+                % (
+                    "Extension modules",
+                    "There was an issue with "
+                    "your platform configuration"
+                    " - see above.",
+                )
+            )
 
     def build_extension(self, ext):
         name = ext.name
@@ -91,40 +96,45 @@ MacOS users should run:
             build_ext.build_extension(self, ext)
         except Exception:
             e = sys.exc_info()[1]
-            sys.stdout.write('%s\n' % str(e))
-            warnings.warn(self.warning_message % ("The %s extension "
-                                                  "module" % (name,),
-                                                  "The output above "
-                                                  "this warning shows how "
-                                                  "the compilation "
-                                                  "failed."))
+            sys.stdout.write("%s\n" % str(e))
+            warnings.warn(
+                self.warning_message
+                % (
+                    "The %s extension " "module" % (name,),
+                    "The output above "
+                    "this warning shows how "
+                    "the compilation "
+                    "failed.",
+                )
+            )
 
 
 kwargs = {}
 
 version = "6.0.dev1"
 
-with open('README.rst') as f:
-    kwargs['long_description'] = f.read()
+with open("README.rst") as f:
+    kwargs["long_description"] = f.read()
 
-if (platform.python_implementation() == 'CPython' and
-        os.environ.get('TORNADO_EXTENSION') != '0'):
+if (
+    platform.python_implementation() == "CPython"
+    and os.environ.get("TORNADO_EXTENSION") != "0"
+):
     # This extension builds and works on pypy as well, although pypy's jit
     # produces equivalent performance.
-    kwargs['ext_modules'] = [
-        Extension('tornado.speedups',
-                  sources=['tornado/speedups.c']),
+    kwargs["ext_modules"] = [
+        Extension("tornado.speedups", sources=["tornado/speedups.c"])
     ]
 
-    if os.environ.get('TORNADO_EXTENSION') != '1':
+    if os.environ.get("TORNADO_EXTENSION") != "1":
         # Unless the user has specified that the extension is mandatory,
         # fall back to the pure-python implementation on any build failure.
-        kwargs['cmdclass'] = {'build_ext': custom_build_ext}
+        kwargs["cmdclass"] = {"build_ext": custom_build_ext}
 
 
 if setuptools is not None:
-    python_requires = '>= 3.5'
-    kwargs['python_requires'] = python_requires
+    python_requires = ">= 3.5"
+    kwargs["python_requires"] = python_requires
 
 setup(
     name="tornado",
@@ -134,6 +144,7 @@ setup(
         # data files need to be listed both here (which determines what gets
         # installed) and in MANIFEST.in (which determines what gets included
         # in the sdist tarball)
+        "tornado": ["py.typed"],
         "tornado.test": [
             "README",
             "csv_translations/fr_FR.csv",
@@ -157,16 +168,18 @@ setup(
     author_email="python-tornado@googlegroups.com",
     url="http://www.tornadoweb.org/",
     license="http://www.apache.org/licenses/LICENSE-2.0",
-    description=("Tornado is a Python web framework and asynchronous networking library,"
-                 " originally developed at FriendFeed."),
+    description=(
+        "Tornado is a Python web framework and asynchronous networking library,"
+        " originally developed at FriendFeed."
+    ),
     classifiers=[
-        'License :: OSI Approved :: Apache Software License',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.5',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: Implementation :: CPython',
-        'Programming Language :: Python :: Implementation :: PyPy',
+        "License :: OSI Approved :: Apache Software License",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: Implementation :: CPython",
+        "Programming Language :: Python :: Implementation :: PyPy",
     ],
     **kwargs
 )

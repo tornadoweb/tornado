@@ -24,9 +24,9 @@ Most code that needs access to this functionality should do e.g.::
 
 import os
 
-if os.name == 'nt':
+if os.name == "nt":
     from tornado.platform.windows import set_close_exec
 else:
     from tornado.platform.posix import set_close_exec
 
-__all__ = ['set_close_exec']
+__all__ = ["set_close_exec"]

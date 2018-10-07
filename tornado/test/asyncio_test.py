@@ -16,7 +16,11 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from tornado import gen
 from tornado.ioloop import IOLoop
-from tornado.platform.asyncio import AsyncIOLoop, to_asyncio_future, AnyThreadEventLoopPolicy
+from tornado.platform.asyncio import (
+    AsyncIOLoop,
+    to_asyncio_future,
+    AnyThreadEventLoopPolicy,
+)
 from tornado.testing import AsyncTestCase, gen_test
 
 
@@ -35,14 +39,15 @@ class AsyncIOLoopTest(AsyncTestCase):
         # Test that we can yield an asyncio future from a tornado coroutine.
         # Without 'yield from', we must wrap coroutines in ensure_future,
         # which was introduced during Python 3.4, deprecating the prior "async".
-        if hasattr(asyncio, 'ensure_future'):
+        if hasattr(asyncio, "ensure_future"):
             ensure_future = asyncio.ensure_future
         else:
             # async is a reserved word in Python 3.7
-            ensure_future = getattr(asyncio, 'async')
+            ensure_future = getattr(asyncio, "async")
 
         x = yield ensure_future(
-            asyncio.get_event_loop().run_in_executor(None, lambda: 42))
+            asyncio.get_event_loop().run_in_executor(None, lambda: 42)
+        )
         self.assertEqual(x, 42)
 
     @gen_test
@@ -52,6 +57,7 @@ class AsyncIOLoopTest(AsyncTestCase):
             event_loop = asyncio.get_event_loop()
             x = yield from event_loop.run_in_executor(None, lambda: 42)
             return x
+
         result = yield f()
         self.assertEqual(result, 42)
 
@@ -76,30 +82,30 @@ class AsyncIOLoopTest(AsyncTestCase):
             return await to_asyncio_future(native_coroutine_without_adapter())
 
         # Tornado supports native coroutines both with and without adapters
-        self.assertEqual(
-            self.io_loop.run_sync(native_coroutine_without_adapter),
-            42)
-        self.assertEqual(
-            self.io_loop.run_sync(native_coroutine_with_adapter),
-            42)
-        self.assertEqual(
-            self.io_loop.run_sync(native_coroutine_with_adapter2),
-            42)
+        self.assertEqual(self.io_loop.run_sync(native_coroutine_without_adapter), 42)
+        self.assertEqual(self.io_loop.run_sync(native_coroutine_with_adapter), 42)
+        self.assertEqual(self.io_loop.run_sync(native_coroutine_with_adapter2), 42)
 
         # Asyncio only supports coroutines that yield asyncio-compatible
         # Futures (which our Future is since 5.0).
         self.assertEqual(
             asyncio.get_event_loop().run_until_complete(
-                native_coroutine_without_adapter()),
-            42)
+                native_coroutine_without_adapter()
+            ),
+            42,
+        )
         self.assertEqual(
             asyncio.get_event_loop().run_until_complete(
-                native_coroutine_with_adapter()),
-            42)
+                native_coroutine_with_adapter()
+            ),
+            42,
+        )
         self.assertEqual(
             asyncio.get_event_loop().run_until_complete(
-                native_coroutine_with_adapter2()),
-            42)
+                native_coroutine_with_adapter2()
+            ),
+            42,
+        )
 
 
 class LeakTest(unittest.TestCase):
@@ -160,19 +166,19 @@ class AnyThreadEventLoopPolicyTest(unittest.TestCase):
             loop = asyncio.get_event_loop()
             loop.close()
             return loop
+
         future = self.executor.submit(get_and_close_event_loop)
         return future.result()
 
     def run_policy_test(self, accessor, expected_type):
         # With the default policy, non-main threads don't get an event
         # loop.
-        self.assertRaises((RuntimeError, AssertionError),
-                          self.executor.submit(accessor).result)
+        self.assertRaises(
+            (RuntimeError, AssertionError), self.executor.submit(accessor).result
+        )
         # Set the policy and we can get a loop.
         asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
-        self.assertIsInstance(
-            self.executor.submit(accessor).result(),
-            expected_type)
+        self.assertIsInstance(self.executor.submit(accessor).result(), expected_type)
         # Clean up to silence leak warnings. Always use asyncio since
         # IOLoop doesn't (currently) close the underlying loop.
         self.executor.submit(lambda: asyncio.get_event_loop().close()).result()

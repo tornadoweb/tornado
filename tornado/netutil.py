@@ -38,11 +38,9 @@ if typing.TYPE_CHECKING:
 
 # Note that the naming of ssl.Purpose is confusing; the purpose
 # of a context is to authentiate the opposite side of the connection.
-_client_ssl_defaults = ssl.create_default_context(
-    ssl.Purpose.SERVER_AUTH)
-_server_ssl_defaults = ssl.create_default_context(
-    ssl.Purpose.CLIENT_AUTH)
-if hasattr(ssl, 'OP_NO_COMPRESSION'):
+_client_ssl_defaults = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+_server_ssl_defaults = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+if hasattr(ssl, "OP_NO_COMPRESSION"):
     # See netutil.ssl_options_to_context
     _client_ssl_defaults.options |= ssl.OP_NO_COMPRESSION
     _server_ssl_defaults.options |= ssl.OP_NO_COMPRESSION
@@ -52,10 +50,10 @@ if hasattr(ssl, 'OP_NO_COMPRESSION'):
 # module-import time, the import lock is already held by the main thread,
 # leading to deadlock. Avoid it by caching the idna encoder on the main
 # thread now.
-u'foo'.encode('idna')
+u"foo".encode("idna")
 
 # For undiagnosed reasons, 'latin1' codec may also need to be preloaded.
-u'foo'.encode('latin1')
+u"foo".encode("latin1")
 
 # These errnos indicate that a non-blocking operation must be retried
 # at a later time.  On most platforms they're the same value, but on
@@ -69,10 +67,14 @@ if hasattr(errno, "WSAEWOULDBLOCK"):
 _DEFAULT_BACKLOG = 128
 
 
-def bind_sockets(port: int, address: str=None,
-                 family: socket.AddressFamily=socket.AF_UNSPEC,
-                 backlog: int=_DEFAULT_BACKLOG, flags: int=None,
-                 reuse_port: bool=False) -> List[socket.socket]:
+def bind_sockets(
+    port: int,
+    address: str = None,
+    family: socket.AddressFamily = socket.AF_UNSPEC,
+    backlog: int = _DEFAULT_BACKLOG,
+    flags: int = None,
+    reuse_port: bool = False,
+) -> List[socket.socket]:
     """Creates listening sockets bound to the given port and address.
 
     Returns a list of socket objects (multiple sockets are returned if
@@ -113,16 +115,22 @@ def bind_sockets(port: int, address: str=None,
         flags = socket.AI_PASSIVE
     bound_port = None
     unique_addresses = set()  # type: set
-    for res in sorted(socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
-                                         0, flags), key=lambda x: x[0]):
+    for res in sorted(
+        socket.getaddrinfo(address, port, family, socket.SOCK_STREAM, 0, flags),
+        key=lambda x: x[0],
+    ):
         if res in unique_addresses:
             continue
 
         unique_addresses.add(res)
 
         af, socktype, proto, canonname, sockaddr = res
-        if (sys.platform == 'darwin' and address == 'localhost' and
-                af == socket.AF_INET6 and sockaddr[3] != 0):
+        if (
+            sys.platform == "darwin"
+            and address == "localhost"
+            and af == socket.AF_INET6
+            and sockaddr[3] != 0
+        ):
             # Mac OS X includes a link-local address fe80::1%lo0 in the
             # getaddrinfo results for 'localhost'.  However, the firewall
             # doesn't understand that this is a local address and will
@@ -137,7 +145,7 @@ def bind_sockets(port: int, address: str=None,
                 continue
             raise
         set_close_exec(sock.fileno())
-        if os.name != 'nt':
+        if os.name != "nt":
             try:
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             except socket.error as e:
@@ -172,9 +180,11 @@ def bind_sockets(port: int, address: str=None,
     return sockets
 
 
-if hasattr(socket, 'AF_UNIX'):
-    def bind_unix_socket(file: str, mode: int=0o600,
-                         backlog: int=_DEFAULT_BACKLOG) -> socket.socket:
+if hasattr(socket, "AF_UNIX"):
+
+    def bind_unix_socket(
+        file: str, mode: int = 0o600, backlog: int = _DEFAULT_BACKLOG
+    ) -> socket.socket:
         """Creates a listening unix socket.
 
         If a socket with the given name already exists, it will be deleted.
@@ -209,8 +219,9 @@ if hasattr(socket, 'AF_UNIX'):
         return sock
 
 
-def add_accept_handler(sock: socket.socket,
-                       callback: Callable[[socket.socket, Any], None]) -> Callable[[], None]:
+def add_accept_handler(
+    sock: socket.socket, callback: Callable[[socket.socket, Any], None]
+) -> Callable[[], None]:
     """Adds an `.IOLoop` event handler to accept new connections on ``sock``.
 
     When a connection is accepted, ``callback(connection, address)`` will
@@ -276,14 +287,14 @@ def is_valid_ip(ip: str) -> bool:
 
     Supports IPv4 and IPv6.
     """
-    if not ip or '\x00' in ip:
+    if not ip or "\x00" in ip:
         # getaddrinfo resolves empty strings to localhost, and truncates
         # on zero bytes.
         return False
     try:
-        res = socket.getaddrinfo(ip, 0, socket.AF_UNSPEC,
-                                 socket.SOCK_STREAM,
-                                 0, socket.AI_NUMERICHOST)
+        res = socket.getaddrinfo(
+            ip, 0, socket.AF_UNSPEC, socket.SOCK_STREAM, 0, socket.AI_NUMERICHOST
+        )
         return bool(res)
     except socket.gaierror as e:
         if e.args[0] == socket.EAI_NONAME:
@@ -315,17 +326,18 @@ class Resolver(Configurable):
        The default implementation has changed from `BlockingResolver` to
        `DefaultExecutorResolver`.
     """
+
     @classmethod
-    def configurable_base(cls) -> Type['Resolver']:
+    def configurable_base(cls) -> Type["Resolver"]:
         return Resolver
 
     @classmethod
-    def configurable_default(cls) -> Type['Resolver']:
+    def configurable_default(cls) -> Type["Resolver"]:
         return DefaultExecutorResolver
 
     def resolve(
-            self, host: str, port: int, family: socket.AddressFamily=socket.AF_UNSPEC,
-    ) -> 'Future[List[Tuple[int, Any]]]':
+        self, host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
+    ) -> "Future[List[Tuple[int, Any]]]":
         """Resolves an address.
 
         The ``host`` argument is a string which may be a hostname or a
@@ -359,7 +371,7 @@ class Resolver(Configurable):
 
 
 def _resolve_addr(
-        host: str, port: int, family: socket.AddressFamily=socket.AF_UNSPEC,
+    host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
 ) -> List[Tuple[int, Any]]:
     # On Solaris, getaddrinfo fails if the given port is not found
     # in /etc/services and no socket type is given, so we must pass
@@ -378,12 +390,14 @@ class DefaultExecutorResolver(Resolver):
 
     .. versionadded:: 5.0
     """
+
     @gen.coroutine
     def resolve(
-            self, host: str, port: int, family: socket.AddressFamily=socket.AF_UNSPEC,
+        self, host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
     ) -> Generator[Any, Any, List[Tuple[int, Any]]]:
         result = yield IOLoop.current().run_in_executor(
-            None, _resolve_addr, host, port, family)
+            None, _resolve_addr, host, port, family
+        )
         return result
 
 
@@ -404,8 +418,10 @@ class ExecutorResolver(Resolver):
        The default `Resolver` now uses `.IOLoop.run_in_executor`; use that instead
        of this class.
     """
-    def initialize(self, executor: concurrent.futures.Executor=None,
-                   close_executor: bool=True) -> None:
+
+    def initialize(
+        self, executor: concurrent.futures.Executor = None, close_executor: bool = True
+    ) -> None:
         self.io_loop = IOLoop.current()
         if executor is not None:
             self.executor = executor
@@ -421,7 +437,7 @@ class ExecutorResolver(Resolver):
 
     @run_on_executor
     def resolve(
-            self, host: str, port: int, family: socket.AddressFamily=socket.AF_UNSPEC,
+        self, host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
     ) -> List[Tuple[int, Any]]:
         return _resolve_addr(host, port, family)
 
@@ -436,6 +452,7 @@ class BlockingResolver(ExecutorResolver):
        The default `Resolver` now uses `.IOLoop.run_in_executor`; use that instead
        of this class.
     """
+
     def initialize(self) -> None:  # type: ignore
         super(BlockingResolver, self).initialize()
 
@@ -460,16 +477,20 @@ class ThreadedResolver(ExecutorResolver):
        The default `Resolver` now uses `.IOLoop.run_in_executor`; use that instead
        of this class.
     """
+
     _threadpool = None  # type: ignore
     _threadpool_pid = None  # type: int
 
-    def initialize(self, num_threads: int=10) -> None:  # type: ignore
+    def initialize(self, num_threads: int = 10) -> None:  # type: ignore
         threadpool = ThreadedResolver._create_threadpool(num_threads)
         super(ThreadedResolver, self).initialize(
-            executor=threadpool, close_executor=False)
+            executor=threadpool, close_executor=False
+        )
 
     @classmethod
-    def _create_threadpool(cls, num_threads: int) -> concurrent.futures.ThreadPoolExecutor:
+    def _create_threadpool(
+        cls, num_threads: int
+    ) -> concurrent.futures.ThreadPoolExecutor:
         pid = os.getpid()
         if cls._threadpool_pid != pid:
             # Threads cannot survive after a fork, so if our pid isn't what it
@@ -503,7 +524,8 @@ class OverrideResolver(Resolver):
     .. versionchanged:: 5.0
        Added support for host-port-family triplets.
     """
-    def initialize(self, resolver: Resolver, mapping: dict) -> None:  # type: ignore
+
+    def initialize(self, resolver: Resolver, mapping: dict) -> None:
         self.resolver = resolver
         self.mapping = mapping
 
@@ -511,8 +533,8 @@ class OverrideResolver(Resolver):
         self.resolver.close()
 
     def resolve(
-            self, host: str, port: int, family: socket.AddressFamily=socket.AF_UNSPEC,
-    ) -> 'Future[List[Tuple[int, Any]]]':
+        self, host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
+    ) -> "Future[List[Tuple[int, Any]]]":
         if (host, port, family) in self.mapping:
             host, port = self.mapping[(host, port, family)]
         elif (host, port) in self.mapping:
@@ -525,11 +547,14 @@ class OverrideResolver(Resolver):
 # These are the keyword arguments to ssl.wrap_socket that must be translated
 # to their SSLContext equivalents (the other arguments are still passed
 # to SSLContext.wrap_socket).
-_SSL_CONTEXT_KEYWORDS = frozenset(['ssl_version', 'certfile', 'keyfile',
-                                   'cert_reqs', 'ca_certs', 'ciphers'])
+_SSL_CONTEXT_KEYWORDS = frozenset(
+    ["ssl_version", "certfile", "keyfile", "cert_reqs", "ca_certs", "ciphers"]
+)
 
 
-def ssl_options_to_context(ssl_options: Union[Dict[str, Any], ssl.SSLContext]) -> ssl.SSLContext:
+def ssl_options_to_context(
+    ssl_options: Union[Dict[str, Any], ssl.SSLContext]
+) -> ssl.SSLContext:
     """Try to convert an ``ssl_options`` dictionary to an
     `~ssl.SSLContext` object.
 
@@ -546,17 +571,18 @@ def ssl_options_to_context(ssl_options: Union[Dict[str, Any], ssl.SSLContext]) -
     assert all(k in _SSL_CONTEXT_KEYWORDS for k in ssl_options), ssl_options
     # Can't use create_default_context since this interface doesn't
     # tell us client vs server.
-    context = ssl.SSLContext(
-        ssl_options.get('ssl_version', ssl.PROTOCOL_SSLv23))
-    if 'certfile' in ssl_options:
-        context.load_cert_chain(ssl_options['certfile'], ssl_options.get('keyfile', None))
-    if 'cert_reqs' in ssl_options:
-        context.verify_mode = ssl_options['cert_reqs']
-    if 'ca_certs' in ssl_options:
-        context.load_verify_locations(ssl_options['ca_certs'])
-    if 'ciphers' in ssl_options:
-        context.set_ciphers(ssl_options['ciphers'])
-    if hasattr(ssl, 'OP_NO_COMPRESSION'):
+    context = ssl.SSLContext(ssl_options.get("ssl_version", ssl.PROTOCOL_SSLv23))
+    if "certfile" in ssl_options:
+        context.load_cert_chain(
+            ssl_options["certfile"], ssl_options.get("keyfile", None)
+        )
+    if "cert_reqs" in ssl_options:
+        context.verify_mode = ssl_options["cert_reqs"]
+    if "ca_certs" in ssl_options:
+        context.load_verify_locations(ssl_options["ca_certs"])
+    if "ciphers" in ssl_options:
+        context.set_ciphers(ssl_options["ciphers"])
+    if hasattr(ssl, "OP_NO_COMPRESSION"):
         # Disable TLS compression to avoid CRIME and related attacks.
         # This constant depends on openssl version 1.0.
         # TODO: Do we need to do this ourselves or can we trust
@@ -565,8 +591,12 @@ def ssl_options_to_context(ssl_options: Union[Dict[str, Any], ssl.SSLContext]) -
     return context
 
 
-def ssl_wrap_socket(socket: socket.socket, ssl_options: Union[Dict[str, Any], ssl.SSLContext],
-                    server_hostname: str=None, **kwargs: Any) -> ssl.SSLSocket:
+def ssl_wrap_socket(
+    socket: socket.socket,
+    ssl_options: Union[Dict[str, Any], ssl.SSLContext],
+    server_hostname: str = None,
+    **kwargs: Any
+) -> ssl.SSLSocket:
     """Returns an ``ssl.SSLSocket`` wrapping the given socket.
 
     ``ssl_options`` may be either an `ssl.SSLContext` object or a
@@ -582,7 +612,6 @@ def ssl_wrap_socket(socket: socket.socket, ssl_options: Union[Dict[str, Any], ss
         # TODO: add a unittest (python added server-side SNI support in 3.4)
         # In the meantime it can be manually tested with
         # python3 -m tornado.httpclient https://sni.velox.ch
-        return context.wrap_socket(socket, server_hostname=server_hostname,
-                                   **kwargs)
+        return context.wrap_socket(socket, server_hostname=server_hostname, **kwargs)
     else:
         return context.wrap_socket(socket, **kwargs)
