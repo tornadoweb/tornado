@@ -1,5 +1,4 @@
 from tornado import gen, netutil
-from tornado.concurrent import Future
 from tornado.escape import (
     json_decode,
     json_encode,
@@ -50,8 +49,8 @@ if typing.TYPE_CHECKING:
     from typing import Dict, List  # noqa: F401
 
 
-def read_stream_body(stream, callback):
-    """Reads an HTTP response from `stream` and runs callback with its
+async def read_stream_body(stream):
+    """Reads an HTTP response from `stream` and returns a tuple of its
     start_line, headers and body."""
     chunks = []
 
@@ -65,10 +64,11 @@ def read_stream_body(stream, callback):
 
         def finish(self):
             conn.detach()  # type: ignore
-            callback((self.start_line, self.headers, b"".join(chunks)))
 
     conn = HTTP1Connection(stream, True)
-    conn.read_response(Delegate())
+    delegate = Delegate()
+    await conn.read_response(delegate)
+    return delegate.start_line, delegate.headers, b"".join(chunks)
 
 
 class HandlerBaseTestCase(AsyncHTTPTestCase):
@@ -257,8 +257,9 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
                 + newline
                 + body
             )
-            read_stream_body(stream, self.stop)
-            start_line, headers, body = self.wait()
+            start_line, headers, body = self.io_loop.run_sync(
+                lambda: read_stream_body(stream)
+            )
             return body
 
     def test_multipart_form(self):
@@ -459,8 +460,9 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
     def test_malformed_first_line_response(self):
         with ExpectLog(gen_log, ".*Malformed HTTP request line"):
             self.stream.write(b"asdf\r\n\r\n")
-            read_stream_body(self.stream, self.stop)
-            start_line, headers, response = self.wait()
+            start_line, headers, response = self.io_loop.run_sync(
+                lambda: read_stream_body(self.stream)
+            )
             self.assertEqual("HTTP/1.1", start_line.version)
             self.assertEqual(400, start_line.code)
             self.assertEqual("Bad Request", start_line.reason)
@@ -498,8 +500,9 @@ bar
                 b"\n", b"\r\n"
             )
         )
-        read_stream_body(self.stream, self.stop)
-        start_line, headers, response = self.wait()
+        start_line, headers, response = self.io_loop.run_sync(
+            lambda: read_stream_body(self.stream)
+        )
         self.assertEqual(json_decode(response), {u"foo": [u"bar"]})
 
     def test_chunked_request_uppercase(self):
@@ -521,8 +524,9 @@ bar
                 b"\n", b"\r\n"
             )
         )
-        read_stream_body(self.stream, self.stop)
-        start_line, headers, response = self.wait()
+        start_line, headers, response = self.io_loop.run_sync(
+            lambda: read_stream_body(self.stream)
+        )
         self.assertEqual(json_decode(response), {u"foo": [u"bar"]})
 
     @gen_test
@@ -1239,9 +1243,7 @@ class BodyLimitsTest(AsyncHTTPTestCase):
                 b"Content-Length: 10240\r\n\r\n"
             )
             stream.write(b"a" * 10240)
-            fut = Future()  # type: Future[bytes]
-            read_stream_body(stream, callback=fut.set_result)
-            start_line, headers, response = yield fut
+            start_line, headers, response = yield read_stream_body(stream)
             self.assertEqual(response, b"10240")
             # Without the ?expected_size parameter, we get the old default value
             stream.write(
