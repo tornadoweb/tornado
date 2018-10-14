@@ -58,18 +58,11 @@ class TriggerHandler(RequestHandler):
     @gen.coroutine
     def get(self):
         logging.debug("queuing trigger")
-        self.queue.append(self.finish)
+        event = Event()
+        self.queue.append(event.set)
         if self.get_argument("wake", "true") == "true":
             self.wake_callback()
-        never_finish = Event()
-        yield never_finish.wait()
-
-
-class HangHandler(RequestHandler):
-    @gen.coroutine
-    def get(self):
-        never_finish = Event()
-        yield never_finish.wait()
+        yield event.wait()
 
 
 class ContentLengthHandler(RequestHandler):
@@ -163,7 +156,6 @@ class SimpleHTTPClientTestMixin(object):
                 ),
                 url("/chunk", ChunkHandler),
                 url("/countdown/([0-9]+)", CountdownHandler, name="countdown"),
-                url("/hang", HangHandler),
                 url("/hello", HelloWorldHandler),
                 url("/content_length", ContentLengthHandler),
                 url("/head", HeadHandler),
@@ -304,6 +296,7 @@ class SimpleHTTPClientTestMixin(object):
             self.fetch("/trigger?wake=false", request_timeout=timeout, raise_error=True)
         # trigger the hanging request to let it clean up after itself
         self.triggers.popleft()()
+        self.io_loop.run_sync(lambda: gen.sleep(0))
 
     @skipIfNoIPv6
     def test_ipv6(self):

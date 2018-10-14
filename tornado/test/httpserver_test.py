@@ -751,11 +751,13 @@ class KeepAliveTest(AsyncHTTPTestCase):
                 self.write("".join(chr(i % 256) * 1024 for i in range(512)))
 
         class FinishOnCloseHandler(RequestHandler):
+            def initialize(self, cleanup_event):
+                self.cleanup_event = cleanup_event
+
             @gen.coroutine
             def get(self):
                 self.flush()
-                never_finish = Event()
-                yield never_finish.wait()
+                yield self.cleanup_event.wait()
 
             def on_connection_close(self):
                 # This is not very realistic, but finishing the request
@@ -763,11 +765,16 @@ class KeepAliveTest(AsyncHTTPTestCase):
                 # some errors seen in the wild.
                 self.finish("closed")
 
+        self.cleanup_event = Event()
         return Application(
             [
                 ("/", HelloHandler),
                 ("/large", LargeHandler),
-                ("/finish_on_close", FinishOnCloseHandler),
+                (
+                    "/finish_on_close",
+                    FinishOnCloseHandler,
+                    dict(cleanup_event=self.cleanup_event),
+                ),
             ]
         )
 
@@ -894,6 +901,8 @@ class KeepAliveTest(AsyncHTTPTestCase):
         self.stream.write(b"GET /finish_on_close HTTP/1.1\r\n\r\n")
         yield self.read_headers()
         self.close()
+        # Let the hanging coroutine clean up after itself
+        self.cleanup_event.set()
 
     @gen_test
     def test_keepalive_chunked(self):
