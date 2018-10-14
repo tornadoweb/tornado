@@ -2571,11 +2571,10 @@ class StaticFileHandler(RequestHandler):
         with cls._lock:
             cls._static_hashes = {}
 
-    def head(self, path: str) -> "Future[None]":
+    def head(self, path: str) -> Awaitable[None]:
         return self.get(path, include_body=False)
 
-    @gen.coroutine
-    def get(self, path: str, include_body: bool = True) -> Generator[Any, Any, None]:
+    async def get(self, path: str, include_body: bool = True) -> None:
         # Set up our path instance variables.
         self.path = self.parse_url_path(path)
         del path  # make sure we don't refer to path instead of self.path again
@@ -2644,7 +2643,7 @@ class StaticFileHandler(RequestHandler):
             for chunk in content:
                 try:
                     self.write(chunk)
-                    yield self.flush()
+                    await self.flush()
                 except iostream.StreamClosedError:
                     return
         else:

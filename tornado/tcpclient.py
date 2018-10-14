@@ -31,7 +31,7 @@ from tornado.platform.auto import set_close_exec
 from tornado.gen import TimeoutError
 
 import typing
-from typing import Generator, Any, Union, Dict, Tuple, List, Callable, Iterator
+from typing import Any, Union, Dict, Tuple, List, Callable, Iterator
 
 if typing.TYPE_CHECKING:
     from typing import Optional, Set  # noqa: F401
@@ -219,8 +219,7 @@ class TCPClient(object):
         if self._own_resolver:
             self.resolver.close()
 
-    @gen.coroutine
-    def connect(
+    async def connect(
         self,
         host: str,
         port: int,
@@ -230,7 +229,7 @@ class TCPClient(object):
         source_ip: str = None,
         source_port: int = None,
         timeout: Union[float, datetime.timedelta] = None,
-    ) -> Generator[Any, Any, IOStream]:
+    ) -> IOStream:
         """Connect to the given host and port.
 
         Asynchronously returns an `.IOStream` (or `.SSLIOStream` if
@@ -264,11 +263,11 @@ class TCPClient(object):
             else:
                 raise TypeError("Unsupported timeout %r" % timeout)
         if timeout is not None:
-            addrinfo = yield gen.with_timeout(
+            addrinfo = await gen.with_timeout(
                 timeout, self.resolver.resolve(host, port, af)
             )
         else:
-            addrinfo = yield self.resolver.resolve(host, port, af)
+            addrinfo = await self.resolver.resolve(host, port, af)
         connector = _Connector(
             addrinfo,
             functools.partial(
@@ -278,20 +277,20 @@ class TCPClient(object):
                 source_port=source_port,
             ),
         )
-        af, addr, stream = yield connector.start(connect_timeout=timeout)
+        af, addr, stream = await connector.start(connect_timeout=timeout)
         # TODO: For better performance we could cache the (af, addr)
         # information here and re-use it on subsequent connections to
         # the same host. (http://tools.ietf.org/html/rfc6555#section-4.2)
         if ssl_options is not None:
             if timeout is not None:
-                stream = yield gen.with_timeout(
+                stream = await gen.with_timeout(
                     timeout,
                     stream.start_tls(
                         False, ssl_options=ssl_options, server_hostname=host
                     ),
                 )
             else:
-                stream = yield stream.start_tls(
+                stream = await stream.start_tls(
                     False, ssl_options=ssl_options, server_hostname=host
                 )
         return stream

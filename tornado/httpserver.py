@@ -30,7 +30,6 @@ import ssl
 
 from tornado.escape import native_str
 from tornado.http1connection import HTTP1ServerConnection, HTTP1ConnectionParameters
-from tornado import gen
 from tornado import httputil
 from tornado import iostream
 from tornado import netutil
@@ -38,18 +37,7 @@ from tornado.tcpserver import TCPServer
 from tornado.util import Configurable
 
 import typing
-from typing import (
-    Union,
-    Any,
-    Dict,
-    Callable,
-    List,
-    Type,
-    Generator,
-    Tuple,
-    Optional,
-    Awaitable,
-)
+from typing import Union, Any, Dict, Callable, List, Type, Tuple, Optional, Awaitable
 
 if typing.TYPE_CHECKING:
     from typing import Set  # noqa: F401
@@ -209,12 +197,11 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
     def configurable_default(cls) -> Type[Configurable]:
         return HTTPServer
 
-    @gen.coroutine
-    def close_all_connections(self) -> Generator[Any, Any, None]:
+    async def close_all_connections(self) -> None:
         while self._connections:
             # Peek at an arbitrary element of the set
             conn = next(iter(self._connections))
-            yield conn.close()
+            await conn.close()
 
     def handle_stream(self, stream: iostream.IOStream, address: Tuple) -> None:
         context = _HTTPRequestContext(

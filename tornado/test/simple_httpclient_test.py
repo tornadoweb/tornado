@@ -18,7 +18,6 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import UnsatisfiableReadError
 from tornado.locks import Event
 from tornado.log import gen_log
-from tornado.concurrent import Future
 from tornado.netutil import Resolver, bind_sockets
 from tornado.simple_httpclient import (
     SimpleAsyncHTTPClient,
@@ -273,9 +272,14 @@ class SimpleHTTPClientTestMixin(object):
     def test_connect_timeout(self):
         timeout = 0.1
 
+        cleanup_event = Event()
+        test = self
+
         class TimeoutResolver(Resolver):
-            def resolve(self, *args, **kwargs):
-                return Future()  # never completes
+            async def resolve(self, *args, **kwargs):
+                await cleanup_event.wait()
+                # Return something valid so the test doesn't raise during shutdown.
+                return [(socket.AF_INET, ("127.0.0.1", test.get_http_port()))]
 
         with closing(self.create_client(resolver=TimeoutResolver())) as client:
             with self.assertRaises(HTTPTimeoutError):
@@ -285,6 +289,12 @@ class SimpleHTTPClientTestMixin(object):
                     request_timeout=3600,
                     raise_error=True,
                 )
+
+        # Let the hanging coroutine clean up after itself. We need to
+        # wait more than a single IOLoop iteration for the SSL case,
+        # which logs errors on unexpected EOF.
+        cleanup_event.set()
+        yield gen.sleep(0.2)
 
     @skipOnTravis
     def test_request_timeout(self):
@@ -694,11 +704,16 @@ class HostnameMappingTestCase(AsyncHTTPTestCase):
 
 class ResolveTimeoutTestCase(AsyncHTTPTestCase):
     def setUp(self):
+        self.cleanup_event = Event()
+        test = self
+
         # Dummy Resolver subclass that never finishes.
         class BadResolver(Resolver):
             @gen.coroutine
             def resolve(self, *args, **kwargs):
-                yield Event().wait()
+                yield test.cleanup_event.wait()
+                # Return something valid so the test doesn't raise during cleanup.
+                return [(socket.AF_INET, ("127.0.0.1", test.get_http_port()))]
 
         super(ResolveTimeoutTestCase, self).setUp()
         self.http_client = SimpleAsyncHTTPClient(resolver=BadResolver())
@@ -709,6 +724,10 @@ class ResolveTimeoutTestCase(AsyncHTTPTestCase):
     def test_resolve_timeout(self):
         with self.assertRaises(HTTPTimeoutError):
             self.fetch("/hello", connect_timeout=0.1, raise_error=True)
+
+        # Let the hanging coroutine clean up after itself
+        self.cleanup_event.set()
+        self.io_loop.run_sync(lambda: gen.sleep(0))
 
 
 class MaxHeaderSizeTest(AsyncHTTPTestCase):

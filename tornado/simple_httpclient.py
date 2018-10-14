@@ -28,7 +28,7 @@ import time
 from io import BytesIO
 import urllib.parse
 
-from typing import Dict, Any, Generator, Callable, Optional, Type, Union
+from typing import Dict, Any, Callable, Optional, Type, Union
 from types import TracebackType
 import typing
 
@@ -277,10 +277,11 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         # Timeout handle returned by IOLoop.add_timeout
         self._timeout = None  # type: object
         self._sockaddr = None
-        IOLoop.current().add_callback(self.run)
+        IOLoop.current().add_future(
+            gen.convert_yielded(self.run()), lambda f: f.result()
+        )
 
-    @gen.coroutine
-    def run(self) -> Generator[Any, Any, None]:
+    async def run(self) -> None:
         try:
             self.parsed = urllib.parse.urlsplit(_unicode(self.request.url))
             if self.parsed.scheme not in ("http", "https"):
@@ -311,7 +312,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     self.start_time + timeout,
                     functools.partial(self._on_timeout, "while connecting"),
                 )
-                stream = yield self.tcp_client.connect(
+                stream = await self.tcp_client.connect(
                     host,
                     port,
                     af=af,
@@ -417,9 +418,9 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 )
                 self.connection.write_headers(start_line, self.request.headers)
                 if self.request.expect_100_continue:
-                    yield self.connection.read_response(self)
+                    await self.connection.read_response(self)
                 else:
-                    yield self._write_body(True)
+                    await self._write_body(True)
         except Exception:
             if not self._handle_exception(*sys.exc_info()):
                 raise
@@ -489,18 +490,17 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         )
         return connection
 
-    @gen.coroutine
-    def _write_body(self, start_read: bool) -> Generator[Any, Any, None]:
+    async def _write_body(self, start_read: bool) -> None:
         if self.request.body is not None:
             self.connection.write(self.request.body)
         elif self.request.body_producer is not None:
             fut = self.request.body_producer(self.connection.write)
             if fut is not None:
-                yield fut
+                await fut
         self.connection.finish()
         if start_read:
             try:
-                yield self.connection.read_response(self)
+                await self.connection.read_response(self)
             except StreamClosedError:
                 if not self._handle_exception(*sys.exc_info()):
                     raise
@@ -564,14 +564,14 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             except HTTPStreamClosedError:
                 self._handle_exception(*sys.exc_info())
 
-    def headers_received(
+    async def headers_received(
         self,
         first_line: Union[httputil.ResponseStartLine, httputil.RequestStartLine],
         headers: httputil.HTTPHeaders,
     ) -> None:
         assert isinstance(first_line, httputil.ResponseStartLine)
         if self.request.expect_100_continue and first_line.code == 100:
-            self._write_body(False)
+            await self._write_body(False)
             return
         self.code = first_line.code
         self.reason = first_line.reason

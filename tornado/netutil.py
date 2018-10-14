@@ -24,17 +24,15 @@ import ssl
 import stat
 
 from tornado.concurrent import dummy_executor, run_on_executor
-from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.platform.auto import set_close_exec
 from tornado.util import Configurable, errno_from_exception
 
 import typing
-from typing import List, Callable, Any, Type, Generator, Dict, Union, Tuple
+from typing import List, Callable, Any, Type, Dict, Union, Tuple, Awaitable
 
 if typing.TYPE_CHECKING:
     from asyncio import Future  # noqa: F401
-    from typing import Awaitable  # noqa: F401
 
 # Note that the naming of ssl.Purpose is confusing; the purpose
 # of a context is to authentiate the opposite side of the connection.
@@ -337,7 +335,7 @@ class Resolver(Configurable):
 
     def resolve(
         self, host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
-    ) -> "Future[List[Tuple[int, Any]]]":
+    ) -> Awaitable[List[Tuple[int, Any]]]:
         """Resolves an address.
 
         The ``host`` argument is a string which may be a hostname or a
@@ -391,11 +389,10 @@ class DefaultExecutorResolver(Resolver):
     .. versionadded:: 5.0
     """
 
-    @gen.coroutine
-    def resolve(
+    async def resolve(
         self, host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
-    ) -> Generator[Any, Any, List[Tuple[int, Any]]]:
-        result = yield IOLoop.current().run_in_executor(
+    ) -> List[Tuple[int, Any]]:
+        result = await IOLoop.current().run_in_executor(
             None, _resolve_addr, host, port, family
         )
         return result
@@ -534,7 +531,7 @@ class OverrideResolver(Resolver):
 
     def resolve(
         self, host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
-    ) -> "Future[List[Tuple[int, Any]]]":
+    ) -> Awaitable[List[Tuple[int, Any]]]:
         if (host, port, family) in self.mapping:
             host, port = self.mapping[(host, port, family)]
         elif (host, port) in self.mapping:
