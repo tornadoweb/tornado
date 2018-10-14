@@ -20,7 +20,7 @@ import types
 from tornado import gen, ioloop
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 
-from typing import Union, Optional, Type, Any, Generator
+from typing import Union, Optional, Type, Any
 import typing
 
 if typing.TYPE_CHECKING:
@@ -453,9 +453,8 @@ class Semaphore(_TimeoutGarbageCollector):
     ) -> None:
         self.__enter__()
 
-    @gen.coroutine
-    def __aenter__(self) -> Generator[Any, Any, None]:
-        yield self.acquire()
+    async def __aenter__(self) -> None:
+        await self.acquire()
 
     async def __aexit__(
         self,
@@ -562,9 +561,8 @@ class Lock(object):
     ) -> None:
         self.__enter__()
 
-    @gen.coroutine
-    def __aenter__(self) -> Generator[Any, Any, None]:
-        yield self.acquire()
+    async def __aenter__(self) -> None:
+        await self.acquire()
 
     async def __aexit__(
         self,
