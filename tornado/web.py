@@ -1956,7 +1956,7 @@ class _ApplicationRouter(ReversibleRuleRouter):
 
 
 class Application(ReversibleRouter):
-    """A collection of request handlers that make up a web application.
+    r"""A collection of request handlers that make up a web application.
 
     Instances of this class are callable and can be passed directly to
     HTTPServer to serve the application::

@@ -43,7 +43,8 @@ install:
     #- if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then travis_retry pip install pycares; fi
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then travis_retry pip install pycurl; fi
     # Twisted is flaky on pypy (TODO: still? this note is quite old)
-    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then travis_retry pip install Twisted; fi
+    # It also sometimes has problems on nightly.
+    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* && $TRAVIS_PYTHON_VERSION != 'nightly' ]]; then travis_retry pip install Twisted; fi
     # Ideally we'd run the lint stuff on the latest Python
     # version supported. But Python 3.7 requires slower-to-start VMs,
     # so we run it on 3.6 to minimize total CI run time.
@@ -83,6 +84,8 @@ script:
     # run it with nightly cpython. Coverage is very slow on pypy.
     - if [[ $TRAVIS_PYTHON_VERSION != nightly && $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then export RUN_COVERAGE=1; fi
     - if [[ "$RUN_COVERAGE" == 1 ]]; then export TARGET="-m coverage run $TARGET"; fi
+    # See comments in tox.ini
+    - export PYTHONWARNINGS=error,ignore:::site
     - python -bb $TARGET
     - python -O $TARGET
     - LANG=C python $TARGET
@@ -92,6 +95,7 @@ script:
     # make coverage reports for Codecov to find
     - if [[ "$RUN_COVERAGE" == 1 ]]; then coverage xml; fi
     - export TORNADO_EXTENSION=0
+    - unset PYTHONWARNINGS
     - if [[ $TRAVIS_PYTHON_VERSION == 3.7 ]]; then (cd ../docs && mkdir sphinx-out && sphinx-build -E -n -W -b html . sphinx-out); fi
     - if [[ $TRAVIS_PYTHON_VERSION == 3.7 ]]; then (cd ../docs && mkdir sphinx-doctest-out && sphinx-build -E -n -b doctest . sphinx-out); fi
     - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then (cd .. && flake8); fi
