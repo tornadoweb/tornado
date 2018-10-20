@@ -427,7 +427,7 @@ class AuthRedirectTest(WebTestCase):
         self.assertEqual(response.code, 302)
         self.assertTrue(
             re.match(
-                "http://example.com/login\?next=http%3A%2F%2F127.0.0.1%3A[0-9]+%2Fabsolute",
+                r"http://example.com/login\?next=http%3A%2F%2F127.0.0.1%3A[0-9]+%2Fabsolute",
                 response.headers["Location"],
             ),
             response.headers["Location"],

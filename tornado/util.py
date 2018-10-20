@@ -217,7 +217,7 @@ _re_unescape_pattern = re.compile(r"\\(.)", re.DOTALL)
 
 
 def re_unescape(s: str) -> str:
-    """Unescape a string escaped by `re.escape`.
+    r"""Unescape a string escaped by `re.escape`.
 
     May raise ``ValueError`` for regular expressions which could not
     have been produced by `re.escape` (for example, strings containing

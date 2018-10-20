@@ -7,6 +7,7 @@ import operator
 import textwrap
 import sys
 import unittest
+import warnings
 
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
@@ -111,14 +112,11 @@ class CountingStderr(io.IOBase):
 
 
 def main():
-    # The -W command-line option does not work in a virtualenv with
-    # python 3 (as of virtualenv 1.7), so configure warnings
-    # programmatically instead.
-    import warnings
-
-    # Be strict about most warnings.  This also turns on warnings that are
-    # ignored by default, including DeprecationWarnings and
-    # python 3.2's ResourceWarnings.
+    # Be strict about most warnings (This is set in our test running
+    # scripts to catch import-time warnings, but set it again here to
+    # be sure). This also turns on warnings that are ignored by
+    # default, including DeprecationWarnings and python 3.2's
+    # ResourceWarnings.
     warnings.filterwarnings("error")
     # setuptools sometimes gives ImportWarnings about things that are on
     # sys.path even if they're not being used.
