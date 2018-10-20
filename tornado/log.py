@@ -229,6 +229,7 @@ def enable_pretty_logging(options: Any = None, logger: logging.Logger = None) ->
                 filename=options.log_file_prefix,
                 maxBytes=options.log_file_max_size,
                 backupCount=options.log_file_num_backups,
+                encoding="utf-8",
             )  # type: logging.Handler
         elif rotate_mode == "time":
             channel = logging.handlers.TimedRotatingFileHandler(
@@ -236,6 +237,7 @@ def enable_pretty_logging(options: Any = None, logger: logging.Logger = None) ->
                 when=options.log_rotate_when,
                 interval=options.log_rotate_interval,
                 backupCount=options.log_file_num_backups,
+                encoding="utf-8",
             )
         else:
             error_message = (
