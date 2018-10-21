@@ -1444,16 +1444,17 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
                     WebSocketError("Non-websocket response")
                 )
 
-    def headers_received(
+    async def headers_received(
         self,
         start_line: Union[httputil.RequestStartLine, httputil.ResponseStartLine],
         headers: httputil.HTTPHeaders,
     ) -> None:
         assert isinstance(start_line, httputil.ResponseStartLine)
         if start_line.code != 101:
-            return super(WebSocketClientConnection, self).headers_received(
+            await super(WebSocketClientConnection, self).headers_received(
                 start_line, headers
             )
+            return
 
         self.headers = headers
         self.protocol = self.get_websocket_protocol()

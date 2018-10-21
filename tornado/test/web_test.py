@@ -441,8 +441,7 @@ class ConnectionCloseHandler(RequestHandler):
     @gen.coroutine
     def get(self):
         self.test.on_handler_waiting()
-        never_finish = Event()
-        yield never_finish.wait()
+        yield self.test.cleanup_event.wait()
 
     def on_connection_close(self):
         self.test.on_connection_close()
@@ -450,6 +449,7 @@ class ConnectionCloseHandler(RequestHandler):
 
 class ConnectionCloseTest(WebTestCase):
     def get_handlers(self):
+        self.cleanup_event = Event()
         return [("/", ConnectionCloseHandler, dict(test=self))]
 
     def test_connection_close(self):
@@ -458,6 +458,9 @@ class ConnectionCloseTest(WebTestCase):
         self.stream = IOStream(s)
         self.stream.write(b"GET / HTTP/1.0\r\n\r\n")
         self.wait()
+        # Let the hanging coroutine clean up after itself
+        self.cleanup_event.set()
+        self.io_loop.run_sync(lambda: gen.sleep(0))
 
     def on_handler_waiting(self):
         logging.debug("handler waiting")

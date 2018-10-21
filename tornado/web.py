@@ -1659,10 +1659,9 @@ class RequestHandler(object):
                     break
         return match
 
-    @gen.coroutine
-    def _execute(
+    async def _execute(
         self, transforms: List["OutputTransform"], *args: bytes, **kwargs: bytes
-    ) -> Generator[Any, Any, None]:
+    ) -> None:
         """Executes this request with the given output transforms."""
         self._transforms = transforms
         try:
@@ -1683,7 +1682,7 @@ class RequestHandler(object):
 
             result = self.prepare()
             if result is not None:
-                result = yield result
+                result = await result
             if self._prepared_future is not None:
                 # Tell the Application we've finished with prepare()
                 # and are ready for the body to arrive.
@@ -1697,14 +1696,14 @@ class RequestHandler(object):
                 # result; the data has been passed to self.data_received
                 # instead.
                 try:
-                    yield self.request._body_future
+                    await self.request._body_future
                 except iostream.StreamClosedError:
                     return
 
             method = getattr(self, self.request.method.lower())
             result = method(*self.path_args, **self.path_kwargs)
             if result is not None:
-                result = yield result
+                result = await result
             if self._auto_finish and not self._finished:
                 self.finish()
         except Exception as e:
@@ -2329,7 +2328,10 @@ class _HandlerDelegate(httputil.HTTPMessageDelegate):
         # except handler, and we cannot easily access the IOLoop here to
         # call add_future (because of the requirement to remain compatible
         # with WSGI)
-        self.handler._execute(transforms, *self.path_args, **self.path_kwargs)
+        fut = gen.convert_yielded(
+            self.handler._execute(transforms, *self.path_args, **self.path_kwargs)
+        )
+        fut.add_done_callback(lambda f: f.result())
         # If we are streaming the request body, then execute() is finished
         # when the handler has prepared to receive the body.  If not,
         # it doesn't matter when execute() finishes (so we return None)
@@ -2569,11 +2571,10 @@ class StaticFileHandler(RequestHandler):
         with cls._lock:
             cls._static_hashes = {}
 
-    def head(self, path: str) -> "Future[None]":
+    def head(self, path: str) -> Awaitable[None]:
         return self.get(path, include_body=False)
 
-    @gen.coroutine
-    def get(self, path: str, include_body: bool = True) -> Generator[Any, Any, None]:
+    async def get(self, path: str, include_body: bool = True) -> None:
         # Set up our path instance variables.
         self.path = self.parse_url_path(path)
         del path  # make sure we don't refer to path instead of self.path again
@@ -2642,7 +2643,7 @@ class StaticFileHandler(RequestHandler):
             for chunk in content:
                 try:
                     self.write(chunk)
-                    yield self.flush()
+                    await self.flush()
                 except iostream.StreamClosedError:
                     return
         else:
