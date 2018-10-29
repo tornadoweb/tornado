@@ -1,3 +1,16 @@
+tornado (5.0.2+hh1) unstable; urgency=medium
+
+  * HH-84687 skip some tests in docker build container
+  * HH-84687 use faster curl.POSTFIELDS
+  * HH-84687 add curl_httpclient and xsrf tests
+  * HH-84687 failproof headers decoding
+  * HH-84687 debianization
+  * Merge pull request #2306 from bdarnell/cherrypick-jessie-
+    compatibility
+  * Support coroutines compiled with cython
+
+ -- Automated Build <an.sumin@hh.ru>  Mon, 29 Oct 2018 15:54:46 +0300
+
 tornado (5.0.2+hh0) unstable; urgency=medium
 
   * Release Tornado 5.0.2
