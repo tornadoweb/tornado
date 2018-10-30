@@ -1280,6 +1280,17 @@ class StaticFileTest(WebTestCase):
         self.assertEqual(response.headers.get("Content-Length"), "4")
         self.assertEqual(response.headers.get("Content-Range"), "bytes 22-25/26")
 
+    def test_static_with_range_neg_past_start(self):
+        response = self.get_and_head(
+            "/static/robots.txt", headers={"Range": "bytes=-1000000"}
+        )
+        self.assertEqual(response.code, 200)
+        robots_file_path = os.path.join(self.static_dir, "robots.txt")
+        with open(robots_file_path) as f:
+            self.assertEqual(response.body, utf8(f.read()))
+        self.assertEqual(response.headers.get("Content-Length"), "26")
+        self.assertEqual(response.headers.get("Content-Range"), None)
+
     def test_static_invalid_range(self):
         response = self.get_and_head("/static/robots.txt", headers={"Range": "asdf"})
         self.assertEqual(response.code, 200)

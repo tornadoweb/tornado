@@ -2610,6 +2610,8 @@ class StaticFileHandler(RequestHandler):
                 return
             if start is not None and start < 0:
                 start += size
+                if start < 0:
+                    start = 0
             if end is not None and end > size:
                 # Clients sometimes blindly use a large range to limit their
                 # download size; cap the endpoint at the actual file size.
