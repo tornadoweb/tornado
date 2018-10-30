@@ -85,7 +85,7 @@ def _pipe_cloexec() -> Tuple[int, int]:
 _task_id = None
 
 
-def fork_processes(num_processes: Optional[int], max_restarts: int = 100) -> int:
+def fork_processes(num_processes: Optional[int], max_restarts: int = None) -> int:
     """Starts multiple worker processes.
 
     If ``num_processes`` is None or <= 0, we detect the number of cores
@@ -109,7 +109,12 @@ def fork_processes(num_processes: Optional[int], max_restarts: int = 100) -> int
     process, ``fork_processes`` returns None if all child processes
     have exited normally, but will otherwise only exit by throwing an
     exception.
+
+    max_restarts defaults to 100.
     """
+    if max_restarts is None:
+        max_restarts = 100
+
     global _task_id
     assert _task_id is None
     if num_processes is None or num_processes <= 0:
