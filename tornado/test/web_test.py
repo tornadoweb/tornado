@@ -1309,6 +1309,13 @@ class StaticFileTest(WebTestCase):
         self.assertEqual(response.code, 416)
         self.assertEqual(response.headers.get("Content-Range"), "bytes */26")
 
+    def test_static_unsatisfiable_range_end_less_than_start(self):
+        response = self.get_and_head(
+            "/static/robots.txt", headers={"Range": "bytes=10-3"}
+        )
+        self.assertEqual(response.code, 416)
+        self.assertEqual(response.headers.get("Content-Range"), "bytes */26")
+
     def test_static_head(self):
         response = self.fetch("/static/robots.txt", method="HEAD")
         self.assertEqual(response.code, 200)
