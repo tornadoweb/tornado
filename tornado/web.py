@@ -2600,7 +2600,10 @@ class StaticFileHandler(RequestHandler):
         size = self.get_content_size()
         if request_range:
             start, end = request_range
-            if (start is not None and (start >= size or (end is not None and start >= end))) or end == 0:
+            if (
+                start is not None
+                and (start >= size or (end is not None and start >= end))
+            ) or end == 0:
                 # As per RFC 2616 14.35.1, a range is not satisfiable only: if
                 # the first requested byte is equal to or greater than the
                 # content, or when a suffix with length 0 is specified.
