@@ -13,5 +13,5 @@ ignore =
     # flake8 and black disagree about
     # W503 line break before binary operator
     # E203 whitespace before ':'
-    W503,E203
+    W503,W504,E203
 doctests = true
