@@ -2600,6 +2600,10 @@ class StaticFileHandler(RequestHandler):
         size = self.get_content_size()
         if request_range:
             start, end = request_range
+            if start is not None and start < 0:
+                start += size
+                if start < 0:
+                    start = 0
             if (
                 start is not None
                 and (start >= size or (end is not None and start >= end))
@@ -2607,7 +2611,6 @@ class StaticFileHandler(RequestHandler):
                 # As per RFC 2616 14.35.1, a range is not satisfiable only: if
                 # the first requested byte is equal to or greater than the
                 # content, or when a suffix with length 0 is specified.
-
                 # https://tools.ietf.org/html/rfc7233#section-2.1
                 # A byte-range-spec is invalid if the last-byte-pos value is present
                 # and less than the first-byte-pos.
@@ -2615,10 +2618,6 @@ class StaticFileHandler(RequestHandler):
                 self.set_header("Content-Type", "text/plain")
                 self.set_header("Content-Range", "bytes */%s" % (size,))
                 return
-            if start is not None and start < 0:
-                start += size
-                if start < 0:
-                    start = 0
             if end is not None and end > size:
                 # Clients sometimes blindly use a large range to limit their
                 # download size; cap the endpoint at the actual file size.
