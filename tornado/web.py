@@ -1418,13 +1418,9 @@ class RequestHandler(object):
             else:
                 raise ValueError("unknown xsrf cookie version %d", output_version)
             if version is None:
-                expires_days = 30 if self.current_user else None
-                self.set_cookie(
-                    "_xsrf",
-                    self._xsrf_token,
-                    expires_days=expires_days,
-                    **cookie_kwargs
-                )
+                if self.current_user and "expires_days" not in cookie_kwargs:
+                    cookie_kwargs["expires_days"] = 30
+                self.set_cookie("_xsrf", self._xsrf_token, **cookie_kwargs)
         return self._xsrf_token
 
     def _get_raw_xsrf_token(self) -> Tuple[Optional[int], bytes, float]:

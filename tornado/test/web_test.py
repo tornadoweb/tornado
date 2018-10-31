@@ -2902,11 +2902,23 @@ class XSRFCookieKwargsTest(SimpleHandlerTestCase):
             self.write(self.xsrf_token)
 
     def get_app_kwargs(self):
-        return dict(xsrf_cookies=True, xsrf_cookie_kwargs=dict(httponly=True))
+        return dict(
+            xsrf_cookies=True, xsrf_cookie_kwargs=dict(httponly=True, expires_days=2)
+        )
 
     def test_xsrf_httponly(self):
         response = self.fetch("/")
         self.assertIn("httponly;", response.headers["Set-Cookie"].lower())
+        self.assertIn("expires=", response.headers["Set-Cookie"].lower())
+        header = response.headers.get("Set-Cookie")
+        match = re.match(".*; expires=(?P<expires>.+);.*", header)
+        assert match is not None
+
+        expires = datetime.datetime.utcnow() + datetime.timedelta(days=2)
+        parsed = email.utils.parsedate(match.groupdict()["expires"])
+        assert parsed is not None
+        header_expires = datetime.datetime(*parsed[:6])
+        self.assertTrue(abs((expires - header_expires).total_seconds()) < 10)
 
 
 class FinishExceptionTest(SimpleHandlerTestCase):
