@@ -381,6 +381,7 @@ class HTTPRequest(object):
         expect_100_continue: bool = False,
         decompress_response: bool = None,
         ssl_options: Union[Dict[str, Any], ssl.SSLContext] = None,
+        ssl_cipher: str = None
     ) -> None:
         r"""All parameters except ``url`` are optional.
 
@@ -463,6 +464,9 @@ class HTTPRequest(object):
            ``simple_httpclient`` (unsupported by ``curl_httpclient``).
            Overrides ``validate_cert``, ``ca_certs``, ``client_key``,
            and ``client_cert``.
+        :arg str ssl_cipher: Specify ciphers to use for request, for more details
+            about cipher see https://curl.haxx.se/docs/ssl-ciphers.html.
+            only supported with ``curl_httpclient``.
         :arg bool allow_ipv6: Use IPv6 when available?  Default is true.
         :arg bool expect_100_continue: If true, send the
            ``Expect: 100-continue`` header and wait for a continue response
@@ -474,8 +478,8 @@ class HTTPRequest(object):
             When using ``curl_httpclient`` certain options may be
             inherited by subsequent fetches because ``pycurl`` does
             not allow them to be cleanly reset.  This applies to the
-            ``ca_certs``, ``client_key``, ``client_cert``, and
-            ``network_interface`` arguments.  If you use these
+            ``ca_certs``, ``client_key``, ``client_cert``, ``ssl_cipher``,
+            and ``network_interface`` arguments.  If you use these
             options, you should pass them on every request (you don't
             have to always use the same values, but it's not possible
             to mix requests that specify these options with ones that
@@ -492,6 +496,9 @@ class HTTPRequest(object):
 
         .. versionadded:: 4.5
            The ``proxy_auth_mode`` argument.
+
+        .. versionadded:: 6.0
+           The ``ssl_cipher`` argument.
         """
         # Note that some of these attributes go through property setters
         # defined below.
@@ -532,6 +539,7 @@ class HTTPRequest(object):
         self.client_key = client_key
         self.client_cert = client_cert
         self.ssl_options = ssl_options
+        self.ssl_cipher = ssl_cipher
         self.expect_100_continue = expect_100_continue
         self.start_time = time.time()
 

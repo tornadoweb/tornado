@@ -509,6 +509,9 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if request.client_key is not None:
             curl.setopt(pycurl.SSLKEY, request.client_key)
 
+        if request.ssl_cipher is not None:
+            curl.setopt(pycurl.SSL_CIPHER_LIST, request.ssl_cipher)
+
         if request.ssl_options is not None:
             raise ValueError("ssl_options not supported in curl_httpclient")
 
