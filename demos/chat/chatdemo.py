@@ -51,7 +51,7 @@ class MessageBuffer(object):
     def add_message(self, message):
         self.cache.append(message)
         if len(self.cache) > self.cache_size:
-            self.cache = self.cache[-self.cache_size:]
+            self.cache = self.cache[-self.cache_size :]
         self.cond.notify_all()
 
 
@@ -66,15 +66,14 @@ class MainHandler(tornado.web.RequestHandler):
 
 class MessageNewHandler(tornado.web.RequestHandler):
     """Post a new message to the chat room."""
+
     def post(self):
-        message = {
-            "id": str(uuid.uuid4()),
-            "body": self.get_argument("body"),
-        }
+        message = {"id": str(uuid.uuid4()), "body": self.get_argument("body")}
         # render_string() returns a byte string, which is not supported
         # in json, so we must convert it to a character string.
         message["html"] = tornado.escape.to_unicode(
-            self.render_string("message.html", message=message))
+            self.render_string("message.html", message=message)
+        )
         if self.get_argument("next", None):
             self.redirect(self.get_argument("next"))
         else:
@@ -87,6 +86,7 @@ class MessageUpdatesHandler(tornado.web.RequestHandler):
 
     Waits until new messages are available before returning anything.
     """
+
     async def post(self):
         cursor = self.get_argument("cursor", None)
         messages = global_message_buffer.get_messages_since(cursor)

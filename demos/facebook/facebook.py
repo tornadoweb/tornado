@@ -62,8 +62,9 @@ class BaseHandler(tornado.web.RequestHandler):
 class MainHandler(BaseHandler, tornado.auth.FacebookGraphMixin):
     @tornado.web.authenticated
     async def get(self):
-        stream = await self.facebook_request("/me/home", self._on_stream,
-                                             access_token=self.current_user["access_token"])
+        stream = await self.facebook_request(
+            "/me/home", self._on_stream, access_token=self.current_user["access_token"]
+        )
         if stream is None:
             # Session may have expired
             self.redirect("/auth/login")
@@ -73,21 +74,28 @@ class MainHandler(BaseHandler, tornado.auth.FacebookGraphMixin):
 
 class AuthLoginHandler(BaseHandler, tornado.auth.FacebookGraphMixin):
     async def get(self):
-        my_url = (self.request.protocol + "://" + self.request.host +
-                  "/auth/login?next=" +
-                  tornado.escape.url_escape(self.get_argument("next", "/")))
+        my_url = (
+            self.request.protocol
+            + "://"
+            + self.request.host
+            + "/auth/login?next="
+            + tornado.escape.url_escape(self.get_argument("next", "/"))
+        )
         if self.get_argument("code", False):
             user = await self.get_authenticated_user(
                 redirect_uri=my_url,
                 client_id=self.settings["facebook_api_key"],
                 client_secret=self.settings["facebook_secret"],
-                code=self.get_argument("code"))
+                code=self.get_argument("code"),
+            )
             self.set_secure_cookie("fbdemo_user", tornado.escape.json_encode(user))
             self.redirect(self.get_argument("next", "/"))
             return
-        self.authorize_redirect(redirect_uri=my_url,
-                                client_id=self.settings["facebook_api_key"],
-                                extra_params={"scope": "user_posts"})
+        self.authorize_redirect(
+            redirect_uri=my_url,
+            client_id=self.settings["facebook_api_key"],
+            extra_params={"scope": "user_posts"},
+        )
 
 
 class AuthLogoutHandler(BaseHandler, tornado.auth.FacebookGraphMixin):

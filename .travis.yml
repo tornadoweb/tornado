@@ -99,7 +99,7 @@ script:
     - if [[ $TRAVIS_PYTHON_VERSION == 3.7 ]]; then (cd ../docs && mkdir sphinx-out && sphinx-build -E -n -W -b html . sphinx-out); fi
     - if [[ $TRAVIS_PYTHON_VERSION == 3.7 ]]; then (cd ../docs && mkdir sphinx-doctest-out && sphinx-build -E -n -b doctest . sphinx-out); fi
     - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then (cd .. && flake8); fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then (cd .. && black --check --diff tornado); fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then (cd .. && black --check --diff tornado demos); fi
     - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then (cd .. && mypy tornado); fi
 
 after_success:

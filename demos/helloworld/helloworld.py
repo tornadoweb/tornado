@@ -31,9 +31,7 @@ class MainHandler(tornado.web.RequestHandler):
 
 def main():
     tornado.options.parse_command_line()
-    application = tornado.web.Application([
-        (r"/", MainHandler),
-    ])
+    application = tornado.web.Application([(r"/", MainHandler)])
     http_server = tornado.httpserver.HTTPServer(application)
     http_server.listen(options.port)
     tornado.ioloop.IOLoop.current().start()
