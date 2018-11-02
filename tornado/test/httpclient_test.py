@@ -467,6 +467,18 @@ X-XSS-Protection: 1;
         response2 = yield self.http_client.fetch(response.request)
         self.assertEqual(response2.body, b"Hello world!")
 
+    @gen_test
+    def test_bind_source_ip(self):
+        url = self.get_url("/hello")
+        request = HTTPRequest(url, network_interface="127.0.0.1")
+        response = yield self.http_client.fetch(request)
+        self.assertEqual(response.code, 200)
+
+        with self.assertRaises((ValueError, HTTPError)) as context:
+            request = HTTPRequest(url, network_interface="not-interface-or-ip")
+            yield self.http_client.fetch(request)
+        self.assertIn("not-interface-or-ip", str(context.exception))
+
     def test_all_methods(self):
         for method in ["GET", "DELETE", "OPTIONS"]:
             response = self.fetch("/all_methods", method=method)

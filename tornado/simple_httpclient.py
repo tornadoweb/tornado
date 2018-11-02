@@ -12,7 +12,12 @@ from tornado import httputil
 from tornado.http1connection import HTTP1Connection, HTTP1ConnectionParameters
 from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError, IOStream
-from tornado.netutil import Resolver, OverrideResolver, _client_ssl_defaults
+from tornado.netutil import (
+    Resolver,
+    OverrideResolver,
+    _client_ssl_defaults,
+    is_valid_ip,
+)
 from tornado.log import gen_log
 from tornado.tcpclient import TCPClient
 
@@ -306,6 +311,16 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
             ssl_options = self._get_ssl_options(self.parsed.scheme)
 
+            source_ip = None
+            if self.request.network_interface:
+                if is_valid_ip(self.request.network_interface):
+                    source_ip = self.request.network_interface
+                else:
+                    raise ValueError(
+                        "Unrecognized IPv4 or IPv6 address for network_interface, got %r"
+                        % (self.request.network_interface,)
+                    )
+
             timeout = min(self.request.connect_timeout, self.request.request_timeout)
             if timeout:
                 self._timeout = self.io_loop.add_timeout(
@@ -318,6 +333,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     af=af,
                     ssl_options=ssl_options,
                     max_buffer_size=self.max_buffer_size,
+                    source_ip=source_ip,
                 )
 
                 if self.final_callback is None:
@@ -340,7 +356,6 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 ):
                     raise KeyError("unknown method %s" % self.request.method)
                 for key in (
-                    "network_interface",
                     "proxy_host",
                     "proxy_port",
                     "proxy_username",
