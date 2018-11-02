@@ -422,8 +422,8 @@ class HTTPRequest(object):
            New in Tornado 4.0.
         :arg bool use_gzip: Deprecated alias for ``decompress_response``
            since Tornado 4.0.
-        :arg str network_interface: Network interface to use for request.
-           ``curl_httpclient`` only; see note below.
+        :arg str network_interface: Network interface or source IP to use for request.
+           See ``curl_httpclient`` note below.
         :arg collections.abc.Callable streaming_callback: If set, ``streaming_callback`` will
            be run with each chunk of data as it is received, and
            ``HTTPResponse.body`` and ``HTTPResponse.buffer`` will be empty in
