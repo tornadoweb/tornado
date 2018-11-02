@@ -209,7 +209,7 @@ class TCPServer(object):
         else:
             self._pending_sockets.extend(sockets)
 
-    def start(self, num_processes: Optional[int] = 1) -> None:
+    def start(self, num_processes: Optional[int] = 1, max_restarts: int = None) -> None:
         """Starts this server in the `.IOLoop`.
 
         By default, we run the server in this process and do not fork any
@@ -232,7 +232,7 @@ class TCPServer(object):
         assert not self._started
         self._started = True
         if num_processes != 1:
-            process.fork_processes(num_processes)
+            process.fork_processes(num_processes, max_restarts)
         sockets = self._pending_sockets
         self._pending_sockets = []
         self.add_sockets(sockets)
