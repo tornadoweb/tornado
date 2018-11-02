@@ -48,7 +48,7 @@ async def maybe_create_tables(db):
             await cur.execute("SELECT COUNT(*) FROM entries LIMIT 1")
             await cur.fetchone()
     except psycopg2.ProgrammingError:
-        with open('schema.sql') as f:
+        with open("schema.sql") as f:
             schema = f.read()
         with (await db.cursor()) as cur:
             await cur.execute(schema)
@@ -109,8 +109,7 @@ class BaseHandler(tornado.web.RequestHandler):
         """
         with (await self.application.db.cursor()) as cur:
             await cur.execute(stmt, args)
-            return [self.row_to_obj(row, cur)
-                    for row in await cur.fetchall()]
+            return [self.row_to_obj(row, cur) for row in await cur.fetchall()]
 
     async def queryone(self, stmt, *args):
         """Query for exactly one result.
@@ -130,8 +129,9 @@ class BaseHandler(tornado.web.RequestHandler):
         # self.current_user in prepare instead.
         user_id = self.get_secure_cookie("blogdemo_user")
         if user_id:
-            self.current_user = await self.queryone("SELECT * FROM authors WHERE id = %s",
-                                                    int(user_id))
+            self.current_user = await self.queryone(
+                "SELECT * FROM authors WHERE id = %s", int(user_id)
+            )
 
     async def any_author_exists(self):
         return bool(await self.query("SELECT * FROM authors LIMIT 1"))
@@ -139,7 +139,9 @@ class BaseHandler(tornado.web.RequestHandler):
 
 class HomeHandler(BaseHandler):
     async def get(self):
-        entries = await self.query("SELECT * FROM entries ORDER BY published DESC LIMIT 5")
+        entries = await self.query(
+            "SELECT * FROM entries ORDER BY published DESC LIMIT 5"
+        )
         if not entries:
             self.redirect("/compose")
             return
@@ -162,7 +164,9 @@ class ArchiveHandler(BaseHandler):
 
 class FeedHandler(BaseHandler):
     async def get(self):
-        entries = await self.query("SELECT * FROM entries ORDER BY published DESC LIMIT 10")
+        entries = await self.query(
+            "SELECT * FROM entries ORDER BY published DESC LIMIT 10"
+        )
         self.set_header("Content-Type", "application/atom+xml")
         self.render("feed.xml", entries=entries)
 
@@ -184,13 +188,20 @@ class ComposeHandler(BaseHandler):
         html = markdown.markdown(text)
         if id:
             try:
-                entry = await self.queryone("SELECT * FROM entries WHERE id = %s", int(id))
+                entry = await self.queryone(
+                    "SELECT * FROM entries WHERE id = %s", int(id)
+                )
             except NoResultError:
                 raise tornado.web.HTTPError(404)
             slug = entry.slug
             await self.execute(
                 "UPDATE entries SET title = %s, markdown = %s, html = %s "
-                "WHERE id = %s", title, text, html, int(id))
+                "WHERE id = %s",
+                title,
+                text,
+                html,
+                int(id),
+            )
         else:
             slug = unicodedata.normalize("NFKD", title)
             slug = re.sub(r"[^\w]+", " ", slug)
@@ -206,7 +217,12 @@ class ComposeHandler(BaseHandler):
             await self.execute(
                 "INSERT INTO entries (author_id,title,slug,markdown,html,published,updated)"
                 "VALUES (%s,%s,%s,%s,%s,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",
-                self.current_user.id, title, slug, text, html)
+                self.current_user.id,
+                title,
+                slug,
+                text,
+                html,
+            )
         self.redirect("/entry/" + slug)
 
 
@@ -218,13 +234,18 @@ class AuthCreateHandler(BaseHandler):
         if await self.any_author_exists():
             raise tornado.web.HTTPError(400, "author already created")
         hashed_password = await tornado.ioloop.IOLoop.current().run_in_executor(
-            None, bcrypt.hashpw, tornado.escape.utf8(self.get_argument("password")),
-            bcrypt.gensalt())
+            None,
+            bcrypt.hashpw,
+            tornado.escape.utf8(self.get_argument("password")),
+            bcrypt.gensalt(),
+        )
         author = await self.queryone(
             "INSERT INTO authors (email, name, hashed_password) "
             "VALUES (%s, %s, %s) RETURNING id",
-            self.get_argument("email"), self.get_argument("name"),
-            tornado.escape.to_unicode(hashed_password))
+            self.get_argument("email"),
+            self.get_argument("name"),
+            tornado.escape.to_unicode(hashed_password),
+        )
         self.set_secure_cookie("blogdemo_user", str(author.id))
         self.redirect(self.get_argument("next", "/"))
 
@@ -239,14 +260,18 @@ class AuthLoginHandler(BaseHandler):
 
     async def post(self):
         try:
-            author = await self.queryone("SELECT * FROM authors WHERE email = %s",
-                                         self.get_argument("email"))
+            author = await self.queryone(
+                "SELECT * FROM authors WHERE email = %s", self.get_argument("email")
+            )
         except NoResultError:
             self.render("login.html", error="email not found")
             return
         hashed_password = await tornado.ioloop.IOLoop.current().run_in_executor(
-            None, bcrypt.hashpw, tornado.escape.utf8(self.get_argument("password")),
-            tornado.escape.utf8(author.hashed_password))
+            None,
+            bcrypt.hashpw,
+            tornado.escape.utf8(self.get_argument("password")),
+            tornado.escape.utf8(author.hashed_password),
+        )
         hashed_password = tornado.escape.to_unicode(hashed_password)
         if hashed_password == author.hashed_password:
             self.set_secure_cookie("blogdemo_user", str(author.id))
@@ -271,11 +296,12 @@ async def main():
 
     # Create the global connection pool.
     async with aiopg.create_pool(
-            host=options.db_host,
-            port=options.db_port,
-            user=options.db_user,
-            password=options.db_password,
-            dbname=options.db_database) as db:
+        host=options.db_host,
+        port=options.db_port,
+        user=options.db_user,
+        password=options.db_password,
+        dbname=options.db_database,
+    ) as db:
         await maybe_create_tables(db)
         app = Application(db)
         app.listen(options.port)

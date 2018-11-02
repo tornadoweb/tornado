@@ -33,16 +33,18 @@ def multipart_producer(boundary, filenames, write):
 
     for filename in filenames:
         filename_bytes = filename.encode()
-        mtype = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+        mtype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
         buf = (
-            (b'--%s\r\n' % boundary_bytes) +
-            (b'Content-Disposition: form-data; name="%s"; filename="%s"\r\n' %
-             (filename_bytes, filename_bytes)) +
-            (b'Content-Type: %s\r\n' % mtype.encode()) +
-            b'\r\n'
+            (b"--%s\r\n" % boundary_bytes)
+            + (
+                b'Content-Disposition: form-data; name="%s"; filename="%s"\r\n'
+                % (filename_bytes, filename_bytes)
+            )
+            + (b"Content-Type: %s\r\n" % mtype.encode())
+            + b"\r\n"
         )
         yield write(buf)
-        with open(filename, 'rb') as f:
+        with open(filename, "rb") as f:
             while True:
                 # 16k at a time.
                 chunk = f.read(16 * 1024)
@@ -50,9 +52,9 @@ def multipart_producer(boundary, filenames, write):
                     break
                 yield write(chunk)
 
-        yield write(b'\r\n')
+        yield write(b"\r\n")
 
-    yield write(b'--%s--\r\n' % (boundary_bytes,))
+    yield write(b"--%s--\r\n" % (boundary_bytes,))
 
 
 # Using HTTP PUT, upload one raw file. This is preferred for large files since
@@ -61,19 +63,21 @@ def multipart_producer(boundary, filenames, write):
 def post(filenames):
     client = httpclient.AsyncHTTPClient()
     boundary = uuid4().hex
-    headers = {'Content-Type': 'multipart/form-data; boundary=%s' % boundary}
+    headers = {"Content-Type": "multipart/form-data; boundary=%s" % boundary}
     producer = partial(multipart_producer, boundary, filenames)
-    response = yield client.fetch('http://localhost:8888/post',
-                                  method='POST',
-                                  headers=headers,
-                                  body_producer=producer)
+    response = yield client.fetch(
+        "http://localhost:8888/post",
+        method="POST",
+        headers=headers,
+        body_producer=producer,
+    )
 
     print(response)
 
 
 @gen.coroutine
 def raw_producer(filename, write):
-    with open(filename, 'rb') as f:
+    with open(filename, "rb") as f:
         while True:
             # 16K at a time.
             chunk = f.read(16 * 1024)
@@ -88,14 +92,16 @@ def raw_producer(filename, write):
 def put(filenames):
     client = httpclient.AsyncHTTPClient()
     for filename in filenames:
-        mtype = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
-        headers = {'Content-Type': mtype}
+        mtype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        headers = {"Content-Type": mtype}
         producer = partial(raw_producer, filename)
         url_path = quote(os.path.basename(filename))
-        response = yield client.fetch('http://localhost:8888/%s' % url_path,
-                                      method='PUT',
-                                      headers=headers,
-                                      body_producer=producer)
+        response = yield client.fetch(
+            "http://localhost:8888/%s" % url_path,
+            method="PUT",
+            headers=headers,
+            body_producer=producer,
+        )
         print(response)
 
 

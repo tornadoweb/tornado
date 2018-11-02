@@ -25,12 +25,13 @@ class POSTHandler(tornado.web.RequestHandler):
     def post(self):
         for field_name, files in self.request.files.items():
             for info in files:
-                filename, content_type = info['filename'], info['content_type']
-                body = info['body']
-                logging.info('POST "%s" "%s" %d bytes',
-                             filename, content_type, len(body))
+                filename, content_type = info["filename"], info["content_type"]
+                body = info["body"]
+                logging.info(
+                    'POST "%s" "%s" %d bytes', filename, content_type, len(body)
+                )
 
-        self.write('OK')
+        self.write("OK")
 
 
 @tornado.web.stream_request_body
@@ -43,16 +44,13 @@ class PUTHandler(tornado.web.RequestHandler):
 
     def put(self, filename):
         filename = unquote(filename)
-        mtype = self.request.headers.get('Content-Type')
+        mtype = self.request.headers.get("Content-Type")
         logging.info('PUT "%s" "%s" %d bytes', filename, mtype, self.bytes_read)
-        self.write('OK')
+        self.write("OK")
 
 
 def make_app():
-    return tornado.web.Application([
-        (r"/post", POSTHandler),
-        (r"/(.*)", PUTHandler),
-    ])
+    return tornado.web.Application([(r"/post", POSTHandler), (r"/(.*)", PUTHandler)])
 
 
 if __name__ == "__main__":
