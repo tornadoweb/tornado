@@ -550,6 +550,14 @@ class Lock(object):
         except ValueError:
             raise RuntimeError("release unlocked lock")
 
+    def is_locked(self) -> bool:
+        """Check to see if already locked.
+
+        Returns a bool.
+        """
+        return self._block._value == 0
+
+
     def __enter__(self) -> None:
         raise RuntimeError("Use Lock like 'with (yield lock)', not like 'with lock'")
 
