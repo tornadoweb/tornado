@@ -233,9 +233,14 @@ class AsyncHTTPClient(Configurable):
             return
         self._closed = True
         if self._instance_cache is not None:
-            if self._instance_cache.get(self.io_loop) is not self:
+            cached_val = self._instance_cache.pop(self.io_loop, None)
+            # If there's an object other than self in the instance
+            # cache for our IOLoop, something has gotten mixed up. A
+            # value of None appears to be possible when this is called
+            # from a destructor (HTTPClient.__del__) as the weakref
+            # gets cleared before the destructor runs.
+            if cached_val is not None and cached_val is not self:
                 raise RuntimeError("inconsistent AsyncHTTPClient cache")
-            del self._instance_cache[self.io_loop]
 
     def fetch(
         self,
