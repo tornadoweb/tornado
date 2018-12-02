@@ -627,15 +627,17 @@ class BaseIOStream(object):
             futures.append(self._connect_future)
             self._connect_future = None
         for future in futures:
-            future.set_exception(StreamClosedError(real_error=self.error))
+            if not future.done():
+                future.set_exception(StreamClosedError(real_error=self.error))
             future.exception()
         if self._ssl_connect_future is not None:
             # _ssl_connect_future expects to see the real exception (typically
             # an ssl.SSLError), not just StreamClosedError.
-            if self.error is not None:
-                self._ssl_connect_future.set_exception(self.error)
-            else:
-                self._ssl_connect_future.set_exception(StreamClosedError())
+            if not self._ssl_connect_future.done():
+                if self.error is not None:
+                    self._ssl_connect_future.set_exception(self.error)
+                else:
+                    self._ssl_connect_future.set_exception(StreamClosedError())
             self._ssl_connect_future.exception()
             self._ssl_connect_future = None
         if self._close_callback is not None:

@@ -23,7 +23,7 @@ from tornado.httpclient import (
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
-from tornado.log import gen_log
+from tornado.log import gen_log, app_log
 from tornado import netutil
 from tornado.testing import AsyncHTTPTestCase, bind_unused_port, gen_test, ExpectLog
 from tornado.test.util import skipOnTravis
@@ -569,6 +569,20 @@ X-XSS-Protection: 1;
 
         for k, v in response.time_info.items():
             self.assertTrue(0 <= v < 1.0, "time_info[%s] out of bounds: %s" % (k, v))
+
+    @gen_test
+    def test_error_after_cancel(self):
+        fut = self.http_client.fetch(self.get_url("/404"))
+        self.assertTrue(fut.cancel())
+        with ExpectLog(app_log, "Exception after Future was cancelled") as el:
+            # We can't wait on the cancelled Future any more, so just
+            # let the IOLoop run until the exception gets logged (or
+            # not, in which case we exit the loop and ExpectLog will
+            # raise).
+            for i in range(100):
+                yield gen.sleep(0.01)
+                if el.logged_stack:
+                    break
 
 
 class RequestProxyTest(unittest.TestCase):

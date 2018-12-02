@@ -27,7 +27,11 @@ import time
 
 from binascii import hexlify
 
-from tornado.concurrent import Future, future_set_result_unless_cancelled
+from tornado.concurrent import (
+    Future,
+    future_set_result_unless_cancelled,
+    future_set_exception_unless_cancelled,
+)
 from tornado import ioloop
 from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
@@ -296,7 +300,9 @@ class Subprocess(object):
         def callback(ret: int) -> None:
             if ret != 0 and raise_error:
                 # Unfortunately we don't have the original args any more.
-                future.set_exception(CalledProcessError(ret, "unknown"))
+                future_set_exception_unless_cancelled(
+                    future, CalledProcessError(ret, "unknown")
+                )
             else:
                 future_set_result_unless_cancelled(future, ret)
 
