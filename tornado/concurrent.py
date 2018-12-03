@@ -33,6 +33,8 @@ import functools
 import sys
 import types
 
+from tornado.log import app_log
+
 import typing
 from typing import Any, Callable, Optional, Tuple, Union
 
@@ -185,6 +187,28 @@ def future_set_result_unless_cancelled(
         future.set_result(value)
 
 
+def future_set_exception_unless_cancelled(
+    future: Union["futures.Future[_T]", "Future[_T]"], exc: BaseException
+) -> None:
+    """Set the given ``exc`` as the `Future`'s exception.
+
+    If the Future is already canceled, logs the exception instead. If
+    this logging is not desired, the caller should explicitly check
+    the state of the Future and call Future.set_exception instead of
+    this wrapper.
+
+    Avoids asyncio.InvalidStateError when calling set_exception() on
+    a cancelled `asyncio.Future`.
+
+    .. versionadded:: 6.0
+
+    """
+    if not future.cancelled():
+        future.set_exception(exc)
+    else:
+        app_log.error("Exception after Future was cancelled", exc_info=exc)
+
+
 def future_set_exc_info(
     future: Union["futures.Future[_T]", "Future[_T]"],
     exc_info: Tuple[
@@ -193,19 +217,20 @@ def future_set_exc_info(
 ) -> None:
     """Set the given ``exc_info`` as the `Future`'s exception.
 
-    Understands both `asyncio.Future` and Tornado's extensions to
-    enable better tracebacks on Python 2.
+    Understands both `asyncio.Future` and the extensions in older
+    versions of Tornado to enable better tracebacks on Python 2.
 
     .. versionadded:: 5.0
+
+    .. versionchanged:: 6.0
+
+       If the future is already cancelled, this function is a no-op.
+       (previously asyncio.InvalidStateError would be raised)
+
     """
-    if hasattr(future, "set_exc_info"):
-        # Tornado's Future
-        future.set_exc_info(exc_info)  # type: ignore
-    else:
-        # asyncio.Future
-        if exc_info[1] is None:
-            raise Exception("future_set_exc_info called with no exception")
-        future.set_exception(exc_info[1])
+    if exc_info[1] is None:
+        raise Exception("future_set_exc_info called with no exception")
+    future_set_exception_unless_cancelled(future, exc_info[1])
 
 
 @typing.overload

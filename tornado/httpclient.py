@@ -45,7 +45,11 @@ import ssl
 import time
 import weakref
 
-from tornado.concurrent import Future, future_set_result_unless_cancelled
+from tornado.concurrent import (
+    Future,
+    future_set_result_unless_cancelled,
+    future_set_exception_unless_cancelled,
+)
 from tornado.escape import utf8, native_str
 from tornado import gen, httputil
 from tornado.ioloop import IOLoop
@@ -295,7 +299,7 @@ class AsyncHTTPClient(Configurable):
         def handle_response(response: "HTTPResponse") -> None:
             if response.error:
                 if raise_error or not response._error_is_response_code:
-                    future.set_exception(response.error)
+                    future_set_exception_unless_cancelled(future, response.error)
                     return
             future_set_result_unless_cancelled(future, response)
 
