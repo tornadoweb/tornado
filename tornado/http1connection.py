@@ -492,7 +492,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         else:
             future = self._write_future = Future()
             self._pending_write = self.stream.write(self._format_chunk(chunk))
-            self._pending_write.add_done_callback(self._on_write_complete)
+            future_add_done_callback(self._pending_write, self._on_write_complete)
         return future
 
     def finish(self) -> None:

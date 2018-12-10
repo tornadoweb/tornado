@@ -224,6 +224,13 @@ class FinalReturnTest(WebTestCase):
                 test.final_return = self.finish()
                 yield test.final_return
 
+            @gen.coroutine
+            def post(self):
+                self.write("hello,")
+                yield self.flush()
+                test.final_return = self.finish("world")
+                yield test.final_return
+
         class RenderHandler(RequestHandler):
             def create_template_loader(self, path):
                 return DictLoader({"foo.html": "hi"})
@@ -239,6 +246,11 @@ class FinalReturnTest(WebTestCase):
 
     def test_finish_method_return_future(self):
         response = self.fetch(self.get_url("/finish"))
+        self.assertEqual(response.code, 200)
+        self.assertIsInstance(self.final_return, Future)
+        self.assertTrue(self.final_return.done())
+
+        response = self.fetch(self.get_url("/finish"), method="POST", body=b"")
         self.assertEqual(response.code, 200)
         self.assertIsInstance(self.final_return, Future)
         self.assertTrue(self.final_return.done())
