@@ -1,9 +1,11 @@
 from tornado import gen, ioloop
 from tornado.httpserver import HTTPServer
+from tornado.locks import Event
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, gen_test
 from tornado.web import Application
 import asyncio
 import contextlib
+import gc
 import os
 import platform
 import traceback
@@ -53,6 +55,30 @@ class AsyncTestCaseTest(AsyncTestCase):
         self.wait(timeout=0.02)
         self.io_loop.add_timeout(self.io_loop.time() + 0.03, self.stop)
         self.wait(timeout=0.15)
+
+
+class LeakTest(AsyncTestCase):
+    def tearDown(self):
+        super().tearDown()
+        # Trigger a gc to make warnings more deterministic.
+        gc.collect()
+
+    def test_leaked_coroutine(self):
+        # This test verifies that "leaked" coroutines are shut down
+        # without triggering warnings like "task was destroyed but it
+        # is pending". If this test were to fail, it would fail
+        # because runtests.py detected unexpected output to stderr.
+        event = Event()
+
+        async def callback():
+            try:
+                await event.wait()
+            except asyncio.CancelledError:
+                pass
+
+        self.io_loop.add_callback(callback)
+        self.io_loop.add_callback(self.stop)
+        self.wait()
 
 
 class AsyncHTTPTestCaseTest(AsyncHTTPTestCase):

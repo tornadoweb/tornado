@@ -812,7 +812,11 @@ class HTTP1ServerConnection(object):
                 request_delegate = delegate.start_request(self, conn)
                 try:
                     ret = await conn.read_response(request_delegate)
-                except (iostream.StreamClosedError, iostream.UnsatisfiableReadError):
+                except (
+                    iostream.StreamClosedError,
+                    iostream.UnsatisfiableReadError,
+                    asyncio.CancelledError,
+                ):
                     return
                 except _QuietException:
                     # This exception was already logged.

@@ -33,7 +33,7 @@ import ssl
 import sys
 import re
 
-from tornado.concurrent import Future
+from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado import ioloop
 from tornado.log import gen_log
 from tornado.netutil import ssl_wrap_socket, _client_ssl_defaults, _server_ssl_defaults
@@ -803,7 +803,7 @@ class BaseIOStream(object):
         if self._read_future is not None:
             future = self._read_future
             self._read_future = None
-            future.set_result(result)
+            future_set_result_unless_cancelled(future, result)
         self._maybe_add_error_listener()
 
     def _try_inline_read(self) -> None:
@@ -972,7 +972,7 @@ class BaseIOStream(object):
             if index > self._total_write_done_index:
                 break
             self._write_futures.popleft()
-            future.set_result(None)
+            future_set_result_unless_cancelled(future, None)
 
     def _consume(self, loc: int) -> bytes:
         # Consume loc bytes from the read buffer and return them
@@ -1311,7 +1311,7 @@ class IOStream(BaseIOStream):
         if self._connect_future is not None:
             future = self._connect_future
             self._connect_future = None
-            future.set_result(self)
+            future_set_result_unless_cancelled(future, self)
         self._connecting = False
 
     def set_nodelay(self, value: bool) -> None:
@@ -1429,7 +1429,7 @@ class SSLIOStream(IOStream):
         if self._ssl_connect_future is not None:
             future = self._ssl_connect_future
             self._ssl_connect_future = None
-            future.set_result(self)
+            future_set_result_unless_cancelled(future, self)
 
     def _verify_cert(self, peercert: Any) -> bool:
         """Returns True if peercert is valid according to the configured
