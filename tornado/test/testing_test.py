@@ -181,8 +181,8 @@ class AsyncHTTPTestCaseSetUpTearDownTest(unittest.TestCase):
                 return Application()
 
             def test(self):
-                self.assertTrue(hasattr(test, "_app"))
-                self.assertTrue(hasattr(test, "http_server"))
+                self.assertTrue(hasattr(self, "_app"))
+                self.assertTrue(hasattr(self, "http_server"))
 
         test = SetUpTearDown("test")
         test.run(result)
