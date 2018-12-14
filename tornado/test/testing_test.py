@@ -181,13 +181,13 @@ class AsyncHTTPTestCaseSetUpTearDownTest(unittest.TestCase):
                 return Application()
 
             def test(self):
-                self.assertTrue(hasattr(test, '_app'))
-                self.assertTrue(hasattr(test, 'http_server'))
+                self.assertTrue(hasattr(test, "_app"))
+                self.assertTrue(hasattr(test, "http_server"))
 
-        test = SetUpTearDown('test')
+        test = SetUpTearDown("test")
         test.run(result)
-        self.assertFalse(hasattr(test, '_app'))
-        self.assertFalse(hasattr(test, 'http_server'))
+        self.assertFalse(hasattr(test, "_app"))
+        self.assertFalse(hasattr(test, "http_server"))
 
 
 class GenTest(AsyncTestCase):
