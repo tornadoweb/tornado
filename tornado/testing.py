@@ -432,6 +432,8 @@ class AsyncHTTPTestCase(AsyncTestCase):
             self.http_server.close_all_connections, timeout=get_async_test_timeout()
         )
         self.http_client.close()
+        del self.http_server
+        del self._app
         super(AsyncHTTPTestCase, self).tearDown()
 
 
