@@ -193,6 +193,7 @@ class WebSocketBaseTestCase(AsyncHTTPTestCase):
         ws = yield websocket_connect(
             "ws://127.0.0.1:%d%s" % (self.get_http_port(), path), **kwargs
         )
+        print(f'result of ws connect {ws}')
         raise gen.Return(ws)
 
 
