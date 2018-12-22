@@ -28,7 +28,11 @@ import tornado.web
 from urllib.parse import urlparse, urljoin
 import zlib
 
-from tornado.concurrent import Future, future_set_result_unless_cancelled
+from tornado.concurrent import (
+    Future,
+    future_set_result_unless_cancelled,
+    future_set_exception_unless_cancelled
+)
 from tornado.escape import utf8, native_str, to_unicode
 from tornado import gen, httpclient, httputil
 from tornado.ioloop import IOLoop, PeriodicCallback
@@ -1659,18 +1663,20 @@ def websocket_connect(
         httpclient._RequestProxy(request, httpclient.HTTPRequest._DEFAULTS),
     )
 
-    conn_future = _websocket_connect(
-        request,
-        callback,
-        connect_timeout,
-        on_message_callback,
-        compression_options,
-        ping_interval,
-        ping_timeout,
-        max_message_size,
-        subprotocols,
-    )
-    wrapped_conn_future = Future()
+    def do_connect(request: httpclient.HTTPRequest) -> Future:
+        conn_future = _websocket_connect(
+            request,
+            callback,
+            connect_timeout,
+            on_message_callback,
+            compression_options,
+            ping_interval,
+            ping_timeout,
+            max_message_size,
+            subprotocols,
+        )
+        return conn_future
+
 
     def wrap_conn_future_callback(conn_future):
         try:
@@ -1679,27 +1685,20 @@ def websocket_connect(
             try:
                 new_request = redirect_request(request, e.target_location)
             except RequestRedirectError as e:
-                wrapped_conn_future.set_exception(e)
-                return
+                future_set_exception_unless_cancelled(
+                    wrapped_conn_future, e)
             else:
-                conn_future = _websocket_connect(
-                    new_request,
-                    callback,
-                    connect_timeout,
-                    on_message_callback,
-                    compression_options,
-                    ping_interval,
-                    ping_timeout,
-                    max_message_size,
-                    subprotocols,
-                )
+                conn_future = do_connect(new_request)
                 IOLoop.current.add_future(
                     conn_future, wrap_conn_future_callback)
         except Exception as e:
-            wrapped_conn_future.set_exception(e)
+            future_set_exception_unless_cancelled(
+                wrapped_conn_future, e)
         else:
             future_set_result_unless_cancelled(wrapped_conn_future, conn)
 
+        wrapped_conn_future = Future()
+        conn_future = do_connect(request)
         IOLoop.current.add_future(conn_future, wrap_conn_future_callback)
 
         return wrapped_conn_future
