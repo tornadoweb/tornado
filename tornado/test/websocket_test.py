@@ -104,6 +104,14 @@ class NonWebSocketHandler(RequestHandler):
         self.write("ok")
 
 
+class RedirectHandler(RequestHandler):
+    def initialize(self, target_location):
+        self._target_location = target_location
+
+    def get(self):
+        self.redirect(self._target_location)
+
+
 class CloseReasonHandler(TestWebSocketHandler):
     def open(self):
         self.on_close_called = False
@@ -209,6 +217,12 @@ class WebSocketTest(WebSocketBaseTestCase):
         return Application(
             [
                 ("/echo", EchoHandler, dict(close_future=self.close_future)),
+                ("/redirect", RedirectHandler, dict(target_location="/echo")),
+                (
+                    "/double_redirect",
+                    RedirectHandler,
+                    dict(target_location="/redirect")
+                ),
                 ("/non_ws", NonWebSocketHandler),
                 ("/header", HeaderHandler, dict(close_future=self.close_future)),
                 (
@@ -355,6 +369,21 @@ class WebSocketTest(WebSocketBaseTestCase):
     def test_websocket_http_success(self):
         with self.assertRaises(WebSocketError):
             yield self.ws_connect("/non_ws")
+    
+    @gen_test
+    def test_websocket_redirect(self):
+        conn = yield self.ws_connect("/redirect")
+        yield conn.write_message("hello redirect")
+        msg = yield conn.read_message()
+        self.assertEqual("hello redirect", msg)
+
+    @gen_test
+    def test_websocket_double_redirect(self):
+        conn = yield self.ws_connect("/double_redirect")
+        yield conn.write_message("hello redirect")
+        msg = yield conn.read_message()
+        self.assertEqual("hello redirect", msg)
+
 
     @gen_test
     def test_websocket_network_fail(self):
