@@ -214,7 +214,7 @@ class WebSocketTest(WebSocketBaseTestCase):
                 (
                     "/double_redirect",
                     RedirectHandler,
-                    dict(target_location="/redirect")
+                    dict(target_location="/redirect"),
                 ),
                 ("/non_ws", NonWebSocketHandler),
                 ("/header", HeaderHandler, dict(close_future=self.close_future)),

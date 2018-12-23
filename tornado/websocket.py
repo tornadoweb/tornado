@@ -32,7 +32,7 @@ import zlib
 from tornado.concurrent import (
     Future,
     future_set_result_unless_cancelled,
-    future_set_exception_unless_cancelled
+    future_set_exception_unless_cancelled,
 )
 from tornado.escape import utf8, native_str, to_unicode
 from tornado import gen, httpclient, httputil
@@ -124,6 +124,7 @@ class WebSocketRedirect(WebSocketError):
     """Raised when code is 302/303 in received headers
        while doing websocket handshake
     """
+
     def __init__(self, target_location: str) -> None:
         self.target_location = target_location
 
@@ -132,6 +133,7 @@ class RequestRedirectError(WebSocketError):
     """Raised when request's max_redirects <= 0
        or follow_redirect is False
     """
+
     pass
 
 
@@ -1452,7 +1454,8 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
                 # websocket redirect, raise exception for reconnect
                 # to redirected url
                 self.connect_future.set_exception(
-                    WebSocketRedirect(self._redirect_location))
+                    WebSocketRedirect(self._redirect_location)
+                )
             else:
                 self.connect_future.set_exception(StreamClosedError())
         self._on_message(None)
@@ -1486,7 +1489,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         self.headers = headers
 
         if self._should_follow_redirect():
-            self._redirect_location = headers['Location']
+            self._redirect_location = headers["Location"]
             return
 
         if start_line.code != 101:
@@ -1519,9 +1522,10 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         if self._should_follow_redirect():
             if self._redirect_location is not None:
                 self.connect_future.set_exception(
-                    WebSocketRedirect(self._redirect_location))
+                    WebSocketRedirect(self._redirect_location)
+                )
             else:
-                raise ValueError('redirect location is None')
+                raise ValueError("redirect location is None")
             # close connection
             self.on_connection_close()
             self.connection.close()
@@ -1688,7 +1692,7 @@ def websocket_connect(
     )
 
     def do_connect(
-            request: httpclient.HTTPRequest
+        request: httpclient.HTTPRequest
     ) -> "Future[WebSocketClientConnection]":
         conn_future = _websocket_connect(
             request,
@@ -1704,7 +1708,7 @@ def websocket_connect(
         return conn_future
 
     def wrap_conn_future_callback(
-            conn_future: "Future[WebSocketClientConnection]"
+        conn_future: "Future[WebSocketClientConnection]"
     ) -> None:
         try:
             conn = conn_future.result()
@@ -1712,15 +1716,12 @@ def websocket_connect(
             try:
                 new_request = redirect_request(request, e.target_location)
             except RequestRedirectError as e:
-                future_set_exception_unless_cancelled(
-                    wrapped_conn_future, e)
+                future_set_exception_unless_cancelled(wrapped_conn_future, e)
             else:
                 conn_future = do_connect(new_request)
-                IOLoop.current().add_future(
-                    conn_future, wrap_conn_future_callback)
+                IOLoop.current().add_future(conn_future, wrap_conn_future_callback)
         except Exception as e:
-            future_set_exception_unless_cancelled(
-                wrapped_conn_future, e)
+            future_set_exception_unless_cancelled(wrapped_conn_future, e)
         else:
             future_set_result_unless_cancelled(wrapped_conn_future, conn)
 
@@ -1732,16 +1733,15 @@ def websocket_connect(
 
 
 def redirect_request(
-        request: httpclient.HTTPRequest,
-        target_location: str
+    request: httpclient.HTTPRequest, target_location: str
 ) -> httpclient.HTTPRequest:
     request_proxy = cast(httpclient._RequestProxy, request)
 
     if not request_proxy.follow_redirects:
-        raise RequestRedirectError('follow_redirects is not True')
+        raise RequestRedirectError("follow_redirects is not True")
 
     if request_proxy.max_redirects is None or request_proxy.max_redirects <= 0:
-        raise RequestRedirectError('max_redirects occurred, no more redirect')
+        raise RequestRedirectError("max_redirects occurred, no more redirect")
 
     original_request = getattr(request, "original_request", request)
     new_request = copy.copy(request_proxy.request)
@@ -1771,8 +1771,7 @@ def redirect_request(
     new_request.original_request = original_request  # type: ignore
     new_request = cast(
         httpclient.HTTPRequest,
-        httpclient._RequestProxy(
-            new_request, httpclient.HTTPRequest._DEFAULTS)
+        httpclient._RequestProxy(new_request, httpclient.HTTPRequest._DEFAULTS),
     )
     return new_request
 
