@@ -1753,7 +1753,7 @@ def redirect_request(
     # compatibility with pre-HTTP/1.1 user agents which don't
     # understand the 303 status.
     new_request.method = "GET"
-    new_request.body = None
+    new_request.body = cast(bytes, None)
     for h in [
         "Content-Length",
         "Content-Type",
