@@ -1684,7 +1684,7 @@ def websocket_connect(
     )
 
     def do_connect(request: httpclient.HTTPRequest
-        ) -> Future[WebSocketClientConnection]:
+    ) -> "Future[WebSocketClientConnection]":
         conn_future = _websocket_connect(
             request,
             callback,
@@ -1699,7 +1699,7 @@ def websocket_connect(
         return conn_future
 
     def wrap_conn_future_callback(
-            conn_future: Future[WebSocketClientConnection]
+            conn_future: "Future[WebSocketClientConnection]"
         ) -> None:
         try:
             conn = conn_future.result()
@@ -1731,22 +1731,18 @@ def redirect_request(
         target_location: str
 ) -> httpclient.HTTPRequest:
     request_proxy = cast(httpclient._RequestProxy, request)
-    request = request_proxy.request
 
-    if not request.follow_redirects:
+    if not request_proxy.follow_redirects:
         raise RequestRedirectError('follow_redirects is not True')
 
-    if request.max_redirects is None or request.max_redirects <= 0:
+    if request_proxy.max_redirects is None or request_proxy.max_redirects <= 0:
         raise RequestRedirectError('max_redirects occurred, no more redirect')
 
     original_request = getattr(request, "original_request", request)
-    new_request = copy.copy(request)
-    new_request.url = urljoin(request.url, target_location)
-    schema, sep, rest = new_request.url.partition(':')
-    schema = {'http': 'ws', 'https': 'wss'}[schema]
-    new_request.url = schema + sep + rest
+    new_request = copy.copy(request_proxy.request)
+    new_request.url = urljoin(request_proxy.request.url, target_location)
 
-    new_request.max_redirects = request.max_redirects - 1
+    new_request.max_redirects = request_proxy.max_redirects - 1
     del new_request.headers["Host"]
     # http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.3.4
     # Client SHOULD make a GET request after a 303.
