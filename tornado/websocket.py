@@ -1683,7 +1683,8 @@ def websocket_connect(
         httpclient._RequestProxy(request, httpclient.HTTPRequest._DEFAULTS),
     )
 
-    def do_connect(request: httpclient.HTTPRequest
+    def do_connect(
+            request: httpclient.HTTPRequest
     ) -> "Future[WebSocketClientConnection]":
         conn_future = _websocket_connect(
             request,
@@ -1700,7 +1701,7 @@ def websocket_connect(
 
     def wrap_conn_future_callback(
             conn_future: "Future[WebSocketClientConnection]"
-        ) -> None:
+    ) -> None:
         try:
             conn = conn_future.result()
         except WebSocketRedirect as e:
