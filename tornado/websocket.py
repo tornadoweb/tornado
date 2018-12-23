@@ -1510,9 +1510,8 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         self.final_callback = None  # type: ignore
 
         future_set_result_unless_cancelled(self.connect_future, self)
-    
-    def finish(self):
 
+    def finish(self):
         if self._should_follow_redirect():
             self.connect_future.set_exception(
                 WebSocketRedirect(self._redirect_location))
@@ -1695,7 +1694,6 @@ def websocket_connect(
         )
         return conn_future
 
-
     def wrap_conn_future_callback(conn_future):
         try:
             conn = conn_future.result()
@@ -1766,7 +1764,6 @@ def redirect_request(
         httpclient._RequestProxy(
             new_request, httpclient.HTTPRequest._DEFAULTS)
     )
-    
     return new_request
 
 
