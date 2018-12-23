@@ -1448,7 +1448,13 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
 
     def on_connection_close(self) -> None:
         if not self.connect_future.done():
-            self.connect_future.set_exception(StreamClosedError())
+            if self._redirect_location is not None:
+                # websocket redirect, raise exception for reconnect
+                # to redirected url
+                self.connect_future.set_exception(
+                    WebSocketRedirect(self._redirect_location))
+            else:
+                self.connect_future.set_exception(StreamClosedError())
         self._on_message(None)
         self.tcp_client.close()
         super(WebSocketClientConnection, self).on_connection_close()
@@ -1462,10 +1468,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
 
     def _on_http_response(self, response: httpclient.HTTPResponse) -> None:
         if not self.connect_future.done():
-            if self._redirect_location is not None:
-                self.connect_future.set_exception(
-                    WebSocketRedirect(self._redirect_location))
-            elif response.error:
+            if response.error:
                 self.connect_future.set_exception(response.error)
             else:
                 self.connect_future.set_exception(
@@ -1480,7 +1483,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         assert isinstance(start_line, httputil.ResponseStartLine)
         if start_line.code in (302, 303):
             self._redirect_location = headers['Location']
-            return
+            raise WebSocketRedirect(self._redirect_location)
 
         if start_line.code != 101:
             await super(WebSocketClientConnection, self).headers_received(
@@ -1693,7 +1696,7 @@ def websocket_connect(
                     wrapped_conn_future, e)
             else:
                 conn_future = do_connect(new_request)
-                IOLoop.current.add_future(
+                IOLoop.current().add_future(
                     conn_future, wrap_conn_future_callback)
         except Exception as e:
             future_set_exception_unless_cancelled(
@@ -1701,11 +1704,11 @@ def websocket_connect(
         else:
             future_set_result_unless_cancelled(wrapped_conn_future, conn)
 
-        wrapped_conn_future = Future()
-        conn_future = do_connect(request)
-        IOLoop.current.add_future(conn_future, wrap_conn_future_callback)
+    wrapped_conn_future = Future()
+    conn_future = do_connect(request)
+    IOLoop.current().add_future(conn_future, wrap_conn_future_callback)
 
-        return wrapped_conn_future
+    return wrapped_conn_future
 
 
 def redirect_request(
@@ -1719,8 +1722,12 @@ def redirect_request(
         raise RequestRedirectError('max_redirects occurred, no more redirect')
 
     original_request = getattr(request, "original_request", request)
-    new_request = copy.copy(request)
+    new_request = copy.copy(request.request)
     new_request.url = urljoin(request.url, target_location)
+    schema, sep, rest = new_request.url.partition(':')
+    schema = {'http': 'ws', 'https': 'wss'}[schema]
+    new_request.url = schema + sep + rest
+
     new_request.max_redirects = request.max_redirects - 1
     del new_request.headers["Host"]
     # http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.3.4
@@ -1743,6 +1750,12 @@ def redirect_request(
         except KeyError:
             pass
     new_request.original_request = original_request
+    new_request = cast(
+        httpclient.HTTPRequest,
+        httpclient._RequestProxy(
+            new_request, httpclient.HTTPRequest._DEFAULTS)
+    )
+    
     return new_request
 
 
