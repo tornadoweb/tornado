@@ -1481,9 +1481,13 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         headers: httputil.HTTPHeaders,
     ) -> None:
         assert isinstance(start_line, httputil.ResponseStartLine)
-        if start_line.code in (302, 303):
+        self.code = start_line.code
+        self.reason = start_line.reason
+        self.headers = headers
+
+        if self._should_follow_redirect():
             self._redirect_location = headers['Location']
-            raise WebSocketRedirect(self._redirect_location)
+            return
 
         if start_line.code != 101:
             await super(WebSocketClientConnection, self).headers_received(
@@ -1510,6 +1514,17 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         self.final_callback = None  # type: ignore
 
         future_set_result_unless_cancelled(self.connect_future, self)
+    
+    def finish(self):
+
+        if self._should_follow_redirect():
+            self.connect_future.set_exception(
+                WebSocketRedirect(self._redirect_location))
+            # close connection
+            self.on_connection_close()
+            self.connection.close()
+        else:
+            super().finish()
 
     def write_message(
         self, message: Union[str, bytes], binary: bool = False
