@@ -201,7 +201,6 @@ class WebSocketBaseTestCase(AsyncHTTPTestCase):
         ws = yield websocket_connect(
             "ws://127.0.0.1:%d%s" % (self.get_http_port(), path), **kwargs
         )
-        print(f'result of ws connect {ws}')
         raise gen.Return(ws)
 
 
@@ -358,7 +357,7 @@ class WebSocketTest(WebSocketBaseTestCase):
     def test_websocket_http_success(self):
         with self.assertRaises(WebSocketError):
             yield self.ws_connect("/non_ws")
-    
+
     @gen_test
     def test_websocket_redirect(self):
         conn = yield self.ws_connect("/redirect")
@@ -372,7 +371,6 @@ class WebSocketTest(WebSocketBaseTestCase):
         yield conn.write_message("hello redirect")
         msg = yield conn.read_message()
         self.assertEqual("hello redirect", msg)
-
 
     @gen_test
     def test_websocket_network_fail(self):
