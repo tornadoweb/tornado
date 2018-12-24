@@ -1,3 +1,4 @@
+import asyncio
 import functools
 import traceback
 import unittest
@@ -61,6 +62,8 @@ class EchoHandler(TestWebSocketHandler):
     def on_message(self, message):
         try:
             yield self.write_message(message, isinstance(message, bytes))
+        except asyncio.CancelledError:
+            pass
         except WebSocketClosedError:
             pass
 

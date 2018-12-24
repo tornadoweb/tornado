@@ -23,6 +23,7 @@ Contents:
 * `PipeIOStream`: Pipe-based IOStream implementation.
 """
 
+import asyncio
 import collections
 import errno
 import io
@@ -629,7 +630,13 @@ class BaseIOStream(object):
         for future in futures:
             if not future.done():
                 future.set_exception(StreamClosedError(real_error=self.error))
-            future.exception()
+            # Reference the exception to silence warnings. Annoyingly,
+            # this raises if the future was cancelled, but just
+            # returns any other error.
+            try:
+                future.exception()
+            except asyncio.CancelledError:
+                pass
         if self._ssl_connect_future is not None:
             # _ssl_connect_future expects to see the real exception (typically
             # an ssl.SSLError), not just StreamClosedError.
@@ -777,6 +784,8 @@ class BaseIOStream(object):
         try:
             pos = self._read_to_buffer_loop()
         except UnsatisfiableReadError:
+            raise
+        except asyncio.CancelledError:
             raise
         except Exception as e:
             gen_log.warning("error on read: %s" % e)
