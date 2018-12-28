@@ -11,8 +11,7 @@ project = "Tornado"
 
 year_copyright = time.gmtime(
     int(os.environ.get(
-        'SOURCE_DATE_EPOCH', time.time()))
-    ).tm_year
+        'SOURCE_DATE_EPOCH', time.time()))).tm_year
 
 copyright = "2009-%d, The Tornado Authors" % year_copyright
 
