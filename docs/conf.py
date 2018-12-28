@@ -8,7 +8,13 @@ import tornado
 master_doc = "index"
 
 project = "Tornado"
-copyright = "2009-%s, The Tornado Authors" % time.strftime("%Y")
+
+year_copyright = time.gmtime(
+    int(os.environ.get(
+        'SOURCE_DATE_EPOCH', time.time()))
+    ).tm_year
+
+copyright = "2009-%d, The Tornado Authors" % year_copyright
 
 version = release = tornado.version
 
