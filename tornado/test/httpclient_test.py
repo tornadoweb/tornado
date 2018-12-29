@@ -664,6 +664,7 @@ class SyncHTTPClientTest(unittest.TestCase):
 
             @gen.coroutine
             def slow_stop():
+                yield self.server.close_all_connections()
                 # The number of iterations is difficult to predict. Typically,
                 # one is sufficient, although sometimes it needs more.
                 for i in range(5):

@@ -9,6 +9,7 @@
   for the tornado.autoreload module to rerun the tests when code changes.
 """
 
+import asyncio
 from collections.abc import Generator
 import functools
 import inspect
@@ -178,6 +179,36 @@ class AsyncTestCase(unittest.TestCase):
         self.io_loop.make_current()
 
     def tearDown(self) -> None:
+        # Native coroutines tend to produce warnings if they're not
+        # allowed to run to completion. It's difficult to ensure that
+        # this always happens in tests, so cancel any tasks that are
+        # still pending by the time we get here.
+        asyncio_loop = self.io_loop.asyncio_loop  # type: ignore
+        if hasattr(asyncio, "all_tasks"):  # py37
+            tasks = asyncio.all_tasks(asyncio_loop)  # type: ignore
+        else:
+            tasks = asyncio.Task.all_tasks(asyncio_loop)
+        # Tasks that are done may still appear here and may contain
+        # non-cancellation exceptions, so filter them out.
+        tasks = [t for t in tasks if not t.done()]
+        for t in tasks:
+            t.cancel()
+        # Allow the tasks to run and finalize themselves (which means
+        # raising a CancelledError inside the coroutine). This may
+        # just transform the "task was destroyed but it is pending"
+        # warning into a "uncaught CancelledError" warning, but
+        # catching CancelledErrors in coroutines that may leak is
+        # simpler than ensuring that no coroutines leak.
+        if tasks:
+            done, pending = self.io_loop.run_sync(lambda: asyncio.wait(tasks))
+            assert not pending
+            # If any task failed with anything but a CancelledError, raise it.
+            for f in done:
+                try:
+                    f.result()
+                except asyncio.CancelledError:
+                    pass
+
         # Clean up Subprocess, so it can be used again with a new ioloop.
         Subprocess.uninitialize()
         self.io_loop.clear_current()

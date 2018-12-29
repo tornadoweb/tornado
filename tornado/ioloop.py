@@ -724,7 +724,9 @@ class IOLoop(Configurable):
     def _run_callback(self, callback: Callable[[], Any]) -> None:
         """Runs a callback with error handling.
 
-        For use in subclasses.
+        .. versionchanged:: 6.0
+
+           CancelledErrors are no longer logged.
         """
         try:
             ret = callback()
@@ -744,6 +746,8 @@ class IOLoop(Configurable):
                     pass
                 else:
                     self.add_future(ret, self._discard_future_result)
+        except asyncio.CancelledError:
+            pass
         except Exception:
             app_log.error("Exception in callback %r", callback, exc_info=True)
 
