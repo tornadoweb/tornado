@@ -16,6 +16,11 @@ from tornado.web import Application, RequestHandler, HTTPError
 
 from tornado import gen
 
+try:
+    import contextvars
+except ImportError:
+    contextvars = None  # type: ignore
+
 import typing
 
 if typing.TYPE_CHECKING:
@@ -1047,6 +1052,59 @@ class RunnerGCTest(AsyncTestCase):
         loop = self.get_new_ioloop()
         result = loop.run_sync(wait_a_moment)
         self.assertEqual(result, [None, None])
+
+
+if contextvars is not None:
+    ctx_var = contextvars.ContextVar("ctx_var")  # type: contextvars.ContextVar[int]
+
+
+@unittest.skipIf(contextvars is None, "contextvars module not present")
+class ContextVarsTest(AsyncTestCase):
+    async def native_root(self, x):
+        ctx_var.set(x)
+        await self.inner(x)
+
+    @gen.coroutine
+    def gen_root(self, x):
+        ctx_var.set(x)
+        yield
+        yield self.inner(x)
+
+    async def inner(self, x):
+        self.assertEqual(ctx_var.get(), x)
+        await self.gen_inner(x)
+        self.assertEqual(ctx_var.get(), x)
+
+        # IOLoop.run_in_executor doesn't automatically copy context
+        ctx = contextvars.copy_context()
+        await self.io_loop.run_in_executor(None, lambda: ctx.run(self.thread_inner, x))
+        self.assertEqual(ctx_var.get(), x)
+
+        # Neither does asyncio's run_in_executor.
+        await asyncio.get_event_loop().run_in_executor(
+            None, lambda: ctx.run(self.thread_inner, x)
+        )
+        self.assertEqual(ctx_var.get(), x)
+
+    @gen.coroutine
+    def gen_inner(self, x):
+        self.assertEqual(ctx_var.get(), x)
+        yield
+        self.assertEqual(ctx_var.get(), x)
+
+    def thread_inner(self, x):
+        self.assertEqual(ctx_var.get(), x)
+
+    @gen_test
+    def test_propagate(self):
+        # Verify that context vars get propagated across various
+        # combinations of native and decorated coroutines.
+        yield [
+            self.native_root(1),
+            self.native_root(2),
+            self.gen_root(3),
+            self.gen_root(4),
+        ]
 
 
 if __name__ == "__main__":
