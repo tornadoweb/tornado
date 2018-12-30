@@ -32,12 +32,12 @@ For example, here's a coroutine-based handler:
 .. testoutput::
    :hide:
 
-Most asynchronous functions in Tornado return a `.Future`;
-yielding this object returns its ``Future.result``.
+Asynchronous functions in Tornado return an ``Awaitable`` or `.Future`;
+yielding this object returns its result.
 
-You can also yield a list or dict of ``Futures``, which will be
-started at the same time and run in parallel; a list or dict of results will
-be returned when they are all finished:
+You can also yield a list or dict of other yieldable objects, which
+will be started at the same time and run in parallel; a list or dict
+of results will be returned when they are all finished:
 
 .. testcode::
 
@@ -54,13 +54,9 @@ be returned when they are all finished:
 .. testoutput::
    :hide:
 
-If the `~functools.singledispatch` library is available (standard in
-Python 3.4, available via the `singledispatch
-<https://pypi.python.org/pypi/singledispatch>`_ package on older
-versions), additional types of objects may be yielded. Tornado includes
-support for ``asyncio.Future`` and Twisted's ``Deferred`` class when
-``tornado.platform.asyncio`` and ``tornado.platform.twisted`` are imported.
-See the `convert_yielded` function to extend this mechanism.
+If ``tornado.platform.twisted`` is imported, it is also possible to
+yield Twisted's ``Deferred`` objects. See the `convert_yielded`
+function to extend this mechanism.
 
 .. versionchanged:: 3.2
    Dict support added.
@@ -162,16 +158,9 @@ def coroutine(
 ) -> Callable[..., "Future[_T]"]:
     """Decorator for asynchronous generators.
 
-    Any generator that yields objects from this module must be wrapped
-    in this decorator (or use ``async def`` and ``await`` for similar
-    functionality).
-
-    Coroutines may "return" by raising the special exception
-    `Return(value) <Return>`.  In Python 3.3+, it is also possible for
-    the function to simply use the ``return value`` statement (prior to
-    Python 3.3 generators were not allowed to also return values).
-    In all versions of Python a coroutine that simply wishes to exit
-    early may use the ``return`` statement without a value.
+    For compatibility with older versions of Python, coroutines may
+    also "return" by raising the special exception `Return(value)
+    <Return>`.
 
     Functions with this decorator return a `.Future`.
 
@@ -294,22 +283,23 @@ class Return(Exception):
 
 
 class WaitIterator(object):
-    """Provides an iterator to yield the results of futures as they finish.
+    """Provides an iterator to yield the results of awaitables as they finish.
 
-    Yielding a set of futures like this:
+    Yielding a set of awaitables like this:
 
-    ``results = yield [future1, future2]``
+    ``results = yield [awaitable1, awaitable2]``
 
-    pauses the coroutine until both ``future1`` and ``future2``
+    pauses the coroutine until both ``awaitable1`` and ``awaitable2``
     return, and then restarts the coroutine with the results of both
-    futures. If either future is an exception, the expression will
-    raise that exception and all the results will be lost.
+    awaitables. If either awaitable raises an exception, the
+    expression will raise that exception and all the results will be
+    lost.
 
-    If you need to get the result of each future as soon as possible,
-    or if you need the result of some futures even if others produce
+    If you need to get the result of each awaitable as soon as possible,
+    or if you need the result of some awaitables even if others produce
     errors, you can use ``WaitIterator``::
 
-      wait_iterator = gen.WaitIterator(future1, future2)
+      wait_iterator = gen.WaitIterator(awaitable1, awaitable2)
       while not wait_iterator.done():
           try:
               result = yield wait_iterator.next()
@@ -325,7 +315,7 @@ class WaitIterator(object):
     input arguments*. If you need to know which future produced the
     current result, you can use the attributes
     ``WaitIterator.current_future``, or ``WaitIterator.current_index``
-    to get the index of the future from the input list. (if keyword
+    to get the index of the awaitable from the input list. (if keyword
     arguments were used in the construction of the `WaitIterator`,
     ``current_index`` will use the corresponding keyword).
 
@@ -681,6 +671,9 @@ coroutines that are likely to yield Futures that are ready instantly.
 
 Usage: ``yield gen.moment``
 
+In native coroutines, the equivalent of ``yield gen.moment`` is
+``await asyncio.sleep(0)``.
+
 .. versionadded:: 4.0
 
 .. deprecated:: 4.5
@@ -815,7 +808,9 @@ except AttributeError:
 def convert_yielded(yielded: _Yieldable) -> Future:
     """Convert a yielded object into a `.Future`.
 
-    The default implementation accepts lists, dictionaries, and Futures.
+    The default implementation accepts lists, dictionaries, and
+    Futures. This has the side effect of starting any coroutines that
+    did not start themselves, similar to `asyncio.ensure_future`.
 
     If the `~functools.singledispatch` library is available, this function
     may be extended to support additional types. For example::
@@ -825,6 +820,7 @@ def convert_yielded(yielded: _Yieldable) -> Future:
             return tornado.platform.asyncio.to_tornado_future(asyncio_future)
 
     .. versionadded:: 4.1
+
     """
     if yielded is None or yielded is moment:
         return moment

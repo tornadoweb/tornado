@@ -18,6 +18,7 @@ extensions = [
     "sphinx.ext.doctest",
     "sphinx.ext.intersphinx",
     "sphinx.ext.viewcode",
+    "sphinxcontrib.asyncio",
 ]
 
 primary_domain = "py"
@@ -37,6 +38,7 @@ coverage_ignore_modules = [
     "tornado.platform.asyncio",
     "tornado.platform.caresresolver",
     "tornado.platform.twisted",
+    "tornado.simple_httpclient",
 ]
 # I wish this could go in a per-module file...
 coverage_ignore_classes = [

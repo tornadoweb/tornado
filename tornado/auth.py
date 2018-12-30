@@ -102,7 +102,7 @@ class OpenIdMixin(object):
 
         .. versionchanged:: 6.0
 
-           The ``callback`` argument was removed and this method no
+            The ``callback`` argument was removed and this method no
             longer returns an awaitable object. It is now an ordinary
             synchronous function.
         """
@@ -128,7 +128,7 @@ class OpenIdMixin(object):
 
         .. versionchanged:: 6.0
 
-           The ``callback`` argument was removed. Use the returned
+            The ``callback`` argument was removed. Use the returned
             awaitable object instead.
         """
         handler = cast(RequestHandler, self)

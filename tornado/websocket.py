@@ -1496,7 +1496,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
 
     def read_message(
         self, callback: Callable[["Future[Union[None, str, bytes]]"], None] = None
-    ) -> "Future[Union[None, str, bytes]]":
+    ) -> Awaitable[Union[None, str, bytes]]:
         """Reads a message from the WebSocket server.
 
         If on_message_callback was specified at WebSocket
@@ -1508,15 +1508,17 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         ready.
         """
 
-        future = self.read_queue.get()
+        awaitable = self.read_queue.get()
         if callback is not None:
-            self.io_loop.add_future(future, callback)
-        return future
+            self.io_loop.add_future(asyncio.ensure_future(awaitable), callback)
+        return awaitable
 
-    def on_message(self, message: Union[str, bytes]) -> Optional["Future[None]"]:
+    def on_message(self, message: Union[str, bytes]) -> Optional[Awaitable[None]]:
         return self._on_message(message)
 
-    def _on_message(self, message: Union[None, str, bytes]) -> Optional["Future[None]"]:
+    def _on_message(
+        self, message: Union[None, str, bytes]
+    ) -> Optional[Awaitable[None]]:
         if self._on_message_callback:
             self._on_message_callback(message)
             return None
@@ -1580,7 +1582,7 @@ def websocket_connect(
     ping_timeout: float = None,
     max_message_size: int = _default_max_message_size,
     subprotocols: List[str] = None,
-) -> "Future[WebSocketClientConnection]":
+) -> "Awaitable[WebSocketClientConnection]":
     """Client-side websocket support.
 
     Takes a url and returns a Future whose result is a
