@@ -14,17 +14,15 @@
 # under the License.
 """Utilities for working with ``Future`` objects.
 
-``Futures`` are a pattern for concurrent programming introduced in
-Python 3.2 in the `concurrent.futures` package, and also adopted (in a
-slightly different form) in Python 3.4's `asyncio` package. This
-package defines a ``Future`` class that is an alias for `asyncio.Future`
-when available, and a compatible implementation for older versions of
-Python. It also includes some utility functions for interacting with
-``Future`` objects.
+Tornado previously provided its own ``Future`` class, but now uses
+`asyncio.Future`. This module contains utility functions for working
+with `asyncio.Future` in a way that is backwards-compatible with
+Tornado's old ``Future`` implementation.
 
-While this package is an important part of Tornado's internal
+While this module is an important part of Tornado's internal
 implementation, applications rarely need to interact with it
 directly.
+
 """
 
 import asyncio
