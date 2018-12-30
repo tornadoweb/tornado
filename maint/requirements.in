@@ -11,7 +11,7 @@ pycares
 pycurl
 
 # Other useful tools
-Sphinx<1.8.0
+Sphinx>1.8.2
 autopep8
 black
 coverage
