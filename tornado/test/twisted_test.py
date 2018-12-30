@@ -13,10 +13,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""
-Unittest for the twisted-style reactor.
-"""
-
+import asyncio
 import logging
 import signal
 import unittest
@@ -120,7 +117,7 @@ class CompatibilityTests(unittest.TestCase):
 
     def tornado_fetch(self, url, runner):
         client = AsyncHTTPClient()
-        fut = client.fetch(url)
+        fut = asyncio.ensure_future(client.fetch(url))
         fut.add_done_callback(lambda f: self.stop_loop())
         runner()
         return fut.result()
