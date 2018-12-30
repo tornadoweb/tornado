@@ -162,7 +162,7 @@ Then the Tornado equivalent is::
 * The `.IOLoop` constructor now has a ``make_current`` keyword argument
   to control whether the new `.IOLoop` becomes `.IOLoop.current()`.
 * Third-party implementations of `.IOLoop` should accept ``**kwargs``
-  in their `~.IOLoop.initialize` methods and pass them to the superclass
+  in their ``IOLoop.initialize`` methods and pass them to the superclass
   implementation.
 * `.PeriodicCallback` is now more efficient when the clock jumps forward
   by a large amount.

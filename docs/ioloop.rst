@@ -45,10 +45,3 @@
    .. automethod:: IOLoop.time
    .. autoclass:: PeriodicCallback
       :members:
-
-   Methods for subclasses
-   ^^^^^^^^^^^^^^^^^^^^^^
-
-   .. automethod:: IOLoop.initialize
-   .. automethod:: IOLoop.close_fd
-   .. automethod:: IOLoop.split_fd

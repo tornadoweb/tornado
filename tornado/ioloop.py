@@ -15,7 +15,11 @@
 
 """An I/O event loop for non-blocking sockets.
 
-On Python 3, `.IOLoop` is a wrapper around the `asyncio` event loop.
+In Tornado 6.0, `.IOLoop` is a wrapper around the `asyncio` event
+loop, with a slightly different interface for historical reasons.
+Applications can use either the `.IOLoop` interface or the underlying
+`asyncio` event loop directly (unless compatibility with older
+versions of Tornado is desired, in which case `.IOLoop` must be used).
 
 Typical applications will use a single `IOLoop` object, accessed via
 `IOLoop.current` class method. The `IOLoop.start` method (or
@@ -23,10 +27,6 @@ equivalently, `asyncio.AbstractEventLoop.run_forever`) should usually
 be called at the end of the ``main()`` function. Atypical applications
 may use more than one `IOLoop`, such as one `IOLoop` per thread, or
 per `unittest` case.
-
-In addition to I/O events, the `IOLoop` can also schedule time-based
-events. `IOLoop.add_timeout` is a non-blocking alternative to
-`time.sleep`.
 
 """
 
@@ -75,14 +75,10 @@ _S = TypeVar("_S", bound=_Selectable)
 
 
 class IOLoop(Configurable):
-    """A level-triggered I/O loop.
+    """An I/O event loop.
 
-    On Python 3, `IOLoop` is a wrapper around the `asyncio` event
-    loop. On Python 2, it uses ``epoll`` (Linux) or ``kqueue`` (BSD
-    and Mac OS X) if they are available, or else we fall back on
-    select(). If you are implementing a system that needs to handle
-    thousands of simultaneous connections, you should use a system
-    that supports either ``epoll`` or ``kqueue``.
+    As of Tornado 6.0, `IOLoop` is a wrapper around the `asyncio` event
+    loop.
 
     Example usage for a simple TCP server:
 
@@ -540,12 +536,11 @@ class IOLoop(Configurable):
         The return value is a floating-point number relative to an
         unspecified time in the past.
 
-        By default, the `IOLoop`'s time function is `time.time`.  However,
-        it may be configured to use e.g. `time.monotonic` instead.
-        Calls to `add_timeout` that pass a number instead of a
-        `datetime.timedelta` should use this function to compute the
-        appropriate time, so they can work no matter what time function
-        is chosen.
+        Historically, the IOLoop could be customized to use e.g.
+        `time.monotonic` instead of `time.time`, but this is not
+        currently supported and so this method is equivalent to
+        `time.time`.
+
         """
         return time.time()
 
@@ -758,37 +753,37 @@ class IOLoop(Configurable):
     def split_fd(
         self, fd: Union[int, _Selectable]
     ) -> Tuple[int, Union[int, _Selectable]]:
-        """Returns an (fd, obj) pair from an ``fd`` parameter.
+        # """Returns an (fd, obj) pair from an ``fd`` parameter.
 
-        We accept both raw file descriptors and file-like objects as
-        input to `add_handler` and related methods.  When a file-like
-        object is passed, we must retain the object itself so we can
-        close it correctly when the `IOLoop` shuts down, but the
-        poller interfaces favor file descriptors (they will accept
-        file-like objects and call ``fileno()`` for you, but they
-        always return the descriptor itself).
+        # We accept both raw file descriptors and file-like objects as
+        # input to `add_handler` and related methods.  When a file-like
+        # object is passed, we must retain the object itself so we can
+        # close it correctly when the `IOLoop` shuts down, but the
+        # poller interfaces favor file descriptors (they will accept
+        # file-like objects and call ``fileno()`` for you, but they
+        # always return the descriptor itself).
 
-        This method is provided for use by `IOLoop` subclasses and should
-        not generally be used by application code.
+        # This method is provided for use by `IOLoop` subclasses and should
+        # not generally be used by application code.
 
-        .. versionadded:: 4.0
-        """
+        # .. versionadded:: 4.0
+        # """
         if isinstance(fd, int):
             return fd, fd
         return fd.fileno(), fd
 
     def close_fd(self, fd: Union[int, _Selectable]) -> None:
-        """Utility method to close an ``fd``.
+        # """Utility method to close an ``fd``.
 
-        If ``fd`` is a file-like object, we close it directly; otherwise
-        we use `os.close`.
+        # If ``fd`` is a file-like object, we close it directly; otherwise
+        # we use `os.close`.
 
-        This method is provided for use by `IOLoop` subclasses (in
-        implementations of ``IOLoop.close(all_fds=True)`` and should
-        not generally be used by application code.
+        # This method is provided for use by `IOLoop` subclasses (in
+        # implementations of ``IOLoop.close(all_fds=True)`` and should
+        # not generally be used by application code.
 
-        .. versionadded:: 4.0
-        """
+        # .. versionadded:: 4.0
+        # """
         try:
             if isinstance(fd, int):
                 os.close(fd)
