@@ -231,9 +231,9 @@ class BaseIOStream(object):
     """A utility class to write to and read from a non-blocking file or socket.
 
     We support a non-blocking ``write()`` and a family of ``read_*()``
-    methods. When the operation completes, the `.Future` will resolve
+    methods. When the operation completes, the ``Awaitable`` will resolve
     with the data read (or ``None`` for ``write()``). All outstanding
-    ``Futures`` will resolve with a `StreamClosedError` when the
+    ``Awaitables`` will resolve with a `StreamClosedError` when the
     stream is closed; `.BaseIOStream.set_close_callback` can also be used
     to be notified of a closed stream.
 
