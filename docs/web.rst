@@ -9,7 +9,7 @@
 
    Request handlers
    ----------------
-   .. autoclass:: RequestHandler
+   .. autoclass:: RequestHandler(...)
 
    Entry points
    ^^^^^^^^^^^^
@@ -50,11 +50,24 @@
    Input
    ^^^^^
 
-   .. automethod:: RequestHandler.get_argument
+   The ``argument`` methods provide support for HTML form-style
+   arguments. These methods are available in both singular and plural
+   forms because HTML forms are ambiguous and do not distinguish
+   between a singular argument and a list containing one entry. If you
+   wish to use other formats for arguments (for example, JSON), parse
+   ``self.request.body`` yourself::
+
+       def prepare(self):
+           if self.request.headers['Content-Type'] == 'application/x-json':
+               self.args = json_decode(self.request.body)
+           # Access self.args directly instead of using self.get_argument.
+
+
+   .. automethod:: RequestHandler.get_argument(name: str, default: Union[None, str, RAISE] = RAISE, strip: bool = True) -> Optional[str]
    .. automethod:: RequestHandler.get_arguments
-   .. automethod:: RequestHandler.get_query_argument
+   .. automethod:: RequestHandler.get_query_argument(name: str, default: Union[None, str, RAISE] = RAISE, strip: bool = True) -> Optional[str]
    .. automethod:: RequestHandler.get_query_arguments
-   .. automethod:: RequestHandler.get_body_argument
+   .. automethod:: RequestHandler.get_body_argument(name: str, default: Union[None, str, RAISE] = RAISE, strip: bool = True) -> Optional[str]
    .. automethod:: RequestHandler.get_body_arguments
    .. automethod:: RequestHandler.decode_argument
    .. attribute:: RequestHandler.request
@@ -147,8 +160,7 @@
 
    Application configuration
    -----------------------------
-   .. autoclass:: Application
-      :members:
+   .. autoclass:: Application(handlers: List[Union[Rule, Tuple]] = None, default_host: str = None, transforms: List[Type[OutputTransform]] = None, **settings)
 
       .. attribute:: settings
 
@@ -265,6 +277,12 @@
            `tornado.web.StaticFileHandler`.  ``static_handler_args``, if set,
            should be a dictionary of keyword arguments to be passed to the
            handler's ``initialize`` method.
+
+   .. automethod:: Application.listen
+   .. automethod:: Application.add_handlers(handlers: List[Union[Rule, Tuple]])
+   .. automethod:: Application.get_handler_delegate
+   .. automethod:: Application.reverse_url
+   .. automethod:: Application.log_request
 
    .. autoclass:: URLSpec
 
