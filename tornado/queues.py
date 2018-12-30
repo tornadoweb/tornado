@@ -277,7 +277,7 @@ class Queue(Generic[_T]):
         if self._unfinished_tasks == 0:
             self._finished.set()
 
-    def join(self, timeout: Union[float, datetime.timedelta] = None) -> "Future[None]":
+    def join(self, timeout: Union[float, datetime.timedelta] = None) -> Awaitable[None]:
         """Block until all items in the queue are processed.
 
         Returns a Future, which raises `tornado.util.TimeoutError` after a
