@@ -1508,10 +1508,10 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         ready.
         """
 
-        future = self.read_queue.get()
+        awaitable = self.read_queue.get()
         if callback is not None:
-            self.io_loop.add_future(future, callback)
-        return future
+            self.io_loop.add_future(asyncio.ensure_future(awaitable), callback)
+        return awaitable
 
     def on_message(self, message: Union[str, bytes]) -> Optional[Awaitable[None]]:
         return self._on_message(message)

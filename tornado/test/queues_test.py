@@ -10,6 +10,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import asyncio
 from datetime import timedelta
 from random import random
 import unittest
@@ -143,8 +144,10 @@ class QueueGetTest(AsyncTestCase):
     @gen_test
     def test_get_clears_timed_out_getters(self):
         q = queues.Queue()  # type: queues.Queue[int]
-        getters = [q.get(timedelta(seconds=0.01)) for _ in range(10)]
-        get = q.get()
+        getters = [
+            asyncio.ensure_future(q.get(timedelta(seconds=0.01))) for _ in range(10)
+        ]
+        get = asyncio.ensure_future(q.get())
         self.assertEqual(11, len(q._getters))
         yield gen.sleep(0.02)
         self.assertEqual(11, len(q._getters))
@@ -259,8 +262,10 @@ class QueuePutTest(AsyncTestCase):
     @gen_test
     def test_put_clears_timed_out_getters(self):
         q = queues.Queue()  # type: queues.Queue[int]
-        getters = [q.get(timedelta(seconds=0.01)) for _ in range(10)]
-        get = q.get()
+        getters = [
+            asyncio.ensure_future(q.get(timedelta(seconds=0.01))) for _ in range(10)
+        ]
+        get = asyncio.ensure_future(q.get())
         q.get()
         self.assertEqual(12, len(q._getters))
         yield gen.sleep(0.02)
