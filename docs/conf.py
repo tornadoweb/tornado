@@ -1,7 +1,6 @@
 # Ensure we get the local copy of tornado instead of what's on the standard path
 import os
 import sys
-import time
 
 sys.path.insert(0, os.path.abspath(".."))
 import tornado
@@ -9,7 +8,7 @@ import tornado
 master_doc = "index"
 
 project = "Tornado"
-copyright = "2009-%s, The Tornado Authors" % time.strftime("%Y")
+copyright = "The Tornado Authors"
 
 version = release = tornado.version
 
