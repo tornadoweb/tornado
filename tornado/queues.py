@@ -232,6 +232,16 @@ class Queue(Generic[_T]):
         scale as `tornado.ioloop.IOLoop.time`, normally `time.time`), or a
         `datetime.timedelta` object for a deadline relative to the
         current time.
+
+        .. note::
+
+           The ``timeout`` argument of this method differs from that
+           of the standard library's `queue.Queue.get`. That method
+           interprets numeric values as relative timeouts; this one
+           interprets them as absolute deadlines and requires
+           ``timedelta`` objects for relative timeouts (consistent
+           with other timeouts in Tornado).
+
         """
         future = Future()  # type: Future[_T]
         try:
