@@ -626,14 +626,17 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             )
             new_request.max_redirects = self.request.max_redirects - 1
             del new_request.headers["Host"]
-            # http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.3.4
-            # Client SHOULD make a GET request after a 303.
-            # According to the spec, 302 should be followed by the same
-            # method as the original request, but in practice browsers
-            # treat 302 the same as 303, and many servers use 302 for
-            # compatibility with pre-HTTP/1.1 user agents which don't
-            # understand the 303 status.
-            if self.code in (302, 303):
+            # https://tools.ietf.org/html/rfc7231#section-6.4
+            #
+            # The original HTTP spec said that after a 301 or 302
+            # redirect, the request method should be preserved.
+            # However, browsers implemented this by changing the
+            # method to GET, and the behavior stuck. 303 redirects
+            # always specified this POST-to-GET behavior (arguably 303
+            # redirects should change *all* requests to GET, but
+            # libcurl only does this for POST so we follow their
+            # example).
+            if self.code in (301, 302, 303) and self.request.method == "POST":
                 new_request.method = "GET"
                 new_request.body = None
                 for h in [

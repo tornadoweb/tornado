@@ -126,7 +126,7 @@ class AllMethodsHandler(RequestHandler):
     def method(self):
         self.write(self.request.method)
 
-    get = post = put = delete = options = patch = other = method  # type: ignore
+    get = head = post = put = delete = options = patch = other = method  # type: ignore
 
 
 class SetHeaderHandler(RequestHandler):
@@ -321,6 +321,32 @@ Transfer-Encoding: chunked
             allow_nonstandard_methods=True,
         )
         self.assertEqual(response.body, b"Put body: ")
+
+    def test_method_after_redirect(self):
+        # Legacy redirect codes (301, 302) convert POST requests to GET.
+        for status in [301, 302, 303]:
+            url = "/redirect?url=/all_methods&status=%d" % status
+            resp = self.fetch(url, method="POST", body=b"")
+            self.assertEqual(b"GET", resp.body)
+
+            # Other methods are left alone.
+            for method in ["GET", "OPTIONS", "PUT", "DELETE"]:
+                resp = self.fetch(url, method=method, allow_nonstandard_methods=True)
+                self.assertEqual(utf8(method), resp.body)
+            # HEAD is different so check it separately.
+            resp = self.fetch(url, method="HEAD")
+            self.assertEqual(200, resp.code)
+            self.assertEqual(b"", resp.body)
+
+        # Newer redirects always preserve the original method.
+        for status in [307, 308]:
+            url = "/redirect?url=/all_methods&status=307"
+            for method in ["GET", "OPTIONS", "POST", "PUT", "DELETE"]:
+                resp = self.fetch(url, method=method, allow_nonstandard_methods=True)
+                self.assertEqual(method, to_unicode(resp.body))
+            resp = self.fetch(url, method="HEAD")
+            self.assertEqual(200, resp.code)
+            self.assertEqual(b"", resp.body)
 
     def test_credentials_in_url(self):
         url = self.get_url("/auth").replace("http://", "http://me:secret@")
