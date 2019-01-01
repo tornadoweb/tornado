@@ -1,0 +1,92 @@
+What's new in Tornado 6.0
+=========================
+
+In progress
+-----------
+
+Backwards-incompatible changes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Python 2.7 and 3.4 are no longer supported; the minimum supported
+  Python version is 3.5.2.
+- APIs deprecated in Tornado 5.1 have been removed. This includes the
+  ``tornado.stack_context`` module and most ``callback`` arguments
+  throughout the package. All removed APIs emitted
+  `DeprecationWarning` when used in Tornado 5.1, so running your
+  application with the ``-Wd`` Python command-line flag or the
+  environment variable ``PYTHONWARNINGS=d`` should tell you whether
+  your application is ready to move to Tornado 6.0.
+
+`tornado.auth`
+~~~~~~~~~~~~~~
+
+- All ``callback`` arguments in this package have been removed. Use
+  the coroutine interfaces instead.
+- The ``OAuthMixin._oauth_get_user`` method has been removed.
+  Override `~.OAuthMixin._oauth_get_user_future` instead.
+
+`tornado.concurrent`
+~~~~~~~~~~~~~~~~~~~~
+
+- The ``callback`` argument to `.run_on_executor` has been removed.
+- ``return_future`` has been removed.
+
+`tornado.gen`
+~~~~~~~~~~~~~
+
+- Some older portions of this module have been removed. This includes
+  ``engine``, ``YieldPoint``, ``Callback``, ``Wait``, ``WaitAll``,
+  ``MultiYieldPoint``, and ``Task``.
+- Functions decorated with ``@gen.coroutine`` no longer accept
+  ``callback`` arguments.
+
+`tornado.httpclient`
+~~~~~~~~~~~~~~~~~~~~
+
+- The behavior of ``raise_error=False`` has changed. Now only
+  suppresses the errors raised due to completed responses with non-200
+  status codes (previously it suppressed all errors).
+- The ``callback`` argument to `.AsyncHTTPClient.fetch` has been removed.
+
+`tornado.httputil`
+~~~~~~~~~~~~~~~~~~
+
+- ``HTTPServerRequest.write`` has been removed. Use the methods of
+  ``request.connection`` instead.
+
+`tornado.ioloop`
+~~~~~~~~~~~~~~~~
+
+- ``IOLoop.set_blocking_signal_threshold``,
+  ``IOLoop.set_blocking_log_threshold``, ``IOLoop.log_stack``,
+  and ``IOLoop.handle_callback_exception`` have been removed.
+
+`tornado.iostream`
+~~~~~~~~~~~~~~~~~~
+
+- All ``callback`` arguments in this module have been removed except
+  for `.BaseIOStream.set_close_callback`.
+- ``streaming_callback`` arguments to `.BaseIOStream.read_bytes` and
+  `.BaseIOStream.read_until_close` have been removed.
+
+`tornado.platform.twisted`
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- ``TornadoReactor`` and ``TwistedIOLoop`` have been removed.
+
+``tornado.stack_context``
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- The ``tornado.stack_context`` module has been removed.
+
+`tornado.web`
+~~~~~~~~~~~~~
+
+- The ``asynchronous`` decorator has been removed.
+- The ``callback`` argument to `.RequestHandler.flush` has been removed.
+
+
+`tornado.wsgi`
+~~~~~~~~~~~~~~
+
+- ``WSGIApplication`` and ``WSGIAdapter`` have been removed.
