@@ -307,6 +307,21 @@ Transfer-Encoding: chunked
         # don't either).
         self.assertEqual(301, response.code)
 
+    def test_redirect_put_with_body(self):
+        response = self.fetch(
+            "/redirect?url=/put&status=307", method="PUT", body="hello"
+        )
+        self.assertEqual(response.body, b"Put body: hello")
+
+    def test_redirect_put_without_body(self):
+        # This "without body" edge case is similar to what happens with body_producer.
+        response = self.fetch(
+            "/redirect?url=/put&status=307",
+            method="PUT",
+            allow_nonstandard_methods=True,
+        )
+        self.assertEqual(response.body, b"Put body: ")
+
     def test_credentials_in_url(self):
         url = self.get_url("/auth").replace("http://", "http://me:secret@")
         response = self.fetch(url)
