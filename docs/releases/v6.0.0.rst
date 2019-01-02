@@ -17,6 +17,14 @@ Backwards-incompatible changes
   environment variable ``PYTHONWARNINGS=d`` should tell you whether
   your application is ready to move to Tornado 6.0.
 
+General changes
+~~~~~~~~~~~~~~~
+
+- Tornado now includes type annotations compatible with ``mypy``.
+  These annotations will be used when type-checking your application
+  with ``mypy``, and may be usable in editors and other tools.
+- Tornado now uses native coroutines internally, improving performance.
+
 `tornado.auth`
 ~~~~~~~~~~~~~~
 
@@ -60,6 +68,7 @@ Backwards-incompatible changes
 - ``IOLoop.set_blocking_signal_threshold``,
   ``IOLoop.set_blocking_log_threshold``, ``IOLoop.log_stack``,
   and ``IOLoop.handle_callback_exception`` have been removed.
+- Improved performance of `.IOLoop.add_callback`.
 
 `tornado.iostream`
 ~~~~~~~~~~~~~~~~~~
@@ -68,23 +77,76 @@ Backwards-incompatible changes
   for `.BaseIOStream.set_close_callback`.
 - ``streaming_callback`` arguments to `.BaseIOStream.read_bytes` and
   `.BaseIOStream.read_until_close` have been removed.
+- Eliminated unnecessary logging of "Errno 0".
+
+`tornado.log`
+~~~~~~~~~~~~~
+
+- Log files opened by this module are now explicitly set to UTF-8 encoding.
+
+`tornado.netutil`
+~~~~~~~~~~~~~~~~~
+
+- The results of ``getaddrinfo`` are now sorted by address family to
+  avoid partial failures and deadlocks.
 
 `tornado.platform.twisted`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - ``TornadoReactor`` and ``TwistedIOLoop`` have been removed.
 
+``tornado.simple_httpclient``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- The default HTTP client now supports the ``network_interface``
+  request argument to specify the source IP for the connection.
+- If a server returns a 3xx response code without a ``Location``
+  header, the response is raised or returned directly instead of
+  trying and failing to follow the redirect.
+- When following redirects, methods other than ``POST`` will no longer
+  be transformed into ``GET`` requests. 301 (permanent) redirects are
+  now treated the same way as 302 (temporary) and 303 (see other)
+  redirects in this respect.
+- Following redirects now works with ``body_producer``.
+
 ``tornado.stack_context``
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - The ``tornado.stack_context`` module has been removed.
+
+`tornado.tcpserver`
+~~~~~~~~~~~~~~~~~~~
+
+- `.TCPServer.start` now supports a ``max_restarts`` argument (same as
+  `.fork_processes`).
+
+`tornado.testing`
+~~~~~~~~~~~~~~~~~
+
+- `.AsyncHTTPTestCase` now drops all references to the `.Application`
+  during ``tearDown``, allowing its memory to be reclaimed sooner.
+- `.AsyncTestCase` now cancels all pending coroutines in ``tearDown``,
+  in an effort to reduce warnings from the python runtime about
+  coroutines that were not awaited. Note that this may cause
+  ``asyncio.CancelledError`` to be logged in other places. Coroutines
+  that expect to be running at test shutdown may need to catch this
+  exception.
 
 `tornado.web`
 ~~~~~~~~~~~~~
 
 - The ``asynchronous`` decorator has been removed.
 - The ``callback`` argument to `.RequestHandler.flush` has been removed.
+- `.StaticFileHandler` now supports large negative values for the
+  ``Range`` header and returns an appropriate error for ``end >
+  start``.
+- It is now possible to set ``expires_days`` in ``xsrf_cookie_kwargs``.
 
+`tornado.websocket`
+~~~~~~~~~~~~~~~~~~~
+
+- Pings and other messages sent while the connection is closing are
+  now silently dropped instead of logging exceptions.
 
 `tornado.wsgi`
 ~~~~~~~~~~~~~~

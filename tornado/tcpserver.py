@@ -228,6 +228,12 @@ class TCPServer(object):
         which defaults to True when ``debug=True``).
         When using multiple processes, no IOLoops can be created or
         referenced until after the call to ``TCPServer.start(n)``.
+
+        The ``max_restarts`` argument is passed to `.fork_processes`.
+
+        .. versionchanged:: 6.0
+
+           Added ``max_restarts`` argument.
         """
         assert not self._started
         self._started = True
