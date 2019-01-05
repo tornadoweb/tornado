@@ -233,11 +233,8 @@ class ObjectHandler(BaseRequestHandler):
         self.set_header(
             "Last-Modified", datetime.datetime.utcfromtimestamp(info.st_mtime)
         )
-        object_file = open(path, "rb")
-        try:
+        with open(path, "rb") as object_file:
             self.finish(object_file.read())
-        finally:
-            object_file.close()
 
     def put(self, bucket, object_name):
         object_name = urllib.unquote(object_name)
@@ -252,9 +249,8 @@ class ObjectHandler(BaseRequestHandler):
         directory = os.path.dirname(path)
         if not os.path.exists(directory):
             os.makedirs(directory)
-        object_file = open(path, "w")
-        object_file.write(self.request.body)
-        object_file.close()
+        with open(path, "w") as object_file:
+            object_file.write(self.request.body)
         self.finish()
 
     def delete(self, bucket, object_name):

@@ -151,27 +151,26 @@ def load_translations(directory: str, encoding: str = None) -> None:
                 encoding = "utf-8-sig"
         # python 3: csv.reader requires a file open in text mode.
         # Specify an encoding to avoid dependence on $LANG environment variable.
-        f = open(full_path, "r", encoding=encoding)
-        _translations[locale] = {}
-        for i, row in enumerate(csv.reader(f)):
-            if not row or len(row) < 2:
-                continue
-            row = [escape.to_unicode(c).strip() for c in row]
-            english, translation = row[:2]
-            if len(row) > 2:
-                plural = row[2] or "unknown"
-            else:
-                plural = "unknown"
-            if plural not in ("plural", "singular", "unknown"):
-                gen_log.error(
-                    "Unrecognized plural indicator %r in %s line %d",
-                    plural,
-                    path,
-                    i + 1,
-                )
-                continue
-            _translations[locale].setdefault(plural, {})[english] = translation
-        f.close()
+        with open(full_path, encoding=encoding) as f:
+            _translations[locale] = {}
+            for i, row in enumerate(csv.reader(f)):
+                if not row or len(row) < 2:
+                    continue
+                row = [escape.to_unicode(c).strip() for c in row]
+                english, translation = row[:2]
+                if len(row) > 2:
+                    plural = row[2] or "unknown"
+                else:
+                    plural = "unknown"
+                if plural not in ("plural", "singular", "unknown"):
+                    gen_log.error(
+                        "Unrecognized plural indicator %r in %s line %d",
+                        plural,
+                        path,
+                        i + 1,
+                    )
+                    continue
+                _translations[locale].setdefault(plural, {})[english] = translation
     _supported_locales = frozenset(list(_translations.keys()) + [_default_locale])
     gen_log.debug("Supported locales: %s", sorted(_supported_locales))
 
