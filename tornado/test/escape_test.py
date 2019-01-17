@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import tornado.escape
 from tornado.escape import (
     utf8, xhtml_escape, xhtml_unescape, url_escape, url_unescape,
-    to_unicode, json_decode, json_encode, squeeze, recursive_unicode,
+    to_unicode, json_decode, json_encode, squeeze, recursive_unicode, parse_qs_bytes
 )
 from tornado.util import unicode_type
 from tornado.test.util import unittest
@@ -248,3 +248,12 @@ class EscapeTestCase(unittest.TestCase):
         self.assertEqual(recursive_unicode(tests['list']), [u"foo", u"bar"])
         self.assertEqual(recursive_unicode(tests['tuple']), (u"foo", u"bar"))
         self.assertEqual(recursive_unicode(tests['bytes']), u"foo")
+
+    def test_parse_qs_bytes(self):
+        tests = [
+            ('b=测试', {'b': ['测试']}),
+            ('a=test', {'a': ['test']}),
+            ('a=test&b=测试', {'a': ['test'], 'b': ['测试']})
+        ]
+        for test in tests:
+            self.assertEqual(parse_qs_bytes(test[0]), test[1])

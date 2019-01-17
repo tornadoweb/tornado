@@ -172,12 +172,8 @@ else:
         """
         # This is gross, but python3 doesn't give us another way.
         # Latin1 is the universal donor of character encodings.
-        result = _parse_qs(qs, keep_blank_values, strict_parsing,
+        return _parse_qs(qs, keep_blank_values, strict_parsing,
                            encoding='latin1', errors='strict')
-        encoded = {}
-        for k, v in result.items():
-            encoded[k] = [i.encode('latin1') for i in v]
-        return encoded
 
 
 _UTF8_TYPES = (bytes, type(None))
