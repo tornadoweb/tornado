@@ -1476,9 +1476,6 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         headers: httputil.HTTPHeaders,
     ) -> None:
         assert isinstance(start_line, httputil.ResponseStartLine)
-        self.code = start_line.code
-        self.reason = start_line.reason
-        self.headers = headers
 
         if start_line.code != 101:
             await super(WebSocketClientConnection, self).headers_received(
