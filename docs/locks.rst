@@ -10,9 +10,10 @@ similar to those provided in the standard library's `asyncio package
 
 .. warning::
 
-   Note that these primitives are not actually thread-safe and cannot be used in
-   place of those from the standard library--they are meant to coordinate Tornado
-   coroutines in a single-threaded app, not to protect shared objects in a
+   Note that these primitives are not actually thread-safe and cannot
+   be used in place of those from the standard library's `threading`
+   module--they are meant to coordinate Tornado coroutines in a
+   single-threaded app, not to protect shared objects in a
    multithreaded app.
 
 .. automodule:: tornado.locks

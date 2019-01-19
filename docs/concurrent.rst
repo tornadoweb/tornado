@@ -11,9 +11,7 @@
 
      .. class:: Future
 
-        ``tornado.concurrent.Future`` is an alias for `asyncio.Future`
-        on Python 3. On Python 2, it provides an equivalent
-        implementation.
+        ``tornado.concurrent.Future`` is an alias for `asyncio.Future`.
 
         In Tornado, the main way in which applications interact with
         ``Future`` objects is by ``awaiting`` or ``yielding`` them in

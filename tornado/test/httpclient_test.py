@@ -62,6 +62,13 @@ class RedirectHandler(RequestHandler):
         )
 
 
+class RedirectWithoutLocationHandler(RequestHandler):
+    def prepare(self):
+        # For testing error handling of a redirect with no location header.
+        self.set_status(301)
+        self.finish()
+
+
 class ChunkHandler(RequestHandler):
     @gen.coroutine
     def get(self):
@@ -119,7 +126,7 @@ class AllMethodsHandler(RequestHandler):
     def method(self):
         self.write(self.request.method)
 
-    get = post = put = delete = options = patch = other = method  # type: ignore
+    get = head = post = put = delete = options = patch = other = method  # type: ignore
 
 
 class SetHeaderHandler(RequestHandler):
@@ -143,6 +150,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
                 url("/post", PostHandler),
                 url("/put", PutHandler),
                 url("/redirect", RedirectHandler),
+                url("/redirect_without_location", RedirectWithoutLocationHandler),
                 url("/chunk", ChunkHandler),
                 url("/auth", AuthHandler),
                 url("/countdown/([0-9]+)", CountdownHandler, name="countdown"),
@@ -290,6 +298,55 @@ Transfer-Encoding: chunked
         self.assertEqual(200, response.code)
         self.assertTrue(response.effective_url.endswith("/countdown/0"))
         self.assertEqual(b"Zero", response.body)
+
+    def test_redirect_without_location(self):
+        response = self.fetch("/redirect_without_location", follow_redirects=True)
+        # If there is no location header, the redirect response should
+        # just be returned as-is. (This should arguably raise an
+        # error, but libcurl doesn't treat this as an error, so we
+        # don't either).
+        self.assertEqual(301, response.code)
+
+    def test_redirect_put_with_body(self):
+        response = self.fetch(
+            "/redirect?url=/put&status=307", method="PUT", body="hello"
+        )
+        self.assertEqual(response.body, b"Put body: hello")
+
+    def test_redirect_put_without_body(self):
+        # This "without body" edge case is similar to what happens with body_producer.
+        response = self.fetch(
+            "/redirect?url=/put&status=307",
+            method="PUT",
+            allow_nonstandard_methods=True,
+        )
+        self.assertEqual(response.body, b"Put body: ")
+
+    def test_method_after_redirect(self):
+        # Legacy redirect codes (301, 302) convert POST requests to GET.
+        for status in [301, 302, 303]:
+            url = "/redirect?url=/all_methods&status=%d" % status
+            resp = self.fetch(url, method="POST", body=b"")
+            self.assertEqual(b"GET", resp.body)
+
+            # Other methods are left alone.
+            for method in ["GET", "OPTIONS", "PUT", "DELETE"]:
+                resp = self.fetch(url, method=method, allow_nonstandard_methods=True)
+                self.assertEqual(utf8(method), resp.body)
+            # HEAD is different so check it separately.
+            resp = self.fetch(url, method="HEAD")
+            self.assertEqual(200, resp.code)
+            self.assertEqual(b"", resp.body)
+
+        # Newer redirects always preserve the original method.
+        for status in [307, 308]:
+            url = "/redirect?url=/all_methods&status=307"
+            for method in ["GET", "OPTIONS", "POST", "PUT", "DELETE"]:
+                resp = self.fetch(url, method=method, allow_nonstandard_methods=True)
+                self.assertEqual(method, to_unicode(resp.body))
+            resp = self.fetch(url, method="HEAD")
+            self.assertEqual(200, resp.code)
+            self.assertEqual(b"", resp.body)
 
     def test_credentials_in_url(self):
         url = self.get_url("/auth").replace("http://", "http://me:secret@")
@@ -664,6 +721,7 @@ class SyncHTTPClientTest(unittest.TestCase):
 
             @gen.coroutine
             def slow_stop():
+                yield self.server.close_all_connections()
                 # The number of iterations is difficult to predict. Typically,
                 # one is sufficient, although sometimes it needs more.
                 for i in range(5):

@@ -390,7 +390,10 @@ class HTTP1Connection(httputil.HTTPConnection):
             self._chunking_output = (
                 start_line.method in ("POST", "PUT", "PATCH")
                 and "Content-Length" not in headers
-                and "Transfer-Encoding" not in headers
+                and (
+                    "Transfer-Encoding" not in headers
+                    or headers["Transfer-Encoding"] == "chunked"
+                )
             )
         else:
             assert isinstance(start_line, httputil.ResponseStartLine)
@@ -812,7 +815,11 @@ class HTTP1ServerConnection(object):
                 request_delegate = delegate.start_request(self, conn)
                 try:
                     ret = await conn.read_response(request_delegate)
-                except (iostream.StreamClosedError, iostream.UnsatisfiableReadError):
+                except (
+                    iostream.StreamClosedError,
+                    iostream.UnsatisfiableReadError,
+                    asyncio.CancelledError,
+                ):
                     return
                 except _QuietException:
                     # This exception was already logged.

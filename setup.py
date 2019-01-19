@@ -111,7 +111,10 @@ MacOS users should run:
 
 kwargs = {}
 
-version = "6.0.dev1"
+with open("tornado/__init__.py") as f:
+    ns = {}
+    exec(f.read(), ns)
+    version = ns["version"]
 
 with open("README.rst") as f:
     kwargs["long_description"] = f.read()

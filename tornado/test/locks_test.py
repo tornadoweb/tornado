@@ -10,6 +10,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import asyncio
 from datetime import timedelta
 import typing  # noqa: F401
 import unittest
@@ -164,7 +165,7 @@ class ConditionTest(AsyncTestCase):
         c = locks.Condition()
 
         # Three waiters.
-        futures = [c.wait() for _ in range(3)]
+        futures = [asyncio.ensure_future(c.wait()) for _ in range(3)]
 
         # First and second futures resolved. Second future reenters notify(),
         # resolving third future.
@@ -180,7 +181,7 @@ class ConditionTest(AsyncTestCase):
         for _ in range(101):
             c.wait(timedelta(seconds=0.01))
 
-        future = c.wait()
+        future = asyncio.ensure_future(c.wait())
         self.assertEqual(102, len(c._waiters))
 
         # Let first 101 waiters time out, triggering a collection.
@@ -204,11 +205,11 @@ class EventTest(AsyncTestCase):
 
     def test_event(self):
         e = locks.Event()
-        future_0 = e.wait()
+        future_0 = asyncio.ensure_future(e.wait())
         e.set()
-        future_1 = e.wait()
+        future_1 = asyncio.ensure_future(e.wait())
         e.clear()
-        future_2 = e.wait()
+        future_2 = asyncio.ensure_future(e.wait())
 
         self.assertTrue(future_0.done())
         self.assertTrue(future_1.done())
@@ -232,9 +233,9 @@ class EventTest(AsyncTestCase):
 
     def test_event_wait_clear(self):
         e = locks.Event()
-        f0 = e.wait()
+        f0 = asyncio.ensure_future(e.wait())
         e.clear()
-        f1 = e.wait()
+        f1 = asyncio.ensure_future(e.wait())
         e.set()
         self.assertTrue(f0.done())
         self.assertTrue(f1.done())
@@ -256,13 +257,13 @@ class SemaphoreTest(AsyncTestCase):
 
     def test_acquire(self):
         sem = locks.Semaphore()
-        f0 = sem.acquire()
+        f0 = asyncio.ensure_future(sem.acquire())
         self.assertTrue(f0.done())
 
         # Wait for release().
-        f1 = sem.acquire()
+        f1 = asyncio.ensure_future(sem.acquire())
         self.assertFalse(f1.done())
-        f2 = sem.acquire()
+        f2 = asyncio.ensure_future(sem.acquire())
         sem.release()
         self.assertTrue(f1.done())
         self.assertFalse(f2.done())
@@ -271,7 +272,7 @@ class SemaphoreTest(AsyncTestCase):
 
         sem.release()
         # Now acquire() is instant.
-        self.assertTrue(sem.acquire().done())
+        self.assertTrue(asyncio.ensure_future(sem.acquire()).done())
         self.assertEqual(0, len(sem._waiters))
 
     @gen_test
@@ -286,7 +287,7 @@ class SemaphoreTest(AsyncTestCase):
             yield acquire
 
         sem.acquire()
-        f = sem.acquire()
+        f = asyncio.ensure_future(sem.acquire())
         self.assertFalse(f.done())
         sem.release()
         self.assertTrue(f.done())
@@ -309,18 +310,21 @@ class SemaphoreTest(AsyncTestCase):
         sem.release()
 
         # Now the counter is 3. We can acquire three times before blocking.
-        self.assertTrue(sem.acquire().done())
-        self.assertTrue(sem.acquire().done())
-        self.assertTrue(sem.acquire().done())
-        self.assertFalse(sem.acquire().done())
+        self.assertTrue(asyncio.ensure_future(sem.acquire()).done())
+        self.assertTrue(asyncio.ensure_future(sem.acquire()).done())
+        self.assertTrue(asyncio.ensure_future(sem.acquire()).done())
+        self.assertFalse(asyncio.ensure_future(sem.acquire()).done())
 
     @gen_test
     def test_garbage_collection(self):
         # Test that timed-out waiters are occasionally cleaned from the queue.
         sem = locks.Semaphore(value=0)
-        futures = [sem.acquire(timedelta(seconds=0.01)) for _ in range(101)]
+        futures = [
+            asyncio.ensure_future(sem.acquire(timedelta(seconds=0.01)))
+            for _ in range(101)
+        ]
 
-        future = sem.acquire()
+        future = asyncio.ensure_future(sem.acquire())
         self.assertEqual(102, len(sem._waiters))
 
         # Let first 101 waiters time out, triggering a collection.
@@ -345,7 +349,7 @@ class SemaphoreContextManagerTest(AsyncTestCase):
             self.assertTrue(yielded is None)
 
         # Semaphore was released and can be acquired again.
-        self.assertTrue(sem.acquire().done())
+        self.assertTrue(asyncio.ensure_future(sem.acquire()).done())
 
     @gen_test
     def test_context_manager_async_await(self):
@@ -359,7 +363,7 @@ class SemaphoreContextManagerTest(AsyncTestCase):
         yield f()
 
         # Semaphore was released and can be acquired again.
-        self.assertTrue(sem.acquire().done())
+        self.assertTrue(asyncio.ensure_future(sem.acquire()).done())
 
     @gen_test
     def test_context_manager_exception(self):
@@ -369,7 +373,7 @@ class SemaphoreContextManagerTest(AsyncTestCase):
                 1 / 0
 
         # Semaphore was released and can be acquired again.
-        self.assertTrue(sem.acquire().done())
+        self.assertTrue(asyncio.ensure_future(sem.acquire()).done())
 
     @gen_test
     def test_context_manager_timeout(self):
@@ -378,7 +382,7 @@ class SemaphoreContextManagerTest(AsyncTestCase):
             pass
 
         # Semaphore was released and can be acquired again.
-        self.assertTrue(sem.acquire().done())
+        self.assertTrue(asyncio.ensure_future(sem.acquire()).done())
 
     @gen_test
     def test_context_manager_timeout_error(self):
@@ -388,7 +392,7 @@ class SemaphoreContextManagerTest(AsyncTestCase):
                 pass
 
         # Counter is still 0.
-        self.assertFalse(sem.acquire().done())
+        self.assertFalse(asyncio.ensure_future(sem.acquire()).done())
 
     @gen_test
     def test_context_manager_contended(self):
@@ -433,7 +437,7 @@ class BoundedSemaphoreTest(AsyncTestCase):
         # Value is 0.
         sem.acquire()
         # Block on acquire().
-        future = sem.acquire()
+        future = asyncio.ensure_future(sem.acquire())
         self.assertFalse(future.done())
         sem.release()
         self.assertTrue(future.done())
@@ -452,8 +456,8 @@ class LockTests(AsyncTestCase):
 
     def test_acquire_release(self):
         lock = locks.Lock()
-        self.assertTrue(lock.acquire().done())
-        future = lock.acquire()
+        self.assertTrue(asyncio.ensure_future(lock.acquire()).done())
+        future = asyncio.ensure_future(lock.acquire())
         self.assertFalse(future.done())
         lock.release()
         self.assertTrue(future.done())
@@ -461,7 +465,7 @@ class LockTests(AsyncTestCase):
     @gen_test
     def test_acquire_fifo(self):
         lock = locks.Lock()
-        self.assertTrue(lock.acquire().done())
+        self.assertTrue(asyncio.ensure_future(lock.acquire()).done())
         N = 5
         history = []
 
@@ -481,7 +485,7 @@ class LockTests(AsyncTestCase):
         # Repeat the above test using `async with lock:`
         # instead of `with (yield lock.acquire()):`.
         lock = locks.Lock()
-        self.assertTrue(lock.acquire().done())
+        self.assertTrue(asyncio.ensure_future(lock.acquire()).done())
         N = 5
         history = []
 
@@ -502,7 +506,7 @@ class LockTests(AsyncTestCase):
             yield lock.acquire(timeout=timedelta(seconds=0.01))
 
         # Still locked.
-        self.assertFalse(lock.acquire().done())
+        self.assertFalse(asyncio.ensure_future(lock.acquire()).done())
 
     def test_multi_release(self):
         lock = locks.Lock()

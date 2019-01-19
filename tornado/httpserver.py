@@ -168,6 +168,10 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
         max_buffer_size: int = None,
         trusted_downstream: List[str] = None,
     ) -> None:
+        # This method's signature is not extracted with autodoc
+        # because we want its arguments to appear on the class
+        # constructor. When changing this signature, also update the
+        # copy in httpserver.rst.
         self.request_callback = request_callback
         self.xheaders = xheaders
         self.protocol = protocol
@@ -198,6 +202,19 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
         return HTTPServer
 
     async def close_all_connections(self) -> None:
+        """Close all open connections and asynchronously wait for them to finish.
+
+        This method is used in combination with `~.TCPServer.stop` to
+        support clean shutdowns (especially for unittests). Typical
+        usage would call ``stop()`` first to stop accepting new
+        connections, then ``await close_all_connections()`` to wait for
+        existing connections to finish.
+
+        This method does not currently close open websocket connections.
+
+        Note that this method is a coroutine and must be caled with ``await``.
+
+        """
         while self._connections:
             # Peek at an arbitrary element of the set
             conn = next(iter(self._connections))

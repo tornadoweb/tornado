@@ -24,7 +24,7 @@ import json
 import re
 import urllib.parse
 
-from tornado.util import unicode_type, basestring_type
+from tornado.util import unicode_type
 
 import typing
 from typing import Union, Any, Optional, Dict, List, Callable
@@ -76,7 +76,10 @@ def json_encode(value: Any) -> str:
 
 
 def json_decode(value: Union[str, bytes]) -> Any:
-    """Returns Python objects for the given JSON string."""
+    """Returns Python objects for the given JSON string.
+
+    Supports both `str` and `bytes` inputs.
+    """
     return json.loads(to_basestring(value))
 
 
@@ -231,39 +234,7 @@ _unicode = to_unicode
 # When dealing with the standard library across python 2 and 3 it is
 # sometimes useful to have a direct conversion to the native string type
 native_str = to_unicode
-
-_BASESTRING_TYPES = (basestring_type, type(None))
-
-
-@typing.overload
-def to_basestring(value: str) -> str:
-    pass
-
-
-@typing.overload  # noqa: F811
-def to_basestring(value: bytes) -> str:
-    pass
-
-
-@typing.overload  # noqa: F811
-def to_basestring(value: None) -> None:
-    pass
-
-
-def to_basestring(value: Union[None, str, bytes]) -> Optional[str]:  # noqa: F811
-    """Converts a string argument to a subclass of basestring.
-
-    In python2, byte and unicode strings are mostly interchangeable,
-    so functions that deal with a user-supplied argument in combination
-    with ascii string constants can use either and should return the type
-    the user supplied.  In python3, the two types are not interchangeable,
-    so this method is needed to convert byte strings to unicode.
-    """
-    if isinstance(value, _BASESTRING_TYPES):
-        return value
-    if not isinstance(value, bytes):
-        raise TypeError("Expected bytes, unicode, or None; got %r" % type(value))
-    return value.decode("utf-8")
+to_basestring = to_unicode
 
 
 def recursive_unicode(obj: Any) -> Any:

@@ -23,6 +23,7 @@ Contents:
 * `PipeIOStream`: Pipe-based IOStream implementation.
 """
 
+import asyncio
 import collections
 import errno
 import io
@@ -33,7 +34,7 @@ import ssl
 import sys
 import re
 
-from tornado.concurrent import Future
+from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado import ioloop
 from tornado.log import gen_log
 from tornado.netutil import ssl_wrap_socket, _client_ssl_defaults, _server_ssl_defaults
@@ -230,9 +231,9 @@ class BaseIOStream(object):
     """A utility class to write to and read from a non-blocking file or socket.
 
     We support a non-blocking ``write()`` and a family of ``read_*()``
-    methods. When the operation completes, the `.Future` will resolve
+    methods. When the operation completes, the ``Awaitable`` will resolve
     with the data read (or ``None`` for ``write()``). All outstanding
-    ``Futures`` will resolve with a `StreamClosedError` when the
+    ``Awaitables`` will resolve with a `StreamClosedError` when the
     stream is closed; `.BaseIOStream.set_close_callback` can also be used
     to be notified of a closed stream.
 
@@ -629,7 +630,13 @@ class BaseIOStream(object):
         for future in futures:
             if not future.done():
                 future.set_exception(StreamClosedError(real_error=self.error))
-            future.exception()
+            # Reference the exception to silence warnings. Annoyingly,
+            # this raises if the future was cancelled, but just
+            # returns any other error.
+            try:
+                future.exception()
+            except asyncio.CancelledError:
+                pass
         if self._ssl_connect_future is not None:
             # _ssl_connect_future expects to see the real exception (typically
             # an ssl.SSLError), not just StreamClosedError.
@@ -778,6 +785,8 @@ class BaseIOStream(object):
             pos = self._read_to_buffer_loop()
         except UnsatisfiableReadError:
             raise
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             gen_log.warning("error on read: %s" % e)
             self.close(exc_info=e)
@@ -803,7 +812,7 @@ class BaseIOStream(object):
         if self._read_future is not None:
             future = self._read_future
             self._read_future = None
-            future.set_result(result)
+            future_set_result_unless_cancelled(future, result)
         self._maybe_add_error_listener()
 
     def _try_inline_read(self) -> None:
@@ -972,7 +981,7 @@ class BaseIOStream(object):
             if index > self._total_write_done_index:
                 break
             self._write_futures.popleft()
-            future.set_result(None)
+            future_set_result_unless_cancelled(future, None)
 
     def _consume(self, loc: int) -> bytes:
         # Consume loc bytes from the read buffer and return them
@@ -1311,7 +1320,7 @@ class IOStream(BaseIOStream):
         if self._connect_future is not None:
             future = self._connect_future
             self._connect_future = None
-            future.set_result(self)
+            future_set_result_unless_cancelled(future, self)
         self._connecting = False
 
     def set_nodelay(self, value: bool) -> None:
@@ -1429,7 +1438,7 @@ class SSLIOStream(IOStream):
         if self._ssl_connect_future is not None:
             future = self._ssl_connect_future
             self._ssl_connect_future = None
-            future.set_result(self)
+            future_set_result_unless_cancelled(future, self)
 
     def _verify_cert(self, peercert: Any) -> bool:
         """Returns True if peercert is valid according to the configured

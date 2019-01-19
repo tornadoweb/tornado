@@ -73,6 +73,14 @@ that the function passed to ``run_in_executor`` should avoid
 referencing any Tornado objects. ``run_in_executor`` is the
 recommended way to interact with blocking code.
 
+``asyncio`` Integration
+-----------------------
+
+Tornado is integrated with the standard library `asyncio` module and
+shares the same event loop (by default since Tornado 5.0). In general,
+libraries designed for use with `asyncio` can be mixed freely with
+Tornado.
+
 
 Installation
 ------------
@@ -88,13 +96,10 @@ installed in this way, so you may wish to download a copy of the
 source tarball or clone the `git repository
 <https://github.com/tornadoweb/tornado>`_ as well.
 
-**Prerequisites**: Tornado 5.x runs on Python 2.7, and 3.4+ (Tornado
-6.0 will require Python 3.5+; Python 2 will no longer be supported).
-The updates to the `ssl` module in Python 2.7.9 are required (in some
-distributions, these updates may be available in older python
-versions). In addition to the requirements which will be installed
-automatically by ``pip`` or ``setup.py install``, the following
-optional packages may be useful:
+**Prerequisites**: Tornado 6.0 requires Python 3.5.2 or newer (See
+`Tornado 5.1 <https://www.tornadoweb.org/en/branch5.1/>`_ if
+compatibility with Python 2.7 is required). The following optional
+packages may be useful:
 
 * `pycurl <http://pycurl.sourceforge.net>`_ is used by the optional
   ``tornado.curl_httpclient``.  Libcurl version 7.22 or higher is required.
@@ -103,10 +108,6 @@ optional packages may be useful:
 * `pycares <https://pypi.python.org/pypi/pycares>`_ is an alternative
   non-blocking DNS resolver that can be used when threads are not
   appropriate.
-* `monotonic <https://pypi.python.org/pypi/monotonic>`_ or `Monotime
-  <https://pypi.python.org/pypi/Monotime>`_ add support for a
-  monotonic clock, which improves reliability in environments where
-  clock adjustments are frequent. No longer needed in Python 3.
 
 **Platforms**: Tornado should run on any Unix-like platform, although
 for the best performance and scalability only Linux (with ``epoll``)

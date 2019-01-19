@@ -13,27 +13,27 @@
 
    .. autofunction:: coroutine
 
+   .. autoexception:: Return
+
    Utility functions
    -----------------
 
-   .. autoexception:: Return
-
-   .. autofunction:: with_timeout
+   .. autofunction:: with_timeout(timeout: Union[float, datetime.timedelta], future: Yieldable, quiet_exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = ())
 
    .. autofunction:: sleep
-
-   .. autodata:: moment
-      :annotation:
 
    .. autoclass:: WaitIterator
       :members:
 
-   .. autofunction:: multi
+   .. autofunction:: multi(Union[List[Yieldable], Dict[Any, Yieldable]], quiet_exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = ())
 
-   .. autofunction:: multi_future
+   .. autofunction:: multi_future(Union[List[Yieldable], Dict[Any, Yieldable]], quiet_exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = ())
 
    .. autofunction:: convert_yielded
 
    .. autofunction:: maybe_future
 
    .. autofunction:: is_coroutine_function
+
+   .. autodata:: moment
+      :annotation:

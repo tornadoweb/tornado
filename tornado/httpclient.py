@@ -20,8 +20,6 @@ to switch to ``curl_httpclient`` for reasons such as the following:
 
 * ``curl_httpclient`` is faster.
 
-* ``curl_httpclient`` was the default prior to Tornado 2.0.
-
 Note that if you are using ``curl_httpclient``, it is highly
 recommended that you use a recent version of ``libcurl`` and
 ``pycurl``.  Currently the minimum supported version of libcurl is
@@ -55,7 +53,7 @@ from tornado import gen, httputil
 from tornado.ioloop import IOLoop
 from tornado.util import Configurable
 
-from typing import Type, Any, Union, Dict, Callable, Optional, cast
+from typing import Type, Any, Union, Dict, Callable, Optional, cast, Awaitable
 
 
 class HTTPClient(object):
@@ -251,7 +249,7 @@ class AsyncHTTPClient(Configurable):
         request: Union[str, "HTTPRequest"],
         raise_error: bool = True,
         **kwargs: Any
-    ) -> "Future[HTTPResponse]":
+    ) -> Awaitable["HTTPResponse"]:
         """Executes a request, asynchronously returning an `HTTPResponse`.
 
         The request may be either a string URL or an `HTTPRequest` object.

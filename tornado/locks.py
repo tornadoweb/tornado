@@ -20,7 +20,7 @@ import types
 from tornado import gen, ioloop
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 
-from typing import Union, Optional, Type, Any
+from typing import Union, Optional, Type, Any, Awaitable
 import typing
 
 if typing.TYPE_CHECKING:
@@ -121,7 +121,7 @@ class Condition(_TimeoutGarbageCollector):
             result += " waiters[%s]" % len(self._waiters)
         return result + ">"
 
-    def wait(self, timeout: Union[float, datetime.timedelta] = None) -> "Future[bool]":
+    def wait(self, timeout: Union[float, datetime.timedelta] = None) -> Awaitable[bool]:
         """Wait for `.notify`.
 
         Returns a `.Future` that resolves ``True`` if the condition is notified,
@@ -231,10 +231,10 @@ class Event(object):
         """
         self._value = False
 
-    def wait(self, timeout: Union[float, datetime.timedelta] = None) -> "Future[None]":
+    def wait(self, timeout: Union[float, datetime.timedelta] = None) -> Awaitable[None]:
         """Block until the internal flag is true.
 
-        Returns a Future, which raises `tornado.util.TimeoutError` after a
+        Returns an awaitable, which raises `tornado.util.TimeoutError` after a
         timeout.
         """
         fut = Future()  # type: Future[None]
@@ -413,10 +413,10 @@ class Semaphore(_TimeoutGarbageCollector):
 
     def acquire(
         self, timeout: Union[float, datetime.timedelta] = None
-    ) -> "Future[_ReleasingContextManager]":
-        """Decrement the counter. Returns a Future.
+    ) -> Awaitable[_ReleasingContextManager]:
+        """Decrement the counter. Returns an awaitable.
 
-        Block if the counter is zero and wait for a `.release`. The Future
+        Block if the counter is zero and wait for a `.release`. The awaitable
         raises `.TimeoutError` after the deadline.
         """
         waiter = Future()  # type: Future[_ReleasingContextManager]
@@ -440,10 +440,7 @@ class Semaphore(_TimeoutGarbageCollector):
         return waiter
 
     def __enter__(self) -> None:
-        raise RuntimeError(
-            "Use Semaphore like 'with (yield semaphore.acquire())', not like"
-            " 'with semaphore'"
-        )
+        raise RuntimeError("Use 'async with' instead of 'with' for Semaphore")
 
     def __exit__(
         self,
@@ -530,10 +527,10 @@ class Lock(object):
 
     def acquire(
         self, timeout: Union[float, datetime.timedelta] = None
-    ) -> "Future[_ReleasingContextManager]":
-        """Attempt to lock. Returns a Future.
+    ) -> Awaitable[_ReleasingContextManager]:
+        """Attempt to lock. Returns an awaitable.
 
-        Returns a Future, which raises `tornado.util.TimeoutError` after a
+        Returns an awaitable, which raises `tornado.util.TimeoutError` after a
         timeout.
         """
         return self._block.acquire(timeout)
@@ -551,7 +548,7 @@ class Lock(object):
             raise RuntimeError("release unlocked lock")
 
     def __enter__(self) -> None:
-        raise RuntimeError("Use Lock like 'with (yield lock)', not like 'with lock'")
+        raise RuntimeError("Use `async with` instead of `with` for Lock")
 
     def __exit__(
         self,

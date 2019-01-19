@@ -222,16 +222,26 @@ class Queue(Generic[_T]):
         else:
             self.__put_internal(item)
 
-    def get(self, timeout: Union[float, datetime.timedelta] = None) -> "Future[_T]":
+    def get(self, timeout: Union[float, datetime.timedelta] = None) -> Awaitable[_T]:
         """Remove and return an item from the queue.
 
-        Returns a Future which resolves once an item is available, or raises
+        Returns an awaitable which resolves once an item is available, or raises
         `tornado.util.TimeoutError` after a timeout.
 
         ``timeout`` may be a number denoting a time (on the same
         scale as `tornado.ioloop.IOLoop.time`, normally `time.time`), or a
         `datetime.timedelta` object for a deadline relative to the
         current time.
+
+        .. note::
+
+           The ``timeout`` argument of this method differs from that
+           of the standard library's `queue.Queue.get`. That method
+           interprets numeric values as relative timeouts; this one
+           interprets them as absolute deadlines and requires
+           ``timedelta`` objects for relative timeouts (consistent
+           with other timeouts in Tornado).
+
         """
         future = Future()  # type: Future[_T]
         try:
@@ -277,10 +287,10 @@ class Queue(Generic[_T]):
         if self._unfinished_tasks == 0:
             self._finished.set()
 
-    def join(self, timeout: Union[float, datetime.timedelta] = None) -> "Future[None]":
+    def join(self, timeout: Union[float, datetime.timedelta] = None) -> Awaitable[None]:
         """Block until all items in the queue are processed.
 
-        Returns a Future, which raises `tornado.util.TimeoutError` after a
+        Returns an awaitable, which raises `tornado.util.TimeoutError` after a
         timeout.
         """
         return self._finished.wait(timeout)

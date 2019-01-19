@@ -180,6 +180,11 @@ class RequestHandler(object):
 
     Subclasses must define at least one of the methods defined in the
     "Entry points" section below.
+
+    Applications should not construct `RequestHandler` objects
+    directly and subclasses should not override ``__init__`` (override
+    `~RequestHandler.initialize` instead).
+
     """
 
     SUPPORTED_METHODS = ("GET", "HEAD", "POST", "DELETE", "PATCH", "PUT", "OPTIONS")
@@ -272,10 +277,10 @@ class RequestHandler(object):
         Override this method to perform common initialization regardless
         of the request method.
 
-        Asynchronous support: Decorate this method with `.gen.coroutine`
-        or use ``async def`` to make it asynchronous.
-        If this method returns a `.Future` execution will not proceed
-        until the `.Future` is done.
+        Asynchronous support: Use ``async def`` or decorate this method with
+        `.gen.coroutine` to make it asynchronous.
+        If this method returns an  ``Awaitable`` execution will not proceed
+        until the ``Awaitable`` is done.
 
         .. versionadded:: 3.1
            Asynchronous support.
@@ -361,9 +366,10 @@ class RequestHandler(object):
     def set_header(self, name: str, value: _HeaderTypes) -> None:
         """Sets the given response header name and value.
 
-        If a datetime is given, we automatically format it according to the
-        HTTP specification. If the value is not a string, we convert it to
-        a string. All header values are then encoded as UTF-8.
+        All header values are converted to strings (`datetime` objects
+        are formatted according to the HTTP specification for the
+        ``Date`` header).
+
         """
         self._headers[name] = self._convert_header_value(value)
 
@@ -441,10 +447,10 @@ class RequestHandler(object):
         If default is not provided, the argument is considered to be
         required, and we raise a `MissingArgumentError` if it is missing.
 
-        If the argument appears in the url more than once, we return the
+        If the argument appears in the request more than once, we return the
         last value.
 
-        The returned value is always unicode.
+        This method searches both the query and body arguments.
         """
         return self._get_argument(name, default, self.request.arguments, strip)
 
@@ -453,7 +459,7 @@ class RequestHandler(object):
 
         If the argument is not present, returns an empty list.
 
-        The returned values are always unicode.
+        This method searches both the query and body arguments.
         """
 
         # Make sure `get_arguments` isn't accidentally being called with a
@@ -478,8 +484,6 @@ class RequestHandler(object):
         If the argument appears in the url more than once, we return the
         last value.
 
-        The returned value is always unicode.
-
         .. versionadded:: 3.2
         """
         return self._get_argument(name, default, self.request.body_arguments, strip)
@@ -488,8 +492,6 @@ class RequestHandler(object):
         """Returns a list of the body arguments with the given name.
 
         If the argument is not present, returns an empty list.
-
-        The returned values are always unicode.
 
         .. versionadded:: 3.2
         """
@@ -510,8 +512,6 @@ class RequestHandler(object):
         If the argument appears in the url more than once, we return the
         last value.
 
-        The returned value is always unicode.
-
         .. versionadded:: 3.2
         """
         return self._get_argument(name, default, self.request.query_arguments, strip)
@@ -520,8 +520,6 @@ class RequestHandler(object):
         """Returns a list of the query arguments with the given name.
 
         If the argument is not present, returns an empty list.
-
-        The returned values are always unicode.
 
         .. versionadded:: 3.2
         """
@@ -811,7 +809,7 @@ class RequestHandler(object):
     def write(self, chunk: Union[str, bytes, dict]) -> None:
         """Writes the given chunk to the output buffer.
 
-        To write the output to the network, use the flush() method below.
+        To write the output to the network, use the `flush()` method below.
 
         If the given chunk is a dictionary, we write it as JSON and set
         the Content-Type of the response to be ``application/json``.
@@ -1499,17 +1497,16 @@ class RequestHandler(object):
 
         See http://en.wikipedia.org/wiki/Cross-site_request_forgery
 
-        Prior to release 1.1.1, this check was ignored if the HTTP header
-        ``X-Requested-With: XMLHTTPRequest`` was present.  This exception
-        has been shown to be insecure and has been removed.  For more
-        information please see
-        http://www.djangoproject.com/weblog/2011/feb/08/security/
-        http://weblog.rubyonrails.org/2011/2/8/csrf-protection-bypass-in-ruby-on-rails
-
         .. versionchanged:: 3.2.2
            Added support for cookie version 2.  Both versions 1 and 2 are
            supported.
         """
+        # Prior to release 1.1.1, this check was ignored if the HTTP header
+        # ``X-Requested-With: XMLHTTPRequest`` was present.  This exception
+        # has been shown to be insecure and has been removed.  For more
+        # information please see
+        # http://www.djangoproject.com/weblog/2011/feb/08/security/
+        # http://weblog.rubyonrails.org/2011/2/8/csrf-protection-bypass-in-ruby-on-rails
         token = (
             self.get_argument("_xsrf", None)
             or self.request.headers.get("X-Xsrftoken")
@@ -1720,6 +1717,8 @@ class RequestHandler(object):
         """Implement this method to handle streamed request data.
 
         Requires the `.stream_request_body` decorator.
+
+        May be a coroutine for flow control.
         """
         raise NotImplementedError()
 
@@ -2015,7 +2014,7 @@ class Application(ReversibleRouter):
 
        Applications that do not use TLS may be vulnerable to :ref:`DNS
        rebinding <dnsrebinding>` attacks. This attack is especially
-       relevant to applications that only listen on ``127.0.0.1` or
+       relevant to applications that only listen on ``127.0.0.1`` or
        other private networks. Appropriate host patterns must be used
        (instead of the default of ``r'.*'``) to prevent this risk. The
        ``default_host`` argument must not be used in applications that
