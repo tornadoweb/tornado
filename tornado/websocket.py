@@ -1394,8 +1394,8 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             ping_timeout=ping_timeout,
             max_message_size=max_message_size,
             compression_options=compression_options,
-            redirect_loaction: Optional[str] =None,
         )
+        self._redirect_location = None  # type: Optional[str]
 
         scheme, sep, rest = request.url.partition(":")
         scheme = {"ws": "http", "wss": "https"}[scheme]
@@ -1450,14 +1450,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
 
     def on_connection_close(self) -> None:
         if not self.connect_future.done():
-            if self._redirect_location is not None:
-                # websocket redirect, raise exception for reconnect
-                # to redirected url
-                self.connect_future.set_exception(
-                    WebSocketRedirect(self._redirect_location)
-                )
-            else:
-                self.connect_future.set_exception(StreamClosedError())
+            self.connect_future.set_exception(StreamClosedError())
         self._on_message(None)
         self.tcp_client.close()
         super(WebSocketClientConnection, self).on_connection_close()

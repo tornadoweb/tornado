@@ -11,7 +11,7 @@ from tornado.log import gen_log, app_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
-from tornado.web import Application, RequestHandler
+from tornado.web import Application, RequestHandler, RedirectHandler
 
 try:
     import tornado.websocket  # noqa: F401
@@ -110,14 +110,6 @@ class NonWebSocketHandler(RequestHandler):
         self.write("ok")
 
 
-class RedirectHandler(RequestHandler):
-    def initialize(self, target_location):
-        self._target_location = target_location
-
-    def get(self):
-        self.redirect(self._target_location)
-
-
 class CloseReasonHandler(TestWebSocketHandler):
     def open(self):
         self.on_close_called = False
@@ -210,12 +202,8 @@ class WebSocketTest(WebSocketBaseTestCase):
         return Application(
             [
                 ("/echo", EchoHandler, dict(close_future=self.close_future)),
-                ("/redirect", RedirectHandler, dict(target_location="/echo")),
-                (
-                    "/double_redirect",
-                    RedirectHandler,
-                    dict(target_location="/redirect"),
-                ),
+                ("/redirect", RedirectHandler, dict(url="/echo")),
+                ("/double_redirect", RedirectHandler, dict(url="/redirect")),
                 ("/non_ws", NonWebSocketHandler),
                 ("/header", HeaderHandler, dict(close_future=self.close_future)),
                 (
