@@ -110,14 +110,6 @@ class NonWebSocketHandler(RequestHandler):
         self.write("ok")
 
 
-class RedirectHandler(RequestHandler):
-    def initialize(self, target_location):
-        self._target_location = target_location
-
-    def get(self):
-        self.redirect(self._target_location)
-
-
 class CloseReasonHandler(TestWebSocketHandler):
     def open(self):
         self.on_close_called = False
