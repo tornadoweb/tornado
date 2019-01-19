@@ -1487,7 +1487,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             self.io_loop.remove_timeout(self._timeout)
             self._timeout = None
 
-        self.headers = headers
+        self.headers = headers  # type: httputil.HTTPHeaders
         self.protocol = self.get_websocket_protocol()
         self.protocol._process_server_headers(self.key, self.headers)
         self.protocol.stream = self.connection.detach()
@@ -1505,9 +1505,10 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
 
     def finish(self) -> None:
         if self._should_follow_redirect():
-            if self.headers["Location"]:
+            redirect_location = self.headers.get("Location", None)
+            if redirect_location:
                 self.connect_future.set_exception(
-                    WebSocketRedirect(self.headers["Location"])
+                    WebSocketRedirect(redirect_location)
                 )
             else:
                 raise ValueError("redirect location is None")
