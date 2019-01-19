@@ -1507,9 +1507,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         if self._should_follow_redirect():
             redirect_location = self.headers.get("Location", None)
             if redirect_location:
-                self.connect_future.set_exception(
-                    WebSocketRedirect(redirect_location)
-                )
+                self.connect_future.set_exception(WebSocketRedirect(redirect_location))
             else:
                 raise ValueError("redirect location is None")
             # close connection
