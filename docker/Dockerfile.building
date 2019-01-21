@@ -1,0 +1,8 @@
+FROM registry.pyn.ru:5000/python3.7-ubuntu18-production:2019.01.15
+
+RUN mkdir -p /home/build
+WORKDIR /home/build
+
+COPY tornado tornado
+
+RUN python3 -m tornado.test.runtests
