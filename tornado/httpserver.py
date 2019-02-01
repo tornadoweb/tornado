@@ -331,6 +331,9 @@ class _HTTPRequestContext(object):
 
     def _apply_xheaders(self, headers: httputil.HTTPHeaders) -> None:
         """Rewrite the ``remote_ip`` and ``protocol`` fields."""
+        # Only trust proxies in trusted_downstream
+        if self.remote_ip not in self.trusted_downstream:
+            return
         # Squid uses X-Forwarded-For, others use X-Real-Ip
         ip = headers.get("X-Forwarded-For", self.remote_ip)
         # Skip trusted downstream hosts in X-Forwarded-For list
