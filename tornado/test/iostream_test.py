@@ -946,12 +946,12 @@ class TestIOStreamStartTLS(AsyncTestCase):
     def test_handshake_fail(self):
         server_future = self.server_start_tls(_server_ssl_options())
         # Certificates are verified with the default configuration.
-        client_future = self.client_start_tls(server_hostname="localhost")
         with ExpectLog(gen_log, "SSL Error"):
+            client_future = self.client_start_tls(server_hostname="localhost")
             with self.assertRaises(ssl.SSLError):
                 yield client_future
-        with self.assertRaises((ssl.SSLError, socket.error)):
-            yield server_future
+            with self.assertRaises((ssl.SSLError, socket.error)):
+                yield server_future
 
     @gen_test
     def test_check_hostname(self):
@@ -959,16 +959,16 @@ class TestIOStreamStartTLS(AsyncTestCase):
         # The check_hostname functionality is only available in python 2.7 and
         # up and in python 3.4 and up.
         server_future = self.server_start_tls(_server_ssl_options())
-        client_future = self.client_start_tls(
-            ssl.create_default_context(), server_hostname="127.0.0.1"
-        )
         with ExpectLog(gen_log, "SSL Error"):
+            client_future = self.client_start_tls(
+                ssl.create_default_context(), server_hostname="127.0.0.1"
+            )
             with self.assertRaises(ssl.SSLError):
                 # The client fails to connect with an SSL error.
                 yield client_future
-        with self.assertRaises(Exception):
-            # The server fails to connect, but the exact error is unspecified.
-            yield server_future
+            with self.assertRaises(Exception):
+                # The server fails to connect, but the exact error is unspecified.
+                yield server_future
 
 
 class WaitForHandshakeTest(AsyncTestCase):
