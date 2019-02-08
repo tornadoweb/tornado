@@ -229,6 +229,7 @@ class TCPClient(object):
         source_ip: str = None,
         source_port: int = None,
         timeout: Union[float, datetime.timedelta] = None,
+        server_hostname: str = None,
     ) -> IOStream:
         """Connect to the given host and port.
 
@@ -241,19 +242,26 @@ class TCPClient(object):
         use a specific interface, it has to be handled outside
         of Tornado as this depends very much on the platform.
 
+        Similarly, when the user requires a certain source port, it can
+        be specified using the ``source_port`` arg.
+
+        When SSL is enabled, the ``server_hostname`` defaults to ``host`` -
+        this can be overridden by providing ``server_hostname`` directly.
+
         Raises `TimeoutError` if the input future does not complete before
         ``timeout``, which may be specified in any form allowed by
         `.IOLoop.add_timeout` (i.e. a `datetime.timedelta` or an absolute time
         relative to `.IOLoop.time`)
-
-        Similarly, when the user requires a certain source port, it can
-        be specified using the ``source_port`` arg.
 
         .. versionchanged:: 4.5
            Added the ``source_ip`` and ``source_port`` arguments.
 
         .. versionchanged:: 5.0
            Added the ``timeout`` argument.
+
+        .. versionchanged:: 6.0
+
+           Added ``server_hostname`` argument.
         """
         if timeout is not None:
             if isinstance(timeout, numbers.Real):
@@ -282,16 +290,18 @@ class TCPClient(object):
         # information here and re-use it on subsequent connections to
         # the same host. (http://tools.ietf.org/html/rfc6555#section-4.2)
         if ssl_options is not None:
+            if server_hostname is None:
+                server_hostname = host
             if timeout is not None:
                 stream = await gen.with_timeout(
                     timeout,
                     stream.start_tls(
-                        False, ssl_options=ssl_options, server_hostname=host
+                        False, ssl_options=ssl_options, server_hostname=server_hostname
                     ),
                 )
             else:
                 stream = await stream.start_tls(
-                    False, ssl_options=ssl_options, server_hostname=host
+                    False, ssl_options=ssl_options, server_hostname=server_hostname
                 )
         return stream
 

@@ -120,6 +120,12 @@ General changes
 - `.TCPServer.start` now supports a ``max_restarts`` argument (same as
   `.fork_processes`).
 
+`tornado.tcpclient`
+~~~~~~~~~~~~~~~~~~~
+
+- `.TCPClient.connect` now supports a ``server_hostname`` argument (forwarded
+  to `.IOStream.start_tls`).
+
 `tornado.testing`
 ~~~~~~~~~~~~~~~~~
 
