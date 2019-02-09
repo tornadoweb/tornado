@@ -777,10 +777,12 @@ def parse_body_arguments(
     and ``files`` parameters are dictionaries that will be updated
     with the parsed contents.
     """
-    if headers and "Content-Encoding" in headers:
-        gen_log.warning("Unsupported Content-Encoding: %s", headers["Content-Encoding"])
-        return
     if content_type.startswith("application/x-www-form-urlencoded"):
+        if headers and "Content-Encoding" in headers:
+            gen_log.warning(
+                "Unsupported Content-Encoding: %s", headers["Content-Encoding"]
+            )
+            return
         try:
             uri_arguments = parse_qs_bytes(native_str(body), keep_blank_values=True)
         except Exception as e:
@@ -790,6 +792,11 @@ def parse_body_arguments(
             if values:
                 arguments.setdefault(name, []).extend(values)
     elif content_type.startswith("multipart/form-data"):
+        if headers and "Content-Encoding" in headers:
+            gen_log.warning(
+                "Unsupported Content-Encoding: %s", headers["Content-Encoding"]
+            )
+            return
         try:
             fields = content_type.split(";")
             for field in fields:
