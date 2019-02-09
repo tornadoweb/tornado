@@ -187,6 +187,17 @@ class OpenCoroutineHandler(TestWebSocketHandler):
         self.write_message("ok")
 
 
+class ErrorInOpenHandler(TestWebSocketHandler):
+    def open(self):
+        raise Exception("boom")
+
+
+class ErrorInAsyncOpenHandler(TestWebSocketHandler):
+    async def open(self):
+        await asyncio.sleep(0)
+        raise Exception("boom")
+
+
 class WebSocketBaseTestCase(AsyncHTTPTestCase):
     @gen.coroutine
     def ws_connect(self, path, **kwargs):
@@ -245,6 +256,8 @@ class WebSocketTest(WebSocketBaseTestCase):
                     OpenCoroutineHandler,
                     dict(close_future=self.close_future, test=self),
                 ),
+                ("/error_in_open", ErrorInOpenHandler),
+                ("/error_in_async_open", ErrorInAsyncOpenHandler),
             ],
             template_loader=DictLoader({"message.html": "<b>{{ message }}</b>"}),
         )
@@ -534,6 +547,20 @@ class WebSocketTest(WebSocketBaseTestCase):
         self.message_sent.set()
         res = yield ws.read_message()
         self.assertEqual(res, "ok")
+
+    @gen_test
+    def test_error_in_open(self):
+        with ExpectLog(app_log, "Uncaught exception"):
+            ws = yield self.ws_connect("/error_in_open")
+            res = yield ws.read_message()
+        self.assertIsNone(res)
+
+    @gen_test
+    def test_error_in_async_open(self):
+        with ExpectLog(app_log, "Uncaught exception"):
+            ws = yield self.ws_connect("/error_in_async_open")
+            res = yield ws.read_message()
+        self.assertIsNone(res)
 
 
 class NativeCoroutineOnMessageHandler(TestWebSocketHandler):
