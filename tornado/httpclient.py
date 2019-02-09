@@ -470,11 +470,11 @@ class HTTPRequest(object):
            ``simple_httpclient`` (unsupported by ``curl_httpclient``).
            Overrides ``validate_cert``, ``ca_certs``, ``client_key``,
            and ``client_cert``.
-        :arg bool allow_ipv6: Use IPv6 when available?  Default is true.
+        :arg bool allow_ipv6: Use IPv6 when available?  Default is True.
         :arg bool expect_100_continue: If true, send the
            ``Expect: 100-continue`` header and wait for a continue response
            before sending the request body.  Only supported with
-           simple_httpclient.
+           ``simple_httpclient``.
 
         .. note::
 
@@ -570,34 +570,35 @@ class HTTPResponse(object):
 
     Attributes:
 
-    * request: HTTPRequest object
+    * ``request``: HTTPRequest object
 
-    * code: numeric HTTP status code, e.g. 200 or 404
+    * ``code``: numeric HTTP status code, e.g. 200 or 404
 
-    * reason: human-readable reason phrase describing the status code
+    * ``reason``: human-readable reason phrase describing the status code
 
-    * headers: `tornado.httputil.HTTPHeaders` object
+    * ``headers``: `tornado.httputil.HTTPHeaders` object
 
-    * effective_url: final location of the resource after following any
+    * ``effective_url``: final location of the resource after following any
       redirects
 
-    * buffer: ``cStringIO`` object for response body
+    * ``buffer``: ``cStringIO`` object for response body
 
-    * body: response body as bytes (created on demand from ``self.buffer``)
+    * ``body``: response body as bytes (created on demand from ``self.buffer``)
 
-    * error: Exception object, if any
+    * ``error``: Exception object, if any
 
-    * request_time: seconds from request start to finish. Includes all network
-      operations from DNS resolution to receiving the last byte of data.
-      Does not include time spent in the queue (due to the ``max_clients`` option).
-      If redirects were followed, only includes the final request.
+    * ``request_time``: seconds from request start to finish. Includes all
+      network operations from DNS resolution to receiving the last byte of
+      data. Does not include time spent in the queue (due to the
+      ``max_clients`` option). If redirects were followed, only includes
+      the final request.
 
-    * start_time: Time at which the HTTP operation started, based on `time.time`
-      (not the monotonic clock used by `.IOLoop.time`). May be ``None`` if the request
-      timed out while in the queue.
+    * ``start_time``: Time at which the HTTP operation started, based on
+      `time.time` (not the monotonic clock used by `.IOLoop.time`). May
+      be ``None`` if the request timed out while in the queue.
 
-    * time_info: dictionary of diagnostic timing information from the request.
-      Available data are subject to change, but currently uses timings
+    * ``time_info``: dictionary of diagnostic timing information from the
+      request. Available data are subject to change, but currently uses timings
       available from http://curl.haxx.se/libcurl/c/curl_easy_getinfo.html,
       plus ``queue``, which is the delay (if any) introduced by waiting for
       a slot under `AsyncHTTPClient`'s ``max_clients`` setting.

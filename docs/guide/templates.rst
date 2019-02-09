@@ -66,9 +66,9 @@ directory as your Python file, you could render this template with:
    :hide:
 
 Tornado templates support *control statements* and *expressions*.
-Control statements are surrounded by ``{%`` and ``%}``, e.g.,
+Control statements are surrounded by ``{%`` and ``%}``, e.g.
 ``{% if len(items) > 2 %}``. Expressions are surrounded by ``{{`` and
-``}}``, e.g., ``{{ items[0] }}``.
+``}}``, e.g. ``{{ items[0] }}``.
 
 Control statements more or less map exactly to Python statements. We
 support ``if``, ``for``, ``while``, and ``try``, all of which are
@@ -78,7 +78,7 @@ detail in the documentation for the `tornado.template`.
 
 Expressions can be any Python expression, including function calls.
 Template code is executed in a namespace that includes the following
-objects and functions (Note that this list applies to templates
+objects and functions. (Note that this list applies to templates
 rendered using `.RequestHandler.render` and
 `~.RequestHandler.render_string`. If you're using the
 `tornado.template` module directly outside of a `.RequestHandler` many
@@ -136,7 +136,8 @@ that appear in certain locations, such as in Javascript or CSS, may need
 additional escaping.  Additionally, either care must be taken to always
 use double quotes and `.xhtml_escape` in HTML attributes that may contain
 untrusted content, or a separate escaping function must be used for
-attributes (see e.g. http://wonko.com/post/html-escaping)
+attributes (see e.g.
+`this blog post <http://wonko.com/post/html-escaping>`_).
 
 Internationalization
 ~~~~~~~~~~~~~~~~~~~~
@@ -212,7 +213,7 @@ formats: the ``.mo`` format used by `gettext` and related tools, and a
 simple ``.csv`` format.  An application will generally call either
 `tornado.locale.load_translations` or
 `tornado.locale.load_gettext_translations` once at startup; see those
-methods for more details on the supported formats..
+methods for more details on the supported formats.
 
 You can get the list of supported locales in your application with
 `tornado.locale.get_supported_locales()`. The user's locale is chosen
@@ -234,7 +235,7 @@ packaged with their own CSS and JavaScript.
 For example, if you are implementing a blog, and you want to have blog
 entries appear on both the blog home page and on each blog entry page,
 you can make an ``Entry`` module to render them on both pages. First,
-create a Python module for your UI modules, e.g., ``uimodules.py``::
+create a Python module for your UI modules, e.g. ``uimodules.py``::
 
     class Entry(tornado.web.UIModule):
         def render(self, entry, show_comments=False):

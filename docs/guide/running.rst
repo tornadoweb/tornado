@@ -22,8 +22,9 @@ configuring a WSGI container to find your application, you write a
 Configure your operating system or process manager to run this program to
 start the server. Please note that it may be necessary to increase the number 
 of open files per process (to avoid "Too many open files"-Error). 
-To raise this limit (setting it to 50000 for example)  you can use the ulimit command, 
-modify /etc/security/limits.conf or setting ``minfds`` in your supervisord config.
+To raise this limit (setting it to 50000 for example)  you can use the
+``ulimit`` command, modify ``/etc/security/limits.conf`` or set
+``minfds`` in your `supervisord <http://www.supervisord.org>`_ config.
 
 Processes and ports
 ~~~~~~~~~~~~~~~~~~~
@@ -50,8 +51,8 @@ main function:
 
 This is the easiest way to start multiple processes and have them all
 share the same port, although it has some limitations.  First, each
-child process will have its own IOLoop, so it is important that
-nothing touch the global IOLoop instance (even indirectly) before the
+child process will have its own ``IOLoop``, so it is important that
+nothing touches the global ``IOLoop`` instance (even indirectly) before the
 fork.  Second, it is difficult to do zero-downtime updates in this model.
 Finally, since all the processes share the same port it is more difficult
 to monitor them individually.
@@ -67,10 +68,10 @@ to present a single address to outside visitors.
 Running behind a load balancer
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-When running behind a load balancer like nginx, it is recommended to
-pass ``xheaders=True`` to the `.HTTPServer` constructor. This will tell
-Tornado to use headers like ``X-Real-IP`` to get the user's IP address
-instead of attributing all traffic to the balancer's IP address.
+When running behind a load balancer like `nginx <http://nginx.net/>`_,
+it is recommended to pass ``xheaders=True`` to the `.HTTPServer` constructor.
+This will tell Tornado to use headers like ``X-Real-IP`` to get the user's
+IP address instead of attributing all traffic to the balancer's IP address.
 
 This is a barebones nginx config file that is structurally similar to
 the one we use at FriendFeed. It assumes nginx and the Tornado servers
@@ -169,7 +170,7 @@ You can serve static files from Tornado by specifying the
     ], **settings)
 
 This setting will automatically make all requests that start with
-``/static/`` serve from that static directory, e.g.,
+``/static/`` serve from that static directory, e.g.
 ``http://localhost:8888/static/foo.png`` will serve the file
 ``foo.png`` from the specified static directory. We also automatically
 serve ``/robots.txt`` and ``/favicon.ico`` from the static directory
@@ -248,7 +249,7 @@ individual flag takes precedence):
   server down in a way that debug mode cannot currently recover from.
 * ``compiled_template_cache=False``: Templates will not be cached.
 * ``static_hash_cache=False``: Static file hashes (used by the
-  ``static_url`` function) will not be cached
+  ``static_url`` function) will not be cached.
 * ``serve_traceback=True``: When an exception in a `.RequestHandler`
   is not caught, an error page including a stack trace will be
   generated.

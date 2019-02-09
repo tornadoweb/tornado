@@ -657,15 +657,15 @@ class BaseIOStream(object):
         self._write_buffer = None  # type: ignore
 
     def reading(self) -> bool:
-        """Returns true if we are currently reading from the stream."""
+        """Returns ``True`` if we are currently reading from the stream."""
         return self._read_future is not None
 
     def writing(self) -> bool:
-        """Returns true if we are currently writing to the stream."""
+        """Returns ``True`` if we are currently writing to the stream."""
         return bool(self._write_buffer)
 
     def closed(self) -> bool:
-        """Returns true if the stream has been closed."""
+        """Returns ``True`` if the stream has been closed."""
         return self._closed
 
     def set_nodelay(self, value: bool) -> None:
@@ -1053,7 +1053,7 @@ class BaseIOStream(object):
             self.io_loop.update_handler(self.fileno(), self._state)
 
     def _is_connreset(self, exc: BaseException) -> bool:
-        """Return true if exc is ECONNRESET or equivalent.
+        """Return ``True`` if exc is ECONNRESET or equivalent.
 
         May be overridden in subclasses.
         """
@@ -1335,7 +1335,7 @@ class IOStream(BaseIOStream):
             except socket.error as e:
                 # Sometimes setsockopt will fail if the socket is closed
                 # at the wrong time.  This can happen with HTTPServer
-                # resetting the value to false between requests.
+                # resetting the value to ``False`` between requests.
                 if e.errno != errno.EINVAL and not self._is_connreset(e):
                     raise
 
@@ -1441,7 +1441,7 @@ class SSLIOStream(IOStream):
             future_set_result_unless_cancelled(future, self)
 
     def _verify_cert(self, peercert: Any) -> bool:
-        """Returns True if peercert is valid according to the configured
+        """Returns ``True`` if peercert is valid according to the configured
         validation mode and hostname.
 
         The ssl handshake already tested the certificate for a valid

@@ -29,4 +29,4 @@ alternative to `WSGI <http://www.python.org/dev/peps/pep-3333/>`_.
 While it is possible to use the Tornado HTTP server as a container for
 other WSGI frameworks (`.WSGIContainer`), this combination has
 limitations and to take full advantage of Tornado you will need to use
-the Tornado's web framework and HTTP server together.
+Tornado's web framework and HTTP server together.

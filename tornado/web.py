@@ -238,8 +238,8 @@ class RequestHandler(object):
     initialize = _initialize  # type: Callable[..., None]
     """Hook for subclass initialization. Called for each request.
 
-    A dictionary passed as the third argument of a url spec will be
-    supplied as keyword arguments to initialize().
+    A dictionary passed as the third argument of a ``URLSpec`` will be
+    supplied as keyword arguments to ``initialize()``.
 
     Example::
 
@@ -814,7 +814,7 @@ class RequestHandler(object):
         If the given chunk is a dictionary, we write it as JSON and set
         the Content-Type of the response to be ``application/json``.
         (if you want to send JSON as a different ``Content-Type``, call
-        set_header *after* calling write()).
+        ``set_header`` *after* calling ``write()``).
 
         Note that lists are not converted to JSON because of a potential
         cross-site security vulnerability.  All JSON output should be

@@ -840,7 +840,7 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
     * In the OAuth section of the page, select Create New Client ID.
     * Set the Redirect URI to point to your auth handler
     * Copy the "Client secret" and "Client ID" to the application settings as
-      {"google_oauth": {"key": CLIENT_ID, "secret": CLIENT_SECRET}}
+      ``{"google_oauth": {"key": CLIENT_ID, "secret": CLIENT_SECRET}}``
 
     .. versionadded:: 3.2
     """

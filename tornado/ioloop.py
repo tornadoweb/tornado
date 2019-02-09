@@ -878,7 +878,7 @@ class PeriodicCallback(object):
             self._timeout = None
 
     def is_running(self) -> bool:
-        """Return True if this `.PeriodicCallback` has been started.
+        """Returns ``True`` if this `.PeriodicCallback` has been started.
 
         .. versionadded:: 4.1
         """
