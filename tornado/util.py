@@ -131,8 +131,8 @@ class GzipDecompressor(object):
 def import_object(name: str) -> Any:
     """Imports an object by name.
 
-    import_object('x') is equivalent to 'import x'.
-    import_object('x.y.z') is equivalent to 'from x.y import z'.
+    ``import_object('x')`` is equivalent to ``import x``.
+    ``import_object('x.y.z')`` is equivalent to ``from x.y import z``.
 
     >>> import tornado.escape
     >>> import_object('tornado.escape') is tornado.escape
@@ -292,7 +292,9 @@ class Configurable(object):
         """Returns the base class of a configurable hierarchy.
 
         This will normally return the class in which it is defined.
-        (which is *not* necessarily the same as the cls classmethod parameter).
+        (which is *not* necessarily the same as the ``cls`` classmethod
+        parameter).
+
         """
         raise NotImplementedError()
 
@@ -430,7 +432,7 @@ class ArgReplacer(object):
 
 def timedelta_to_seconds(td):
     # type: (datetime.timedelta) -> float
-    """Equivalent to td.total_seconds() (introduced in python 2.7)."""
+    """Equivalent to ``td.total_seconds()`` (introduced in Python 2.7)."""
     return td.total_seconds()
 
 

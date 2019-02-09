@@ -293,8 +293,8 @@ class AsyncTestCase(unittest.TestCase):
         ``timeout`` keyword argument or globally with the
         ``ASYNC_TEST_TIMEOUT`` environment variable.
 
-        If ``condition`` is not None, the `.IOLoop` will be restarted
-        after `stop()` until ``condition()`` returns true.
+        If ``condition`` is not ``None``, the `.IOLoop` will be restarted
+        after `stop()` until ``condition()`` returns ``True``.
 
         .. versionchanged:: 3.1
            Added the ``ASYNC_TEST_TIMEOUT`` environment variable.
@@ -398,18 +398,18 @@ class AsyncHTTPTestCase(AsyncTestCase):
         """Convenience method to synchronously fetch a URL.
 
         The given path will be appended to the local server's host and
-        port.  Any additional kwargs will be passed directly to
+        port.  Any additional keyword arguments will be passed directly to
         `.AsyncHTTPClient.fetch` (and so could be used to pass
         ``method="POST"``, ``body="..."``, etc).
 
         If the path begins with http:// or https://, it will be treated as a
         full URL and will be fetched as-is.
 
-        If ``raise_error`` is True, a `tornado.httpclient.HTTPError` will
+        If ``raise_error`` is ``True``, a `tornado.httpclient.HTTPError` will
         be raised if the response code is not 200. This is the same behavior
         as the ``raise_error`` argument to `.AsyncHTTPClient.fetch`, but
-        the default is False here (it's True in `.AsyncHTTPClient`) because
-        tests often need to deal with non-200 response codes.
+        the default is ``False`` here (it's ``True`` in `.AsyncHTTPClient`)
+        because tests often need to deal with non-200 response codes.
 
         .. versionchanged:: 5.0
            Added support for absolute URLs.
@@ -631,7 +631,7 @@ class ExpectLog(logging.Filter):
     Useful to make tests of error conditions less noisy, while still
     leaving unexpected log entries visible.  *Not thread safe.*
 
-    The attribute ``logged_stack`` is set to true if any exception
+    The attribute ``logged_stack`` is set to ``True`` if any exception
     stack trace was logged.
 
     Usage::
@@ -694,7 +694,7 @@ def main(**kwargs: Any) -> None:
     """A simple test runner.
 
     This test runner is essentially equivalent to `unittest.main` from
-    the standard library, but adds support for tornado-style option
+    the standard library, but adds support for Tornado-style option
     parsing and log formatting. It is *not* necessary to use this
     `main` function to run tests using `AsyncTestCase`; these tests
     are self-contained and can run with any test runner.
@@ -703,8 +703,8 @@ def main(**kwargs: Any) -> None:
 
         python -m tornado.testing tornado.test.web_test
 
-    See the standard library unittest module for ways in which tests can
-    be specified.
+    See the standard library ``unittest`` module for ways in which
+    tests can be specified.
 
     Projects with many tests may wish to define a test script like
     ``tornado/test/runtests.py``.  This script should define a method
@@ -727,7 +727,7 @@ def main(**kwargs: Any) -> None:
     .. versionchanged:: 5.0
 
        This function produces no output of its own; only that produced
-       by the `unittest` module (Previously it would add a PASS or FAIL
+       by the `unittest` module (previously it would add a PASS or FAIL
        log message).
     """
     from tornado.options import define, options, parse_command_line

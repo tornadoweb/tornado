@@ -28,7 +28,7 @@
    The arguments to these methods come from the `.URLSpec`: Any
    capturing groups in the regular expression become arguments to the
    HTTP verb methods (keyword arguments if the group is named,
-   positional arguments if its unnamed).
+   positional arguments if it's unnamed).
 
    To support a method not on this list, override the class variable
    ``SUPPORTED_METHODS``::
@@ -159,7 +159,8 @@
 
 
    Application configuration
-   -----------------------------
+   -------------------------
+
    .. autoclass:: Application(handlers: List[Union[Rule, Tuple]] = None, default_host: str = None, transforms: List[Type[OutputTransform]] = None, **settings)
 
       .. attribute:: settings
@@ -197,7 +198,7 @@
            `RequestHandler` object).  The default implementation
            writes to the `logging` module's root logger.  May also be
            customized by overriding `Application.log_request`.
-         * ``serve_traceback``: If true, the default error page
+         * ``serve_traceback``: If ``True``, the default error page
            will include the traceback of the error.  This option is new in
            Tornado 3.2; previously this functionality was controlled by
            the ``debug`` setting.
@@ -224,7 +225,7 @@
          * ``login_url``: The `authenticated` decorator will redirect
            to this url if the user is not logged in.  Can be further
            customized by overriding `RequestHandler.get_login_url`
-         * ``xsrf_cookies``: If true, :ref:`xsrf` will be enabled.
+         * ``xsrf_cookies``: If ``True``, :ref:`xsrf` will be enabled.
          * ``xsrf_cookie_version``: Controls the version of new XSRF
            cookies produced by this server.  Should generally be left
            at the default (which will always be the highest supported

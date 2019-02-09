@@ -281,7 +281,7 @@ def add_accept_handler(
 
 
 def is_valid_ip(ip: str) -> bool:
-    """Returns true if the given string is a well-formed IP address.
+    """Returns ``True`` if the given string is a well-formed IP address.
 
     Supports IPv4 and IPv6.
     """

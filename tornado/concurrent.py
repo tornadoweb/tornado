@@ -176,7 +176,7 @@ def future_set_result_unless_cancelled(
 ) -> None:
     """Set the given ``value`` as the `Future`'s result, if not cancelled.
 
-    Avoids asyncio.InvalidStateError when calling set_result() on
+    Avoids ``asyncio.InvalidStateError`` when calling ``set_result()`` on
     a cancelled `asyncio.Future`.
 
     .. versionadded:: 5.0
@@ -192,10 +192,10 @@ def future_set_exception_unless_cancelled(
 
     If the Future is already canceled, logs the exception instead. If
     this logging is not desired, the caller should explicitly check
-    the state of the Future and call Future.set_exception instead of
+    the state of the Future and call ``Future.set_exception`` instead of
     this wrapper.
 
-    Avoids asyncio.InvalidStateError when calling set_exception() on
+    Avoids ``asyncio.InvalidStateError`` when calling ``set_exception()`` on
     a cancelled `asyncio.Future`.
 
     .. versionadded:: 6.0
@@ -223,7 +223,7 @@ def future_set_exc_info(
     .. versionchanged:: 6.0
 
        If the future is already cancelled, this function is a no-op.
-       (previously asyncio.InvalidStateError would be raised)
+       (previously ``asyncio.InvalidStateError`` would be raised)
 
     """
     if exc_info[1] is None:

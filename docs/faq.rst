@@ -74,8 +74,8 @@ See the :doc:`Asynchronous I/O <guide/async>` chapter of the Tornado
 user's guide for more on blocking and asynchronous functions.
 
 
-My code is asynchronous, but it's not running in parallel in two browser tabs.
-------------------------------------------------------------------------------
+My code is asynchronous. Why is it not running in parallel in two browser tabs?
+-------------------------------------------------------------------------------
 
 Even when a handler is asynchronous and non-blocking, it can be surprisingly
 tricky to verify this. Browsers will recognize that you are trying to

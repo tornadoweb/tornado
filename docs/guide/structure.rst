@@ -178,7 +178,7 @@ In addition to ``get()``/``post()``/etc, certain other methods in
 necessary. On every request, the following sequence of calls takes
 place:
 
-1. A new `.RequestHandler` object is created on each request
+1. A new `.RequestHandler` object is created on each request.
 2. `~.RequestHandler.initialize()` is called with the initialization
    arguments from the `.Application` configuration. ``initialize``
    should typically just save the arguments passed into member
@@ -206,12 +206,12 @@ overridden methods include:
   disconnects; applications may choose to detect this case and halt
   further processing.  Note that there is no guarantee that a closed
   connection can be detected promptly.
-- `~.RequestHandler.get_current_user` - see :ref:`user-authentication`
+- `~.RequestHandler.get_current_user` - see :ref:`user-authentication`.
 - `~.RequestHandler.get_user_locale` - returns `.Locale` object to use
-  for the current user
+  for the current user.
 - `~.RequestHandler.set_default_headers` - may be used to set
   additional headers on the response (such as a custom ``Server``
-  header)
+  header).
 
 Error Handling
 ~~~~~~~~~~~~~~
@@ -260,7 +260,7 @@ redirect users elsewhere. There is also an optional parameter
 considered permanent.  The default value of ``permanent`` is
 ``False``, which generates a ``302 Found`` HTTP response code and is
 appropriate for things like redirecting users after successful
-``POST`` requests.  If ``permanent`` is true, the ``301 Moved
+``POST`` requests.  If ``permanent`` is ``True``, the ``301 Moved
 Permanently`` HTTP response code is used, which is useful for
 e.g. redirecting to a canonical URL for a page in an SEO-friendly
 manner.

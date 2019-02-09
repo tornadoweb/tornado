@@ -498,9 +498,9 @@ class WebSocketHandler(tornado.web.RequestHandler):
         implement WebSockets support this header, and non-browser
         clients do not have the same cross-site security concerns).
 
-        Should return True to accept the request or False to reject it.
-        By default, rejects all requests with an origin on a host other
-        than this one.
+        Should return ``True`` to accept the request or ``False`` to
+        reject it. By default, rejects all requests with an origin on
+        a host other than this one.
 
         This is a security protection against cross site scripting attacks on
         browsers, since WebSockets are allowed to bypass the usual same-origin
@@ -520,7 +520,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
            for more.
 
         To accept all cross-origin traffic (which was the default prior to
-        Tornado 4.0), simply override this method to always return true::
+        Tornado 4.0), simply override this method to always return ``True``::
 
             def check_origin(self, origin):
                 return True
@@ -1285,7 +1285,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             )
 
     def is_closing(self) -> bool:
-        """Return true if this connection is closing.
+        """Return ``True`` if this connection is closing.
 
         The connection is considered closing if either side has
         initiated its closing handshake or if the stream has been

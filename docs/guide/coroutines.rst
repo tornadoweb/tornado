@@ -39,7 +39,7 @@ decorator.
 
 Native coroutines are the recommended form whenever possible. Only use
 decorated coroutines when compatibility with older versions of Python
-is required. Examples in the tornado documentation will generally use
+is required. Examples in the Tornado documentation will generally use
 the native form.
 
 Translation between the two forms is generally straightforward::
@@ -58,30 +58,35 @@ Translation between the two forms is generally straightforward::
         # special exception.            # Return normally
         raise gen.Return(b)             return b
 
-Other differences between the two forms of coroutine are:
+Other differences between the two forms of coroutine are outlined below.
 
-- Native coroutines are generally faster.
-- Native coroutines can use ``async for`` and ``async with``
-  statements which make some patterns much simpler.
-- Native coroutines do not run at all unless you ``await`` or
-  ``yield`` them. Decorated coroutines can start running "in the
-  background" as soon as they are called. Note that for both kinds of
-  coroutines it is important to use ``await`` or ``yield`` so that
-  any exceptions have somewhere to go.
-- Decorated coroutines have additional integration with the
-  `concurrent.futures` package, allowing the result of
-  ``executor.submit`` to be yielded directly. For native coroutines,
-  use `.IOLoop.run_in_executor` instead.
-- Decorated coroutines support some shorthand for waiting on multiple
-  objects by yielding a list or dict. Use `tornado.gen.multi` to do
-  this in native coroutines.
-- Decorated coroutines can support integration with other packages
-  including Twisted via a registry of conversion functions.
-  To access this functionality in native coroutines, use
-  `tornado.gen.convert_yielded`.
-- Decorated coroutines always return a `.Future` object. Native
-  coroutines return an *awaitable* object that is not a `.Future`. In
-  Tornado the two are mostly interchangeable.
+- Native coroutines:
+
+  - are generally faster.
+  - can use ``async for`` and ``async with``
+    statements which make some patterns much simpler.
+  - do not run at all unless you ``await`` or
+    ``yield`` them. Decorated coroutines can start running "in the
+    background" as soon as they are called. Note that for both kinds of
+    coroutines it is important to use ``await`` or ``yield`` so that
+    any exceptions have somewhere to go.
+
+- Decorated coroutines:
+
+  - have additional integration with the
+    `concurrent.futures` package, allowing the result of
+    ``executor.submit`` to be yielded directly. For native coroutines,
+    use `.IOLoop.run_in_executor` instead.
+  - support some shorthand for waiting on multiple
+    objects by yielding a list or dict. Use `tornado.gen.multi` to do
+    this in native coroutines.
+  - can support integration with other packages
+    including Twisted via a registry of conversion functions.
+    To access this functionality in native coroutines, use
+    `tornado.gen.convert_yielded`.
+  - always return a `.Future` object. Native
+    coroutines return an *awaitable* object that is not a `.Future`. In
+    Tornado the two are mostly interchangeable.
 
 How it works
 ~~~~~~~~~~~~
