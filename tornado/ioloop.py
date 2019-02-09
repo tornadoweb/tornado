@@ -33,6 +33,7 @@ per `unittest` case.
 import asyncio
 import concurrent.futures
 import datetime
+import functools
 import logging
 import numbers
 import os
@@ -676,10 +677,25 @@ class IOLoop(Configurable):
         awaitables (unlike most of Tornado where the two are
         interchangeable).
         """
-        assert is_future(future)
-        future_add_done_callback(
-            future, lambda future: self.add_callback(callback, future)
-        )
+        if isinstance(future, Future):
+            # Note that we specifically do not want the inline behavior of
+            # tornado.concurrent.future_add_done_callback. We always want
+            # this callback scheduled on the next IOLoop iteration (which
+            # asyncio.Future always does).
+            #
+            # Wrap the callback in self._run_callback so we control
+            # the error logging (i.e. it goes to tornado.log.app_log
+            # instead of asyncio's log).
+            future.add_done_callback(
+                lambda f: self._run_callback(functools.partial(callback, future))
+            )
+        else:
+            assert is_future(future)
+            # For concurrent futures, we use self.add_callback, so
+            # it's fine if future_add_done_callback inlines that call.
+            future_add_done_callback(
+                future, lambda f: self.add_callback(callback, future)
+            )
 
     def run_in_executor(
         self,
