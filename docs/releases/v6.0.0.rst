@@ -61,6 +61,8 @@ General changes
 
 - ``HTTPServerRequest.write`` has been removed. Use the methods of
   ``request.connection`` instead.
+- Unrecognized ``Content-Encoding`` values now log warnings only for
+  content types that we would otherwise attempt to parse.
 
 `tornado.ioloop`
 ~~~~~~~~~~~~~~~~
@@ -147,6 +149,8 @@ General changes
 
 - Pings and other messages sent while the connection is closing are
   now silently dropped instead of logging exceptions.
+- Errors raised by ``open()`` are now caught correctly when this method
+  is a coroutine.
 
 `tornado.wsgi`
 ~~~~~~~~~~~~~~
