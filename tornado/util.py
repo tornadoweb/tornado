@@ -59,7 +59,7 @@ else:
     import datetime  # noqa
     import types  # noqa
     from typing import Any, AnyStr, Union, Optional, Dict, Mapping  # noqa
-    from typing import Tuple, Match, Callable  # noqa
+    from typing import List, Tuple, Match, Callable  # noqa
 
     if PY3:
         _BaseString = str
@@ -252,7 +252,7 @@ _re_unescape_pattern = re.compile(r'\\(.)', re.DOTALL)
 
 def re_unescape(s):
     # type: (str) -> str
-    """Unescape a string escaped by `re.escape`.
+    r"""Unescape a string escaped by `re.escape`.
 
     May raise ``ValueError`` for regular expressions which could not
     have been produced by `re.escape` (for example, strings containing
