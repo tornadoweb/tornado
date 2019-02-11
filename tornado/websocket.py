@@ -751,10 +751,14 @@ class WebSocketProtocol13(WebSocketProtocol):
         self.stream = self.handler.stream
 
         self.start_pinging()
-        open_result = self._run_callback(self.handler.open, *self.handler.open_args,
-                                         **self.handler.open_kwargs)
-        if open_result is not None:
-            yield open_result
+        try:
+            open_result = self.handler.open(*self.handler.open_args, **self.handler.open_kwargs)
+            if open_result is not None:
+                yield open_result
+        except Exception:
+            self.handler.log_exception(*sys.exc_info())
+            self._abort()
+
         yield self._receive_frame_loop()
 
     def _parse_extensions_header(self, headers):
