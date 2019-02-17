@@ -10,4 +10,6 @@ ignore =
     E402,
     # E722 do not use bare except
     E722,
+    # W504 line break after binary operator
+    W504,
 doctests = true
