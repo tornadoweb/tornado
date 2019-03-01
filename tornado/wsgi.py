@@ -35,11 +35,12 @@ from tornado import escape
 from tornado import httputil
 from tornado.log import access_log
 
-from typing import List, Tuple, Optional, Type, Callable, Any, Dict, Text
+from typing import List, Tuple, Optional, Callable, Any, Dict, Text
 from types import TracebackType
 import typing
 
 if typing.TYPE_CHECKING:
+    from typing import Type  # noqa: F401
     from wsgiref.types import WSGIApplication as WSGIAppType  # noqa: F401
 
 
@@ -99,7 +100,7 @@ class WSGIContainer(object):
             headers: List[Tuple[str, str]],
             exc_info: Optional[
                 Tuple[
-                    Optional[Type[BaseException]],
+                    "Optional[Type[BaseException]]",
                     Optional[BaseException],
                     Optional[TracebackType],
                 ]

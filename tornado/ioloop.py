@@ -165,7 +165,7 @@ class IOLoop(Configurable):
 
     @classmethod
     def configure(
-        cls, impl: Union[None, str, Type[Configurable]], **kwargs: Any
+        cls, impl: "Union[None, str, Type[Configurable]]", **kwargs: Any
     ) -> None:
         if asyncio is not None:
             from tornado.platform.asyncio import BaseAsyncIOLoop
@@ -664,7 +664,7 @@ class IOLoop(Configurable):
 
     def add_future(
         self,
-        future: Union["Future[_T]", "concurrent.futures.Future[_T]"],
+        future: "Union[Future[_T], concurrent.futures.Future[_T]]",
         callback: Callable[["Future[_T]"], None],
     ) -> None:
         """Schedules a callback on the ``IOLoop`` when the given
