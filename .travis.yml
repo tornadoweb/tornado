@@ -27,6 +27,10 @@ language: python
         - libgnutls-dev
 jobs:
   include:
+    # 3.5.2 is interesting because it's the version in ubuntu 16.04, and due to python's
+    # "provisional feature" rules there are significant differences between patch
+    # versions for asyncio and typing.
+    - python: 3.5.2
     - python: 3.5
     - python: 3.6
     - python: pypy3.5-5.10.1
@@ -85,7 +89,7 @@ script:
     - if [[ $TRAVIS_PYTHON_VERSION != nightly && $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then export RUN_COVERAGE=1; fi
     - if [[ "$RUN_COVERAGE" == 1 ]]; then export TARGET="-m coverage run $TARGET"; fi
     # See comments in tox.ini. Disabled on py35 because ResourceWarnings are too noisy there.
-    - if [[ $TRAVIS_PYTHON_VERSION != '3.5' ]]; then export PYTHONWARNINGS=error,ignore:::site; fi
+    - if [[ $TRAVIS_PYTHON_VERSION != '3.5'* ]]; then export PYTHONWARNINGS=error,ignore:::site; fi
     - python -bb $TARGET
     - python -O $TARGET
     - LANG=C python $TARGET

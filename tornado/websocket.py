@@ -639,7 +639,7 @@ class WebSocketProtocol(abc.ABC):
 
     def _run_callback(
         self, callback: Callable, *args: Any, **kwargs: Any
-    ) -> Optional["Future[Any]"]:
+    ) -> "Optional[Future[Any]]":
         """Runs the given callback with exception handling.
 
         If the callback is a coroutine, returns its Future. On error, aborts the
@@ -1204,7 +1204,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             if handled_future is not None:
                 await handled_future
 
-    def _handle_message(self, opcode: int, data: bytes) -> Optional["Future[None]"]:
+    def _handle_message(self, opcode: int, data: bytes) -> "Optional[Future[None]]":
         """Execute on_message, returning its Future if it is a coroutine."""
         if self.client_terminated:
             return None
@@ -1567,7 +1567,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
 
     def log_exception(
         self,
-        typ: Optional[Type[BaseException]],
+        typ: "Optional[Type[BaseException]]",
         value: Optional[BaseException],
         tb: Optional[TracebackType],
     ) -> None:

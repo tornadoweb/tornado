@@ -1762,7 +1762,7 @@ class RequestHandler(object):
 
     def log_exception(
         self,
-        typ: Optional[Type[BaseException]],
+        typ: "Optional[Type[BaseException]]",
         value: Optional[BaseException],
         tb: Optional[TracebackType],
     ) -> None:

@@ -535,7 +535,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
     def _handle_exception(
         self,
-        typ: Optional[Type[BaseException]],
+        typ: "Optional[Type[BaseException]]",
         value: Optional[BaseException],
         tb: Optional[TracebackType],
     ) -> bool:

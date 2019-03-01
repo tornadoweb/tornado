@@ -46,7 +46,6 @@ from typing import (
     Optional,
     Awaitable,
     Callable,
-    Type,
     Pattern,
     Any,
     Dict,
@@ -56,7 +55,7 @@ from typing import (
 from types import TracebackType
 
 if typing.TYPE_CHECKING:
-    from typing import Deque, List  # noqa: F401
+    from typing import Deque, List, Type  # noqa: F401
 
 _IOStreamType = TypeVar("_IOStreamType", bound="IOStream")
 
@@ -585,7 +584,7 @@ class BaseIOStream(object):
             bool,
             BaseException,
             Tuple[
-                Optional[Type[BaseException]],
+                "Optional[Type[BaseException]]",
                 Optional[BaseException],
                 Optional[TracebackType],
             ],

@@ -58,7 +58,7 @@ class _ExceptionLoggingContext(object):
 
     def __exit__(
         self,
-        typ: Optional[Type[BaseException]],
+        typ: "Optional[Type[BaseException]]",
         value: Optional[BaseException],
         tb: types.TracebackType,
     ) -> None:
@@ -563,7 +563,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             return connection_header == "keep-alive"
         return False
 
-    def _finish_request(self, future: Optional["Future[None]"]) -> None:
+    def _finish_request(self, future: "Optional[Future[None]]") -> None:
         self._clear_callbacks()
         if not self.is_client and self._disconnect_on_finish:
             self.close()
