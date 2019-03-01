@@ -1,7 +1,7 @@
 What's new in Tornado 6.0
 =========================
 
-In progress
+Mar 1, 2019
 -----------
 
 Backwards-incompatible changes
@@ -16,6 +16,10 @@ Backwards-incompatible changes
   application with the ``-Wd`` Python command-line flag or the
   environment variable ``PYTHONWARNINGS=d`` should tell you whether
   your application is ready to move to Tornado 6.0.
+- ``.WebSocketHandler.get`` is now a coroutine and must be called
+  accordingly in any subclasses that override this method (but note
+  that overriding ``get`` is not recommended; either ``prepare`` or
+  ``open`` should be used instead).
 
 General changes
 ~~~~~~~~~~~~~~~
