@@ -73,7 +73,7 @@ async def read_stream_body(stream):
 
 class HandlerBaseTestCase(AsyncHTTPTestCase):
     def get_app(self):
-        return Application([("/", self.__class__.Handler)])
+        return Application([("/.*", self.__class__.Handler)])
 
     def fetch_json(self, *args, **kwargs):
         response = self.fetch(*args, **kwargs)
@@ -554,6 +554,7 @@ class XHeaderTest(HandlerBaseTestCase):
                 dict(
                     remote_ip=self.request.remote_ip,
                     remote_protocol=self.request.protocol,
+                    path=self.request.path,
                 )
             )
 
@@ -638,6 +639,14 @@ class XHeaderTest(HandlerBaseTestCase):
         bad_forwarded = {"X-Forwarded-Proto": "unknown"}
         self.assertEqual(
             self.fetch_json("/", headers=bad_forwarded)["remote_protocol"], "http"
+        )
+
+    def test_forwarded_context(self):
+        self.assertEqual(self.fetch_json("/")["path"], "/")
+
+        self.assertEqual(
+            self.fetch_json("/", headers={"X-Forwarded-Context": "/prefix"})["path"],
+            "/prefix",
         )
 
 
