@@ -558,8 +558,8 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         .. versionadded:: 3.1
         """
-        assert self.stream is not None
-        self.stream.set_nodelay(value)
+        assert self.ws_connection is not None
+        self.ws_connection.set_nodelay(value)
 
     def on_connection_close(self) -> None:
         if self.ws_connection:
@@ -712,6 +712,10 @@ class WebSocketProtocol(abc.ABC):
 
     @abc.abstractmethod
     async def _receive_frame_loop(self) -> None:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def set_nodelay(self, x: bool) -> None:
         raise NotImplementedError()
 
 
@@ -1344,6 +1348,9 @@ class WebSocketProtocol13(WebSocketProtocol):
 
         self.write_ping(b"")
         self.last_ping = now
+
+    def set_nodelay(self, x: bool) -> None:
+        self.stream.set_nodelay(x)
 
 
 class WebSocketClientConnection(simple_httpclient._HTTPConnection):
