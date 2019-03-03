@@ -1,42 +1,26 @@
 # https://travis-ci.org/tornadoweb/tornado
 
-# Most tests run in container mode because it's faster to start up,
-# but a few below use different configurations (as of July 2018
-# only trusty is available in containers).
-dist: trusty
-sudo: false
-
+dist: xenial
+language: python
 matrix:
     fast_finish: true
+addons:
+  apt: 
+    packages:
+      - libgnutls-dev
 
-language: python
 # For a list of available versions, run
-#     aws s3 ls s3://travis-python-archives/binaries/ubuntu/14.04/x86_64/
-#
-# Python 3.7+ needs a newer version of openssl than is available in trusty,
-# so these must run on a newer platform (and since travis doesn't yet have
-# containers for xenial, those must use VMs).
-# YAML magic from https://github.com/travis-ci/travis-ci/issues/9069#issuecomment-401924248
-.mixins:
-- &xenial-mixin
-  dist: xenial
-  sudo: true
-  addons:
-    apt:
-      packages:
-        - libgnutls-dev
+#     aws s3 ls s3://travis-python-archives/binaries/ubuntu/16.04/x86_64/
 jobs:
   include:
     # 3.5.2 is interesting because it's the version in ubuntu 16.04, and due to python's
     # "provisional feature" rules there are significant differences between patch
     # versions for asyncio and typing.
     - python: 3.5.2
-    - python: 3.5
-    - python: 3.6
+    - python: '3.5'
+    - python: '3.6'
+    - python: '3.7'
     - python: pypy3.5-5.10.1
-    - <<: *xenial-mixin
-      python: 3.7
-    - <<: *xenial-mixin
       python: nightly
 
 install:
