@@ -196,8 +196,6 @@ def load_gettext_translations(directory: str, domain: str) -> None:
 
         msgfmt mydomain.po -o {directory}/pt_BR/LC_MESSAGES/mydomain.mo
     """
-    import gettext
-
     global _translations
     global _supported_locales
     global _use_gettext
