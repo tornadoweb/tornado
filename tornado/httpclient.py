@@ -311,7 +311,7 @@ class AsyncHTTPClient(Configurable):
 
     @classmethod
     def configure(
-        cls, impl: Union[None, str, Type[Configurable]], **kwargs: Any
+        cls, impl: "Union[None, str, Type[Configurable]]", **kwargs: Any
     ) -> None:
         """Configures the `AsyncHTTPClient` subclass to use.
 

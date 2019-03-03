@@ -172,7 +172,7 @@ def chain_future(a: "Future[_T]", b: "Future[_T]") -> None:
 
 
 def future_set_result_unless_cancelled(
-    future: Union["futures.Future[_T]", "Future[_T]"], value: _T
+    future: "Union[futures.Future[_T], Future[_T]]", value: _T
 ) -> None:
     """Set the given ``value`` as the `Future`'s result, if not cancelled.
 
@@ -186,7 +186,7 @@ def future_set_result_unless_cancelled(
 
 
 def future_set_exception_unless_cancelled(
-    future: Union["futures.Future[_T]", "Future[_T]"], exc: BaseException
+    future: "Union[futures.Future[_T], Future[_T]]", exc: BaseException
 ) -> None:
     """Set the given ``exc`` as the `Future`'s exception.
 
@@ -208,7 +208,7 @@ def future_set_exception_unless_cancelled(
 
 
 def future_set_exc_info(
-    future: Union["futures.Future[_T]", "Future[_T]"],
+    future: "Union[futures.Future[_T], Future[_T]]",
     exc_info: Tuple[
         Optional[type], Optional[BaseException], Optional[types.TracebackType]
     ],
@@ -246,7 +246,7 @@ def future_add_done_callback(
 
 
 def future_add_done_callback(  # noqa: F811
-    future: Union["futures.Future[_T]", "Future[_T]"], callback: Callable[..., None]
+    future: "Union[futures.Future[_T], Future[_T]]", callback: Callable[..., None]
 ) -> None:
     """Arrange to call ``callback`` when ``future`` is complete.
 

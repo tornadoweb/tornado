@@ -33,10 +33,14 @@ from tornado.util import raise_exc_info, basestring_type
 from tornado.web import Application
 
 import typing
-from typing import Tuple, Any, Callable, Type, Dict, Union, Coroutine, Optional
+from typing import Tuple, Any, Callable, Type, Dict, Union, Optional
 from types import TracebackType
 
 if typing.TYPE_CHECKING:
+    # Coroutine wasn't added to typing until 3.5.3, so only import it
+    # when mypy is running and use forward references.
+    from typing import Coroutine  # noqa: F401
+
     _ExcInfoTuple = Tuple[
         Optional[Type[BaseException]], Optional[BaseException], Optional[TracebackType]
     ]
@@ -505,20 +509,20 @@ class AsyncHTTPSTestCase(AsyncHTTPTestCase):
 @typing.overload
 def gen_test(
     *, timeout: float = None
-) -> Callable[[Callable[..., Union[Generator, Coroutine]]], Callable[..., None]]:
+) -> Callable[[Callable[..., Union[Generator, "Coroutine"]]], Callable[..., None]]:
     pass
 
 
 @typing.overload  # noqa: F811
-def gen_test(func: Callable[..., Union[Generator, Coroutine]]) -> Callable[..., None]:
+def gen_test(func: Callable[..., Union[Generator, "Coroutine"]]) -> Callable[..., None]:
     pass
 
 
 def gen_test(  # noqa: F811
-    func: Callable[..., Union[Generator, Coroutine]] = None, timeout: float = None
+    func: Callable[..., Union[Generator, "Coroutine"]] = None, timeout: float = None
 ) -> Union[
     Callable[..., None],
-    Callable[[Callable[..., Union[Generator, Coroutine]]], Callable[..., None]],
+    Callable[[Callable[..., Union[Generator, "Coroutine"]]], Callable[..., None]],
 ]:
     """Testing equivalent of ``@gen.coroutine``, to be applied to test methods.
 
@@ -558,7 +562,7 @@ def gen_test(  # noqa: F811
     if timeout is None:
         timeout = get_async_test_timeout()
 
-    def wrap(f: Callable[..., Union[Generator, Coroutine]]) -> Callable[..., None]:
+    def wrap(f: Callable[..., Union[Generator, "Coroutine"]]) -> Callable[..., None]:
         # Stack up several decorators to allow us to access the generator
         # object itself.  In the innermost wrapper, we capture the generator
         # and save it in an attribute of self.  Next, we run the wrapped
@@ -681,7 +685,7 @@ class ExpectLog(logging.Filter):
 
     def __exit__(
         self,
-        typ: Optional[Type[BaseException]],
+        typ: "Optional[Type[BaseException]]",
         value: Optional[BaseException],
         tb: Optional[TracebackType],
     ) -> None:

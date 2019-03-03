@@ -408,8 +408,8 @@ class WaitIterator(object):
 
 def multi(
     children: Union[List[_Yieldable], Dict[Any, _Yieldable]],
-    quiet_exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = (),
-) -> Union["Future[List]", "Future[Dict]"]:
+    quiet_exceptions: "Union[Type[Exception], Tuple[Type[Exception], ...]]" = (),
+) -> "Union[Future[List], Future[Dict]]":
     """Runs multiple asynchronous operations in parallel.
 
     ``children`` may either be a list or a dict whose values are
@@ -462,8 +462,8 @@ Multi = multi
 
 def multi_future(
     children: Union[List[_Yieldable], Dict[Any, _Yieldable]],
-    quiet_exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = (),
-) -> Union["Future[List]", "Future[Dict]"]:
+    quiet_exceptions: "Union[Type[Exception], Tuple[Type[Exception], ...]]" = (),
+) -> "Union[Future[List], Future[Dict]]":
     """Wait for multiple asynchronous futures in parallel.
 
     Since Tornado 6.0, this function is exactly the same as `multi`.
@@ -547,7 +547,7 @@ def maybe_future(x: Any) -> Future:
 def with_timeout(
     timeout: Union[float, datetime.timedelta],
     future: _Yieldable,
-    quiet_exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = (),
+    quiet_exceptions: "Union[Type[Exception], Tuple[Type[Exception], ...]]" = (),
 ) -> Future:
     """Wraps a `.Future` (or other yieldable object) in a timeout.
 

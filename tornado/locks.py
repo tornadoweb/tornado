@@ -275,7 +275,7 @@ class _ReleasingContextManager(object):
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
+        exc_type: "Optional[Type[BaseException]]",
         exc_val: Optional[BaseException],
         exc_tb: Optional[types.TracebackType],
     ) -> None:
@@ -444,7 +444,7 @@ class Semaphore(_TimeoutGarbageCollector):
 
     def __exit__(
         self,
-        typ: Optional[Type[BaseException]],
+        typ: "Optional[Type[BaseException]]",
         value: Optional[BaseException],
         traceback: Optional[types.TracebackType],
     ) -> None:
@@ -455,7 +455,7 @@ class Semaphore(_TimeoutGarbageCollector):
 
     async def __aexit__(
         self,
-        typ: Optional[Type[BaseException]],
+        typ: "Optional[Type[BaseException]]",
         value: Optional[BaseException],
         tb: Optional[types.TracebackType],
     ) -> None:
@@ -552,7 +552,7 @@ class Lock(object):
 
     def __exit__(
         self,
-        typ: Optional[Type[BaseException]],
+        typ: "Optional[Type[BaseException]]",
         value: Optional[BaseException],
         tb: Optional[types.TracebackType],
     ) -> None:
@@ -563,7 +563,7 @@ class Lock(object):
 
     async def __aexit__(
         self,
-        typ: Optional[Type[BaseException]],
+        typ: "Optional[Type[BaseException]]",
         value: Optional[BaseException],
         tb: Optional[types.TracebackType],
     ) -> None:
