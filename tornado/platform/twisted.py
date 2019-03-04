@@ -17,8 +17,6 @@
 This module lets you run applications and libraries written for
 Twisted in a Tornado application.  It can be used in two modes,
 depending on which library's underlying event loop you want to use.
-
-This module has been tested with Twisted versions 11.0.0 and newer.
 """
 
 import socket
