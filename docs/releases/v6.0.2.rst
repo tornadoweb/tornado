@@ -1,0 +1,13 @@
+What's new in Tornado 6.0.2
+===========================
+
+Mar 23, 2019
+------------
+
+Bug fixes
+~~~~~~~~~
+
+- `.WebSocketHandler.set_nodelay` works again.
+- Accessing ``HTTPResponse.body`` now returns an empty byte string
+  instead of raising ``ValueError`` for error responses that don't
+  have a body (it returned None in this case in Tornado 5).
