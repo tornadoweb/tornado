@@ -665,7 +665,7 @@ class HTTPResponse(object):
     @property
     def body(self) -> bytes:
         if self.buffer is None:
-            raise ValueError("body not set")
+            return b""
         elif self._body is None:
             self._body = self.buffer.getvalue()
 
