@@ -115,6 +115,8 @@ def fork_processes(num_processes: Optional[int], max_restarts: int = None) -> in
     exception.
 
     max_restarts defaults to 100.
+
+    Availability: Unix
     """
     if max_restarts is None:
         max_restarts = 100
@@ -273,6 +275,8 @@ class Subprocess(object):
         In many cases a close callback on the stdout or stderr streams
         can be used as an alternative to an exit callback if the
         signal handler is causing a problem.
+
+        Availability: Unix
         """
         self._exit_callback = callback
         Subprocess.initialize()
@@ -294,6 +298,8 @@ class Subprocess(object):
         to suppress this behavior and return the exit status without raising.
 
         .. versionadded:: 4.2
+
+        Availability: Unix
         """
         future = Future()  # type: Future[int]
 
@@ -321,6 +327,8 @@ class Subprocess(object):
         .. versionchanged:: 5.0
            The ``io_loop`` argument (deprecated since version 4.1) has been
            removed.
+
+        Availability: Unix
         """
         if cls._initialized:
             return

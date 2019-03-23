@@ -1,0 +1,11 @@
+What's new in Tornado 6.0.1
+===========================
+
+Mar 3, 2019
+-----------
+
+Bug fixes
+~~~~~~~~~
+
+- Fixed issues with type annotations that caused errors while
+  importing Tornado on Python 3.5.2.
