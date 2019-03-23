@@ -229,6 +229,8 @@ class TCPServer(object):
         When using multiple processes, no IOLoops can be created or
         referenced until after the call to ``TCPServer.start(n)``.
 
+        Values of ``num_processes`` other than 1 are not supported on Windows.
+
         The ``max_restarts`` argument is passed to `.fork_processes`.
 
         .. versionchanged:: 6.0

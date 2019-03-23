@@ -34,8 +34,9 @@ multiple Python processes to take full advantage of multi-CPU machines.
 Typically it is best to run one process per CPU.
 
 Tornado includes a built-in multi-process mode to start several
-processes at once.  This requires a slight alteration to the standard
-main function:
+processes at once (note that multi-process mode does not work on
+Windows). This requires a slight alteration to the standard main
+function:
 
 .. testcode::
 

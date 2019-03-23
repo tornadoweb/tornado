@@ -109,16 +109,16 @@ packages may be useful:
   non-blocking DNS resolver that can be used when threads are not
   appropriate.
 
-**Platforms**: Tornado should run on any Unix-like platform, although
-for the best performance and scalability only Linux (with ``epoll``)
-and BSD (with ``kqueue``) are recommended for production deployment
-(even though Mac OS X is derived from BSD and supports kqueue, its
-networking performance is generally poor so it is recommended only for
-development use).  Tornado will also run on Windows, although this
-configuration is not officially supported and is recommended only for
-development use. Without reworking Tornado IOLoop interface, it's not
-possible to add a native Tornado Windows IOLoop implementation or
-leverage Windows' IOCP support from frameworks like AsyncIO or Twisted.
+**Platforms**: Tornado is designed for Unix-like platforms, with best
+performance and scalability on systems supporting ``epoll`` (Linux),
+``kqueue`` (BSD/macOS), or ``/dev/poll`` (Solaris).
+
+Tornado will also run on Windows, although this configuration is not
+officially supported or recommended for production use. Some features
+are missing on Windows (including multi-process mode) and scalability
+is limited (Even though Tornado is built on ``asyncio``, which
+supports Windows, Tornado does not use the APIs that are necessary for
+scalable networking on Windows).
 
 Documentation
 -------------
