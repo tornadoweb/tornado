@@ -2474,8 +2474,8 @@ class RedirectHandler(RequestHandler):
         self._url = url
         self._permanent = permanent
 
-    def get(self, *args: Any) -> None:
-        to_url = self._url.format(*args)
+    def get(self, *args: Any, **kwargs: Any) -> None:
+        to_url = self._url.format(*args, **kwargs)
         if self.request.query_arguments:
             # TODO: figure out typing for the next line.
             to_url = httputil.url_concat(
