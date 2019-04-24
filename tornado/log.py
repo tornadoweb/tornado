@@ -110,6 +110,7 @@ class LogFormatter(logging.Formatter):
         logging.INFO: 2,  # Green
         logging.WARNING: 3,  # Yellow
         logging.ERROR: 1,  # Red
+        logging.CRITICAL: 5,  # Magenta
     }
 
     def __init__(
