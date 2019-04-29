@@ -1015,9 +1015,10 @@ class BaseIOStream(object):
         # immediately anyway.  Instead, we insert checks at various times to
         # see if the connection is idle and add the read listener then.
         if self._state is None or self._state == ioloop.IOLoop.ERROR:
-            if (
-                not self.closed()
-                and self._read_buffer_size == 0
+            if self.closed():
+                self._signal_closed()
+            elif (
+                self._read_buffer_size == 0
                 and self._close_callback is not None
             ):
                 self._add_io_state(ioloop.IOLoop.READ)
