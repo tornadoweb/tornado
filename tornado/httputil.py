@@ -62,11 +62,6 @@ if typing.TYPE_CHECKING:
     import unittest  # noqa: F401
 
 
-# RFC 7230 section 3.5: a recipient MAY recognize a single LF as a line
-# terminator and ignore any preceding CR.
-_CRLF_RE = re.compile(r"\r?\n")
-
-
 class _NormalizedHeaderCache(dict):
     """Dynamic cached mapping of header names to Http-Header-Case.
 
@@ -223,7 +218,11 @@ class HTTPHeaders(collections.abc.MutableMapping):
 
         """
         h = cls()
-        for line in _CRLF_RE.split(headers):
+        # RFC 7230 section 3.5: a recipient MAY recognize a single LF as a line
+        # terminator and ignore any preceding CR.
+        for line in headers.split("\n"):
+            if line.endswith("\r"):
+                line = line[:-1]
             if line:
                 h.parse_line(line)
         return h
