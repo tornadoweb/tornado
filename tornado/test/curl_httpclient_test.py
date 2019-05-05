@@ -9,9 +9,9 @@ from tornado.web import Application, RequestHandler
 
 
 try:
-    import pycurl  # type: ignore
+    import pycurl
 except ImportError:
-    pycurl = None
+    pycurl = None  # type: ignore
 
 if pycurl is not None:
     from tornado.curl_httpclient import CurlAsyncHTTPClient

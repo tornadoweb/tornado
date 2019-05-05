@@ -12,13 +12,13 @@ pycurl
 
 # Other useful tools
 Sphinx>1.8.2
-autopep8
 black
 coverage
 flake8
 mypy==0.630
 pep8
 pyflakes
+sphinxcontrib-asyncio
 sphinx-rtd-theme
 tox
 twine
