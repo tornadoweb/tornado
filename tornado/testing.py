@@ -260,7 +260,7 @@ class AsyncTestCase(unittest.TestCase):
             self.__failure = None
             raise_exc_info(failure)
 
-    def run(self, result: unittest.TestResult = None) -> unittest.TestCase:
+    def run(self, result: unittest.TestResult = None) -> Optional[unittest.TestResult]:
         ret = super(AsyncTestCase, self).run(result)
         # As a last resort, if an exception escaped super.run() and wasn't
         # re-raised in tearDown, raise it here.  This will cause the
