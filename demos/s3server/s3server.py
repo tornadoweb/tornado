@@ -224,7 +224,7 @@ class BucketHandler(BaseRequestHandler):
 
 class ObjectHandler(BaseRequestHandler):
     def get(self, bucket, object_name):
-        object_name = urllib.unquote(object_name)
+        object_name = urllib.parse.unquote(object_name)
         path = self._object_path(bucket, object_name)
         if not path.startswith(self.application.directory) or not os.path.isfile(path):
             raise web.HTTPError(404)
@@ -237,7 +237,7 @@ class ObjectHandler(BaseRequestHandler):
             self.finish(object_file.read())
 
     def put(self, bucket, object_name):
-        object_name = urllib.unquote(object_name)
+        object_name = urllib.parse.unquote(object_name)
         bucket_dir = os.path.abspath(os.path.join(self.application.directory, bucket))
         if not bucket_dir.startswith(self.application.directory) or not os.path.isdir(
             bucket_dir
@@ -254,7 +254,7 @@ class ObjectHandler(BaseRequestHandler):
         self.finish()
 
     def delete(self, bucket, object_name):
-        object_name = urllib.unquote(object_name)
+        object_name = urllib.parse.unquote(object_name)
         path = self._object_path(bucket, object_name)
         if not path.startswith(self.application.directory) or not os.path.isfile(path):
             raise web.HTTPError(404)
