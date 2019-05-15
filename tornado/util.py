@@ -383,11 +383,9 @@ class ArgReplacer(object):
         """Returns list of positional argument names"""
         try:
             return [
-                param.name for param in signature(func).parameters.values()
-                if param.kind in (
-                    param.POSITIONAL_ONLY,
-                    param.POSITIONAL_OR_KEYWORD,
-                )
+                param.name
+                for param in signature(func).parameters.values()
+                if param.kind in (param.POSITIONAL_ONLY, param.POSITIONAL_OR_KEYWORD)
             ]
         except TypeError:
             if hasattr(func, "func_code"):
