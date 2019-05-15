@@ -12,7 +12,7 @@ and `.Resolver`.
 
 import array
 import atexit
-from inspect import getfullargspec
+from inspect import signature
 import os
 import re
 import typing
@@ -380,12 +380,19 @@ class ArgReplacer(object):
             self.arg_pos = None
 
     def _getargnames(self, func: Callable) -> List[str]:
+        """Returns list of positional argument names"""
         try:
-            return getfullargspec(func).args
+            return [
+                param.name for param in signature(func).parameters.values()
+                if param.kind in (
+                    param.POSITIONAL_ONLY,
+                    param.POSITIONAL_OR_KEYWORD,
+                )
+            ]
         except TypeError:
             if hasattr(func, "func_code"):
-                # Cython-generated code has all the attributes needed
-                # by inspect.getfullargspec, but the inspect module only
+                # Cython-generated code has all the information needed,
+                # but the inspect module only
                 # works with ordinary functions. Inline the portion of
                 # getfullargspec that we need here. Note that for static
                 # functions the @cython.binding(True) decorator must
