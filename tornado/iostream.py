@@ -794,6 +794,7 @@ class BaseIOStream(object):
             self._read_from_buffer(pos)
 
     def _start_read(self) -> Future:
+        self._check_closed() # Before reading, check that stream is not closed.
         assert self._read_future is None, "Already reading"
         self._read_future = Future()
         return self._read_future
