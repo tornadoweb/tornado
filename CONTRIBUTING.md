@@ -1,7 +1,5 @@
 Contributing to Tornado Web Server
-==================
-Join the chat at https://gitter.im/tornadoweb/tornado
-   
+================== 
 
 Tornado Web Server is an open source Python web framework and asynchronous networking library, originally developed at FriendFeed.
 
