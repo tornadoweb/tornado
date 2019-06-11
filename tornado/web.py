@@ -598,9 +598,9 @@ class RequestHandler(object):
         name: str,
         value: Union[str, bytes],
         domain: str = None,
-        expires: Union[float, Tuple, datetime.datetime] = None,
+        expires: Optional[Union[float, Tuple, datetime.datetime]] = None,
         path: str = "/",
-        expires_days: int = None,
+        expires_days: Optional[int] = None,
         **kwargs: Any
     ) -> None:
         """Sets an outgoing cookie name/value with the given options.
@@ -682,7 +682,7 @@ class RequestHandler(object):
         self,
         name: str,
         value: Union[str, bytes],
-        expires_days: int = 30,
+        expires_days: Optional[int] = 30,
         version: int = None,
         **kwargs: Any
     ) -> None:
@@ -697,6 +697,7 @@ class RequestHandler(object):
         Note that the ``expires_days`` parameter sets the lifetime of the
         cookie in the browser, but is independent of the ``max_age_days``
         parameter to `get_secure_cookie`.
+        A value of None limits the lifetime to the current browser session.
 
         Secure cookies may contain arbitrary byte values, not just unicode
         strings (unlike regular cookies)
