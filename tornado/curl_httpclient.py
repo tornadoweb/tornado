@@ -383,7 +383,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if request.decompress_response:
             curl.setopt(pycurl.ENCODING, "gzip,deflate")
         else:
-            curl.setopt(pycurl.ENCODING, "none")
+            curl.setopt(pycurl.ENCODING, None)
         if request.proxy_host and request.proxy_port:
             curl.setopt(pycurl.PROXY, request.proxy_host)
             curl.setopt(pycurl.PROXYPORT, request.proxy_port)
