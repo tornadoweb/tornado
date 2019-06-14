@@ -1,7 +1,6 @@
 import collections
 from contextlib import closing
 import errno
-import gzip
 import logging
 import os
 import re
@@ -225,22 +224,6 @@ class SimpleHTTPClientTestMixin(object):
         with closing(self.create_client(max_clients=1)) as client:
             response = yield client.fetch(self.get_url("/countdown/3"), max_redirects=3)
             response.rethrow()
-
-    def test_gzip(self):
-        # All the tests in this file should be using gzip, but this test
-        # ensures that it is in fact getting compressed.
-        # Setting Accept-Encoding manually bypasses the client's
-        # decompression so we can see the raw data.
-        response = self.fetch(
-            "/chunk", use_gzip=False, headers={"Accept-Encoding": "gzip"}
-        )
-        self.assertEqual(response.headers["Content-Encoding"], "gzip")
-        self.assertNotEqual(response.body, b"asdfqwer")
-        # Our test data gets bigger when gzipped.  Oops.  :)
-        # Chunked encoding bypasses the MIN_LENGTH check.
-        self.assertEqual(len(response.body), 34)
-        f = gzip.GzipFile(mode="r", fileobj=response.buffer)
-        self.assertEqual(f.read(), b"asdfqwer")
 
     def test_max_redirects(self):
         response = self.fetch("/countdown/5", max_redirects=3)

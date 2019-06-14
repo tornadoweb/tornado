@@ -3,6 +3,7 @@ import base64
 import binascii
 from contextlib import closing
 import copy
+import gzip
 import threading
 import datetime
 from io import BytesIO
@@ -395,6 +396,23 @@ Transfer-Encoding: chunked
         self.assertEqual(type(response.headers["Content-Type"]), str)
         self.assertEqual(type(response.code), int)
         self.assertEqual(type(response.effective_url), str)
+
+    def test_gzip(self):
+        # All the tests in this file should be using gzip, but this test
+        # ensures that it is in fact getting compressed, and also tests
+        # the httpclient's decompress=False option.
+        # Setting Accept-Encoding manually bypasses the client's
+        # decompression so we can see the raw data.
+        response = self.fetch(
+            "/chunk", decompress_response=False, headers={"Accept-Encoding": "gzip"}
+        )
+        self.assertEqual(response.headers["Content-Encoding"], "gzip")
+        self.assertNotEqual(response.body, b"asdfqwer")
+        # Our test data gets bigger when gzipped.  Oops.  :)
+        # Chunked encoding bypasses the MIN_LENGTH check.
+        self.assertEqual(len(response.body), 34)
+        f = gzip.GzipFile(mode="r", fileobj=response.buffer)
+        self.assertEqual(f.read(), b"asdfqwer")
 
     def test_header_callback(self):
         first_line = []
