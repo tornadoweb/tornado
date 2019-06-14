@@ -28,7 +28,6 @@ from tornado.ioloop import IOLoop
 from tornado.platform.auto import set_close_exec
 from tornado.util import Configurable, errno_from_exception
 
-import typing
 from typing import List, Callable, Any, Type, Dict, Union, Tuple, Awaitable, Optional
 
 # Note that the naming of ssl.Purpose is confusing; the purpose
