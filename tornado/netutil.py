@@ -414,7 +414,9 @@ class ExecutorResolver(Resolver):
     """
 
     def initialize(
-        self, executor: Optional[concurrent.futures.Executor] = None, close_executor: bool = True
+        self,
+        executor: Optional[concurrent.futures.Executor] = None,
+        close_executor: bool = True,
     ) -> None:
         self.io_loop = IOLoop.current()
         if executor is not None:

@@ -146,7 +146,10 @@ class OpenIdMixin(object):
         return self._on_authentication_verified(resp)
 
     def _openid_args(
-        self, callback_uri: str, ax_attrs: Iterable[str] = [], oauth_scope: Optional[str] = None
+        self,
+        callback_uri: str,
+        ax_attrs: Iterable[str] = [],
+        oauth_scope: Optional[str] = None,
     ) -> Dict[str, str]:
         handler = cast(RequestHandler, self)
         url = urllib.parse.urljoin(handler.request.full_url(), callback_uri)
@@ -380,7 +383,9 @@ class OAuthMixin(object):
         return user
 
     def _oauth_request_token_url(
-        self, callback_uri: Optional[str] = None, extra_params: Optional[Dict[str, Any]] = None
+        self,
+        callback_uri: Optional[str] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
     ) -> str:
         handler = cast(RequestHandler, self)
         consumer_token = self._oauth_consumer_token()

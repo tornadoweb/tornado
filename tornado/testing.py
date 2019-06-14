@@ -260,7 +260,9 @@ class AsyncTestCase(unittest.TestCase):
             self.__failure = None
             raise_exc_info(failure)
 
-    def run(self, result: Optional[unittest.TestResult] = None) -> Optional[unittest.TestResult]:
+    def run(
+        self, result: Optional[unittest.TestResult] = None
+    ) -> Optional[unittest.TestResult]:
         ret = super(AsyncTestCase, self).run(result)
         # As a last resort, if an exception escaped super.run() and wasn't
         # re-raised in tearDown, raise it here.  This will cause the
@@ -288,7 +290,9 @@ class AsyncTestCase(unittest.TestCase):
         self.__stopped = True
 
     def wait(
-        self, condition: Optional[Callable[..., bool]] = None, timeout: Optional[float] = None
+        self,
+        condition: Optional[Callable[..., bool]] = None,
+        timeout: Optional[float] = None,
     ) -> None:
         """Runs the `.IOLoop` until stop is called or timeout has passed.
 
@@ -519,7 +523,8 @@ def gen_test(func: Callable[..., Union[Generator, "Coroutine"]]) -> Callable[...
 
 
 def gen_test(  # noqa: F811
-    func: Optional[Callable[..., Union[Generator, "Coroutine"]]] = None, timeout: Optional[float] = None
+    func: Optional[Callable[..., Union[Generator, "Coroutine"]]] = None,
+    timeout: Optional[float] = None,
 ) -> Union[
     Callable[..., None],
     Callable[[Callable[..., Union[Generator, "Coroutine"]]], Callable[..., None]],

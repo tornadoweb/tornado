@@ -648,7 +648,9 @@ class RequestHandler(object):
 
             morsel[k] = v
 
-    def clear_cookie(self, name: str, path: str = "/", domain: Optional[str] = None) -> None:
+    def clear_cookie(
+        self, name: str, path: str = "/", domain: Optional[str] = None
+    ) -> None:
         """Deletes the cookie with the given name.
 
         Due to limitations of the cookie protocol, you must pass the same
@@ -789,7 +791,9 @@ class RequestHandler(object):
             return None
         return get_signature_key_version(value)
 
-    def redirect(self, url: str, permanent: bool = False, status: Optional[int] = None) -> None:
+    def redirect(
+        self, url: str, permanent: bool = False, status: Optional[int] = None
+    ) -> None:
         """Sends a redirect to the given (optionally relative) URL.
 
         If the ``status`` argument is specified, that value is used as the
@@ -1541,7 +1545,9 @@ class RequestHandler(object):
             + '"/>'
         )
 
-    def static_url(self, path: str, include_host: Optional[bool] = None, **kwargs: Any) -> str:
+    def static_url(
+        self, path: str, include_host: Optional[bool] = None, **kwargs: Any
+    ) -> str:
         """Returns a static URL for the given relative static file path.
 
         This method requires you set the ``static_path`` setting in your
@@ -1922,7 +1928,9 @@ class _ApplicationRouter(ReversibleRuleRouter):
         `_ApplicationRouter` instance.
     """
 
-    def __init__(self, application: "Application", rules: Optional[_RuleList] = None) -> None:
+    def __init__(
+        self, application: "Application", rules: Optional[_RuleList] = None
+    ) -> None:
         assert isinstance(application, Application)
         self.application = application
         super(_ApplicationRouter, self).__init__(rules)
@@ -2358,7 +2366,11 @@ class HTTPError(Exception):
     """
 
     def __init__(
-        self, status_code: int = 500, log_message: Optional[str] = None, *args: Any, **kwargs: Any
+        self,
+        status_code: int = 500,
+        log_message: Optional[str] = None,
+        *args: Any,
+        **kwargs: Any
     ) -> None:
         self.status_code = status_code
         self.log_message = log_message

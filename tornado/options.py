@@ -104,7 +104,18 @@ from tornado.escape import _unicode, native_str
 from tornado.log import define_logging_options
 from tornado.util import basestring_type, exec_in
 
-from typing import Any, Iterator, Iterable, Tuple, Set, Dict, Callable, List, TextIO, Optional
+from typing import (
+    Any,
+    Iterator,
+    Iterable,
+    Tuple,
+    Set,
+    Dict,
+    Callable,
+    List,
+    TextIO,
+    Optional,
+)
 
 
 class Error(Exception):
@@ -686,7 +697,9 @@ def define(
     )
 
 
-def parse_command_line(args: Optional[List[str]] = None, final: bool = True) -> List[str]:
+def parse_command_line(
+    args: Optional[List[str]] = None, final: bool = True
+) -> List[str]:
     """Parses global options from the command line.
 
     See `OptionParser.parse_command_line`.

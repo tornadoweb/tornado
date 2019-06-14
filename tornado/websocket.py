@@ -1506,7 +1506,8 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         return self.protocol.write_message(message, binary=binary)
 
     def read_message(
-        self, callback: Optional[Callable[["Future[Union[None, str, bytes]]"], None]] = None
+        self,
+        callback: Optional[Callable[["Future[Union[None, str, bytes]]"], None]] = None,
     ) -> Awaitable[Union[None, str, bytes]]:
         """Reads a message from the WebSocket server.
 

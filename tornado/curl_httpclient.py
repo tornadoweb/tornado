@@ -251,7 +251,10 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 break
 
     def _finish(
-        self, curl: pycurl.Curl, curl_error: Optional[int] = None, curl_message: Optional[str] = None
+        self,
+        curl: pycurl.Curl,
+        curl_error: Optional[int] = None,
+        curl_message: Optional[str] = None,
     ) -> None:
         info = curl.info  # type: ignore
         curl.info = None  # type: ignore

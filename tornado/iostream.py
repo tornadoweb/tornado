@@ -346,7 +346,9 @@ class BaseIOStream(object):
         """
         return None
 
-    def read_until_regex(self, regex: bytes, max_bytes: Optional[int] = None) -> Awaitable[bytes]:
+    def read_until_regex(
+        self, regex: bytes, max_bytes: Optional[int] = None
+    ) -> Awaitable[bytes]:
         """Asynchronously read until we have matched the given regex.
 
         The result includes the data that matches the regex and anything
@@ -383,7 +385,9 @@ class BaseIOStream(object):
             raise
         return future
 
-    def read_until(self, delimiter: bytes, max_bytes: Optional[int] = None) -> Awaitable[bytes]:
+    def read_until(
+        self, delimiter: bytes, max_bytes: Optional[int] = None
+    ) -> Awaitable[bytes]:
         """Asynchronously read until we have found the given delimiter.
 
         The result includes all the data read including the delimiter.

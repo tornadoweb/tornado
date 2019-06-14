@@ -208,7 +208,9 @@ class LogFormatter(logging.Formatter):
         return formatted.replace("\n", "\n    ")
 
 
-def enable_pretty_logging(options: Any = None, logger: Optional[logging.Logger] = None) -> None:
+def enable_pretty_logging(
+    options: Any = None, logger: Optional[logging.Logger] = None
+) -> None:
     """Turns on formatted logging output as configured.
 
     This is called automatically by `tornado.options.parse_command_line`

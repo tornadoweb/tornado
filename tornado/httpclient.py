@@ -87,7 +87,9 @@ class HTTPClient(object):
     """
 
     def __init__(
-        self, async_client_class: Optional[Type["AsyncHTTPClient"]] = None, **kwargs: Any
+        self,
+        async_client_class: Optional[Type["AsyncHTTPClient"]] = None,
+        **kwargs: Any
     ) -> None:
         # Initialize self._closed at the beginning of the constructor
         # so that an exception raised here doesn't lead to confusing
@@ -384,7 +386,9 @@ class HTTPRequest(object):
         allow_ipv6: Optional[bool] = None,
         client_key: Optional[str] = None,
         client_cert: Optional[str] = None,
-        body_producer: Optional[Callable[[Callable[[bytes], None]], "Future[None]"]] = None,
+        body_producer: Optional[
+            Callable[[Callable[[bytes], None]], "Future[None]"]
+        ] = None,
         expect_100_continue: bool = False,
         decompress_response: Optional[bool] = None,
         ssl_options: Optional[Union[Dict[str, Any], ssl.SSLContext]] = None,
@@ -703,7 +707,10 @@ class HTTPClientError(Exception):
     """
 
     def __init__(
-        self, code: int, message: Optional[str] = None, response: Optional[HTTPResponse] = None
+        self,
+        code: int,
+        message: Optional[str] = None,
+        response: Optional[HTTPResponse] = None,
     ) -> None:
         self.code = code
         self.message = message or httputil.responses.get(code, "Unknown")

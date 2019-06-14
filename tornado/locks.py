@@ -121,7 +121,9 @@ class Condition(_TimeoutGarbageCollector):
             result += " waiters[%s]" % len(self._waiters)
         return result + ">"
 
-    def wait(self, timeout: Optional[Union[float, datetime.timedelta]] = None) -> Awaitable[bool]:
+    def wait(
+        self, timeout: Optional[Union[float, datetime.timedelta]] = None
+    ) -> Awaitable[bool]:
         """Wait for `.notify`.
 
         Returns a `.Future` that resolves ``True`` if the condition is notified,
@@ -231,7 +233,9 @@ class Event(object):
         """
         self._value = False
 
-    def wait(self, timeout: Optional[Union[float, datetime.timedelta]] = None) -> Awaitable[None]:
+    def wait(
+        self, timeout: Optional[Union[float, datetime.timedelta]] = None
+    ) -> Awaitable[None]:
         """Block until the internal flag is true.
 
         Returns an awaitable, which raises `tornado.util.TimeoutError` after a

@@ -707,7 +707,9 @@ class ParseError(Exception):
        Added ``filename`` and ``lineno`` attributes.
     """
 
-    def __init__(self, message: str, filename: Optional[str] = None, lineno: int = 0) -> None:
+    def __init__(
+        self, message: str, filename: Optional[str] = None, lineno: int = 0
+    ) -> None:
         self.message = message
         # The names "filename" and "lineno" are chosen for consistency
         # with python SyntaxError.
@@ -762,7 +764,9 @@ class _CodeWriter(object):
 
         return IncludeTemplate()
 
-    def write_line(self, line: str, line_number: int, indent: Optional[int] = None) -> None:
+    def write_line(
+        self, line: str, line_number: int, indent: Optional[int] = None
+    ) -> None:
         if indent is None:
             indent = self._indent
         line_comment = "  # %s:%d" % (self.current_template.name, line_number)
