@@ -87,7 +87,7 @@ class OpenIdMixin(object):
 
     def authenticate_redirect(
         self,
-        callback_uri: str = None,
+        callback_uri: Optional[str] = None,
         ax_attrs: List[str] = ["name", "email", "language", "username"],
     ) -> None:
         """Redirects to the authentication URL for this service.
@@ -114,7 +114,7 @@ class OpenIdMixin(object):
         handler.redirect(endpoint + "?" + urllib.parse.urlencode(args))
 
     async def get_authenticated_user(
-        self, http_client: httpclient.AsyncHTTPClient = None
+        self, http_client: Optional[httpclient.AsyncHTTPClient] = None
     ) -> Dict[str, Any]:
         """Fetches the authenticated user data upon redirect.
 
@@ -146,7 +146,7 @@ class OpenIdMixin(object):
         return self._on_authentication_verified(resp)
 
     def _openid_args(
-        self, callback_uri: str, ax_attrs: Iterable[str] = [], oauth_scope: str = None
+        self, callback_uri: str, ax_attrs: Iterable[str] = [], oauth_scope: Optional[str] = None
     ) -> Dict[str, str]:
         handler = cast(RequestHandler, self)
         url = urllib.parse.urljoin(handler.request.full_url(), callback_uri)
@@ -286,9 +286,9 @@ class OAuthMixin(object):
 
     async def authorize_redirect(
         self,
-        callback_uri: str = None,
-        extra_params: Dict[str, Any] = None,
-        http_client: httpclient.AsyncHTTPClient = None,
+        callback_uri: Optional[str] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+        http_client: Optional[httpclient.AsyncHTTPClient] = None,
     ) -> None:
         """Redirects the user to obtain OAuth authorization for this service.
 
@@ -334,7 +334,7 @@ class OAuthMixin(object):
         self._on_request_token(url, callback_uri, response)
 
     async def get_authenticated_user(
-        self, http_client: httpclient.AsyncHTTPClient = None
+        self, http_client: Optional[httpclient.AsyncHTTPClient] = None
     ) -> Dict[str, Any]:
         """Gets the OAuth authorized user and access token.
 
@@ -380,7 +380,7 @@ class OAuthMixin(object):
         return user
 
     def _oauth_request_token_url(
-        self, callback_uri: str = None, extra_params: Dict[str, Any] = None
+        self, callback_uri: Optional[str] = None, extra_params: Optional[Dict[str, Any]] = None
     ) -> str:
         handler = cast(RequestHandler, self)
         consumer_token = self._oauth_consumer_token()
@@ -547,11 +547,11 @@ class OAuth2Mixin(object):
 
     def authorize_redirect(
         self,
-        redirect_uri: str = None,
-        client_id: str = None,
-        client_secret: str = None,
-        extra_params: Dict[str, Any] = None,
-        scope: str = None,
+        redirect_uri: Optional[str] = None,
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+        scope: Optional[str] = None,
         response_type: str = "code",
     ) -> None:
         """Redirects the user to obtain OAuth authorization for this service.
@@ -582,11 +582,11 @@ class OAuth2Mixin(object):
 
     def _oauth_request_token_url(
         self,
-        redirect_uri: str = None,
-        client_id: str = None,
-        client_secret: str = None,
-        code: str = None,
-        extra_params: Dict[str, Any] = None,
+        redirect_uri: Optional[str] = None,
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
+        code: Optional[str] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
     ) -> str:
         url = self._OAUTH_ACCESS_TOKEN_URL  # type: ignore
         args = {}  # type: Dict[str, str]
@@ -605,8 +605,8 @@ class OAuth2Mixin(object):
     async def oauth2_request(
         self,
         url: str,
-        access_token: str = None,
-        post_args: Dict[str, Any] = None,
+        access_token: Optional[str] = None,
+        post_args: Optional[Dict[str, Any]] = None,
         **args: Any
     ) -> Any:
         """Fetches the given URL auth an OAuth2 access token.
@@ -709,7 +709,7 @@ class TwitterMixin(OAuthMixin):
     _OAUTH_NO_CALLBACKS = False
     _TWITTER_BASE_URL = "https://api.twitter.com/1.1"
 
-    async def authenticate_redirect(self, callback_uri: str = None) -> None:
+    async def authenticate_redirect(self, callback_uri: Optional[str] = None) -> None:
         """Just like `~OAuthMixin.authorize_redirect`, but
         auto-redirects if authorized.
 
@@ -735,7 +735,7 @@ class TwitterMixin(OAuthMixin):
         self,
         path: str,
         access_token: Dict[str, Any],
-        post_args: Dict[str, Any] = None,
+        post_args: Optional[Dict[str, Any]] = None,
         **args: Any
     ) -> Any:
         """Fetches the given API path, e.g., ``statuses/user_timeline/btaylor``
@@ -930,7 +930,7 @@ class FacebookGraphMixin(OAuth2Mixin):
         client_id: str,
         client_secret: str,
         code: str,
-        extra_fields: Dict[str, Any] = None,
+        extra_fields: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Handles the login for the Facebook user, returning a user object.
 
@@ -1034,8 +1034,8 @@ class FacebookGraphMixin(OAuth2Mixin):
     async def facebook_request(
         self,
         path: str,
-        access_token: str = None,
-        post_args: Dict[str, Any] = None,
+        access_token: Optional[str] = None,
+        post_args: Optional[Dict[str, Any]] = None,
         **args: Any
     ) -> Any:
         """Fetches the given relative API path, e.g., "/btaylor/picture"
@@ -1099,7 +1099,7 @@ def _oauth_signature(
     method: str,
     url: str,
     parameters: Dict[str, Any] = {},
-    token: Dict[str, Any] = None,
+    token: Optional[Dict[str, Any]] = None,
 ) -> bytes:
     """Calculates the HMAC-SHA1 OAuth signature for the given request.
 
@@ -1132,7 +1132,7 @@ def _oauth10a_signature(
     method: str,
     url: str,
     parameters: Dict[str, Any] = {},
-    token: Dict[str, Any] = None,
+    token: Optional[Dict[str, Any]] = None,
 ) -> bytes:
     """Calculates the HMAC-SHA1 OAuth 1.0a signature for the given request.
 

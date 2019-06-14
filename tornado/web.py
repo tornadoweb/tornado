@@ -340,7 +340,7 @@ class RequestHandler(object):
         """
         pass
 
-    def set_status(self, status_code: int, reason: str = None) -> None:
+    def set_status(self, status_code: int, reason: Optional[str] = None) -> None:
         """Sets the status code for our response.
 
         :arg int status_code: Response status code.
@@ -554,7 +554,7 @@ class RequestHandler(object):
             values.append(s)
         return values
 
-    def decode_argument(self, value: bytes, name: str = None) -> str:
+    def decode_argument(self, value: bytes, name: Optional[str] = None) -> str:
         """Decodes an argument from the request.
 
         The argument has been percent-decoded and is now a byte string.
@@ -580,7 +580,7 @@ class RequestHandler(object):
         `self.request.cookies <.httputil.HTTPServerRequest.cookies>`."""
         return self.request.cookies
 
-    def get_cookie(self, name: str, default: str = None) -> Optional[str]:
+    def get_cookie(self, name: str, default: Optional[str] = None) -> Optional[str]:
         """Returns the value of the request cookie with the given name.
 
         If the named cookie is not present, returns ``default``.
@@ -597,7 +597,7 @@ class RequestHandler(object):
         self,
         name: str,
         value: Union[str, bytes],
-        domain: str = None,
+        domain: Optional[str] = None,
         expires: Optional[Union[float, Tuple, datetime.datetime]] = None,
         path: str = "/",
         expires_days: Optional[int] = None,
@@ -648,7 +648,7 @@ class RequestHandler(object):
 
             morsel[k] = v
 
-    def clear_cookie(self, name: str, path: str = "/", domain: str = None) -> None:
+    def clear_cookie(self, name: str, path: str = "/", domain: Optional[str] = None) -> None:
         """Deletes the cookie with the given name.
 
         Due to limitations of the cookie protocol, you must pass the same
@@ -662,7 +662,7 @@ class RequestHandler(object):
         expires = datetime.datetime.utcnow() - datetime.timedelta(days=365)
         self.set_cookie(name, value="", path=path, expires=expires, domain=domain)
 
-    def clear_all_cookies(self, path: str = "/", domain: str = None) -> None:
+    def clear_all_cookies(self, path: str = "/", domain: Optional[str] = None) -> None:
         """Deletes all the cookies the user sent with this request.
 
         See `clear_cookie` for more information on the path and domain
@@ -683,7 +683,7 @@ class RequestHandler(object):
         name: str,
         value: Union[str, bytes],
         expires_days: Optional[int] = 30,
-        version: int = None,
+        version: Optional[int] = None,
         **kwargs: Any
     ) -> None:
         """Signs and timestamps a cookie so it cannot be forged.
@@ -718,7 +718,7 @@ class RequestHandler(object):
         )
 
     def create_signed_value(
-        self, name: str, value: Union[str, bytes], version: int = None
+        self, name: str, value: Union[str, bytes], version: Optional[int] = None
     ) -> bytes:
         """Signs and timestamps a string so it cannot be forged.
 
@@ -746,9 +746,9 @@ class RequestHandler(object):
     def get_secure_cookie(
         self,
         name: str,
-        value: str = None,
+        value: Optional[str] = None,
         max_age_days: int = 31,
-        min_version: int = None,
+        min_version: Optional[int] = None,
     ) -> Optional[bytes]:
         """Returns the given signed cookie if it validates, or None.
 
@@ -776,7 +776,7 @@ class RequestHandler(object):
         )
 
     def get_secure_cookie_key_version(
-        self, name: str, value: str = None
+        self, name: str, value: Optional[str] = None
     ) -> Optional[int]:
         """Returns the signing key version of the secure cookie.
 
@@ -789,7 +789,7 @@ class RequestHandler(object):
             return None
         return get_signature_key_version(value)
 
-    def redirect(self, url: str, permanent: bool = False, status: int = None) -> None:
+    def redirect(self, url: str, permanent: bool = False, status: Optional[int] = None) -> None:
         """Sends a redirect to the given (optionally relative) URL.
 
         If the ``status`` argument is specified, that value is used as the
@@ -1101,7 +1101,7 @@ class RequestHandler(object):
                 future.set_result(None)
                 return future
 
-    def finish(self, chunk: Union[str, bytes, dict] = None) -> "Future[None]":
+    def finish(self, chunk: Optional[Union[str, bytes, dict]] = None) -> "Future[None]":
         """Finishes this response, ending the HTTP request.
 
         Passing a ``chunk`` to ``finish()`` is equivalent to passing that
@@ -1541,7 +1541,7 @@ class RequestHandler(object):
             + '"/>'
         )
 
-    def static_url(self, path: str, include_host: bool = None, **kwargs: Any) -> str:
+    def static_url(self, path: str, include_host: Optional[bool] = None, **kwargs: Any) -> str:
         """Returns a static URL for the given relative static file path.
 
         This method requires you set the ``static_path`` setting in your
@@ -1922,7 +1922,7 @@ class _ApplicationRouter(ReversibleRuleRouter):
         `_ApplicationRouter` instance.
     """
 
-    def __init__(self, application: "Application", rules: _RuleList = None) -> None:
+    def __init__(self, application: "Application", rules: Optional[_RuleList] = None) -> None:
         assert isinstance(application, Application)
         self.application = application
         super(_ApplicationRouter, self).__init__(rules)
@@ -2036,9 +2036,9 @@ class Application(ReversibleRouter):
 
     def __init__(
         self,
-        handlers: _RuleList = None,
-        default_host: str = None,
-        transforms: List[Type["OutputTransform"]] = None,
+        handlers: Optional[_RuleList] = None,
+        default_host: Optional[str] = None,
+        transforms: Optional[List[Type["OutputTransform"]]] = None,
         **settings: Any
     ) -> None:
         if transforms is None:
@@ -2189,9 +2189,9 @@ class Application(ReversibleRouter):
         self,
         request: httputil.HTTPServerRequest,
         target_class: Type[RequestHandler],
-        target_kwargs: Dict[str, Any] = None,
-        path_args: List[bytes] = None,
-        path_kwargs: Dict[str, bytes] = None,
+        target_kwargs: Optional[Dict[str, Any]] = None,
+        path_args: Optional[List[bytes]] = None,
+        path_kwargs: Optional[Dict[str, bytes]] = None,
     ) -> "_HandlerDelegate":
         """Returns `~.httputil.HTTPMessageDelegate` that can serve a request
         for application and `RequestHandler` subclass.
@@ -2358,7 +2358,7 @@ class HTTPError(Exception):
     """
 
     def __init__(
-        self, status_code: int = 500, log_message: str = None, *args: Any, **kwargs: Any
+        self, status_code: int = 500, log_message: Optional[str] = None, *args: Any, **kwargs: Any
     ) -> None:
         self.status_code = status_code
         self.log_message = log_message
@@ -2558,7 +2558,7 @@ class StaticFileHandler(RequestHandler):
     _static_hashes = {}  # type: Dict[str, Optional[str]]
     _lock = threading.Lock()  # protects _static_hashes
 
-    def initialize(self, path: str, default_filename: str = None) -> None:
+    def initialize(self, path: str, default_filename: Optional[str] = None) -> None:
         self.root = path
         self.default_filename = default_filename
 
@@ -2784,7 +2784,7 @@ class StaticFileHandler(RequestHandler):
 
     @classmethod
     def get_content(
-        cls, abspath: str, start: int = None, end: int = None
+        cls, abspath: str, start: Optional[int] = None, end: Optional[int] = None
     ) -> Generator[bytes, None, None]:
         """Retrieve the content of the requested resource which is located
         at the given absolute path.
@@ -3348,9 +3348,9 @@ def create_signed_value(
     secret: _CookieSecretTypes,
     name: str,
     value: Union[str, bytes],
-    version: int = None,
-    clock: Callable[[], float] = None,
-    key_version: int = None,
+    version: Optional[int] = None,
+    clock: Optional[Callable[[], float]] = None,
+    key_version: Optional[int] = None,
 ) -> bytes:
     if version is None:
         version = DEFAULT_SIGNED_VALUE_VERSION
@@ -3439,8 +3439,8 @@ def decode_signed_value(
     name: str,
     value: Union[None, str, bytes],
     max_age_days: int = 31,
-    clock: Callable[[], float] = None,
-    min_version: int = None,
+    clock: Optional[Callable[[], float]] = None,
+    min_version: Optional[int] = None,
 ) -> Optional[bytes]:
     if clock is None:
         clock = time.time

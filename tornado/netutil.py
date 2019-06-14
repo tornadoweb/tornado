@@ -29,10 +29,7 @@ from tornado.platform.auto import set_close_exec
 from tornado.util import Configurable, errno_from_exception
 
 import typing
-from typing import List, Callable, Any, Type, Dict, Union, Tuple, Awaitable
-
-if typing.TYPE_CHECKING:
-    from asyncio import Future  # noqa: F401
+from typing import List, Callable, Any, Type, Dict, Union, Tuple, Awaitable, Optional
 
 # Note that the naming of ssl.Purpose is confusing; the purpose
 # of a context is to authentiate the opposite side of the connection.
@@ -67,10 +64,10 @@ _DEFAULT_BACKLOG = 128
 
 def bind_sockets(
     port: int,
-    address: str = None,
+    address: Optional[str] = None,
     family: socket.AddressFamily = socket.AF_UNSPEC,
     backlog: int = _DEFAULT_BACKLOG,
-    flags: int = None,
+    flags: Optional[int] = None,
     reuse_port: bool = False,
 ) -> List[socket.socket]:
     """Creates listening sockets bound to the given port and address.
@@ -417,7 +414,7 @@ class ExecutorResolver(Resolver):
     """
 
     def initialize(
-        self, executor: concurrent.futures.Executor = None, close_executor: bool = True
+        self, executor: Optional[concurrent.futures.Executor] = None, close_executor: bool = True
     ) -> None:
         self.io_loop = IOLoop.current()
         if executor is not None:
@@ -591,7 +588,7 @@ def ssl_options_to_context(
 def ssl_wrap_socket(
     socket: socket.socket,
     ssl_options: Union[Dict[str, Any], ssl.SSLContext],
-    server_hostname: str = None,
+    server_hostname: Optional[str] = None,
     **kwargs: Any
 ) -> ssl.SSLSocket:
     """Returns an ``ssl.SSLSocket`` wrapping the given socket.

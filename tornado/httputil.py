@@ -367,16 +367,16 @@ class HTTPServerRequest(object):
 
     def __init__(
         self,
-        method: str = None,
-        uri: str = None,
+        method: Optional[str] = None,
+        uri: Optional[str] = None,
         version: str = "HTTP/1.0",
-        headers: HTTPHeaders = None,
-        body: bytes = None,
-        host: str = None,
-        files: Dict[str, List["HTTPFile"]] = None,
-        connection: "HTTPConnection" = None,
-        start_line: "RequestStartLine" = None,
-        server_connection: object = None,
+        headers: Optional[HTTPHeaders] = None,
+        body: Optional[bytes] = None,
+        host: Optional[str] = None,
+        files: Optional[Dict[str, List["HTTPFile"]]] = None,
+        connection: Optional["HTTPConnection"] = None,
+        start_line: Optional["RequestStartLine"] = None,
+        server_connection: Optional[object] = None,
     ) -> None:
         if start_line is not None:
             method, uri, version = start_line
@@ -590,7 +590,7 @@ class HTTPConnection(object):
         self,
         start_line: Union["RequestStartLine", "ResponseStartLine"],
         headers: HTTPHeaders,
-        chunk: bytes = None,
+        chunk: Optional[bytes] = None,
     ) -> "Future[None]":
         """Write an HTTP header block.
 
@@ -766,7 +766,7 @@ def parse_body_arguments(
     body: bytes,
     arguments: Dict[str, List[bytes]],
     files: Dict[str, List[HTTPFile]],
-    headers: HTTPHeaders = None,
+    headers: Optional[HTTPHeaders] = None,
 ) -> None:
     """Parses a form request body.
 

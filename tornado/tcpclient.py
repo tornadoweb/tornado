@@ -30,11 +30,7 @@ from tornado.netutil import Resolver
 from tornado.platform.auto import set_close_exec
 from tornado.gen import TimeoutError
 
-import typing
-from typing import Any, Union, Dict, Tuple, List, Callable, Iterator
-
-if typing.TYPE_CHECKING:
-    from typing import Optional, Set  # noqa: F401
+from typing import Any, Union, Dict, Tuple, List, Callable, Iterator, Optional, Set
 
 _INITIAL_CONNECT_TIMEOUT = 0.3
 
@@ -105,7 +101,7 @@ class _Connector(object):
     def start(
         self,
         timeout: float = _INITIAL_CONNECT_TIMEOUT,
-        connect_timeout: Union[float, datetime.timedelta] = None,
+        connect_timeout: Optional[Union[float, datetime.timedelta]] = None,
     ) -> "Future[Tuple[socket.AddressFamily, Any, IOStream]]":
         self.try_connect(iter(self.primary_addrs))
         self.set_timeout(timeout)
@@ -207,7 +203,7 @@ class TCPClient(object):
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
     """
 
-    def __init__(self, resolver: Resolver = None) -> None:
+    def __init__(self, resolver: Optional[Resolver] = None) -> None:
         if resolver is not None:
             self.resolver = resolver
             self._own_resolver = False
@@ -224,11 +220,11 @@ class TCPClient(object):
         host: str,
         port: int,
         af: socket.AddressFamily = socket.AF_UNSPEC,
-        ssl_options: Union[Dict[str, Any], ssl.SSLContext] = None,
-        max_buffer_size: int = None,
-        source_ip: str = None,
-        source_port: int = None,
-        timeout: Union[float, datetime.timedelta] = None,
+        ssl_options: Optional[Union[Dict[str, Any], ssl.SSLContext]] = None,
+        max_buffer_size: Optional[int] = None,
+        source_ip: Optional[str] = None,
+        source_port: Optional[int] = None,
+        timeout: Optional[Union[float, datetime.timedelta]] = None,
     ) -> IOStream:
         """Connect to the given host and port.
 
@@ -300,8 +296,8 @@ class TCPClient(object):
         max_buffer_size: int,
         af: socket.AddressFamily,
         addr: Tuple,
-        source_ip: str = None,
-        source_port: int = None,
+        source_ip: Optional[str] = None,
+        source_port: Optional[int] = None,
     ) -> Tuple[IOStream, "Future[IOStream]"]:
         # Always connect in plaintext; we'll convert to ssl if necessary
         # after one connection has completed.

@@ -329,7 +329,7 @@ class IOLoop(Configurable):
 
         return AsyncIOLoop
 
-    def initialize(self, make_current: bool = None) -> None:
+    def initialize(self, make_current: Optional[bool] = None) -> None:
         if make_current is None:
             if IOLoop.current(instance=False) is None:
                 self.make_current()
@@ -457,7 +457,7 @@ class IOLoop(Configurable):
         """
         raise NotImplementedError()
 
-    def run_sync(self, func: Callable, timeout: float = None) -> Any:
+    def run_sync(self, func: Callable, timeout: Optional[float] = None) -> Any:
         """Starts the `IOLoop`, runs the given function, and stops the loop.
 
         The function must return either an awaitable object or

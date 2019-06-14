@@ -262,10 +262,10 @@ class Template(object):
         self,
         template_string: Union[str, bytes],
         name: str = "<string>",
-        loader: "BaseLoader" = None,
+        loader: Optional["BaseLoader"] = None,
         compress_whitespace: Union[bool, _UnsetMarker] = _UNSET,
         autoescape: Union[str, _UnsetMarker] = _UNSET,
-        whitespace: str = None,
+        whitespace: Optional[str] = None,
     ) -> None:
         """Construct a Template.
 
@@ -399,8 +399,8 @@ class BaseLoader(object):
     def __init__(
         self,
         autoescape: str = _DEFAULT_AUTOESCAPE,
-        namespace: Dict[str, Any] = None,
-        whitespace: str = None,
+        namespace: Optional[Dict[str, Any]] = None,
+        whitespace: Optional[str] = None,
     ) -> None:
         """Construct a template loader.
 
@@ -433,11 +433,11 @@ class BaseLoader(object):
         with self.lock:
             self.templates = {}
 
-    def resolve_path(self, name: str, parent_path: str = None) -> str:
+    def resolve_path(self, name: str, parent_path: Optional[str] = None) -> str:
         """Converts a possibly-relative path to absolute (used internally)."""
         raise NotImplementedError()
 
-    def load(self, name: str, parent_path: str = None) -> Template:
+    def load(self, name: str, parent_path: Optional[str] = None) -> Template:
         """Loads a template."""
         name = self.resolve_path(name, parent_path=parent_path)
         with self.lock:
@@ -457,7 +457,7 @@ class Loader(BaseLoader):
         super(Loader, self).__init__(**kwargs)
         self.root = os.path.abspath(root_directory)
 
-    def resolve_path(self, name: str, parent_path: str = None) -> str:
+    def resolve_path(self, name: str, parent_path: Optional[str] = None) -> str:
         if (
             parent_path
             and not parent_path.startswith("<")
@@ -485,7 +485,7 @@ class DictLoader(BaseLoader):
         super(DictLoader, self).__init__(**kwargs)
         self.dict = dict
 
-    def resolve_path(self, name: str, parent_path: str = None) -> str:
+    def resolve_path(self, name: str, parent_path: Optional[str] = None) -> str:
         if (
             parent_path
             and not parent_path.startswith("<")
@@ -707,7 +707,7 @@ class ParseError(Exception):
        Added ``filename`` and ``lineno`` attributes.
     """
 
-    def __init__(self, message: str, filename: str = None, lineno: int = 0) -> None:
+    def __init__(self, message: str, filename: Optional[str] = None, lineno: int = 0) -> None:
         self.message = message
         # The names "filename" and "lineno" are chosen for consistency
         # with python SyntaxError.
@@ -762,7 +762,7 @@ class _CodeWriter(object):
 
         return IncludeTemplate()
 
-    def write_line(self, line: str, line_number: int, indent: int = None) -> None:
+    def write_line(self, line: str, line_number: int, indent: Optional[int] = None) -> None:
         if indent is None:
             indent = self._indent
         line_comment = "  # %s:%d" % (self.current_template.name, line_number)
@@ -782,7 +782,7 @@ class _TemplateReader(object):
         self.line = 1
         self.pos = 0
 
-    def find(self, needle: str, start: int = 0, end: int = None) -> int:
+    def find(self, needle: str, start: int = 0, end: Optional[int] = None) -> int:
         assert start >= 0, start
         pos = self.pos
         start += pos
@@ -796,7 +796,7 @@ class _TemplateReader(object):
             index -= pos
         return index
 
-    def consume(self, count: int = None) -> str:
+    def consume(self, count: Optional[int] = None) -> str:
         if count is None:
             count = len(self.text) - self.pos
         newpos = self.pos + count
@@ -843,8 +843,8 @@ def _format_code(code: str) -> str:
 def _parse(
     reader: _TemplateReader,
     template: Template,
-    in_block: str = None,
-    in_loop: str = None,
+    in_block: Optional[str] = None,
+    in_loop: Optional[str] = None,
 ) -> _ChunkList:
     body = _ChunkList([])
     while True:

@@ -161,7 +161,7 @@
    Application configuration
    -------------------------
 
-   .. autoclass:: Application(handlers: List[Union[Rule, Tuple]] = None, default_host: str = None, transforms: List[Type[OutputTransform]] = None, **settings)
+   .. autoclass:: Application(handlers: Optional[List[Union[Rule, Tuple]]] = None, default_host: Optional[str] = None, transforms: Optional[List[Type[OutputTransform]]] = None, **settings)
 
       .. attribute:: settings
 

@@ -36,18 +36,14 @@ from tornado.httpclient import (
 )
 from tornado.log import app_log
 
-from typing import Dict, Any, Callable, Union
-import typing
-
-if typing.TYPE_CHECKING:
-    from typing import Deque, Tuple, Optional  # noqa: F401
+from typing import Dict, Any, Callable, Union, Deque, Tuple, Optional
 
 curl_log = logging.getLogger("tornado.curl_httpclient")
 
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):
     def initialize(  # type: ignore
-        self, max_clients: int = 10, defaults: Dict[str, Any] = None
+        self, max_clients: int = 10, defaults: Optional[Dict[str, Any]] = None
     ) -> None:
         super(CurlAsyncHTTPClient, self).initialize(defaults=defaults)
         # Typeshed is incomplete for CurlMulti, so just use Any for now.
@@ -255,7 +251,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 break
 
     def _finish(
-        self, curl: pycurl.Curl, curl_error: int = None, curl_message: str = None
+        self, curl: pycurl.Curl, curl_error: Optional[int] = None, curl_message: Optional[str] = None
     ) -> None:
         info = curl.info  # type: ignore
         curl.info = None  # type: ignore
