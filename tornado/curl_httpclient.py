@@ -36,7 +36,11 @@ from tornado.httpclient import (
 )
 from tornado.log import app_log
 
-from typing import Dict, Any, Callable, Union, Deque, Tuple, Optional
+from typing import Dict, Any, Callable, Union, Tuple, Optional
+import typing
+
+if typing.TYPE_CHECKING:
+    from typing import Deque  # noqa: F401
 
 curl_log = logging.getLogger("tornado.curl_httpclient")
 

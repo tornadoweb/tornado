@@ -88,7 +88,7 @@ class HTTPClient(object):
 
     def __init__(
         self,
-        async_client_class: Union[Type["AsyncHTTPClient"], None] = None,
+        async_client_class: "Optional[Type[AsyncHTTPClient]]" = None,
         **kwargs: Any
     ) -> None:
         # Initialize self._closed at the beginning of the constructor
