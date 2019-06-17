@@ -87,7 +87,9 @@ class HTTPClient(object):
     """
 
     def __init__(
-        self, async_client_class: Type["AsyncHTTPClient"] = None, **kwargs: Any
+        self,
+        async_client_class: "Optional[Type[AsyncHTTPClient]]" = None,
+        **kwargs: Any
     ) -> None:
         # Initialize self._closed at the beginning of the constructor
         # so that an exception raised here doesn't lead to confusing
@@ -211,7 +213,7 @@ class AsyncHTTPClient(Configurable):
             instance_cache[instance.io_loop] = instance
         return instance
 
-    def initialize(self, defaults: Dict[str, Any] = None) -> None:
+    def initialize(self, defaults: Optional[Dict[str, Any]] = None) -> None:
         self.io_loop = IOLoop.current()
         self.defaults = dict(HTTPRequest._DEFAULTS)
         if defaults is not None:
@@ -357,37 +359,39 @@ class HTTPRequest(object):
         self,
         url: str,
         method: str = "GET",
-        headers: Union[Dict[str, str], httputil.HTTPHeaders] = None,
-        body: Union[bytes, str] = None,
-        auth_username: str = None,
-        auth_password: str = None,
-        auth_mode: str = None,
-        connect_timeout: float = None,
-        request_timeout: float = None,
-        if_modified_since: Union[float, datetime.datetime] = None,
-        follow_redirects: bool = None,
-        max_redirects: int = None,
-        user_agent: str = None,
-        use_gzip: bool = None,
-        network_interface: str = None,
-        streaming_callback: Callable[[bytes], None] = None,
-        header_callback: Callable[[str], None] = None,
-        prepare_curl_callback: Callable[[Any], None] = None,
-        proxy_host: str = None,
-        proxy_port: int = None,
-        proxy_username: str = None,
-        proxy_password: str = None,
-        proxy_auth_mode: str = None,
-        allow_nonstandard_methods: bool = None,
-        validate_cert: bool = None,
-        ca_certs: str = None,
-        allow_ipv6: bool = None,
-        client_key: str = None,
-        client_cert: str = None,
-        body_producer: Callable[[Callable[[bytes], None]], "Future[None]"] = None,
+        headers: Optional[Union[Dict[str, str], httputil.HTTPHeaders]] = None,
+        body: Optional[Union[bytes, str]] = None,
+        auth_username: Optional[str] = None,
+        auth_password: Optional[str] = None,
+        auth_mode: Optional[str] = None,
+        connect_timeout: Optional[float] = None,
+        request_timeout: Optional[float] = None,
+        if_modified_since: Optional[Union[float, datetime.datetime]] = None,
+        follow_redirects: Optional[bool] = None,
+        max_redirects: Optional[int] = None,
+        user_agent: Optional[str] = None,
+        use_gzip: Optional[bool] = None,
+        network_interface: Optional[str] = None,
+        streaming_callback: Optional[Callable[[bytes], None]] = None,
+        header_callback: Optional[Callable[[str], None]] = None,
+        prepare_curl_callback: Optional[Callable[[Any], None]] = None,
+        proxy_host: Optional[str] = None,
+        proxy_port: Optional[int] = None,
+        proxy_username: Optional[str] = None,
+        proxy_password: Optional[str] = None,
+        proxy_auth_mode: Optional[str] = None,
+        allow_nonstandard_methods: Optional[bool] = None,
+        validate_cert: Optional[bool] = None,
+        ca_certs: Optional[str] = None,
+        allow_ipv6: Optional[bool] = None,
+        client_key: Optional[str] = None,
+        client_cert: Optional[str] = None,
+        body_producer: Optional[
+            Callable[[Callable[[bytes], None]], "Future[None]"]
+        ] = None,
         expect_100_continue: bool = False,
-        decompress_response: bool = None,
-        ssl_options: Union[Dict[str, Any], ssl.SSLContext] = None,
+        decompress_response: Optional[bool] = None,
+        ssl_options: Optional[Union[Dict[str, Any], ssl.SSLContext]] = None,
     ) -> None:
         r"""All parameters except ``url`` are optional.
 
@@ -624,14 +628,14 @@ class HTTPResponse(object):
         self,
         request: HTTPRequest,
         code: int,
-        headers: httputil.HTTPHeaders = None,
-        buffer: BytesIO = None,
-        effective_url: str = None,
-        error: BaseException = None,
-        request_time: float = None,
-        time_info: Dict[str, float] = None,
-        reason: str = None,
-        start_time: float = None,
+        headers: Optional[httputil.HTTPHeaders] = None,
+        buffer: Optional[BytesIO] = None,
+        effective_url: Optional[str] = None,
+        error: Optional[BaseException] = None,
+        request_time: Optional[float] = None,
+        time_info: Optional[Dict[str, float]] = None,
+        reason: Optional[str] = None,
+        start_time: Optional[float] = None,
     ) -> None:
         if isinstance(request, _RequestProxy):
             self.request = request.request
@@ -703,7 +707,10 @@ class HTTPClientError(Exception):
     """
 
     def __init__(
-        self, code: int, message: str = None, response: HTTPResponse = None
+        self,
+        code: int,
+        message: Optional[str] = None,
+        response: Optional[HTTPResponse] = None,
     ) -> None:
         self.code = code
         self.message = message or httputil.responses.get(code, "Unknown")

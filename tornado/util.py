@@ -157,7 +157,9 @@ def import_object(name: str) -> Any:
         raise ImportError("No module named %s" % parts[-1])
 
 
-def exec_in(code: Any, glob: Dict[str, Any], loc: Mapping[str, Any] = None) -> None:
+def exec_in(
+    code: Any, glob: Dict[str, Any], loc: Optional[Optional[Mapping[str, Any]]] = None
+) -> None:
     if isinstance(code, str):
         # exec(string) inherits the caller's future imports; compile
         # the string first to prevent that.

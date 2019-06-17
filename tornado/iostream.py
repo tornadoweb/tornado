@@ -114,7 +114,7 @@ class StreamClosedError(IOError):
        Added the ``real_error`` attribute.
     """
 
-    def __init__(self, real_error: BaseException = None) -> None:
+    def __init__(self, real_error: Optional[BaseException] = None) -> None:
         super(StreamClosedError, self).__init__("Stream is closed")
         self.real_error = real_error
 
@@ -246,9 +246,9 @@ class BaseIOStream(object):
 
     def __init__(
         self,
-        max_buffer_size: int = None,
-        read_chunk_size: int = None,
-        max_write_buffer_size: int = None,
+        max_buffer_size: Optional[int] = None,
+        read_chunk_size: Optional[int] = None,
+        max_write_buffer_size: Optional[int] = None,
     ) -> None:
         """`BaseIOStream` constructor.
 
@@ -346,7 +346,9 @@ class BaseIOStream(object):
         """
         return None
 
-    def read_until_regex(self, regex: bytes, max_bytes: int = None) -> Awaitable[bytes]:
+    def read_until_regex(
+        self, regex: bytes, max_bytes: Optional[int] = None
+    ) -> Awaitable[bytes]:
         """Asynchronously read until we have matched the given regex.
 
         The result includes the data that matches the regex and anything
@@ -383,7 +385,9 @@ class BaseIOStream(object):
             raise
         return future
 
-    def read_until(self, delimiter: bytes, max_bytes: int = None) -> Awaitable[bytes]:
+    def read_until(
+        self, delimiter: bytes, max_bytes: Optional[int] = None
+    ) -> Awaitable[bytes]:
         """Asynchronously read until we have found the given delimiter.
 
         The result includes all the data read including the delimiter.
@@ -1147,7 +1151,7 @@ class IOStream(BaseIOStream):
             del data
 
     def connect(
-        self: _IOStreamType, address: tuple, server_hostname: str = None
+        self: _IOStreamType, address: tuple, server_hostname: Optional[str] = None
     ) -> "Future[_IOStreamType]":
         """Connects the socket to a remote address without blocking.
 
@@ -1222,8 +1226,8 @@ class IOStream(BaseIOStream):
     def start_tls(
         self,
         server_side: bool,
-        ssl_options: Union[Dict[str, Any], ssl.SSLContext] = None,
-        server_hostname: str = None,
+        ssl_options: Optional[Union[Dict[str, Any], ssl.SSLContext]] = None,
+        server_hostname: Optional[str] = None,
     ) -> Awaitable["SSLIOStream"]:
         """Convert this `IOStream` to an `SSLIOStream`.
 
@@ -1480,7 +1484,7 @@ class SSLIOStream(IOStream):
         super(SSLIOStream, self)._handle_write()
 
     def connect(
-        self, address: Tuple, server_hostname: str = None
+        self, address: Tuple, server_hostname: Optional[str] = None
     ) -> "Future[SSLIOStream]":
         self._server_hostname = server_hostname
         # Ignore the result of connect(). If it fails,

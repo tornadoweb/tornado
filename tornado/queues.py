@@ -33,11 +33,11 @@ from tornado import gen, ioloop
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado.locks import Event
 
-from typing import Union, TypeVar, Generic, Awaitable
+from typing import Union, TypeVar, Generic, Awaitable, Optional
 import typing
 
 if typing.TYPE_CHECKING:
-    from typing import Deque, Tuple, List, Any  # noqa: F401
+    from typing import Deque, Tuple, Any  # noqa: F401
 
 _T = TypeVar("_T")
 
@@ -184,7 +184,7 @@ class Queue(Generic[_T]):
             return self.qsize() >= self.maxsize
 
     def put(
-        self, item: _T, timeout: Union[float, datetime.timedelta] = None
+        self, item: _T, timeout: Optional[Union[float, datetime.timedelta]] = None
     ) -> "Future[None]":
         """Put an item into the queue, perhaps waiting until there is room.
 
@@ -222,7 +222,9 @@ class Queue(Generic[_T]):
         else:
             self.__put_internal(item)
 
-    def get(self, timeout: Union[float, datetime.timedelta] = None) -> Awaitable[_T]:
+    def get(
+        self, timeout: Optional[Union[float, datetime.timedelta]] = None
+    ) -> Awaitable[_T]:
         """Remove and return an item from the queue.
 
         Returns an awaitable which resolves once an item is available, or raises
@@ -287,7 +289,9 @@ class Queue(Generic[_T]):
         if self._unfinished_tasks == 0:
             self._finished.set()
 
-    def join(self, timeout: Union[float, datetime.timedelta] = None) -> Awaitable[None]:
+    def join(
+        self, timeout: Optional[Union[float, datetime.timedelta]] = None
+    ) -> Awaitable[None]:
         """Block until all items in the queue are processed.
 
         Returns an awaitable, which raises `tornado.util.TimeoutError` after a

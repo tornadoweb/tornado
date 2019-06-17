@@ -300,7 +300,7 @@ _RuleList = List[
 class RuleRouter(Router):
     """Rule-based router implementation."""
 
-    def __init__(self, rules: _RuleList = None) -> None:
+    def __init__(self, rules: Optional[_RuleList] = None) -> None:
         """Constructs a router from an ordered list of rules::
 
             RuleRouter([
@@ -409,7 +409,7 @@ class ReversibleRuleRouter(ReversibleRouter, RuleRouter):
     in a rule's matcher (see `Matcher.reverse`).
     """
 
-    def __init__(self, rules: _RuleList = None) -> None:
+    def __init__(self, rules: Optional[_RuleList] = None) -> None:
         self.named_rules = {}  # type: Dict[str, Any]
         super(ReversibleRuleRouter, self).__init__(rules)
 
@@ -445,8 +445,8 @@ class Rule(object):
         self,
         matcher: "Matcher",
         target: Any,
-        target_kwargs: Dict[str, Any] = None,
-        name: str = None,
+        target_kwargs: Optional[Dict[str, Any]] = None,
+        name: Optional[str] = None,
     ) -> None:
         """Constructs a Rule instance.
 
@@ -652,8 +652,8 @@ class URLSpec(Rule):
         self,
         pattern: Union[str, Pattern],
         handler: Any,
-        kwargs: Dict[str, Any] = None,
-        name: str = None,
+        kwargs: Optional[Dict[str, Any]] = None,
+        name: Optional[str] = None,
     ) -> None:
         """Parameters:
 

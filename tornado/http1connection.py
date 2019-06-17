@@ -75,11 +75,11 @@ class HTTP1ConnectionParameters(object):
     def __init__(
         self,
         no_keep_alive: bool = False,
-        chunk_size: int = None,
-        max_header_size: int = None,
-        header_timeout: float = None,
-        max_body_size: int = None,
-        body_timeout: float = None,
+        chunk_size: Optional[int] = None,
+        max_header_size: Optional[int] = None,
+        header_timeout: Optional[float] = None,
+        max_body_size: Optional[int] = None,
+        body_timeout: Optional[float] = None,
         decompress: bool = False,
     ) -> None:
         """
@@ -113,8 +113,8 @@ class HTTP1Connection(httputil.HTTPConnection):
         self,
         stream: iostream.IOStream,
         is_client: bool,
-        params: HTTP1ConnectionParameters = None,
-        context: object = None,
+        params: Optional[HTTP1ConnectionParameters] = None,
+        context: Optional[object] = None,
     ) -> None:
         """
         :arg stream: an `.IOStream`
@@ -377,7 +377,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         self,
         start_line: Union[httputil.RequestStartLine, httputil.ResponseStartLine],
         headers: httputil.HTTPHeaders,
-        chunk: bytes = None,
+        chunk: Optional[bytes] = None,
     ) -> "Future[None]":
         """Implements `.HTTPConnection.write_headers`."""
         lines = []
@@ -765,8 +765,8 @@ class HTTP1ServerConnection(object):
     def __init__(
         self,
         stream: iostream.IOStream,
-        params: HTTP1ConnectionParameters = None,
-        context: object = None,
+        params: Optional[HTTP1ConnectionParameters] = None,
+        context: Optional[object] = None,
     ) -> None:
         """
         :arg stream: an `.IOStream`

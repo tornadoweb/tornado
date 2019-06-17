@@ -107,9 +107,9 @@ class TCPServer(object):
 
     def __init__(
         self,
-        ssl_options: Union[Dict[str, Any], ssl.SSLContext] = None,
-        max_buffer_size: int = None,
-        read_chunk_size: int = None,
+        ssl_options: Optional[Union[Dict[str, Any], ssl.SSLContext]] = None,
+        max_buffer_size: Optional[int] = None,
+        read_chunk_size: Optional[int] = None,
     ) -> None:
         self.ssl_options = ssl_options
         self._sockets = {}  # type: Dict[int, socket.socket]
@@ -173,7 +173,7 @@ class TCPServer(object):
     def bind(
         self,
         port: int,
-        address: str = None,
+        address: Optional[str] = None,
         family: socket.AddressFamily = socket.AF_UNSPEC,
         backlog: int = 128,
         reuse_port: bool = False,
@@ -209,7 +209,9 @@ class TCPServer(object):
         else:
             self._pending_sockets.extend(sockets)
 
-    def start(self, num_processes: Optional[int] = 1, max_restarts: int = None) -> None:
+    def start(
+        self, num_processes: Optional[int] = 1, max_restarts: Optional[int] = None
+    ) -> None:
         """Starts this server in the `.IOLoop`.
 
         By default, we run the server in this process and do not fork any

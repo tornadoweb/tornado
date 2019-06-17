@@ -89,12 +89,12 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     def initialize(  # type: ignore
         self,
         max_clients: int = 10,
-        hostname_mapping: Dict[str, str] = None,
+        hostname_mapping: Optional[Dict[str, str]] = None,
         max_buffer_size: int = 104857600,
-        resolver: Resolver = None,
-        defaults: Dict[str, Any] = None,
-        max_header_size: int = None,
-        max_body_size: int = None,
+        resolver: Optional[Resolver] = None,
+        defaults: Optional[Dict[str, Any]] = None,
+        max_header_size: Optional[int] = None,
+        max_body_size: Optional[int] = None,
     ) -> None:
         """Creates a AsyncHTTPClient.
 
@@ -226,7 +226,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
                 self.io_loop.remove_timeout(timeout_handle)
             del self.waiting[key]
 
-    def _on_timeout(self, key: object, info: str = None) -> None:
+    def _on_timeout(self, key: object, info: Optional[str] = None) -> None:
         """Timeout callback of request.
 
         Construct a timeout HTTPResponse when a timeout occurs.
@@ -471,7 +471,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             return ssl_ctx
         return None
 
-    def _on_timeout(self, info: str = None) -> None:
+    def _on_timeout(self, info: Optional[str] = None) -> None:
         """Timeout callback of _HTTPConnection instance.
 
         Raise a `HTTPTimeoutError` when a timeout occurs.
