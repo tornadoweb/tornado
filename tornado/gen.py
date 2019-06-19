@@ -557,8 +557,9 @@ def with_timeout(
     an absolute time relative to `.IOLoop.time`)
 
     If the wrapped `.Future` fails after it has timed out, the exception
-    will be logged unless it is of a type contained in ``quiet_exceptions``
-    (which may be an exception type or a sequence of types).
+    will be logged unless it is either of a type contained in
+    ``quiet_exceptions`` (which may be an exception type or a sequence of
+    types), or a `CancelledError`.
 
     The wrapped `.Future` is not canceled when the timeout expires,
     permitting it to be reused. `asyncio.wait_for` is similar to this
@@ -572,6 +573,9 @@ def with_timeout(
 
     .. versionchanged:: 4.4
        Added support for yieldable objects other than `.Future`.
+
+    .. versionchanged:: 6.1
+       Do not log CancelledError after timeout.
 
     """
     # It's tempting to optimize this by cancelling the input future on timeout
@@ -587,6 +591,8 @@ def with_timeout(
     def error_callback(future: Future) -> None:
         try:
             future.result()
+        except asyncio.CancelledError:
+            pass
         except Exception as e:
             if not isinstance(e, quiet_exceptions):
                 app_log.error(
