@@ -559,7 +559,7 @@ def with_timeout(
     If the wrapped `.Future` fails after it has timed out, the exception
     will be logged unless it is either of a type contained in
     ``quiet_exceptions`` (which may be an exception type or a sequence of
-    types), or a `CancelledError`.
+    types), or a ``CancelledError``.
 
     The wrapped `.Future` is not canceled when the timeout expires,
     permitting it to be reused. `asyncio.wait_for` is similar to this
