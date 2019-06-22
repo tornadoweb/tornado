@@ -49,14 +49,6 @@ u"foo".encode("idna")
 # For undiagnosed reasons, 'latin1' codec may also need to be preloaded.
 u"foo".encode("latin1")
 
-# These errnos indicate that a non-blocking operation must be retried
-# at a later time.  On most platforms they're the same value, but on
-# some they differ.
-_ERRNO_WOULDBLOCK = (errno.EWOULDBLOCK, errno.EAGAIN)
-
-if hasattr(errno, "WSAEWOULDBLOCK"):
-    _ERRNO_WOULDBLOCK += (errno.WSAEWOULDBLOCK,)  # type: ignore
-
 # Default backlog used when calling sock.listen()
 _DEFAULT_BACKLOG = 128
 
@@ -199,9 +191,8 @@ if hasattr(socket, "AF_UNIX"):
         sock.setblocking(False)
         try:
             st = os.stat(file)
-        except OSError as err:
-            if errno_from_exception(err) != errno.ENOENT:
-                raise
+        except FileNotFoundError:
+            pass
         else:
             if stat.S_ISSOCK(st.st_mode):
                 os.remove(file)
@@ -254,17 +245,15 @@ def add_accept_handler(
                 return
             try:
                 connection, address = sock.accept()
-            except socket.error as e:
-                # _ERRNO_WOULDBLOCK indicate we have accepted every
+            except BlockingIOError:
+                # EWOULDBLOCK indicates we have accepted every
                 # connection that is available.
-                if errno_from_exception(e) in _ERRNO_WOULDBLOCK:
-                    return
+                return
+            except ConnectionAbortedError:
                 # ECONNABORTED indicates that there was a connection
                 # but it was closed while still in the accept queue.
                 # (observed on FreeBSD).
-                if errno_from_exception(e) == errno.ECONNABORTED:
-                    continue
-                raise
+                continue
             set_close_exec(connection.fileno())
             callback(connection, address)
 

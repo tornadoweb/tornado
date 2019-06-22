@@ -17,7 +17,6 @@
 the server into multiple processes and managing subprocesses.
 """
 
-import errno
 import os
 import multiprocessing
 import signal
@@ -36,7 +35,6 @@ from tornado import ioloop
 from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
 from tornado.platform.auto import set_close_exec
-from tornado.util import errno_from_exception
 
 import typing
 from typing import Tuple, Optional, Any, Callable
@@ -148,12 +146,7 @@ def fork_processes(
             return id
     num_restarts = 0
     while children:
-        try:
-            pid, status = os.wait()
-        except OSError as e:
-            if errno_from_exception(e) == errno.EINTR:
-                continue
-            raise
+        pid, status = os.wait()
         if pid not in children:
             continue
         id = children.pop(pid)
@@ -358,9 +351,8 @@ class Subprocess(object):
     def _try_cleanup_process(cls, pid: int) -> None:
         try:
             ret_pid, status = os.waitpid(pid, os.WNOHANG)
-        except OSError as e:
-            if errno_from_exception(e) == errno.ECHILD:
-                return
+        except ChildProcessError:
+            return
         if ret_pid == 0:
             return
         assert ret_pid == pid
