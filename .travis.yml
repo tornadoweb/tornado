@@ -4,8 +4,6 @@ dist: xenial
 language: python
 matrix:
     fast_finish: true
-    allow_failures:
-      - python: nightly
 addons:
   apt: 
     packages:
