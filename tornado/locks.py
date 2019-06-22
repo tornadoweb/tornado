@@ -13,7 +13,6 @@
 # under the License.
 
 import collections
-from concurrent.futures import CancelledError
 import datetime
 import types
 
@@ -250,9 +249,7 @@ class Event(object):
         if timeout is None:
             return fut
         else:
-            timeout_fut = gen.with_timeout(
-                timeout, fut, quiet_exceptions=(CancelledError,)
-            )
+            timeout_fut = gen.with_timeout(timeout, fut)
             # This is a slightly clumsy workaround for the fact that
             # gen.with_timeout doesn't cancel its futures. Cancelling
             # fut will remove it from the waiters list.
