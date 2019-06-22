@@ -101,9 +101,7 @@ class IOLoop(Configurable):
             while True:
                 try:
                     connection, address = sock.accept()
-                except socket.error as e:
-                    if e.args[0] not in (errno.EWOULDBLOCK, errno.EAGAIN):
-                        raise
+                except BlockingIOError:
                     return
                 connection.setblocking(0)
                 io_loop = tornado.ioloop.IOLoop.current()

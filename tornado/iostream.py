@@ -64,14 +64,6 @@ try:
 except ImportError:
     _set_nonblocking = None  # type: ignore
 
-# These errnos indicate that a non-blocking operation must be retried
-# at a later time.  On most platforms they're the same value, but on
-# some they differ.
-_ERRNO_WOULDBLOCK = (errno.EWOULDBLOCK, errno.EAGAIN)
-
-if hasattr(errno, "WSAEWOULDBLOCK"):
-    _ERRNO_WOULDBLOCK += (errno.WSAEWOULDBLOCK,)  # type: ignore
-
 # These errnos indicate that a connection has been abruptly terminated.
 # They should be caught and handled less noisily than other errors.
 _ERRNO_CONNRESET = (errno.ECONNRESET, errno.ECONNABORTED, errno.EPIPE, errno.ETIMEDOUT)
@@ -90,12 +82,6 @@ if sys.platform == "darwin":
     # Since the socket is being closed anyway, treat this as an ECONNRESET
     # instead of an unexpected error.
     _ERRNO_CONNRESET += (errno.EPROTOTYPE,)  # type: ignore
-
-# More non-portable errnos:
-_ERRNO_INPROGRESS = (errno.EINPROGRESS,)
-
-if hasattr(errno, "WSAEINPROGRESS"):
-    _ERRNO_INPROGRESS += (errno.WSAEINPROGRESS,)  # type: ignore
 
 _WINDOWS = sys.platform.startswith("win")
 
@@ -859,8 +845,6 @@ class BaseIOStream(object):
                         buf = bytearray(self.read_chunk_size)
                     bytes_read = self.read_from_fd(buf)
                 except (socket.error, IOError, OSError) as e:
-                    if errno_from_exception(e) == errno.EINTR:
-                        continue
                     # ssl.SSLError is a subclass of socket.error
                     if self._is_connreset(e):
                         # Treat ECONNRESET as a connection close rather than
@@ -968,17 +952,16 @@ class BaseIOStream(object):
                     break
                 self._write_buffer.advance(num_bytes)
                 self._total_write_done_index += num_bytes
+            except BlockingIOError:
+                break
             except (socket.error, IOError, OSError) as e:
-                if e.args[0] in _ERRNO_WOULDBLOCK:
-                    break
-                else:
-                    if not self._is_connreset(e):
-                        # Broken pipe errors are usually caused by connection
-                        # reset, and its better to not log EPIPE errors to
-                        # minimize log spam
-                        gen_log.warning("Write error on %s: %s", self.fileno(), e)
-                    self.close(exc_info=e)
-                    return
+                if not self._is_connreset(e):
+                    # Broken pipe errors are usually caused by connection
+                    # reset, and its better to not log EPIPE errors to
+                    # minimize log spam
+                    gen_log.warning("Write error on %s: %s", self.fileno(), e)
+                self.close(exc_info=e)
+                return
 
         while self._write_futures:
             index, future = self._write_futures[0]
@@ -1134,11 +1117,8 @@ class IOStream(BaseIOStream):
     def read_from_fd(self, buf: Union[bytearray, memoryview]) -> Optional[int]:
         try:
             return self.socket.recv_into(buf, len(buf))
-        except socket.error as e:
-            if e.args[0] in _ERRNO_WOULDBLOCK:
-                return None
-            else:
-                raise
+        except BlockingIOError:
+            return None
         finally:
             del buf
 
@@ -1202,24 +1182,19 @@ class IOStream(BaseIOStream):
         self._connect_future = typing.cast("Future[IOStream]", future)
         try:
             self.socket.connect(address)
-        except socket.error as e:
+        except BlockingIOError:
             # In non-blocking mode we expect connect() to raise an
             # exception with EINPROGRESS or EWOULDBLOCK.
-            #
+            pass
+        except socket.error as e:
             # On freebsd, other errors such as ECONNREFUSED may be
             # returned immediately when attempting to connect to
             # localhost, so handle them the same way as an error
             # reported later in _handle_connect.
-            if (
-                errno_from_exception(e) not in _ERRNO_INPROGRESS
-                and errno_from_exception(e) not in _ERRNO_WOULDBLOCK
-            ):
-                if future is None:
-                    gen_log.warning(
-                        "Connect error on fd %s: %s", self.socket.fileno(), e
-                    )
-                self.close(exc_info=e)
-                return future
+            if future is None:
+                gen_log.warning("Connect error on fd %s: %s", self.socket.fileno(), e)
+            self.close(exc_info=e)
+            return future
         self._add_io_state(self.io_loop.WRITE)
         return future
 
@@ -1595,11 +1570,8 @@ class SSLIOStream(IOStream):
                     return None
                 else:
                     raise
-            except socket.error as e:
-                if e.args[0] in _ERRNO_WOULDBLOCK:
-                    return None
-                else:
-                    raise
+            except BlockingIOError:
+                return None
         finally:
             del buf
 
