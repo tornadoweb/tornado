@@ -120,6 +120,13 @@ development use. Without reworking Tornado IOLoop interface, it's not
 possible to add a native Tornado Windows IOLoop implementation or
 leverage Windows' IOCP support from frameworks like AsyncIO or Twisted.
 
+On Windows, Tornado requires the ``WindowsSelectorEventLoop``. This is
+the default in Python 3.7 and older, but Python 3.8 defaults to an
+event loop that is not compatible with Tornado. Applications that use
+Tornado on Windows with Python 3.8 must call
+``asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())``
+at the beginning of their ``main`` file/function.
+
 Documentation
 -------------
 
