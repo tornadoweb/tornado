@@ -159,7 +159,29 @@ def bind_sockets(
             sockaddr = tuple([host, bound_port] + list(sockaddr[2:]))
 
         sock.setblocking(False)
-        sock.bind(sockaddr)
+        try:
+            sock.bind(sockaddr)
+        except OSError as e:
+            if (
+                errno_from_exception(e) == errno.EADDRNOTAVAIL
+                and address == "localhost"
+                and sockaddr[0] == "::1"
+            ):
+                # On some systems (most notably docker with default
+                # configurations), ipv6 is partially disabled:
+                # socket.has_ipv6 is true, we can create AF_INET6
+                # sockets, and getaddrinfo("localhost", ...,
+                # AF_PASSIVE) resolves to ::1, but we get an error
+                # when binding.
+                #
+                # Swallow the error, but only for this specific case.
+                # If EADDRNOTAVAIL occurs in other situations, it
+                # might be a real problem like a typo in a
+                # configuration.
+                sock.close()
+                continue
+            else:
+                raise
         bound_port = sock.getsockname()[1]
         sock.listen(backlog)
         sockets.append(sock)
