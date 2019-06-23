@@ -150,6 +150,16 @@ def main():
         warnings.filterwarnings(
             "ignore", category=ResourceWarning, module=r"asyncio\..*"
         )
+    # This deprecation warning is introduced in Python 3.8 and is
+    # triggered by pycurl. Unforunately, because it is raised in the C
+    # layer it can't be filtered by module and we must match the
+    # message text instead (Tornado's C module uses PY_SSIZE_T_CLEAN
+    # so it's not at risk of running into this issue).
+    warnings.filterwarnings(
+        "ignore",
+        category=DeprecationWarning,
+        message="PY_SSIZE_T_CLEAN will be required",
+    )
 
     logging.getLogger("tornado.access").setLevel(logging.CRITICAL)
 
