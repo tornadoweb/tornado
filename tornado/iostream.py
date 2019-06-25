@@ -1387,6 +1387,10 @@ class SSLIOStream(IOStream):
                 )
                 return self.close(exc_info=err)
             raise
+        except ssl.CertificateError as err:
+            # CertificateError can happen during handshake (hostname
+            # verification) and should be passed to user
+            return self.close(exc_info=err)
         except socket.error as err:
             # Some port scans (e.g. nmap in -sT mode) have been known
             # to cause do_handshake to raise EBADF and ENOTCONN, so make
