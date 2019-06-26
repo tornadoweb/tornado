@@ -169,7 +169,7 @@ not be appropriate for non-browser-based login schemes.
 Check out the `Tornado Blog example application
 <https://github.com/tornadoweb/tornado/tree/stable/demos/blog>`_ for a
 complete example that uses authentication (and stores user data in a
-MySQL database).
+PostgreSQL database).
 
 Third party authentication
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
