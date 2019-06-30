@@ -6,9 +6,9 @@ Coroutines
    from tornado import gen
 
 **Coroutines** are the recommended way to write asynchronous code in
-Tornado. Coroutines use the Python ``await`` or ``yield`` keyword to
-suspend and resume execution instead of a chain of callbacks
-(cooperative lightweight threads as seen in frameworks like `gevent
+Tornado. Coroutines use the Python ``await`` and ``yield`` keywords to
+suspend and resume execution instead of a chain of callbacks.
+(Cooperative lightweight threads as seen in frameworks like `gevent
 <http://www.gevent.org>`_ are sometimes called coroutines as well, but
 in Tornado all coroutines use explicit context switches and are called
 as asynchronous functions).
