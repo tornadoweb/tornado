@@ -636,6 +636,22 @@ class GenCoroutineTest(AsyncTestCase):
         self.assertEqual(ret, [1, 1])
         self.finished = True
 
+    def test_coroutine_context(self):
+        @gen.coroutine
+        def f():
+            current_task = getattr(asyncio, 'current_task', None)
+            if current_task is None:
+                current_task = getattr(asyncio.Task, 'current_task', None)
+            task = current_task()
+            assert task
+            _id = id(task)
+            yield gen.moment
+            task = current_task()
+            assert task
+            assert _id == id(task)
+        self.io_loop.run_sync(f, timeout=3)
+        self.finished = True
+
 
 class GenCoroutineSequenceHandler(RequestHandler):
     @gen.coroutine
