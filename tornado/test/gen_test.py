@@ -1011,8 +1011,9 @@ class RunnerGCTest(AsyncTestCase):
             yield gen.sleep(0.2)
 
         loop.run_sync(do_something)
-        loop.close()
-        gc.collect()
+        with ExpectLog("asyncio", "Task was destroyed but it is pending"):
+            loop.close()
+            gc.collect()
         # Future was collected
         self.assertIs(wfut[0](), None)
         # At least one wakeup
