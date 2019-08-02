@@ -699,13 +699,13 @@ class Runner(object):
             future = self.future
             if future is None:
                 raise Exception("No pending future")
-            if not self.future.done():
+            if not self.future.done():  # type: ignore
                 _step = asyncio.Event()
 
-                def step(*args):
+                def step(f: "Future[_T]") -> None:
                     _step.set()
 
-                self.io_loop.add_future(self.future, step)
+                self.io_loop.add_future(self.future, step)  # type: ignore
                 await _step.wait()
             self.future = None
             try:
@@ -747,18 +747,17 @@ class Runner(object):
             if self.future is moment:
                 await sleep(0)
 
-    def handle_yield(self, yielded: _Yieldable) -> bool:
+    def handle_yield(self, yielded: _Yieldable) -> None:
         try:
             self.future = convert_yielded(yielded)
         except BadYieldError:
             self.future = Future()
             future_set_exc_info(self.future, sys.exc_info())
 
-    def finish(self, future):
+    def finish(self, future: "Future[_T]") -> None:
         if future.cancelled():
             self.task.cancel()
-            self.future.cancel()
-        self.task = None
+            self.future.cancel()  # type: ignore
 
 
 # Convert Awaitables into Futures.
