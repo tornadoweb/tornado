@@ -264,7 +264,7 @@ class Template(object):
         name: str = "<string>",
         loader: Optional["BaseLoader"] = None,
         compress_whitespace: Union[bool, _UnsetMarker] = _UNSET,
-        autoescape: Union[str, _UnsetMarker] = _UNSET,
+        autoescape: Optional[Union[str, _UnsetMarker]] = _UNSET,
         whitespace: Optional[str] = None,
     ) -> None:
         """Construct a Template.
