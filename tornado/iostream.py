@@ -601,9 +601,13 @@ class BaseIOStream(object):
                 self._finish_read(self._read_buffer_size, False)
             elif self._read_future is not None:
                 # resolve reads that are pending and ready to complete
-                pos = self._find_read_pos()
-                if pos is not None:
-                    self._read_from_buffer(pos)
+                try:
+                    pos = self._find_read_pos()
+                except UnsatisfiableReadError:
+                    pass
+                else:
+                    if pos is not None:
+                        self._read_from_buffer(pos)
             if self._state is not None:
                 self.io_loop.remove_handler(self.fileno())
                 self._state = None
