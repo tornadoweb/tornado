@@ -209,7 +209,7 @@ def coroutine(
                 # attribute on the Future.
                 # (Github issues #1769, #2229).
                 runner = Runner(result, future)
-                future.add_done_callback(lambda _: runner)
+                future.add_done_callback(runner.finish)
 
                 try:
                     return future
@@ -694,7 +694,7 @@ class Runner(object):
         self.running = False
         self.finished = False
         self.io_loop = IOLoop.current()
-        asyncio.ensure_future(self.run())
+        self.task = asyncio.ensure_future(self.run())
 
     async def run(self) -> None:
         "Runs the generator to completion in the context of a task"
@@ -754,6 +754,12 @@ class Runner(object):
         except BadYieldError:
             self.future = Future()
             future_set_exc_info(self.future, sys.exc_info())
+
+    def finish(self, future):
+        if future.cancelled():
+            self.task.cancel()
+            self.future.cancel()
+        self.task = None
 
 
 

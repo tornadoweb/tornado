@@ -506,7 +506,8 @@ class IOLoop(Configurable):
                     future_cell[0] = fut
                     fut.set_result(result)
             assert future_cell[0] is not None
-            self.add_future(future_cell[0], lambda future: self.stop())
+            self.add_future(future_cell[0],
+                    lambda f: f.add_done_callback(lambda _: self.stop()))
 
         self.add_callback(run)
         if timeout is not None:
