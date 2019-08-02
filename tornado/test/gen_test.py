@@ -639,9 +639,9 @@ class GenCoroutineTest(AsyncTestCase):
     def test_coroutine_context(self):
         @gen.coroutine
         def f():
-            current_task = getattr(asyncio, 'current_task', None)
+            current_task = getattr(asyncio, "current_task", None)
             if current_task is None:
-                current_task = getattr(asyncio.Task, 'current_task', None)
+                current_task = getattr(asyncio.Task, "current_task", None)
             task = current_task()
             assert task
             _id = id(task)
@@ -649,6 +649,7 @@ class GenCoroutineTest(AsyncTestCase):
             task = current_task()
             assert task
             assert _id == id(task)
+
         self.io_loop.run_sync(f, timeout=3)
         self.finished = True
 

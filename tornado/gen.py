@@ -76,7 +76,6 @@ import functools
 from functools import singledispatch
 from inspect import isawaitable
 import sys
-import types
 
 from tornado.concurrent import (
     Future,
@@ -684,9 +683,7 @@ class Runner(object):
     """
 
     def __init__(
-        self,
-        gen: "Generator[_Yieldable, Any, _T]",
-        result_future: "Future[_T]",
+        self, gen: "Generator[_Yieldable, Any, _T]", result_future: "Future[_T]"
     ) -> None:
         self.gen = gen
         self.result_future = result_future
@@ -704,8 +701,10 @@ class Runner(object):
                 raise Exception("No pending future")
             if not self.future.done():
                 _step = asyncio.Event()
+
                 def step(*args):
                     _step.set()
+
                 self.io_loop.add_future(self.future, step)
                 await _step.wait()
             self.future = None
@@ -760,7 +759,6 @@ class Runner(object):
             self.task.cancel()
             self.future.cancel()
         self.task = None
-
 
 
 # Convert Awaitables into Futures.
