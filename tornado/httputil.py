@@ -24,6 +24,7 @@ import collections
 import copy
 import datetime
 import email.utils
+from functools import lru_cache
 from http.client import responses
 import http.cookies
 import re
@@ -62,37 +63,14 @@ if typing.TYPE_CHECKING:
     import unittest  # noqa: F401
 
 
-class _NormalizedHeaderCache(dict):
-    """Dynamic cached mapping of header names to Http-Header-Case.
+@lru_cache(1000)
+def _normalize_header(name: str) -> str:
+    """Map a header name to Http-Header-Case.
 
-    Implemented as a dict subclass so that cache hits are as fast as a
-    normal dict lookup, without the overhead of a python function
-    call.
-
-    >>> normalized_headers = _NormalizedHeaderCache(10)
-    >>> normalized_headers["coNtent-TYPE"]
+    >>> _normalize_header("coNtent-TYPE")
     'Content-Type'
     """
-
-    def __init__(self, size: int) -> None:
-        super(_NormalizedHeaderCache, self).__init__()
-        self.size = size
-        self.queue = collections.deque()  # type: Deque[str]
-
-    def __missing__(self, key: str) -> str:
-        normalized = "-".join([w.capitalize() for w in key.split("-")])
-        self[key] = normalized
-        self.queue.append(key)
-        if len(self.queue) > self.size:
-            # Limit the size of the cache.  LRU would be better, but this
-            # simpler approach should be fine.  In Python 2.7+ we could
-            # use OrderedDict (or in 3.2+, @functools.lru_cache).
-            old_key = self.queue.popleft()
-            del self[old_key]
-        return normalized
-
-
-_normalized_headers = _NormalizedHeaderCache(1000)
+    return "-".join([w.capitalize() for w in name.split("-")])
 
 
 class HTTPHeaders(collections.abc.MutableMapping):
@@ -143,7 +121,7 @@ class HTTPHeaders(collections.abc.MutableMapping):
     def __init__(self, *args: typing.Any, **kwargs: str) -> None:  # noqa: F811
         self._dict = {}  # type: typing.Dict[str, str]
         self._as_list = {}  # type: typing.Dict[str, typing.List[str]]
-        self._last_key = None
+        self._last_key = None  # type: Optional[str]
         if len(args) == 1 and len(kwargs) == 0 and isinstance(args[0], HTTPHeaders):
             # Copy constructor
             for k, v in args[0].get_all():
@@ -156,7 +134,7 @@ class HTTPHeaders(collections.abc.MutableMapping):
 
     def add(self, name: str, value: str) -> None:
         """Adds a new value for the given key."""
-        norm_name = _normalized_headers[name]
+        norm_name = _normalize_header(name)
         self._last_key = norm_name
         if norm_name in self:
             self._dict[norm_name] = (
@@ -168,7 +146,7 @@ class HTTPHeaders(collections.abc.MutableMapping):
 
     def get_list(self, name: str) -> List[str]:
         """Returns all values for the given header as a list."""
-        norm_name = _normalized_headers[name]
+        norm_name = _normalize_header(name)
         return self._as_list.get(norm_name, [])
 
     def get_all(self) -> Iterable[Tuple[str, str]]:
@@ -230,15 +208,15 @@ class HTTPHeaders(collections.abc.MutableMapping):
     # MutableMapping abstract method implementations.
 
     def __setitem__(self, name: str, value: str) -> None:
-        norm_name = _normalized_headers[name]
+        norm_name = _normalize_header(name)
         self._dict[norm_name] = value
         self._as_list[norm_name] = [value]
 
     def __getitem__(self, name: str) -> str:
-        return self._dict[_normalized_headers[name]]
+        return self._dict[_normalize_header(name)]
 
     def __delitem__(self, name: str) -> None:
-        norm_name = _normalized_headers[name]
+        norm_name = _normalize_header(name)
         del self._dict[norm_name]
         del self._as_list[norm_name]
 
