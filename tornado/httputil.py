@@ -873,6 +873,9 @@ RequestStartLine = collections.namedtuple(
 )
 
 
+_http_version_re = re.compile(r"^HTTP/1\.[0-9]$")
+
+
 def parse_request_start_line(line: str) -> RequestStartLine:
     """Returns a (method, path, version) tuple for an HTTP 1.x request line.
 
@@ -887,7 +890,7 @@ def parse_request_start_line(line: str) -> RequestStartLine:
         # https://tools.ietf.org/html/rfc7230#section-3.1.1
         # invalid request-line SHOULD respond with a 400 (Bad Request)
         raise HTTPInputError("Malformed HTTP request line")
-    if not re.match(r"^HTTP/1\.[0-9]$", version):
+    if not _http_version_re.match(version):
         raise HTTPInputError(
             "Malformed HTTP version in HTTP Request-Line: %r" % version
         )
@@ -899,6 +902,9 @@ ResponseStartLine = collections.namedtuple(
 )
 
 
+_http_response_line_re = re.compile(r"(HTTP/1.[0-9]) ([0-9]+) ([^\r]*)")
+
+
 def parse_response_start_line(line: str) -> ResponseStartLine:
     """Returns a (version, code, reason) tuple for an HTTP 1.x response line.
 
@@ -908,7 +914,7 @@ def parse_response_start_line(line: str) -> ResponseStartLine:
     ResponseStartLine(version='HTTP/1.1', code=200, reason='OK')
     """
     line = native_str(line)
-    match = re.match("(HTTP/1.[0-9]) ([0-9]+) ([^\r]*)", line)
+    match = _http_response_line_re.match(line)
     if not match:
         raise HTTPInputError("Error parsing response start line")
     return ResponseStartLine(match.group(1), int(match.group(2)), match.group(3))
@@ -1013,6 +1019,9 @@ def doctests():
     return doctest.DocTestSuite()
 
 
+_netloc_re = re.compile(r"^(.+):(\d+)$")
+
+
 def split_host_and_port(netloc: str) -> Tuple[str, Optional[int]]:
     """Returns ``(host, port)`` tuple from ``netloc``.
 
@@ -1020,7 +1029,7 @@ def split_host_and_port(netloc: str) -> Tuple[str, Optional[int]]:
 
     .. versionadded:: 4.1
     """
-    match = re.match(r"^(.+):(\d+)$", netloc)
+    match = _netloc_re.match(netloc)
     if match:
         host = match.group(1)
         port = int(match.group(2))  # type: Optional[int]
