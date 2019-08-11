@@ -317,7 +317,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         Note that this callback is slightly different from
         `.HTTPMessageDelegate.on_connection_close`: The
         `.HTTPMessageDelegate` method is called when the connection is
-        closed while recieving a message. This callback is used when
+        closed while receiving a message. This callback is used when
         there is not an active delegate (for example, on the server
         side this callback is used if the client closes the connection
         after sending its request but before receiving all the
