@@ -973,9 +973,16 @@ class WaitForHandshakeTest(AsyncTestCase):
             server = server_cls(ssl_options=_server_ssl_options())
             server.add_socket(sock)
 
-            client = SSLIOStream(
-                socket.socket(), ssl_options=dict(cert_reqs=ssl.CERT_NONE)
-            )
+            ssl_ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
+            # These tests fail with ConnectionAbortedErrors with TLS
+            # 1.3 on windows python 3.7.4 (which includes an upgrade
+            # to openssl 1.1.c. Other platforms might be affected with
+            # newer openssl too). Disable it until we figure out
+            # what's up.
+            ssl_ctx.options |= getattr(ssl, "OP_NO_TLSv1_3", 0)
+            client = SSLIOStream(socket.socket(), ssl_options=ssl_ctx)
             yield client.connect(("127.0.0.1", port))
             self.assertIsNotNone(client.socket.cipher())
         finally:
