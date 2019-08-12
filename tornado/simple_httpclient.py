@@ -32,6 +32,7 @@ import sys
 import time
 from io import BytesIO
 import urllib.parse
+import asyncio
 
 from typing import Dict, Any, Callable, Optional, Type, Union
 from types import TracebackType
@@ -163,7 +164,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.tcp_client.close()
 
     def fetch_impl(
-        self, request: HTTPRequest, callback: Callable[[HTTPResponse], None]
+        self, request: HTTPRequest, callback: Callable[[HTTPResponse], None], future: asyncio.Future
     ) -> None:
         key = object()
         self.queue.append((key, request, callback))

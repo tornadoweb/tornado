@@ -22,6 +22,7 @@ import pycurl
 import threading
 import time
 from io import BytesIO
+import asyncio
 
 from tornado import httputil
 from tornado import ioloop
@@ -96,9 +97,9 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         self._multi = None
 
     def fetch_impl(
-        self, request: HTTPRequest, callback: Callable[[HTTPResponse], None]
+        self, request: HTTPRequest, callback: Callable[[HTTPResponse], None], future: asyncio.Future
     ) -> None:
-        self._requests.append((request, callback, self.io_loop.time()))
+        self._requests.append((request, callback, future, self.io_loop.time()))
         self._process_queue()
         self._set_timeout(0)
 
@@ -211,6 +212,12 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 self._finish(curl, errnum, errmsg)
             if num_q == 0:
                 break
+        for curl in self._curls:
+            if curl not in self._free_list:
+                future = curl.info['future']
+                if future and future.cancelled():
+                    curl.info['future'] = None
+                    curl.close()
         self._process_queue()
 
     def _process_queue(self) -> None:
@@ -219,13 +226,14 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             while self._free_list and self._requests:
                 started += 1
                 curl = self._free_list.pop()
-                (request, callback, queue_start_time) = self._requests.popleft()
+                (request, callback, future, queue_start_time) = self._requests.popleft()
                 # TODO: Don't smuggle extra data on an attribute of the Curl object.
                 curl.info = {  # type: ignore
                     "headers": httputil.HTTPHeaders(),
                     "buffer": BytesIO(),
                     "request": request,
                     "callback": callback,
+                    "future": future,
                     "queue_start_time": queue_start_time,
                     "curl_start_time": time.time(),
                     "curl_start_ioloop_time": self.io_loop.current().time(),
