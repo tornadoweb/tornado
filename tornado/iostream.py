@@ -33,6 +33,7 @@ import socket
 import ssl
 import sys
 import re
+from itertools import islice
 
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado import ioloop
@@ -51,6 +52,7 @@ from typing import (
     Dict,
     TypeVar,
     Tuple,
+    List,
 )
 from types import TracebackType
 
@@ -84,6 +86,12 @@ if sys.platform == "darwin":
     _ERRNO_CONNRESET += (errno.EPROTOTYPE,)  # type: ignore
 
 _WINDOWS = sys.platform.startswith("win")
+
+if _WINDOWS:
+    _SC_IOV_MAX_value = 1
+else:
+    _SC_IOV_MAX_value = os.sysconf('SC_IOV_MAX')
+    assert _SC_IOV_MAX_value > 0
 
 
 class StreamClosedError(IOError):
@@ -146,6 +154,7 @@ class _StreamBuffer(object):
         """
         Append the given piece of data (should be a buffer-compatible object).
         """
+        assert (type(data) is not memoryview) or (len(data) == data.nbytes)
         size = len(data)
         if size > self._large_buf_threshold:
             if not isinstance(data, memoryview):
@@ -164,7 +173,24 @@ class _StreamBuffer(object):
 
         self._size += size
 
-    def peek(self, size: int) -> memoryview:
+    def peek_buffers(self, limit: int = 100) -> Union[memoryview, List[Union[memoryview, bytearray]]]:
+        assert limit > 0
+        buf_count = len(self._buffers)
+
+        if buf_count < 2 or limit == 1:
+            return self.peek_bytes(self._size)
+
+        if buf_count > limit:
+            r = list(islice((buffer for _, buffer in self._buffers), 0, limit))
+        else:
+            r = [buffer for _, buffer in self._buffers]
+
+        if self._first_pos != 0:
+            r[0] = self.peek_bytes(self._size)
+
+        return r
+
+    def peek_bytes(self, size: int) -> memoryview:
         """
         Get a view over at most ``size`` bytes (possibly fewer) at the
         current buffer position.
@@ -229,6 +255,7 @@ class BaseIOStream(object):
     `read_from_fd`, and optionally `get_fd_error`.
 
     """
+    _SC_IOV_MAX_value = _SC_IOV_MAX_value
 
     def __init__(
         self,
@@ -300,7 +327,7 @@ class BaseIOStream(object):
         """
         raise NotImplementedError()
 
-    def write_to_fd(self, data: memoryview) -> int:
+    def write_to_fd(self, data: Union[memoryview, List[Union[memoryview, bytearray]]]) -> int:
         """Attempts to write ``data`` to the underlying file.
 
         Returns the number of bytes written.
@@ -535,13 +562,20 @@ class BaseIOStream(object):
         """
         self._check_closed()
         if data:
+            if type(data) is memoryview and len(data) != data.nbytes:
+                data = data.cast('b')
+            newlen = len(data)
             if (
                 self.max_write_buffer_size is not None
-                and len(self._write_buffer) + len(data) > self.max_write_buffer_size
+                and len(self._write_buffer) + newlen > self.max_write_buffer_size
             ):
                 raise StreamBufferFullError("Reached maximum write buffer size")
             self._write_buffer.append(data)
-            self._total_write_index += len(data)
+            self._total_write_index += newlen
+
+        return self.__write_tail()
+
+    def __write_tail(self) -> "Future[None]":
         future = Future()  # type: Future[None]
         future.add_done_callback(lambda f: f.exception())
         self._write_futures.append((self._total_write_index, future))
@@ -551,6 +585,24 @@ class BaseIOStream(object):
                 self._add_io_state(self.io_loop.WRITE)
             self._maybe_add_error_listener()
         return future
+
+    def write_many(self, buffers: List[Union[bytes, memoryview]]) -> "Future[None]":
+        self._check_closed()
+        buffers = [i.cast('b') if type(i) is memoryview and len(i) != i.nbytes else i for i in buffers]
+        newlen = sum(len(i) for i in buffers)
+        if newlen:
+            if (
+                self.max_write_buffer_size is not None
+                and len(self._write_buffer) + newlen > self.max_write_buffer_size
+            ):
+                raise StreamBufferFullError("Reached maximum write buffer size")
+            for data in buffers:
+                if data:
+                    self._write_buffer.append(data)
+            self._total_write_index += newlen
+
+        return self.__write_tail()
+
 
     def set_close_callback(self, callback: Optional[Callable[[], None]]) -> None:
         """Call the given callback when the stream is closed.
@@ -945,9 +997,9 @@ class BaseIOStream(object):
                     # returning the number of bytes it was able to
                     # process.  Therefore we must not call socket.send
                     # with more than 128KB at a time.
-                    size = 128 * 1024
-
-                num_bytes = self.write_to_fd(self._write_buffer.peek(size))
+                    num_bytes = self.write_to_fd(self._write_buffer.peek_bytes(128 * 1024))
+                else:
+                    num_bytes = self.write_to_fd(self._write_buffer.peek_buffers(self._SC_IOV_MAX_value))
                 if num_bytes == 0:
                     break
                 self._write_buffer.advance(num_bytes)
@@ -1122,9 +1174,12 @@ class IOStream(BaseIOStream):
         finally:
             del buf
 
-    def write_to_fd(self, data: memoryview) -> int:
+    def write_to_fd(self, data: Union[memoryview, List[Union[memoryview, bytearray]]]) -> int:
         try:
-            return self.socket.send(data)  # type: ignore
+            if isinstance(data, list):
+                return self.socket.sendmsg(data)
+            else:
+                return self.socket.send(data)  # type: ignore
         finally:
             # Avoid keeping to data, which can be a memoryview.
             # See https://github.com/tornadoweb/tornado/pull/2008
@@ -1333,6 +1388,9 @@ class SSLIOStream(IOStream):
 
     socket = None  # type: ssl.SSLSocket
 
+    # socket.sendmsg(data) is not implemented for SSL socket at least in Python 3.6
+    _SC_IOV_MAX_value = 1
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """The ``ssl_options`` keyword argument may either be an
         `ssl.SSLContext` object or a dictionary of keywords arguments
@@ -1536,8 +1594,9 @@ class SSLIOStream(IOStream):
             self._finish_ssl_connect()
         return future
 
-    def write_to_fd(self, data: memoryview) -> int:
+    def write_to_fd(self, data: Union[memoryview, List[Union[memoryview, bytearray]]]) -> int:
         try:
+            assert not isinstance(data, list)
             return self.socket.send(data)  # type: ignore
         except ssl.SSLError as e:
             if e.args[0] == ssl.SSL_ERROR_WANT_WRITE:
@@ -1602,9 +1661,12 @@ class PipeIOStream(BaseIOStream):
     def close_fd(self) -> None:
         self._fio.close()
 
-    def write_to_fd(self, data: memoryview) -> int:
+    def write_to_fd(self, data: Union[memoryview, List[Union[memoryview, bytearray]]]) -> int:
         try:
-            return os.write(self.fd, data)  # type: ignore
+            if isinstance(data, list):
+                return os.writev(self.fd, data)
+            else:
+                return os.write(self.fd, data)  # type: ignore
         finally:
             # Avoid keeping to data, which can be a memoryview.
             # See https://github.com/tornadoweb/tornado/pull/2008

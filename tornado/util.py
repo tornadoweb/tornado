@@ -29,6 +29,7 @@ from typing import (
     Callable,
     Type,
     Sequence,
+    Union,
 )
 
 if typing.TYPE_CHECKING:
@@ -438,7 +439,7 @@ def timedelta_to_seconds(td):
     return td.total_seconds()
 
 
-def _websocket_mask_python(mask: bytes, data: bytes) -> bytes:
+def _websocket_mask_python(mask: bytes, data: Union[bytes, memoryview]) -> bytes:
     """Websocket masking function.
 
     `mask` is a `bytes` object of length 4; `data` is a `bytes` object of any length.

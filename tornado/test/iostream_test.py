@@ -1110,7 +1110,7 @@ class TestStreamBuffer(unittest.TestCase):
     def check_peek(self, buf, expected):
         size = 1
         while size < 2 * len(expected):
-            got = self.to_bytes(buf.peek(size))
+            got = self.to_bytes(buf.peek_bytes(size))
             self.assertTrue(got)  # Not empty
             self.assertLessEqual(len(got), size)
             self.assertTrue(expected.startswith(got), (expected, got))
