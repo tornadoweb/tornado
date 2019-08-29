@@ -943,7 +943,7 @@ class GzipBaseTest(object):
 
     def test_uncompressed(self):
         response = self.fetch("/", method="POST", body="foo=bar")
-        self.assertEquals(json_decode(response.body), {u"foo": [u"bar"]})
+        self.assertEqual(json_decode(response.body), {u"foo": [u"bar"]})
 
 
 class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
@@ -952,7 +952,7 @@ class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
 
     def test_gzip(self):
         response = self.post_gzip("foo=bar")
-        self.assertEquals(json_decode(response.body), {u"foo": [u"bar"]})
+        self.assertEqual(json_decode(response.body), {u"foo": [u"bar"]})
 
 
 class GzipUnsupportedTest(GzipBaseTest, AsyncHTTPTestCase):
@@ -962,7 +962,7 @@ class GzipUnsupportedTest(GzipBaseTest, AsyncHTTPTestCase):
         # not a fatal error).
         with ExpectLog(gen_log, "Unsupported Content-Encoding"):
             response = self.post_gzip("foo=bar")
-        self.assertEquals(json_decode(response.body), {})
+        self.assertEqual(json_decode(response.body), {})
 
 
 class StreamingChunkSizeTest(AsyncHTTPTestCase):
