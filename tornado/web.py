@@ -1138,7 +1138,7 @@ class RequestHandler(object):
                 assert not self._write_buffer, (
                     "Cannot send body with %s" % self._status_code
                 )
-                self._clear_headers_for_304()
+                self._clear_representation_headers()
             elif "Content-Length" not in self._headers:
                 content_length = sum(len(part) for part in self._write_buffer)
                 self.set_header("Content-Length", content_length)
@@ -1803,21 +1803,13 @@ class RequestHandler(object):
     def _ui_method(self, method: Callable[..., str]) -> Callable[..., str]:
         return lambda *args, **kwargs: method(self, *args, **kwargs)
 
-    def _clear_headers_for_304(self) -> None:
-        # 304 responses should not contain entity headers (defined in
-        # http://www.w3.org/Protocols/rfc2616/rfc2616-sec7.html#sec7.1)
+    def _clear_representation_headers(self) -> None:
+        # 304 responses should not contain representation metadata
+        # headers (defined in
+        # https://tools.ietf.org/html/rfc7231#section-3.1)
         # not explicitly allowed by
-        # http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.3.5
-        headers = [
-            "Allow",
-            "Content-Encoding",
-            "Content-Language",
-            "Content-Length",
-            "Content-MD5",
-            "Content-Range",
-            "Content-Type",
-            "Last-Modified",
-        ]
+        # https://tools.ietf.org/html/rfc7232#section-4.1
+        headers = ["Content-Encoding", "Content-Language", "Content-Type"]
         for h in headers:
             self.clear_header(h)
 
