@@ -783,7 +783,8 @@ def parse_body_arguments(
             )
             return
         try:
-            uri_arguments = parse_qs_bytes(native_str(body), keep_blank_values=True)
+            # real charset decoding will happen in RequestHandler.decode_argument()
+            uri_arguments = parse_qs_bytes(body, keep_blank_values=True)
         except Exception as e:
             gen_log.warning("Invalid x-www-form-urlencoded body: %s", e)
             uri_arguments = {}

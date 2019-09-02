@@ -145,10 +145,10 @@ def url_unescape(  # noqa: F811
 
 
 def parse_qs_bytes(
-    qs: str, keep_blank_values: bool = False, strict_parsing: bool = False
+    qs: Union[str, bytes], keep_blank_values: bool = False, strict_parsing: bool = False
 ) -> Dict[str, List[bytes]]:
-    """Parses a query string like urlparse.parse_qs, but returns the
-    values as byte strings.
+    """Parses a query string like urlparse.parse_qs,
+    but takes bytes and returns the values as byte strings.
 
     Keys still become type str (interpreted as latin1 in python3!)
     because it's too painful to keep them as byte strings in
@@ -156,6 +156,8 @@ def parse_qs_bytes(
     """
     # This is gross, but python3 doesn't give us another way.
     # Latin1 is the universal donor of character encodings.
+    if isinstance(qs, bytes):
+        qs = qs.decode("latin1")
     result = urllib.parse.parse_qs(
         qs, keep_blank_values, strict_parsing, encoding="latin1", errors="strict"
     )

@@ -389,7 +389,7 @@ class SimpleHTTPClientTestMixin(object):
         if response.body == b"HTTP/1 required":
             self.skipTest("requires HTTP/1.x")
         else:
-            self.assertEquals(b"hello", response.body)
+            self.assertEqual(b"hello", response.body)
 
     def sync_body_producer(self, write):
         write(b"1234")

@@ -2284,7 +2284,7 @@ class StreamingRequestBodyTest(WebTestCase):
         self.data = Future()
         stream.write(b"4\r\nqwer\r\n")
         data = yield self.data
-        self.assertEquals(data, b"qwer")
+        self.assertEqual(data, b"qwer")
         stream.write(b"0\r\n\r\n")
         yield self.finished
         data = yield stream.read_until_close()

@@ -41,6 +41,7 @@ import ssl
 import sys
 import tempfile
 import unittest
+import urllib.parse
 from io import BytesIO
 
 import typing
@@ -378,6 +379,19 @@ class TypeCheckHandler(RequestHandler):
             self.errors[name] = "expected %s, got %s" % (expected_type, actual_type)
 
 
+class PostEchoHandler(RequestHandler):
+    def post(self, *path_args):
+        self.write(dict(echo=self.get_argument("data")))
+
+
+class PostEchoGBKHandler(PostEchoHandler):
+    def decode_argument(self, value, name=None):
+        try:
+            return value.decode("gbk")
+        except Exception:
+            raise HTTPError(400, "invalid gbk bytes: %r" % value)
+
+
 class HTTPServerTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application(
@@ -385,6 +399,8 @@ class HTTPServerTest(AsyncHTTPTestCase):
                 ("/echo", EchoHandler),
                 ("/typecheck", TypeCheckHandler),
                 ("//doubleslash", EchoHandler),
+                ("/post_utf8", PostEchoHandler),
+                ("/post_gbk", PostEchoGBKHandler),
             ]
         )
 
@@ -423,18 +439,22 @@ class HTTPServerTest(AsyncHTTPTestCase):
         self.assertEqual(200, response.code)
         self.assertEqual(json_decode(response.body), {})
 
-    def test_malformed_body(self):
-        # parse_qs is pretty forgiving, but it will fail on python 3
-        # if the data is not utf8.
-        with ExpectLog(gen_log, "Invalid x-www-form-urlencoded body"):
-            response = self.fetch(
-                "/echo",
-                method="POST",
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-                body=b"\xe9",
-            )
-        self.assertEqual(200, response.code)
-        self.assertEqual(b"{}", response.body)
+    def test_post_encodings(self):
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        uni_text = "chinese: \u5f20\u4e09"
+        for enc in ("utf8", "gbk"):
+            for quote in (True, False):
+                with self.subTest(enc=enc, quote=quote):
+                    bin_text = uni_text.encode(enc)
+                    if quote:
+                        bin_text = urllib.parse.quote(bin_text).encode("ascii")
+                    response = self.fetch(
+                        "/post_" + enc,
+                        method="POST",
+                        headers=headers,
+                        body=(b"data=" + bin_text),
+                    )
+                    self.assertEqual(json_decode(response.body), {"echo": uni_text})
 
 
 class HTTPServerRawTest(AsyncHTTPTestCase):
@@ -943,7 +963,7 @@ class GzipBaseTest(object):
 
     def test_uncompressed(self):
         response = self.fetch("/", method="POST", body="foo=bar")
-        self.assertEquals(json_decode(response.body), {u"foo": [u"bar"]})
+        self.assertEqual(json_decode(response.body), {u"foo": [u"bar"]})
 
 
 class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
@@ -952,7 +972,7 @@ class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
 
     def test_gzip(self):
         response = self.post_gzip("foo=bar")
-        self.assertEquals(json_decode(response.body), {u"foo": [u"bar"]})
+        self.assertEqual(json_decode(response.body), {u"foo": [u"bar"]})
 
 
 class GzipUnsupportedTest(GzipBaseTest, AsyncHTTPTestCase):
@@ -962,7 +982,7 @@ class GzipUnsupportedTest(GzipBaseTest, AsyncHTTPTestCase):
         # not a fatal error).
         with ExpectLog(gen_log, "Unsupported Content-Encoding"):
             response = self.post_gzip("foo=bar")
-        self.assertEquals(json_decode(response.body), {})
+        self.assertEqual(json_decode(response.body), {})
 
 
 class StreamingChunkSizeTest(AsyncHTTPTestCase):
