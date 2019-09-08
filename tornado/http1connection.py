@@ -511,7 +511,10 @@ class HTTP1Connection(httputil.HTTPConnection):
                 % self._expected_content_remaining
             )
         if self._chunking_output:
-            if not self.stream.closed():
+            assert self._request_start_line
+            if not self.stream.closed() and (
+                self.is_client or self._request_start_line.method != "HEAD"
+            ):
                 self._pending_write = self.stream.write(b"0\r\n\r\n")
                 self._pending_write.add_done_callback(self._on_write_complete)
         self._write_finished = True
