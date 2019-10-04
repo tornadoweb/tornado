@@ -3107,6 +3107,10 @@ class URLSpecReverseTest(unittest.TestCase):
         self.assertEqual(
             "/api/v1/foo/bar", url(r"^/api/v1/foo/(\w+)$", None).reverse("bar")
         )
+        self.assertEqual(
+            "/api.v1/foo/5/icon.png",
+            url(r"/api\.v1/foo/([0-9]+)/icon\.png", None).reverse(5),
+        )
 
 
 class RedirectHandlerTest(WebTestCase):
