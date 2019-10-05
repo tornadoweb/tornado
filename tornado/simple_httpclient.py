@@ -392,6 +392,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     )
                 if self.request.user_agent:
                     self.request.headers["User-Agent"] = self.request.user_agent
+                else:
+                    self.request.headers["User-Agent"] = "Mozilla/5.0 (compatible; tornadoweb)"
                 if not self.request.allow_nonstandard_methods:
                     # Some HTTP methods nearly always have bodies while others
                     # almost never do. Fail in this case unless the user has
