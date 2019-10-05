@@ -17,9 +17,9 @@ jobs:
     # "provisional feature" rules there are significant differences between patch
     # versions for asyncio and typing.
     - python: 3.5.2
-    - python: '3.5'
-    - python: '3.6'
-    - python: '3.7'
+    - python: 3.5
+    - python: 3.6
+    - python: 3.7
     - python: pypy3.5-5.10.1
       python: nightly
 
