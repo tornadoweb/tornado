@@ -770,6 +770,12 @@ class KeepAliveTest(AsyncHTTPTestCase):
                 # be written out in chunks.
                 self.write("".join(chr(i % 256) * 1024 for i in range(512)))
 
+        class TransferEncodingChunkedHandler(RequestHandler):
+            @gen.coroutine
+            def head(self):
+                self.write("Hello world")
+                yield self.flush()
+
         class FinishOnCloseHandler(RequestHandler):
             def initialize(self, cleanup_event):
                 self.cleanup_event = cleanup_event
@@ -790,6 +796,7 @@ class KeepAliveTest(AsyncHTTPTestCase):
             [
                 ("/", HelloHandler),
                 ("/large", LargeHandler),
+                ("/chunked", TransferEncodingChunkedHandler),
                 (
                     "/finish_on_close",
                     FinishOnCloseHandler,
@@ -941,6 +948,16 @@ class KeepAliveTest(AsyncHTTPTestCase):
         self.stream.write(b"GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n")
         yield self.read_response()
         self.assertEqual(self.headers["Connection"], "Keep-Alive")
+        self.close()
+
+    @gen_test
+    def test_keepalive_chunked_head_no_body(self):
+        yield self.connect()
+        self.stream.write(b"HEAD /chunked HTTP/1.1\r\n\r\n")
+        yield self.read_headers()
+
+        self.stream.write(b"HEAD /chunked HTTP/1.1\r\n\r\n")
+        yield self.read_headers()
         self.close()
 
 
