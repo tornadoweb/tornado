@@ -235,7 +235,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                     # but do not actually have a body.
                     # http://tools.ietf.org/html/rfc7230#section-3.3
                     skip_body = True
-                if code >= 100 and code < 200:
+                if 100 <= code < 200:
                     # 1xx responses should never indicate the presence of
                     # a body.
                     if "Content-Length" in headers or "Transfer-Encoding" in headers:
