@@ -627,7 +627,13 @@ class PathMatches(Matcher):
             if ")" in fragment:
                 paren_loc = fragment.index(")")
                 if paren_loc >= 0:
-                    pieces.append("%s" + fragment[paren_loc + 1 :])
+                    try:
+                        unescaped_fragment = re_unescape(fragment[paren_loc + 1 :])
+                    except ValueError:
+                        # If we can't unescape part of it, we can't
+                        # reverse this url.
+                        return (None, None)
+                    pieces.append("%s" + unescaped_fragment)
             else:
                 try:
                     unescaped_fragment = re_unescape(fragment)
