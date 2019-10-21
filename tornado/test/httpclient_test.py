@@ -109,7 +109,7 @@ class ContentLength304Handler(RequestHandler):
         self.set_status(304)
         self.set_header("Content-Length", 42)
 
-    def _clear_headers_for_304(self):
+    def _clear_representation_headers(self):
         # Tornado strips content-length from 304 responses, but here we
         # want to simulate servers that include the headers anyway.
         pass

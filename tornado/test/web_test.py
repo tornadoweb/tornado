@@ -1175,7 +1175,6 @@ class StaticFileTest(WebTestCase):
         )
         self.assertEqual(response2.code, 304)
         self.assertTrue("Content-Length" not in response2.headers)
-        self.assertTrue("Last-Modified" not in response2.headers)
 
     def test_static_304_if_none_match(self):
         response1 = self.get_and_head("/static/robots.txt")
