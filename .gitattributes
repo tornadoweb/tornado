@@ -1,0 +1,4 @@
+# Tests of static file handling assume unix-style line endings.
+tornado/test/static/*.txt text eol=lf
+tornado/test/static/dir/*.html text eol=lf
+tornado/test/templates/*.html text eol=lf
