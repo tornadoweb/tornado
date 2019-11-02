@@ -50,7 +50,7 @@ def get_links(html):
 async def main():
     q = queues.Queue()
     start = time.time()
-    fetching, fetched = set(), set()
+    fetching, fetched, dead = set(), set(), set()
 
     async def fetch_url(current_url):
         if current_url in fetching:
@@ -74,6 +74,7 @@ async def main():
                 await fetch_url(url)
             except Exception as e:
                 print("Exception: %s %s" % (e, url))
+                dead.add(url)
             finally:
                 q.task_done()
 
@@ -82,9 +83,10 @@ async def main():
     # Start workers, then wait for the work queue to be empty.
     workers = gen.multi([worker() for _ in range(concurrency)])
     await q.join(timeout=timedelta(seconds=300))
-    assert fetching == fetched
+    assert fetching == (fetched | dead)
     print("Done in %d seconds, fetched %s URLs." % (time.time() - start, len(fetched)))
-
+    print("Unable to fetch %s URLS." % len(dead))
+    
     # Signal all the workers to exit.
     for _ in range(concurrency):
         await q.put(None)
