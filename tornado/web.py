@@ -424,14 +424,14 @@ class RequestHandler(object):
     def get_argument(self, name: str, default: str, strip: bool = True) -> str:
         pass
 
-    @overload  # noqa: F811
-    def get_argument(
+    @overload
+    def get_argument(  # noqa: F811
         self, name: str, default: _ArgDefaultMarker = _ARG_DEFAULT, strip: bool = True
     ) -> str:
         pass
 
-    @overload  # noqa: F811
-    def get_argument(
+    @overload
+    def get_argument(  # noqa: F811
         self, name: str, default: None, strip: bool = True
     ) -> Optional[str]:
         pass

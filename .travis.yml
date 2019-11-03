@@ -34,9 +34,9 @@ jobs:
     - python: nightly
       env: TOX_ENV=py3-full
       # Docs and lint python versions must be synced with those in tox.ini
-    - python: '3.7'
+    - python: '3.8'
       env: TOX_ENV=docs
-    - python: '3.6'
+    - python: '3.8'
       env: TOX_ENV=lint
 
 install:
