@@ -17,79 +17,31 @@ jobs:
     # "provisional feature" rules there are significant differences between patch
     # versions for asyncio and typing.
     - python: 3.5.2
+      env: TOX_ENV=py35-full
     - python: '3.5'
+      env: TOX_ENV=py35-full
     - python: '3.6'
+      env: TOX_ENV=py36-full
     - python: '3.7'
+      env: TOX_ENV=py37-full
+    - python: '3.8'
+      env: TOX_ENV=py38-full
     - python: pypy3.5-5.10.1
-      python: nightly
+      # Pypy is a lot slower due to jit warmup costs, so don't run the "full"
+      # test config there.
+      env: TOX_ENV=pypy3
+    - python: nightly
+      env: TOX_ENV=py3-full
+      # Docs and lint python versions must be synced with those in tox.ini
+    - python: '3.7'
+      env: TOX_ENV=docs
+    - python: '3.6'
+      env: TOX_ENV=lint
 
 install:
-    # On nightly, upgrade setuptools first to work around
-    # https://github.com/pypa/setuptools/issues/1257
-    - if [[ $TRAVIS_PYTHON_VERSION == 'nightly' ]]; then travis_retry pip install -U setuptools; fi
-    # TODO(bdarnell): pycares tests are currently disabled on travis due to ipv6 issues.
-    #- if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then travis_retry pip install pycares; fi
-    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then travis_retry pip install pycurl; fi
-    # Twisted is flaky on pypy (TODO: still? this note is quite old)
-    # It also sometimes has problems on nightly.
-    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* && $TRAVIS_PYTHON_VERSION != 'nightly' ]]; then travis_retry pip install Twisted; fi
-    # Ideally we'd run the lint stuff on the latest Python
-    # version supported. But Python 3.7 requires slower-to-start VMs,
-    # so we run it on 3.6 to minimize total CI run time.
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then travis_retry pip install flake8 mypy==0.701 black==19.3b0; fi
-    # We run docs on py37 because we need some bug fixes for introspection of annotations.
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.7' ]]; then travis_retry pip install -r docs/requirements.txt; fi
-    # On travis the extension should always be built
-    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then export TORNADO_EXTENSION=1; fi
-    - travis_retry python setup.py install
-    - travis_retry pip install codecov virtualenv
-    # Create a separate no-dependencies virtualenv to make sure all imports
-    # of optional-dependencies are guarded.
-    - virtualenv /tmp/nodeps
-    - /tmp/nodeps/bin/python -VV
-    - /tmp/nodeps/bin/python setup.py install
+    - travis_retry pip install tox tox-venv
+    - python -VV
     - curl-config --version; pip freeze
 
 script:
-    # Run the tests once from the source directory to detect issues
-    # involving relative __file__ paths; see
-    # https://github.com/tornadoweb/tornado/issues/1780
-    - unset TORNADO_EXTENSION && python -m tornado.test
-    # For all other test variants, get out of the source directory before
-    # running tests to ensure that we get the installed speedups module
-    # instead of the source directory which doesn't have it.
-    - cd maint
-    # Copy the coveragerc down so coverage.py can find it.
-    - cp ../.coveragerc .
-    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then export TORNADO_EXTENSION=1; fi
-    - export TARGET="-m tornado.test.runtests"
-    # Travis workers are often overloaded and cause our tests to exceed
-    # the default timeout of 5s.
-    - export ASYNC_TEST_TIMEOUT=15
-    # We use "python -m coverage" instead of the "bin/coverage" script
-    # so we can pass additional arguments to python.
-    # coverage needs a function that was removed in python 3.6 so we can't
-    # run it with nightly cpython. Coverage is very slow on pypy.
-    - if [[ $TRAVIS_PYTHON_VERSION != nightly && $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then export RUN_COVERAGE=1; fi
-    - if [[ "$RUN_COVERAGE" == 1 ]]; then export TARGET="-m coverage run $TARGET"; fi
-    # See comments in tox.ini. Disabled on py35 because ResourceWarnings are too noisy there.
-    - if [[ $TRAVIS_PYTHON_VERSION != '3.5'* ]]; then export PYTHONWARNINGS=error,ignore:::site; fi
-    - python -bb $TARGET
-    - python -O $TARGET
-    - LANG=C python $TARGET
-    - LANG=en_US.utf-8 python $TARGET
-    #- if [[ $TRAVIS_PYTHON_VERSION != pypy* ]]; then python $TARGET --resolver=tornado.platform.caresresolver.CaresResolver; fi
-    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy3' ]]; then /tmp/nodeps/bin/python -m tornado.test.runtests; fi
-    # make coverage reports for Codecov to find
-    - if [[ "$RUN_COVERAGE" == 1 ]]; then coverage xml; fi
-    - export TORNADO_EXTENSION=0
-    - unset PYTHONWARNINGS
-    - if [[ $TRAVIS_PYTHON_VERSION == 3.7 ]]; then (cd ../docs && mkdir sphinx-out && sphinx-build -E -n -W -b html . sphinx-out); fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 3.7 ]]; then (cd ../docs && mkdir sphinx-doctest-out && sphinx-build -E -n -b doctest . sphinx-out); fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then (cd .. && flake8); fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then (cd .. && black --check --diff tornado demos); fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then (cd .. && mypy tornado); fi
-
-after_success:
-    # call codecov from project root
-    - if [[ "$RUN_COVERAGE" == 1 ]]; then cd ../ && codecov; fi
+    - "tox -e $TOX_ENV -- $TOX_ARGS"
