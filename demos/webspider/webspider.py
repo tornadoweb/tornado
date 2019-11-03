@@ -86,7 +86,7 @@ async def main():
     assert fetching == (fetched | dead)
     print("Done in %d seconds, fetched %s URLs." % (time.time() - start, len(fetched)))
     print("Unable to fetch %s URLS." % len(dead))
-    
+
     # Signal all the workers to exit.
     for _ in range(concurrency):
         await q.put(None)
