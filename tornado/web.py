@@ -1070,7 +1070,11 @@ class RequestHandler(object):
             self._headers_written = True
             for transform in self._transforms:
                 assert chunk is not None
-                self._status_code, self._headers, chunk = transform.transform_first_chunk(
+                (
+                    self._status_code,
+                    self._headers,
+                    chunk,
+                ) = transform.transform_first_chunk(
                     self._status_code, self._headers, chunk, include_footers
                 )
             # Ignore the chunk and only write the headers for HEAD requests
@@ -3524,9 +3528,13 @@ def _decode_signed_value_v2(
     clock: Callable[[], float],
 ) -> Optional[bytes]:
     try:
-        key_version, timestamp_bytes, name_field, value_field, passed_sig = _decode_fields_v2(
-            value
-        )
+        (
+            key_version,
+            timestamp_bytes,
+            name_field,
+            value_field,
+            passed_sig,
+        ) = _decode_fields_v2(value)
     except ValueError:
         return None
     signed_string = value[: -len(passed_sig)]

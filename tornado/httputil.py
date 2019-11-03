@@ -667,7 +667,7 @@ class HTTPFile(ObjectDict):
 
 
 def _parse_request_range(
-    range_header: str
+    range_header: str,
 ) -> Optional[Tuple[Optional[int], Optional[int]]]:
     """Parses a Range header.
 
