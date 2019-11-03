@@ -36,7 +36,7 @@ install:
     # Ideally we'd run the lint stuff on the latest Python
     # version supported. But Python 3.7 requires slower-to-start VMs,
     # so we run it on 3.6 to minimize total CI run time.
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then travis_retry pip install flake8 mypy==0.701 black; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then travis_retry pip install flake8 mypy==0.701 black==19.3b0; fi
     # We run docs on py37 because we need some bug fixes for introspection of annotations.
     - if [[ $TRAVIS_PYTHON_VERSION == '3.7' ]]; then travis_retry pip install -r docs/requirements.txt; fi
     # On travis the extension should always be built
