@@ -73,6 +73,8 @@ async def read_stream_body(stream):
 
 
 class HandlerBaseTestCase(AsyncHTTPTestCase):
+    Handler = None
+
     def get_app(self):
         return Application([("/", self.__class__.Handler)])
 
@@ -121,21 +123,21 @@ class SSLTestMixin(object):
     def get_ssl_version(self):
         raise NotImplementedError()
 
-    def test_ssl(self):
+    def test_ssl(self: typing.Any):
         response = self.fetch("/")
         self.assertEqual(response.body, b"Hello world")
 
-    def test_large_post(self):
+    def test_large_post(self: typing.Any):
         response = self.fetch("/", method="POST", body="A" * 5000)
         self.assertEqual(response.body, b"Got 5000 bytes in POST")
 
-    def test_non_ssl_request(self):
+    def test_non_ssl_request(self: typing.Any):
         # Make sure the server closes the connection when it gets a non-ssl
         # connection, rather than waiting for a timeout or otherwise
         # misbehaving.
         with ExpectLog(gen_log, "(SSL Error|uncaught exception)"):
             with ExpectLog(gen_log, "Uncaught exception", required=False):
-                with self.assertRaises((IOError, HTTPError)):
+                with self.assertRaises((IOError, HTTPError)):  # type: ignore
                     self.fetch(
                         self.get_url("/").replace("https:", "http:"),
                         request_timeout=3600,
@@ -143,10 +145,10 @@ class SSLTestMixin(object):
                         raise_error=True,
                     )
 
-    def test_error_logging(self):
+    def test_error_logging(self: typing.Any):
         # No stack traces are logged for SSL errors.
         with ExpectLog(gen_log, "SSL Error") as expect_log:
-            with self.assertRaises((IOError, HTTPError)):
+            with self.assertRaises((IOError, HTTPError)):  # type: ignore
                 self.fetch(
                     self.get_url("/").replace("https:", "http:"), raise_error=True
                 )
@@ -961,7 +963,7 @@ class KeepAliveTest(AsyncHTTPTestCase):
         self.close()
 
 
-class GzipBaseTest(object):
+class GzipBaseTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application([("/", EchoHandler)])
 
@@ -1182,14 +1184,11 @@ class BodyLimitsTest(AsyncHTTPTestCase):
                 self.bytes_read = 0
 
             def prepare(self):
+                conn = typing.cast(HTTP1Connection, self.request.connection)
                 if "expected_size" in self.request.arguments:
-                    self.request.connection.set_max_body_size(
-                        int(self.get_argument("expected_size"))
-                    )
+                    conn.set_max_body_size(int(self.get_argument("expected_size")))
                 if "body_timeout" in self.request.arguments:
-                    self.request.connection.set_body_timeout(
-                        float(self.get_argument("body_timeout"))
-                    )
+                    conn.set_body_timeout(float(self.get_argument("body_timeout")))
 
             def data_received(self, data):
                 self.bytes_read += len(data)

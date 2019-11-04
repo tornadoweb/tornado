@@ -624,7 +624,9 @@ class RequestHandler(object):
             # Don't let us accidentally inject bad stuff
             raise ValueError("Invalid cookie %r: %r" % (name, value))
         if not hasattr(self, "_new_cookie"):
-            self._new_cookie = http.cookies.SimpleCookie()
+            self._new_cookie = (
+                http.cookies.SimpleCookie()
+            )  # type: http.cookies.SimpleCookie
         if name in self._new_cookie:
             del self._new_cookie[name]
         self._new_cookie[name] = value
@@ -1784,11 +1786,11 @@ class RequestHandler(object):
                 args = [value.status_code, self._request_summary()] + list(value.args)
                 gen_log.warning(format, *args)
         else:
-            app_log.error(  # type: ignore
+            app_log.error(
                 "Uncaught exception %s\n%r",
                 self._request_summary(),
                 self.request,
-                exc_info=(typ, value, tb),
+                exc_info=(typ, value, tb),  # type: ignore
             )
 
     def _ui_module(self, name: str, module: Type["UIModule"]) -> Callable[..., str]:
@@ -1927,8 +1929,8 @@ class _ApplicationRouter(ReversibleRuleRouter):
         rule = super(_ApplicationRouter, self).process_rule(rule)
 
         if isinstance(rule.target, (list, tuple)):
-            rule.target = _ApplicationRouter(  # type: ignore
-                self.application, rule.target
+            rule.target = _ApplicationRouter(
+                self.application, rule.target  # type: ignore
             )
 
         return rule

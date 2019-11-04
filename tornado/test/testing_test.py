@@ -343,7 +343,7 @@ class GetNewIOLoopTest(AsyncTestCase):
         self.new_loop.close()
 
     def test_loop(self):
-        self.assertIs(self.io_loop.asyncio_loop, self.new_loop)
+        self.assertIs(self.io_loop.asyncio_loop, self.new_loop)  # type: ignore
 
 
 if __name__ == "__main__":

@@ -125,6 +125,7 @@ class AllMethodsHandler(RequestHandler):
     SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ("OTHER",)  # type: ignore
 
     def method(self):
+        assert self.request.method is not None
         self.write(self.request.method)
 
     get = head = post = put = delete = options = patch = other = method  # type: ignore
@@ -177,6 +178,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         self.assertEqual(response.code, 200)
         self.assertEqual(response.headers["Content-Type"], "text/plain")
         self.assertEqual(response.body, b"Hello world!")
+        assert response.request_time is not None
         self.assertEqual(int(response.request_time), 0)
 
         response = self.fetch("/hello?name=Ben")
@@ -281,7 +283,7 @@ Transfer-Encoding: chunked
         # important thing is that they don't fall back to basic auth
         # on an unknown mode.
         with ExpectLog(gen_log, "uncaught exception", required=False):
-            with self.assertRaises((ValueError, HTTPError)):
+            with self.assertRaises((ValueError, HTTPError)):  # type: ignore
                 self.fetch(
                     "/auth",
                     auth_username="Aladdin",
@@ -521,6 +523,8 @@ X-XSS-Protection: 1;
     def test_future_http_error(self):
         with self.assertRaises(HTTPError) as context:
             yield self.http_client.fetch(self.get_url("/notfound"))
+        assert context.exception is not None
+        assert context.exception.response is not None
         self.assertEqual(context.exception.code, 404)
         self.assertEqual(context.exception.response.code, 404)
 
@@ -551,7 +555,7 @@ X-XSS-Protection: 1;
         response = yield self.http_client.fetch(request)
         self.assertEqual(response.code, 200)
 
-        with self.assertRaises((ValueError, HTTPError)) as context:
+        with self.assertRaises((ValueError, HTTPError)) as context:  # type: ignore
             request = HTTPRequest(url, network_interface="not-interface-or-ip")
             yield self.http_client.fetch(request)
         self.assertIn("not-interface-or-ip", str(context.exception))
@@ -642,6 +646,7 @@ X-XSS-Protection: 1;
         self.assertLess(response.request_time, 1.0)
         # A very crude check to make sure that start_time is based on
         # wall time and not the monotonic clock.
+        assert response.start_time is not None
         self.assertLess(abs(response.start_time - start_time), 1.0)
 
         for k, v in response.time_info.items():
@@ -698,7 +703,7 @@ class RequestProxyTest(unittest.TestCase):
 class HTTPResponseTestCase(unittest.TestCase):
     def test_str(self):
         response = HTTPResponse(  # type: ignore
-            HTTPRequest("http://example.com"), 200, headers={}, buffer=BytesIO()
+            HTTPRequest("http://example.com"), 200, buffer=BytesIO()
         )
         s = str(response)
         self.assertTrue(s.startswith("HTTPResponse("))

@@ -142,9 +142,14 @@ class RespondInPrepareHandler(RequestHandler):
 
 
 class SimpleHTTPClientTestMixin(object):
-    def get_app(self):
+    def create_client(self, **kwargs):
+        raise NotImplementedError()
+
+    def get_app(self: typing.Any):
         # callable objects to finish pending /trigger requests
-        self.triggers = collections.deque()  # type: typing.Deque[str]
+        self.triggers = (
+            collections.deque()
+        )  # type: typing.Deque[typing.Callable[[], None]]
         return Application(
             [
                 url(
@@ -170,7 +175,7 @@ class SimpleHTTPClientTestMixin(object):
             gzip=True,
         )
 
-    def test_singleton(self):
+    def test_singleton(self: typing.Any):
         # Class "constructor" reuses objects on the same IOLoop
         self.assertTrue(SimpleAsyncHTTPClient() is SimpleAsyncHTTPClient())
         # unless force_instance is used
@@ -188,7 +193,7 @@ class SimpleHTTPClientTestMixin(object):
             client2 = io_loop2.run_sync(make_client)
             self.assertTrue(client1 is not client2)
 
-    def test_connection_limit(self):
+    def test_connection_limit(self: typing.Any):
         with closing(self.create_client(max_clients=2)) as client:
             self.assertEqual(client.max_clients, 2)
             seen = []
@@ -219,13 +224,13 @@ class SimpleHTTPClientTestMixin(object):
             self.assertEqual(len(self.triggers), 0)
 
     @gen_test
-    def test_redirect_connection_limit(self):
+    def test_redirect_connection_limit(self: typing.Any):
         # following redirects should not consume additional connections
         with closing(self.create_client(max_clients=1)) as client:
             response = yield client.fetch(self.get_url("/countdown/3"), max_redirects=3)
             response.rethrow()
 
-    def test_max_redirects(self):
+    def test_max_redirects(self: typing.Any):
         response = self.fetch("/countdown/5", max_redirects=3)
         self.assertEqual(302, response.code)
         # We requested 5, followed three redirects for 4, 3, 2, then the last
@@ -234,14 +239,14 @@ class SimpleHTTPClientTestMixin(object):
         self.assertTrue(response.effective_url.endswith("/countdown/2"))
         self.assertTrue(response.headers["Location"].endswith("/countdown/1"))
 
-    def test_header_reuse(self):
+    def test_header_reuse(self: typing.Any):
         # Apps may reuse a headers object if they are only passing in constant
         # headers like user-agent.  The header object should not be modified.
         headers = HTTPHeaders({"User-Agent": "Foo"})
         self.fetch("/hello", headers=headers)
         self.assertEqual(list(headers.get_all()), [("User-Agent", "Foo")])
 
-    def test_see_other_redirect(self):
+    def test_see_other_redirect(self: typing.Any):
         for code in (302, 303):
             response = self.fetch("/see_other_post", method="POST", body="%d" % code)
             self.assertEqual(200, response.code)
@@ -252,7 +257,7 @@ class SimpleHTTPClientTestMixin(object):
 
     @skipOnTravis
     @gen_test
-    def test_connect_timeout(self):
+    def test_connect_timeout(self: typing.Any):
         timeout = 0.1
 
         cleanup_event = Event()
@@ -280,7 +285,7 @@ class SimpleHTTPClientTestMixin(object):
         yield gen.sleep(0.2)
 
     @skipOnTravis
-    def test_request_timeout(self):
+    def test_request_timeout(self: typing.Any):
         timeout = 0.1
         if os.name == "nt":
             timeout = 0.5
@@ -292,7 +297,7 @@ class SimpleHTTPClientTestMixin(object):
         self.io_loop.run_sync(lambda: gen.sleep(0))
 
     @skipIfNoIPv6
-    def test_ipv6(self):
+    def test_ipv6(self: typing.Any):
         [sock] = bind_sockets(0, "::1", family=socket.AF_INET6)
         port = sock.getsockname()[1]
         self.http_server.add_socket(sock)
@@ -305,7 +310,7 @@ class SimpleHTTPClientTestMixin(object):
         response = self.fetch(url)
         self.assertEqual(response.body, b"Hello world!")
 
-    def test_multiple_content_length_accepted(self):
+    def test_multiple_content_length_accepted(self: typing.Any):
         response = self.fetch("/content_length?value=2,2")
         self.assertEqual(response.body, b"ok")
         response = self.fetch("/content_length?value=2,%202,2")
@@ -317,20 +322,20 @@ class SimpleHTTPClientTestMixin(object):
             with self.assertRaises(HTTPStreamClosedError):
                 self.fetch("/content_length?value=2,%202,3", raise_error=True)
 
-    def test_head_request(self):
+    def test_head_request(self: typing.Any):
         response = self.fetch("/head", method="HEAD")
         self.assertEqual(response.code, 200)
         self.assertEqual(response.headers["content-length"], "7")
         self.assertFalse(response.body)
 
-    def test_options_request(self):
+    def test_options_request(self: typing.Any):
         response = self.fetch("/options", method="OPTIONS")
         self.assertEqual(response.code, 200)
         self.assertEqual(response.headers["content-length"], "2")
         self.assertEqual(response.headers["access-control-allow-origin"], "*")
         self.assertEqual(response.body, b"ok")
 
-    def test_no_content(self):
+    def test_no_content(self: typing.Any):
         response = self.fetch("/no_content")
         self.assertEqual(response.code, 204)
         # 204 status shouldn't have a content-length
@@ -339,7 +344,7 @@ class SimpleHTTPClientTestMixin(object):
         # in HTTP204NoContentTestCase.
         self.assertNotIn("Content-Length", response.headers)
 
-    def test_host_header(self):
+    def test_host_header(self: typing.Any):
         host_re = re.compile(b"^127.0.0.1:[0-9]+$")
         response = self.fetch("/host_echo")
         self.assertTrue(host_re.match(response.body))
@@ -348,7 +353,7 @@ class SimpleHTTPClientTestMixin(object):
         response = self.fetch(url)
         self.assertTrue(host_re.match(response.body), response.body)
 
-    def test_connection_refused(self):
+    def test_connection_refused(self: typing.Any):
         cleanup_func, port = refusing_port()
         self.addCleanup(cleanup_func)
         with ExpectLog(gen_log, ".*", required=False):
@@ -368,7 +373,7 @@ class SimpleHTTPClientTestMixin(object):
             expected_message = os.strerror(errno.ECONNREFUSED)
             self.assertTrue(expected_message in str(cm.exception), cm.exception)
 
-    def test_queue_timeout(self):
+    def test_queue_timeout(self: typing.Any):
         with closing(self.create_client(max_clients=1)) as client:
             # Wait for the trigger request to block, not complete.
             fut1 = client.fetch(self.get_url("/trigger"), request_timeout=10)
@@ -384,7 +389,7 @@ class SimpleHTTPClientTestMixin(object):
             self.triggers.popleft()()
             self.io_loop.run_sync(lambda: fut1)
 
-    def test_no_content_length(self):
+    def test_no_content_length(self: typing.Any):
         response = self.fetch("/no_content_length")
         if response.body == b"HTTP/1 required":
             self.skipTest("requires HTTP/1.x")
@@ -401,14 +406,14 @@ class SimpleHTTPClientTestMixin(object):
         yield gen.moment
         yield write(b"5678")
 
-    def test_sync_body_producer_chunked(self):
+    def test_sync_body_producer_chunked(self: typing.Any):
         response = self.fetch(
             "/echo_post", method="POST", body_producer=self.sync_body_producer
         )
         response.rethrow()
         self.assertEqual(response.body, b"12345678")
 
-    def test_sync_body_producer_content_length(self):
+    def test_sync_body_producer_content_length(self: typing.Any):
         response = self.fetch(
             "/echo_post",
             method="POST",
@@ -418,14 +423,14 @@ class SimpleHTTPClientTestMixin(object):
         response.rethrow()
         self.assertEqual(response.body, b"12345678")
 
-    def test_async_body_producer_chunked(self):
+    def test_async_body_producer_chunked(self: typing.Any):
         response = self.fetch(
             "/echo_post", method="POST", body_producer=self.async_body_producer
         )
         response.rethrow()
         self.assertEqual(response.body, b"12345678")
 
-    def test_async_body_producer_content_length(self):
+    def test_async_body_producer_content_length(self: typing.Any):
         response = self.fetch(
             "/echo_post",
             method="POST",
@@ -435,7 +440,7 @@ class SimpleHTTPClientTestMixin(object):
         response.rethrow()
         self.assertEqual(response.body, b"12345678")
 
-    def test_native_body_producer_chunked(self):
+    def test_native_body_producer_chunked(self: typing.Any):
         async def body_producer(write):
             await write(b"1234")
             import asyncio
@@ -447,7 +452,7 @@ class SimpleHTTPClientTestMixin(object):
         response.rethrow()
         self.assertEqual(response.body, b"12345678")
 
-    def test_native_body_producer_content_length(self):
+    def test_native_body_producer_content_length(self: typing.Any):
         async def body_producer(write):
             await write(b"1234")
             import asyncio
@@ -464,13 +469,13 @@ class SimpleHTTPClientTestMixin(object):
         response.rethrow()
         self.assertEqual(response.body, b"12345678")
 
-    def test_100_continue(self):
+    def test_100_continue(self: typing.Any):
         response = self.fetch(
             "/echo_post", method="POST", body=b"1234", expect_100_continue=True
         )
         self.assertEqual(response.body, b"1234")
 
-    def test_100_continue_early_response(self):
+    def test_100_continue_early_response(self: typing.Any):
         def body_producer(write):
             raise Exception("should not be called")
 
@@ -482,7 +487,7 @@ class SimpleHTTPClientTestMixin(object):
         )
         self.assertEqual(response.code, 403)
 
-    def test_streaming_follow_redirects(self):
+    def test_streaming_follow_redirects(self: typing.Any):
         # When following redirects, header and streaming callbacks
         # should only be called for the final result.
         # TODO(bdarnell): this test belongs in httpclient_test instead of

@@ -53,7 +53,7 @@ from tornado import gen, httputil
 from tornado.ioloop import IOLoop
 from tornado.util import Configurable
 
-from typing import Type, Any, Union, Dict, Callable, Optional, cast, Awaitable
+from typing import Type, Any, Union, Dict, Callable, Optional, cast
 
 
 class HTTPClient(object):
@@ -251,7 +251,7 @@ class AsyncHTTPClient(Configurable):
         request: Union[str, "HTTPRequest"],
         raise_error: bool = True,
         **kwargs: Any
-    ) -> Awaitable["HTTPResponse"]:
+    ) -> "Future[HTTPResponse]":
         """Executes a request, asynchronously returning an `HTTPResponse`.
 
         The request may be either a string URL or an `HTTPRequest` object.
@@ -506,7 +506,7 @@ class HTTPRequest(object):
         """
         # Note that some of these attributes go through property setters
         # defined below.
-        self.headers = headers
+        self.headers = headers  # type: ignore
         if if_modified_since:
             self.headers["If-Modified-Since"] = httputil.format_timestamp(
                 if_modified_since
@@ -518,7 +518,7 @@ class HTTPRequest(object):
         self.proxy_auth_mode = proxy_auth_mode
         self.url = url
         self.method = method
-        self.body = body
+        self.body = body  # type: ignore
         self.body_producer = body_producer
         self.auth_username = auth_username
         self.auth_password = auth_password

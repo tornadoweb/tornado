@@ -55,7 +55,7 @@ def cpu_count() -> int:
     except NotImplementedError:
         pass
     try:
-        return os.sysconf("SC_NPROCESSORS_CONF")
+        return os.sysconf("SC_NPROCESSORS_CONF")  # type: ignore
     except (AttributeError, ValueError):
         pass
     gen_log.error("Could not detect number of processors; assuming 1")
@@ -117,6 +117,10 @@ def fork_processes(
 
     Availability: Unix
     """
+    if sys.platform == "win32":
+        # The exact form of this condition matters to mypy; it understands
+        # if but not assert in this context.
+        raise Exception("fork not available on windows")
     if max_restarts is None:
         max_restarts = 100
 
@@ -349,7 +353,7 @@ class Subprocess(object):
     @classmethod
     def _try_cleanup_process(cls, pid: int) -> None:
         try:
-            ret_pid, status = os.waitpid(pid, os.WNOHANG)
+            ret_pid, status = os.waitpid(pid, os.WNOHANG)  # type: ignore
         except ChildProcessError:
             return
         if ret_pid == 0:
@@ -359,11 +363,14 @@ class Subprocess(object):
         subproc.io_loop.add_callback_from_signal(subproc._set_returncode, status)
 
     def _set_returncode(self, status: int) -> None:
-        if os.WIFSIGNALED(status):
-            self.returncode = -os.WTERMSIG(status)
+        if sys.platform == "win32":
+            self.returncode = -1
         else:
-            assert os.WIFEXITED(status)
-            self.returncode = os.WEXITSTATUS(status)
+            if os.WIFSIGNALED(status):
+                self.returncode = -os.WTERMSIG(status)
+            else:
+                assert os.WIFEXITED(status)
+                self.returncode = os.WEXITSTATUS(status)
         # We've taken over wait() duty from the subprocess.Popen
         # object. If we don't inform it of the process's return code,
         # it will log a warning at destruction in python 3.6+.
