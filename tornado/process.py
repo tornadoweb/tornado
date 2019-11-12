@@ -110,9 +110,8 @@ def fork_processes(
     number between 0 and ``num_processes``.  Processes that exit
     abnormally (due to a signal or non-zero exit status) are restarted
     with the same id (up to ``max_restarts`` times).  In the parent
-    process, ``fork_processes`` returns None if all child processes
-    have exited normally, but will otherwise only exit by throwing an
-    exception.
+    process, ``fork_processes`` calls ``sys.exit(0)`` after all child
+    processes have exited normally.
 
     max_restarts defaults to 100.
 
