@@ -561,21 +561,21 @@ class WebSocketHandler(tornado.web.RequestHandler):
         assert self.ws_connection is not None
         self.ws_connection.set_nodelay(value)
 
-    def on_connection_close(self) -> None:
+    async def on_connection_close(self) -> None:
         if self.ws_connection:
             self.ws_connection.on_connection_close()
             self.ws_connection = None
         if not self._on_close_called:
             self._on_close_called = True
-            self.on_close()
+            await self.on_close()
             self._break_cycles()
 
-    def on_ws_connection_close(
+    async def on_ws_connection_close(
         self, close_code: Optional[int] = None, close_reason: Optional[str] = None
     ) -> None:
         self.close_code = close_code
         self.close_reason = close_reason
-        self.on_connection_close()
+        await self.on_connection_close()
 
     def _break_cycles(self) -> None:
         # WebSocketHandlers call finish() early, but we don't want to
@@ -1118,7 +1118,7 @@ class WebSocketProtocol13(WebSocketProtocol):
                 await self._receive_frame()
         except StreamClosedError:
             self._abort()
-        self.handler.on_ws_connection_close(self.close_code, self.close_reason)
+        await self.handler.on_ws_connection_close(self.close_code, self.close_reason)
 
     async def _read_bytes(self, n: int) -> bytes:
         data = await self.stream.read_bytes(n)
