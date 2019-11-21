@@ -1052,9 +1052,9 @@ class ErrorResponseTest(WebTestCase):
 
 
 class StaticFileTest(WebTestCase):
-    # The expected MD5 hash of robots.txt, used in tests that call
+    # The expected SHA1 hash of robots.txt, used in tests that call
     # StaticFileHandler.get_version
-    robots_txt_hash = b"f71d20196d4caf35b6a670db8c70b03d"
+    robots_txt_hash = b"63657cbb7d7086c56b0cd4e5c6999bb683664868"
     static_dir = os.path.join(os.path.dirname(__file__), "static")
 
     def get_handlers(self):
