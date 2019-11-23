@@ -2822,12 +2822,12 @@ class StaticFileHandler(RequestHandler):
         """Returns a version string for the resource at the given path.
 
         This class method may be overridden by subclasses.  The
-        default implementation is a hash of the file's contents.
+        default implementation is a SHA-512 hash of the file's contents.
 
         .. versionadded:: 3.1
         """
         data = cls.get_content(abspath)
-        hasher = hashlib.md5()
+        hasher = hashlib.sha512()
         if isinstance(data, bytes):
             hasher.update(data)
         else:
