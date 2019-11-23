@@ -1,6 +1,7 @@
 import asyncio
 import functools
 import traceback
+import typing
 import unittest
 
 from tornado.concurrent import Future
@@ -88,7 +89,7 @@ class HeaderHandler(TestWebSocketHandler):
             try:
                 # In a websocket context, many RequestHandler methods
                 # raise RuntimeErrors.
-                method()
+                method()  # type: ignore
                 raise Exception("did not get expected exception")
             except RuntimeError:
                 pass
@@ -639,8 +640,11 @@ class CompressionTestMixin(object):
     def get_client_compression_options(self):
         return None
 
+    def verify_wire_bytes(self, bytes_in: int, bytes_out: int) -> None:
+        raise NotImplementedError()
+
     @gen_test
-    def test_message_sizes(self):
+    def test_message_sizes(self: typing.Any):
         ws = yield self.ws_connect(
             "/echo", compression_options=self.get_client_compression_options()
         )
@@ -655,7 +659,7 @@ class CompressionTestMixin(object):
         self.verify_wire_bytes(ws.protocol._wire_bytes_in, ws.protocol._wire_bytes_out)
 
     @gen_test
-    def test_size_limit(self):
+    def test_size_limit(self: typing.Any):
         ws = yield self.ws_connect(
             "/limited", compression_options=self.get_client_compression_options()
         )
@@ -673,7 +677,7 @@ class CompressionTestMixin(object):
 class UncompressedTestMixin(CompressionTestMixin):
     """Specialization of CompressionTestMixin when we expect no compression."""
 
-    def verify_wire_bytes(self, bytes_in, bytes_out):
+    def verify_wire_bytes(self: typing.Any, bytes_in, bytes_out):
         # Bytes out includes the 4-byte mask key per message.
         self.assertEqual(bytes_out, 3 * (len(self.MESSAGE) + 6))
         self.assertEqual(bytes_in, 3 * (len(self.MESSAGE) + 2))
@@ -710,7 +714,10 @@ class DefaultCompressionTest(CompressionTestMixin, WebSocketBaseTestCase):
 
 class MaskFunctionMixin(object):
     # Subclasses should define self.mask(mask, data)
-    def test_mask(self):
+    def mask(self, mask: bytes, data: bytes) -> bytes:
+        raise NotImplementedError()
+
+    def test_mask(self: typing.Any):
         self.assertEqual(self.mask(b"abcd", b""), b"")
         self.assertEqual(self.mask(b"abcd", b"b"), b"\x03")
         self.assertEqual(self.mask(b"abcd", b"54321"), b"TVPVP")

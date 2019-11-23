@@ -16,6 +16,7 @@ from concurrent import futures
 import logging
 import re
 import socket
+import typing
 import unittest
 
 from tornado.concurrent import (
@@ -98,6 +99,8 @@ class GeneratorCapClient(BaseCapClient):
 
 
 class ClientTestMixin(object):
+    client_class = None  # type: typing.Callable
+
     def setUp(self):
         super(ClientTestMixin, self).setUp()  # type: ignore
         self.server = CapServer()
@@ -109,19 +112,19 @@ class ClientTestMixin(object):
         self.server.stop()
         super(ClientTestMixin, self).tearDown()  # type: ignore
 
-    def test_future(self):
+    def test_future(self: typing.Any):
         future = self.client.capitalize("hello")
         self.io_loop.add_future(future, self.stop)
         self.wait()
         self.assertEqual(future.result(), "HELLO")
 
-    def test_future_error(self):
+    def test_future_error(self: typing.Any):
         future = self.client.capitalize("HELLO")
         self.io_loop.add_future(future, self.stop)
         self.wait()
-        self.assertRaisesRegexp(CapError, "already capitalized", future.result)
+        self.assertRaisesRegexp(CapError, "already capitalized", future.result)  # type: ignore
 
-    def test_generator(self):
+    def test_generator(self: typing.Any):
         @gen.coroutine
         def f():
             result = yield self.client.capitalize("hello")
@@ -129,7 +132,7 @@ class ClientTestMixin(object):
 
         self.io_loop.run_sync(f)
 
-    def test_generator_error(self):
+    def test_generator_error(self: typing.Any):
         @gen.coroutine
         def f():
             with self.assertRaisesRegexp(CapError, "already capitalized"):

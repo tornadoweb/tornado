@@ -39,8 +39,10 @@ else:
 
 
 class _ResolverTestMixin(object):
+    resolver = None  # type: typing.Any
+
     @gen_test
-    def test_localhost(self):
+    def test_localhost(self: typing.Any):
         addrinfo = yield self.resolver.resolve("localhost", 80, socket.AF_UNSPEC)
         self.assertIn((socket.AF_INET, ("127.0.0.1", 80)), addrinfo)
 
@@ -48,8 +50,10 @@ class _ResolverTestMixin(object):
 # It is impossible to quickly and consistently generate an error in name
 # resolution, so test this case separately, using mocks as needed.
 class _ResolverErrorTestMixin(object):
+    resolver = None  # type: typing.Any
+
     @gen_test
-    def test_bad_host(self):
+    def test_bad_host(self: typing.Any):
         with self.assertRaises(IOError):
             yield self.resolver.resolve("an invalid domain", 80, socket.AF_UNSPEC)
 

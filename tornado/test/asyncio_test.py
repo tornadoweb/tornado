@@ -181,7 +181,7 @@ class AnyThreadEventLoopPolicyTest(unittest.TestCase):
         self.assertIsInstance(self.executor.submit(accessor).result(), expected_type)
         # Clean up to silence leak warnings. Always use asyncio since
         # IOLoop doesn't (currently) close the underlying loop.
-        self.executor.submit(lambda: asyncio.get_event_loop().close()).result()
+        self.executor.submit(lambda: asyncio.get_event_loop().close()).result()  # type: ignore
 
     def test_asyncio_accessor(self):
         self.run_policy_test(asyncio.get_event_loop, asyncio.AbstractEventLoop)

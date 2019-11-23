@@ -293,7 +293,7 @@ class AsyncTestCase(unittest.TestCase):
         self,
         condition: Optional[Callable[..., bool]] = None,
         timeout: Optional[float] = None,
-    ) -> None:
+    ) -> Any:
         """Runs the `.IOLoop` until stop is called or timeout has passed.
 
         In the event of a timeout, an exception will be thrown. The

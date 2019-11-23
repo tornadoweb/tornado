@@ -93,6 +93,7 @@ class TCPClientTest(AsyncTestCase):
         stream = yield self.client.connect(
             host, port, source_ip=source_ip, source_port=source_port
         )
+        assert self.server is not None
         server_stream = yield self.server.queue.get()
         with closing(stream):
             stream.write(b"hello")
@@ -208,8 +209,8 @@ class ConnectorTest(AsyncTestCase):
         super(ConnectorTest, self).setUp()
         self.connect_futures = (
             {}
-        )  # type: Dict[Tuple[int, Tuple], Future[ConnectorTest.FakeStream]]
-        self.streams = {}  # type: Dict[Tuple, ConnectorTest.FakeStream]
+        )  # type: Dict[Tuple[int, typing.Any], Future[ConnectorTest.FakeStream]]
+        self.streams = {}  # type: Dict[typing.Any, ConnectorTest.FakeStream]
         self.addrinfo = [(AF1, "a"), (AF1, "b"), (AF2, "c"), (AF2, "d")]
 
     def tearDown(self):

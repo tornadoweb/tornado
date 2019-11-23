@@ -101,8 +101,8 @@ class QueueGetTest(AsyncTestCase):
     def test_blocking_get_wait(self):
         q = queues.Queue()  # type: queues.Queue[int]
         q.put(0)
-        self.io_loop.call_later(0.01, q.put, 1)
-        self.io_loop.call_later(0.02, q.put, 2)
+        self.io_loop.call_later(0.01, q.put_nowait, 1)
+        self.io_loop.call_later(0.02, q.put_nowait, 2)
         self.assertEqual(0, (yield q.get(timeout=timedelta(seconds=1))))
         self.assertEqual(1, (yield q.get(timeout=timedelta(seconds=1))))
 
@@ -213,8 +213,12 @@ class QueuePutTest(AsyncTestCase):
     def test_blocking_put_wait(self):
         q = queues.Queue(1)  # type: queues.Queue[int]
         q.put_nowait(0)
-        self.io_loop.call_later(0.01, q.get)
-        self.io_loop.call_later(0.02, q.get)
+
+        def get_and_discard():
+            q.get()
+
+        self.io_loop.call_later(0.01, get_and_discard)
+        self.io_loop.call_later(0.02, get_and_discard)
         futures = [q.put(0), q.put(1)]
         self.assertFalse(any(f.done() for f in futures))
         yield futures
@@ -307,12 +311,12 @@ class QueueJoinTest(AsyncTestCase):
     queue_class = queues.Queue
 
     def test_task_done_underflow(self):
-        q = self.queue_class()
+        q = self.queue_class()  # type: queues.Queue
         self.assertRaises(ValueError, q.task_done)
 
     @gen_test
     def test_task_done(self):
-        q = self.queue_class()
+        q = self.queue_class()  # type: queues.Queue
         for i in range(100):
             q.put_nowait(i)
 
@@ -335,9 +339,9 @@ class QueueJoinTest(AsyncTestCase):
     @gen_test
     def test_task_done_delay(self):
         # Verify it is task_done(), not get(), that unblocks join().
-        q = self.queue_class()
+        q = self.queue_class()  # type: queues.Queue
         q.put_nowait(0)
-        join = q.join()
+        join = asyncio.ensure_future(q.join())
         self.assertFalse(join.done())
         yield q.get()
         self.assertFalse(join.done())
@@ -348,13 +352,13 @@ class QueueJoinTest(AsyncTestCase):
 
     @gen_test
     def test_join_empty_queue(self):
-        q = self.queue_class()
+        q = self.queue_class()  # type: queues.Queue
         yield q.join()
         yield q.join()
 
     @gen_test
     def test_join_timeout(self):
-        q = self.queue_class()
+        q = self.queue_class()  # type: queues.Queue
         q.put(0)
         with self.assertRaises(TimeoutError):
             yield q.join(timeout=timedelta(seconds=0.01))

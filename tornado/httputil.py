@@ -387,7 +387,9 @@ class HTTPServerRequest(object):
     def cookies(self) -> Dict[str, http.cookies.Morsel]:
         """A dictionary of ``http.cookies.Morsel`` objects."""
         if not hasattr(self, "_cookies"):
-            self._cookies = http.cookies.SimpleCookie()
+            self._cookies = (
+                http.cookies.SimpleCookie()
+            )  # type: http.cookies.SimpleCookie
             if "Cookie" in self.headers:
                 try:
                     parsed = parse_cookie(self.headers["Cookie"])
@@ -667,7 +669,7 @@ class HTTPFile(ObjectDict):
 
 
 def _parse_request_range(
-    range_header: str
+    range_header: str,
 ) -> Optional[Tuple[Optional[int], Optional[int]]]:
     """Parses a Range header.
 

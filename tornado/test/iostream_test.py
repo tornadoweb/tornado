@@ -30,6 +30,7 @@ import platform
 import random
 import socket
 import ssl
+import typing
 from unittest import mock
 import unittest
 
@@ -53,7 +54,7 @@ class TestIOStreamWebMixin(object):
     def get_app(self):
         return Application([("/", HelloHandler)])
 
-    def test_connection_closed(self):
+    def test_connection_closed(self: typing.Any):
         # When a server sends a response and then closes the connection,
         # the client must be allowed to read the data before the IOStream
         # closes itself.  Epoll reports closed connections with a separate
@@ -64,7 +65,7 @@ class TestIOStreamWebMixin(object):
         response.rethrow()
 
     @gen_test
-    def test_read_until_close(self):
+    def test_read_until_close(self: typing.Any):
         stream = self._make_client_iostream()
         yield stream.connect(("127.0.0.1", self.get_http_port()))
         stream.write(b"GET / HTTP/1.0\r\n\r\n")
@@ -74,7 +75,7 @@ class TestIOStreamWebMixin(object):
         self.assertTrue(data.endswith(b"Hello"))
 
     @gen_test
-    def test_read_zero_bytes(self):
+    def test_read_zero_bytes(self: typing.Any):
         self.stream = self._make_client_iostream()
         yield self.stream.connect(("127.0.0.1", self.get_http_port()))
         self.stream.write(b"GET / HTTP/1.0\r\n\r\n")
@@ -94,7 +95,7 @@ class TestIOStreamWebMixin(object):
         self.stream.close()
 
     @gen_test
-    def test_write_while_connecting(self):
+    def test_write_while_connecting(self: typing.Any):
         stream = self._make_client_iostream()
         connect_fut = stream.connect(("127.0.0.1", self.get_http_port()))
         # unlike the previous tests, try to write before the connection
@@ -116,7 +117,7 @@ class TestIOStreamWebMixin(object):
         stream.close()
 
     @gen_test
-    def test_future_interface(self):
+    def test_future_interface(self: typing.Any):
         """Basic test of IOStream's ability to return Futures."""
         stream = self._make_client_iostream()
         connect_result = yield stream.connect(("127.0.0.1", self.get_http_port()))
@@ -133,7 +134,7 @@ class TestIOStreamWebMixin(object):
         stream.close()
 
     @gen_test
-    def test_future_close_while_reading(self):
+    def test_future_close_while_reading(self: typing.Any):
         stream = self._make_client_iostream()
         yield stream.connect(("127.0.0.1", self.get_http_port()))
         yield stream.write(b"GET / HTTP/1.0\r\n\r\n")
@@ -142,7 +143,7 @@ class TestIOStreamWebMixin(object):
         stream.close()
 
     @gen_test
-    def test_future_read_until_close(self):
+    def test_future_read_until_close(self: typing.Any):
         # Ensure that the data comes through before the StreamClosedError.
         stream = self._make_client_iostream()
         yield stream.connect(("127.0.0.1", self.get_http_port()))
@@ -174,7 +175,7 @@ class TestReadWriteMixin(object):
         rs.close()
 
     @gen_test
-    def test_future_delayed_close_callback(self):
+    def test_future_delayed_close_callback(self: typing.Any):
         # Same as test_delayed_close_callback, but with the future interface.
         rs, ws = yield self.make_iostream_pair()
 
@@ -190,7 +191,7 @@ class TestReadWriteMixin(object):
             rs.close()
 
     @gen_test
-    def test_close_buffered_data(self):
+    def test_close_buffered_data(self: typing.Any):
         # Similar to the previous test, but with data stored in the OS's
         # socket buffers instead of the IOStream's read buffer.  Out-of-band
         # close notifications must be delayed until all data has been
@@ -216,7 +217,7 @@ class TestReadWriteMixin(object):
             rs.close()
 
     @gen_test
-    def test_read_until_close_after_close(self):
+    def test_read_until_close_after_close(self: typing.Any):
         # Similar to test_delayed_close_callback, but read_until_close takes
         # a separate code path so test it separately.
         rs, ws = yield self.make_iostream_pair()
@@ -235,7 +236,7 @@ class TestReadWriteMixin(object):
             rs.close()
 
     @gen_test
-    def test_large_read_until(self):
+    def test_large_read_until(self: typing.Any):
         # Performance test: read_until used to have a quadratic component
         # so a read_until of 4MB would take 8 seconds; now it takes 0.25
         # seconds.
@@ -260,7 +261,7 @@ class TestReadWriteMixin(object):
             rs.close()
 
     @gen_test
-    def test_close_callback_with_pending_read(self):
+    def test_close_callback_with_pending_read(self: typing.Any):
         # Regression test for a bug that was introduced in 2.3
         # where the IOStream._close_callback would never be called
         # if there were pending reads.
@@ -284,7 +285,7 @@ class TestReadWriteMixin(object):
             rs.close()
 
     @gen_test
-    def test_future_close_callback(self):
+    def test_future_close_callback(self: typing.Any):
         # Regression test for interaction between the Future read interfaces
         # and IOStream._maybe_add_error_listener.
         rs, ws = yield self.make_iostream_pair()
@@ -309,7 +310,7 @@ class TestReadWriteMixin(object):
             ws.close()
 
     @gen_test
-    def test_write_memoryview(self):
+    def test_write_memoryview(self: typing.Any):
         rs, ws = yield self.make_iostream_pair()
         try:
             fut = rs.read_bytes(4)
@@ -321,7 +322,7 @@ class TestReadWriteMixin(object):
             rs.close()
 
     @gen_test
-    def test_read_bytes_partial(self):
+    def test_read_bytes_partial(self: typing.Any):
         rs, ws = yield self.make_iostream_pair()
         try:
             # Ask for more than is available with partial=True
@@ -346,7 +347,7 @@ class TestReadWriteMixin(object):
             rs.close()
 
     @gen_test
-    def test_read_until_max_bytes(self):
+    def test_read_until_max_bytes(self: typing.Any):
         rs, ws = yield self.make_iostream_pair()
         closed = Event()
         rs.set_close_callback(closed.set)
@@ -374,7 +375,7 @@ class TestReadWriteMixin(object):
             rs.close()
 
     @gen_test
-    def test_read_until_max_bytes_inline(self):
+    def test_read_until_max_bytes_inline(self: typing.Any):
         rs, ws = yield self.make_iostream_pair()
         closed = Event()
         rs.set_close_callback(closed.set)
@@ -393,7 +394,7 @@ class TestReadWriteMixin(object):
             rs.close()
 
     @gen_test
-    def test_read_until_max_bytes_ignores_extra(self):
+    def test_read_until_max_bytes_ignores_extra(self: typing.Any):
         rs, ws = yield self.make_iostream_pair()
         closed = Event()
         rs.set_close_callback(closed.set)
@@ -410,7 +411,7 @@ class TestReadWriteMixin(object):
             rs.close()
 
     @gen_test
-    def test_read_until_regex_max_bytes(self):
+    def test_read_until_regex_max_bytes(self: typing.Any):
         rs, ws = yield self.make_iostream_pair()
         closed = Event()
         rs.set_close_callback(closed.set)
@@ -438,7 +439,7 @@ class TestReadWriteMixin(object):
             rs.close()
 
     @gen_test
-    def test_read_until_regex_max_bytes_inline(self):
+    def test_read_until_regex_max_bytes_inline(self: typing.Any):
         rs, ws = yield self.make_iostream_pair()
         closed = Event()
         rs.set_close_callback(closed.set)
@@ -473,7 +474,7 @@ class TestReadWriteMixin(object):
             rs.close()
 
     @gen_test
-    def test_small_reads_from_large_buffer(self):
+    def test_small_reads_from_large_buffer(self: typing.Any):
         # 10KB buffer size, 100KB available to read.
         # Read 1KB at a time and make sure that the buffer is not eagerly
         # filled.
@@ -488,7 +489,7 @@ class TestReadWriteMixin(object):
             rs.close()
 
     @gen_test
-    def test_small_read_untils_from_large_buffer(self):
+    def test_small_read_untils_from_large_buffer(self: typing.Any):
         # 10KB buffer size, 100KB available to read.
         # Read 1KB at a time and make sure that the buffer is not eagerly
         # filled.
@@ -521,7 +522,7 @@ class TestReadWriteMixin(object):
             ws.close()
 
     @gen_test
-    def test_read_into(self):
+    def test_read_into(self: typing.Any):
         rs, ws = yield self.make_iostream_pair()
 
         def sleep_some():
@@ -563,7 +564,7 @@ class TestReadWriteMixin(object):
             rs.close()
 
     @gen_test
-    def test_read_into_partial(self):
+    def test_read_into_partial(self: typing.Any):
         rs, ws = yield self.make_iostream_pair()
 
         try:
@@ -592,7 +593,7 @@ class TestReadWriteMixin(object):
             rs.close()
 
     @gen_test
-    def test_read_into_zero_bytes(self):
+    def test_read_into_zero_bytes(self: typing.Any):
         rs, ws = yield self.make_iostream_pair()
         try:
             buf = bytearray()
@@ -661,7 +662,7 @@ class TestIOStreamMixin(TestReadWriteMixin):
         raise NotImplementedError()
 
     @gen.coroutine
-    def make_iostream_pair(self, **kwargs):
+    def make_iostream_pair(self: typing.Any, **kwargs):
         listener, port = bind_unused_port()
         server_stream_fut = Future()  # type: Future[IOStream]
 
@@ -679,7 +680,7 @@ class TestIOStreamMixin(TestReadWriteMixin):
         raise gen.Return((server_stream, client_stream))
 
     @gen_test
-    def test_connection_refused(self):
+    def test_connection_refused(self: typing.Any):
         # When a connection is refused, the connect callback should not
         # be run.  (The kqueue IOLoop used to behave differently from the
         # epoll IOLoop in this respect)
@@ -696,7 +697,7 @@ class TestIOStreamMixin(TestReadWriteMixin):
         self.assertTrue(isinstance(stream.error, ConnectionRefusedError), stream.error)
 
     @gen_test
-    def test_gaierror(self):
+    def test_gaierror(self: typing.Any):
         # Test that IOStream sets its exc_info on getaddrinfo error.
         # It's difficult to reliably trigger a getaddrinfo error;
         # some resolvers own't even return errors for malformed names,
@@ -713,7 +714,7 @@ class TestIOStreamMixin(TestReadWriteMixin):
             self.assertTrue(isinstance(stream.error, socket.gaierror))
 
     @gen_test
-    def test_read_until_close_with_error(self):
+    def test_read_until_close_with_error(self: typing.Any):
         server, client = yield self.make_iostream_pair()
         try:
             with mock.patch(
@@ -729,7 +730,7 @@ class TestIOStreamMixin(TestReadWriteMixin):
     @skipIfNonUnix
     @skipPypy3V58
     @gen_test
-    def test_inline_read_error(self):
+    def test_inline_read_error(self: typing.Any):
         # An error on an inline read is raised without logging (on the
         # assumption that it will eventually be noticed or logged further
         # up the stack).
@@ -867,7 +868,9 @@ class TestIOStreamStartTLS(AsyncTestCase):
             self.server_stream = None
             self.server_accepted = Future()  # type: Future[None]
             netutil.add_accept_handler(self.listener, self.accept)
-            self.client_stream = IOStream(socket.socket())
+            self.client_stream = IOStream(
+                socket.socket()
+            )  # type: typing.Optional[IOStream]
             self.io_loop.add_future(
                 self.client_stream.connect(("127.0.0.1", self.port)), self.stop
             )
@@ -894,22 +897,28 @@ class TestIOStreamStartTLS(AsyncTestCase):
 
     @gen.coroutine
     def client_send_line(self, line):
+        assert self.client_stream is not None
         self.client_stream.write(line)
+        assert self.server_stream is not None
         recv_line = yield self.server_stream.read_until(b"\r\n")
         self.assertEqual(line, recv_line)
 
     @gen.coroutine
     def server_send_line(self, line):
+        assert self.server_stream is not None
         self.server_stream.write(line)
+        assert self.client_stream is not None
         recv_line = yield self.client_stream.read_until(b"\r\n")
         self.assertEqual(line, recv_line)
 
     def client_start_tls(self, ssl_options=None, server_hostname=None):
+        assert self.client_stream is not None
         client_stream = self.client_stream
         self.client_stream = None
         return client_stream.start_tls(False, ssl_options, server_hostname)
 
     def server_start_tls(self, ssl_options=None):
+        assert self.server_stream is not None
         server_stream = self.server_stream
         self.server_stream = None
         return server_stream.start_tls(True, ssl_options)

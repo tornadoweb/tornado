@@ -233,13 +233,13 @@ class IOLoop(Configurable):
     def current() -> "IOLoop":
         pass
 
-    @typing.overload  # noqa: F811
+    @typing.overload
     @staticmethod
-    def current(instance: bool = True) -> Optional["IOLoop"]:
+    def current(instance: bool = True) -> Optional["IOLoop"]:  # noqa: F811
         pass
 
-    @staticmethod  # noqa: F811
-    def current(instance: bool = True) -> Optional["IOLoop"]:
+    @staticmethod
+    def current(instance: bool = True) -> Optional["IOLoop"]:  # noqa: F811
         """Returns the current thread's `IOLoop`.
 
         If an `IOLoop` is currently running or has been marked as

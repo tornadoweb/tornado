@@ -1,4 +1,5 @@
 import socket
+import typing
 
 from tornado.http1connection import HTTP1Connection
 from tornado.httputil import HTTPMessageDelegate
@@ -9,6 +10,8 @@ from tornado.testing import AsyncTestCase, bind_unused_port, gen_test
 
 
 class HTTP1ConnectionTest(AsyncTestCase):
+    code = None  # type: typing.Optional[int]
+
     def setUp(self):
         super(HTTP1ConnectionTest, self).setUp()
         self.asyncSetUp()

@@ -38,9 +38,9 @@ class TestIOLoop(AsyncTestCase):
             test.calls += 1
             old_add_callback(callback, *args, **kwargs)
 
-        loop.add_callback = types.MethodType(add_callback, loop)
-        loop.add_callback(lambda: {})
-        loop.add_callback(lambda: [])
+        loop.add_callback = types.MethodType(add_callback, loop)  # type: ignore
+        loop.add_callback(lambda: {})  # type: ignore
+        loop.add_callback(lambda: [])  # type: ignore
         loop.add_timeout(datetime.timedelta(milliseconds=50), loop.stop)
         loop.start()
         self.assertLess(self.calls, 10)
@@ -161,7 +161,7 @@ class TestIOLoop(AsyncTestCase):
 
             self.io_loop.add_handler(client.fileno(), handler, IOLoop.READ)
             self.io_loop.add_timeout(
-                self.io_loop.time() + 0.01, functools.partial(server.send, b"asdf")
+                self.io_loop.time() + 0.01, functools.partial(server.send, b"asdf")  # type: ignore
             )
             self.wait()
             self.io_loop.remove_handler(client.fileno())
@@ -415,7 +415,7 @@ class TestIOLoop(AsyncTestCase):
 # automatically set as current.
 class TestIOLoopCurrent(unittest.TestCase):
     def setUp(self):
-        self.io_loop = None
+        self.io_loop = None  # type: typing.Optional[IOLoop]
         IOLoop.clear_current()
 
     def tearDown(self):
@@ -441,6 +441,7 @@ class TestIOLoopCurrent(unittest.TestCase):
 
             def f():
                 self.current_io_loop = IOLoop.current()
+                assert self.io_loop is not None
                 self.io_loop.stop()
 
             self.io_loop.add_callback(f)

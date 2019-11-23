@@ -253,8 +253,8 @@ def _reload() -> None:
             # Unfortunately the errno returned in this case does not
             # appear to be consistent, so we can't easily check for
             # this error specifically.
-            os.spawnv(  # type: ignore
-                os.P_NOWAIT, sys.executable, [sys.executable] + argv
+            os.spawnv(
+                os.P_NOWAIT, sys.executable, [sys.executable] + argv  # type: ignore
             )
             # At this point the IOLoop has been closed and finally
             # blocks will experience errors if we allow the stack to

@@ -387,7 +387,7 @@ def _resolve_addr(
     results = []
     for fam, socktype, proto, canonname, address in addrinfo:
         results.append((fam, address))
-    return results
+    return results  # type: ignore
 
 
 class DefaultExecutorResolver(Resolver):

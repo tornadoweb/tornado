@@ -204,7 +204,7 @@ class OpenIdMixin(object):
     ) -> Dict[str, Any]:
         handler = cast(RequestHandler, self)
         if b"is_valid:true" not in response.body:
-            raise AuthError("Invalid OpenID response: %s" % response.body)
+            raise AuthError("Invalid OpenID response: %r" % response.body)
 
         # Make sure we got back at least an email from attribute exchange
         ax_ns = None
@@ -556,7 +556,7 @@ class OAuth2Mixin(object):
         client_id: Optional[str] = None,
         client_secret: Optional[str] = None,
         extra_params: Optional[Dict[str, Any]] = None,
-        scope: Optional[str] = None,
+        scope: Optional[List[str]] = None,
         response_type: str = "code",
     ) -> None:
         """Redirects the user to obtain OAuth authorization for this service.

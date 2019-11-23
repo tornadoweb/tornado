@@ -280,8 +280,6 @@ class WebSocketHandler(tornado.web.RequestHandler):
             self.set_status(426, "Upgrade Required")
             self.set_header("Sec-WebSocket-Version", "7, 8, 13")
 
-    stream = None
-
     @property
     def ping_interval(self) -> Optional[float]:
         """The interval for websocket keep-alive pings.
