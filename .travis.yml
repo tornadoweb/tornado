@@ -17,7 +17,8 @@ jobs:
     # "provisional feature" rules there are significant differences between patch
     # versions for asyncio and typing.
     - python: 3.5.2
-      env: TOX_ENV=py35-full
+      # Twisted doesn't install on python 3.5.2, so don't run the "full" tests.
+      env: TOX_ENV=py35
     - python: '3.5'
       env: TOX_ENV=py35-full
     - python: '3.6'
