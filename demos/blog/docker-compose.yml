@@ -10,8 +10,17 @@ services:
       - "3306"
   blog:
     build: .
+    environment:
+      POSTGRES_USER: blog
+      POSTGRES_PASSWORD: blog
+      POSTGRES_DB: blog
     links:
       - postgres
     ports:
       - "8888:8888"
-    command: --db_host=postgres
+    entrypoint:
+      - ./wait-for-postgres.sh
+      - postgres
+      - python3
+      - blog.py
+      - --db_host=postgres
