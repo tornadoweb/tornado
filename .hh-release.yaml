@@ -1,3 +1,4 @@
+version: 5.0.2.1
 docker_context: .
 build_docker_file: docker/Dockerfile.building
 build_method: nope_build
