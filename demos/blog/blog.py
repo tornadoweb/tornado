@@ -266,14 +266,13 @@ class AuthLoginHandler(BaseHandler):
         except NoResultError:
             self.render("login.html", error="email not found")
             return
-        hashed_password = await tornado.ioloop.IOLoop.current().run_in_executor(
+        password_equal = await tornado.ioloop.IOLoop.current().run_in_executor(
             None,
-            bcrypt.hashpw,
+            bcrypt.checkpw,
             tornado.escape.utf8(self.get_argument("password")),
             tornado.escape.utf8(author.hashed_password),
         )
-        hashed_password = tornado.escape.to_unicode(hashed_password)
-        if hashed_password == author.hashed_password:
+        if password_equal:
             self.set_secure_cookie("blogdemo_user", str(author.id))
             self.redirect(self.get_argument("next", "/"))
         else:
