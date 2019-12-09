@@ -1,0 +1,8 @@
+Vagrant::Config.run do |config|
+    config.vm.box = "ubuntu/trusty64"
+
+    config.vm.network :hostonly, "172.19.1.8"
+    config.vm.share_folder("tornado", "/tornado", "../../..", :nfs=> true)
+
+    config.vm.provision :shell, :path => "setup.sh"
+end

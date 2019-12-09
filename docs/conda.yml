@@ -1,0 +1,9 @@
+# TODO: remove when RTD supports python 3.7 without conda
+name: tornado-docs
+dependencies:
+  - python=3.7
+  - pip:
+    - sphinx
+    - sphinx-rtd-theme
+    - sphinxcontrib-asyncio
+    - Twisted

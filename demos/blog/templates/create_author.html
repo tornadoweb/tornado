@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block body %}
+<form action="/auth/create" method="POST">
+  Email: <input name="email" type="text"><br>
+  Name: <input name="name" type="text"><br>
+  Password: <input name="password" type="password"><br>
+  {% module xsrf_form_html() %}
+  <input type="submit">
+</form>
+{% end %}

@@ -1,0 +1,25 @@
+# Requirements for tools used in the development of tornado.
+# Use virtualenv instead of venv; tox seems to get confused otherwise.
+#
+# maint/requirements.txt contains the pinned versions of all direct and
+# indirect dependencies; this file only contains direct dependencies
+# and is useful for upgrading.
+
+# Tornado's optional dependencies
+Twisted
+pycares
+pycurl
+
+# Other useful tools
+Sphinx>1.8.2
+black
+coverage
+flake8
+mypy==0.630
+pep8
+pyflakes
+sphinxcontrib-asyncio
+sphinx-rtd-theme
+tox
+twine
+virtualenv

@@ -9,4 +9,4 @@ Jun 2, 2013
   June 11 <https://dev.twitter.com/calendar>`_.  It also now uses HTTPS
   when talking to Twitter.
 * Fixed a potential memory leak with a long chain of `.gen.coroutine`
-  or `.gen.engine` functions.
+  or ``gen.engine`` functions.

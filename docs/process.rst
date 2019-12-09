@@ -3,3 +3,7 @@
 
 .. automodule:: tornado.process
    :members:
+
+   .. exception:: CalledProcessError
+
+      An alias for `subprocess.CalledProcessError`.

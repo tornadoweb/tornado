@@ -1,0 +1,12 @@
+What's new in Tornado 4.4.3
+===========================
+
+Mar 30, 2017
+------------
+
+Bug fixes
+~~~~~~~~~
+
+* The `tornado.auth` module has been updated for compatibility with `a
+  change to Facebook's access_token endpoint.
+  <https://github.com/tornadoweb/tornado/pull/1977>`_

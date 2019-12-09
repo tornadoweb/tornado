@@ -1,0 +1,14 @@
+What's new in Tornado 6.0.3
+===========================
+
+Jun 22, 2019
+------------
+
+Bug fixes
+~~~~~~~~~
+
+- `.gen.with_timeout` always treats ``asyncio.CancelledError`` as a
+  ``quiet_exception`` (this improves compatibility with Python 3.8,
+  which changed ``CancelledError`` to a ``BaseException``).
+- ``IOStream`` now checks for closed streams earlier, avoiding
+  spurious logged errors in some situations (mainly with websockets).

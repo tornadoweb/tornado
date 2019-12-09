@@ -6,7 +6,7 @@
    Class reference
    ---------------
 
-   .. autoclass:: Template(template_string, name="<string>", loader=None, compress_whitespace=None, autoescape="xhtml_escape")
+   .. autoclass:: Template(template_string, name="<string>", loader=None, compress_whitespace=None, autoescape="xhtml_escape", whitespace=None)
       :members:
 
    .. autoclass:: BaseLoader
@@ -19,3 +19,5 @@
       :members:
 
    .. autoexception:: ParseError
+
+   .. autofunction:: filter_whitespace

@@ -1,5 +1,10 @@
-``tornado.gen`` --- Simplify asynchronous code
+``tornado.gen`` --- Generator-based coroutines
 ==============================================
+
+.. testsetup::
+
+   from tornado.web import *
+   from tornado import gen
 
 .. automodule:: tornado.gen
 
@@ -8,48 +13,27 @@
 
    .. autofunction:: coroutine
 
-   .. autofunction:: engine
+   .. autoexception:: Return
 
-   Yield points
-   ------------
+   Utility functions
+   -----------------
 
-   Instances of the following classes may be used in yield expressions
-   in the generator.  `Futures <.Future>` may be yielded as well;
-   their result method will be called automatically when they are
-   ready.  Additionally, lists of any combination of these objects may
-   be yielded; the result is a list of the results of each yield point
-   in the same order. Yielding dicts with these objects in values will
-   return dict with results at the same keys.
+   .. autofunction:: with_timeout(timeout: Union[float, datetime.timedelta], future: Yieldable, quiet_exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = ())
 
-   .. autofunction:: Task
+   .. autofunction:: sleep
 
-   .. autoclass:: Callback
-
-   .. autoclass:: Wait
-
-   .. autoclass:: WaitAll
-
-   .. autoclass:: YieldPoint
+   .. autoclass:: WaitIterator
       :members:
 
-   .. autofunction:: with_timeout
-   .. autoexception:: TimeoutError
+   .. autofunction:: multi(Union[List[Yieldable], Dict[Any, Yieldable]], quiet_exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = ())
+
+   .. autofunction:: multi_future(Union[List[Yieldable], Dict[Any, Yieldable]], quiet_exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = ())
+
+   .. autofunction:: convert_yielded
 
    .. autofunction:: maybe_future
 
+   .. autofunction:: is_coroutine_function
+
    .. autodata:: moment
       :annotation:
-
-   Other classes
-   -------------
-
-   .. autoexception:: Return
-
-   .. class:: Arguments
-
-      The result of a yield expression whose callback had more than one
-      argument (or keyword arguments).
-
-      The `Arguments` object is a `collections.namedtuple` and can be
-      used either as a tuple ``(args, kwargs)`` or an object with attributes
-      ``args`` and ``kwargs``.

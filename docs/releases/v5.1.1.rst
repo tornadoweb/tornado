@@ -1,0 +1,14 @@
+What's new in Tornado 5.1.1
+===========================
+
+Sep 16, 2018
+------------
+
+Bug fixes
+~~~~~~~~~
+
+- Fixed an case in which the `.Future` returned by
+  `.RequestHandler.finish` could fail to resolve.
+- The `.TwitterMixin.authenticate_redirect` method works again.
+- Improved error handling in the `tornado.auth` module, fixing hanging
+  requests when a network or other error occurs.

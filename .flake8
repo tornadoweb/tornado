@@ -1,0 +1,17 @@
+[flake8]
+exclude = .git,.tox,__pycache__,.eggs,build
+max-line-length = 100
+ignore =
+    # E265 block comment should start with '# '
+    E265,
+    # E266 too many leading '#' for block comment
+    E266,
+    # E402 module level import not at top of file
+    E402,
+    # E722 do not use bare except
+    E722,
+    # flake8 and black disagree about
+    # W503 line break before binary operator
+    # E203 whitespace before ':'
+    W503,E203
+doctests = true

@@ -1,0 +1,195 @@
+What's new in Tornado 5.1
+=========================
+
+July 12, 2018
+-------------
+
+Deprecation notice
+~~~~~~~~~~~~~~~~~~
+
+- Tornado 6.0 will drop support for Python 2.7 and 3.4. The minimum
+  supported Python version will be 3.5.2.
+- The ``tornado.stack_context`` module is deprecated and will be removed
+  in Tornado 6.0. The reason for this is that it is not feasible to
+  provide this module's semantics in the presence of ``async def``
+  native coroutines. ``ExceptionStackContext`` is mainly obsolete
+  thanks to coroutines. ``StackContext`` lacks a direct replacement
+  although the new ``contextvars`` package (in the Python standard
+  library beginning in Python 3.7) may be an alternative.
+- Callback-oriented code often relies on ``ExceptionStackContext`` to
+  handle errors and prevent leaked connections. In order to avoid the
+  risk of silently introducing subtle leaks (and to consolidate all of
+  Tornado's interfaces behind the coroutine pattern), ``callback``
+  arguments throughout the package are deprecated and will be removed
+  in version 6.0. All functions that had a ``callback`` argument
+  removed now return a `.Future` which should be used instead.
+- Where possible, deprecation warnings are emitted when any of these
+  deprecated interfaces is used. However, Python does not display
+  deprecation warnings by default. To prepare your application for
+  Tornado 6.0, run Python with the ``-Wd`` argument or set the
+  environment variable ``PYTHONWARNINGS`` to ``d``. If your
+  application runs on Python 3 without deprecation warnings, it should
+  be able to move to Tornado 6.0 without disruption.
+
+`tornado.auth`
+~~~~~~~~~~~~~~
+
+- `.OAuthMixin._oauth_get_user_future` may now be a native coroutine.
+- All ``callback`` arguments in this package are deprecated and will
+  be removed in 6.0. Use the coroutine interfaces instead.
+- The ``OAuthMixin._oauth_get_user`` method is deprecated and will be removed in
+  6.0. Override `~.OAuthMixin._oauth_get_user_future` instead.
+
+`tornado.autoreload`
+~~~~~~~~~~~~~~~~~~~~
+
+- The command-line autoreload wrapper is now preserved if an internal
+  autoreload fires.
+- The command-line wrapper no longer starts duplicated processes on windows
+  when combined with internal autoreload.
+
+`tornado.concurrent`
+~~~~~~~~~~~~~~~~~~~~
+
+- `.run_on_executor` now returns `.Future` objects that are compatible
+  with ``await``.
+- The ``callback`` argument to `.run_on_executor` is deprecated and will
+  be removed in 6.0.
+- ``return_future`` is deprecated and will be removed in 6.0.
+
+`tornado.gen`
+~~~~~~~~~~~~~
+
+- Some older portions of this module are deprecated and will be removed
+  in 6.0. This includes ``engine``, ``YieldPoint``, ``Callback``,
+  ``Wait``, ``WaitAll``, ``MultiYieldPoint``, and ``Task``.
+- Functions decorated with ``@gen.coroutine`` will no longer accept
+  ``callback`` arguments in 6.0.
+
+`tornado.httpclient`
+~~~~~~~~~~~~~~~~~~~~
+
+- The behavior of ``raise_error=False`` is changing in 6.0. Currently
+  it suppresses all errors; in 6.0 it will only suppress the errors
+  raised due to completed responses with non-200 status codes.
+- The ``callback`` argument to `.AsyncHTTPClient.fetch` is deprecated
+  and will be removed in 6.0.
+- `tornado.httpclient.HTTPError` has been renamed to
+  `.HTTPClientError` to avoid ambiguity in code that also has to deal
+  with `tornado.web.HTTPError`. The old name remains as an alias.
+- ``tornado.curl_httpclient`` now supports non-ASCII characters in
+  username and password arguments.
+- ``.HTTPResponse.request_time`` now behaves consistently across
+  ``simple_httpclient`` and ``curl_httpclient``, excluding time spent
+  in the ``max_clients`` queue in both cases (previously this time was
+  included in ``simple_httpclient`` but excluded in
+  ``curl_httpclient``). In both cases the time is now computed using
+  a monotonic clock where available.
+- `.HTTPResponse` now has a ``start_time`` attribute recording a
+  wall-clock (`time.time`) timestamp at which the request started
+  (after leaving the ``max_clients`` queue if applicable).
+
+`tornado.httputil`
+~~~~~~~~~~~~~~~~~~
+
+- `.parse_multipart_form_data` now recognizes non-ASCII filenames in
+  RFC 2231/5987 (``filename*=``) format.
+- ``HTTPServerRequest.write`` is deprecated and will be removed in 6.0. Use
+  the methods of ``request.connection`` instead.
+- Malformed HTTP headers are now logged less noisily.
+
+`tornado.ioloop`
+~~~~~~~~~~~~~~~~
+
+- `.PeriodicCallback` now supports a ``jitter`` argument to randomly
+  vary the timeout.
+- ``IOLoop.set_blocking_signal_threshold``,
+  ``IOLoop.set_blocking_log_threshold``, ``IOLoop.log_stack``,
+  and ``IOLoop.handle_callback_exception`` are deprecated and will
+  be removed in 6.0.
+- Fixed a `KeyError` in `.IOLoop.close` when `.IOLoop` objects are
+  being opened and closed in multiple threads.
+
+`tornado.iostream`
+~~~~~~~~~~~~~~~~~~
+
+- All ``callback`` arguments in this module are deprecated except for
+  `.BaseIOStream.set_close_callback`. They will be removed in 6.0.
+- ``streaming_callback`` arguments to `.BaseIOStream.read_bytes` and
+  `.BaseIOStream.read_until_close` are deprecated and will be removed
+  in 6.0.
+
+`tornado.netutil`
+~~~~~~~~~~~~~~~~~
+
+- Improved compatibility with GNU Hurd.
+
+`tornado.options`
+~~~~~~~~~~~~~~~~~
+
+- `tornado.options.parse_config_file` now allows setting options to
+  strings (which will be parsed the same way as
+  `tornado.options.parse_command_line`) in addition to the specified
+  type for the option.
+
+`tornado.platform.twisted`
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- ``TornadoReactor`` and ``TwistedIOLoop`` are deprecated and will be
+  removed in 6.0. Instead, Tornado will always use the asyncio event loop
+  and twisted can be configured to do so as well.
+
+``tornado.stack_context``
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- The ``tornado.stack_context`` module is deprecated and will be removed
+  in 6.0.
+
+`tornado.testing`
+~~~~~~~~~~~~~~~~~
+
+- `.AsyncHTTPTestCase.fetch` now takes a ``raise_error`` argument.
+  This argument has the same semantics as `.AsyncHTTPClient.fetch`,
+  but defaults to false because tests often need to deal with non-200
+  responses (and for backwards-compatibility).
+- The `.AsyncTestCase.stop` and `.AsyncTestCase.wait` methods are
+  deprecated.
+
+`tornado.web`
+~~~~~~~~~~~~~
+
+- New method `.RequestHandler.detach` can be used from methods
+  that are not decorated with ``@asynchronous`` (the decorator
+  was required to use ``self.request.connection.detach()``.
+- `.RequestHandler.finish` and `.RequestHandler.render` now return
+  ``Futures`` that can be used to wait for the last part of the
+  response to be sent to the client.
+- `.FallbackHandler` now calls ``on_finish`` for the benefit of
+  subclasses that may have overridden it.
+- The ``asynchronous`` decorator is deprecated and will be removed in 6.0.
+- The ``callback`` argument to `.RequestHandler.flush` is deprecated
+  and will be removed in 6.0.
+
+
+`tornado.websocket`
+~~~~~~~~~~~~~~~~~~~
+
+- When compression is enabled, memory limits now apply to the
+  post-decompression size of the data, protecting against DoS attacks.
+- `.websocket_connect` now supports subprotocols.
+- `.WebSocketHandler` and `.WebSocketClientConnection` now have
+  ``selected_subprotocol`` attributes to see the subprotocol in use.
+- The `.WebSocketHandler.select_subprotocol` method is now called with
+  an empty list instead of a list containing an empty string if no
+  subprotocols were requested by the client.
+- `.WebSocketHandler.open` may now be a coroutine.
+- The ``data`` argument to `.WebSocketHandler.ping` is now optional.
+- Client-side websocket connections no longer buffer more than one
+  message in memory at a time.
+- Exception logging now uses `.RequestHandler.log_exception`.
+
+`tornado.wsgi`
+~~~~~~~~~~~~~~
+
+- ``WSGIApplication`` and ``WSGIAdapter`` are deprecated and will be removed
+  in Tornado 6.0.

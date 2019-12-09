@@ -1,0 +1,12 @@
+What's new in Tornado 4.4.1
+===========================
+
+Jul 23, 2016
+------------
+
+`tornado.web`
+~~~~~~~~~~~~~
+
+* Fixed a regression in Tornado 4.4 which caused URL regexes
+  containing backslash escapes outside capturing groups to be
+  rejected.

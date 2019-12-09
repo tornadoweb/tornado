@@ -79,7 +79,7 @@ New modules
 `tornado.ioloop`
 ~~~~~~~~~~~~~~~~
 
-* `.IOLoop` now uses `~.IOLoop.handle_callback_exception` consistently for
+* `.IOLoop` now uses ``IOLoop.handle_callback_exception`` consistently for
   error logging.
 * `.IOLoop` now frees callback objects earlier, reducing memory usage
   while idle.
@@ -164,11 +164,11 @@ New modules
   argument could not be decoded.
 * `.RequestHandler.clear_all_cookies` now accepts ``domain`` and ``path``
   arguments, just like `~.RequestHandler.clear_cookie`.
-* It is now possible to specify handlers by name when using the `.URLSpec`
-  class.
+* It is now possible to specify handlers by name when using the
+  `tornado.web.URLSpec` class.
 * `.Application` now accepts 4-tuples to specify the ``name`` parameter
-  (which previously required constructing a `.URLSpec` object instead of
-  a tuple).
+  (which previously required constructing a `tornado.web.URLSpec` object
+  instead of a tuple).
 * Fixed an incorrect error message when handler methods return a value
   other than None or a Future.
 * Exceptions will no longer be logged twice when using both ``@asynchronous``

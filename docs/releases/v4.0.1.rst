@@ -1,0 +1,20 @@
+What's new in Tornado 4.0.1
+===========================
+
+Aug 12, 2014
+------------
+
+* The build will now fall back to pure-python mode if the C extension
+  fails to build for any reason (previously it would fall back for some
+  errors but not others).
+* `.IOLoop.call_at` and `.IOLoop.call_later` now always return
+  a timeout handle for use with `.IOLoop.remove_timeout`.
+* If any callback of a `.PeriodicCallback` or `.IOStream` returns a
+  `.Future`, any error raised in that future will now be logged
+  (similar to the behavior of `.IOLoop.add_callback`).
+* Fixed an exception in client-side websocket connections when the
+  connection is closed.
+* ``simple_httpclient`` once again correctly handles 204 status
+  codes with no content-length header.
+* Fixed a regression in ``simple_httpclient`` that would result in
+  timeouts for certain kinds of errors.

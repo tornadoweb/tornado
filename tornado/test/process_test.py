@@ -1,32 +1,23 @@
-#!/usr/bin/env python
-
-
-from __future__ import absolute_import, division, print_function, with_statement
+import asyncio
 import logging
 import os
 import signal
 import subprocess
 import sys
+import unittest
+
 from tornado.httpclient import HTTPClient, HTTPError
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.log import gen_log
 from tornado.process import fork_processes, task_id, Subprocess
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.testing import bind_unused_port, ExpectLog, AsyncTestCase
-from tornado.test.util import unittest, skipIfNonUnix
+from tornado.testing import bind_unused_port, ExpectLog, AsyncTestCase, gen_test
+from tornado.test.util import skipIfNonUnix
 from tornado.web import RequestHandler, Application
 
 
-def skip_if_twisted():
-    if IOLoop.configured_class().__name__.endswith(('TwistedIOLoop',
-                                                    'AsyncIOMainLoop')):
-        raise unittest.SkipTest("Process tests not compatible with "
-                                "TwistedIOLoop or AsyncIOMainLoop")
-
 # Not using AsyncHTTPTestCase because we need control over the IOLoop.
-
-
 @skipIfNonUnix
 class ProcessTest(unittest.TestCase):
     def get_app(self):
@@ -37,9 +28,9 @@ class ProcessTest(unittest.TestCase):
                     # exception handler doesn't catch it
                     os._exit(int(self.get_argument("exit")))
                 if self.get_argument("signal", None):
-                    os.kill(os.getpid(),
-                            int(self.get_argument("signal")))
+                    os.kill(os.getpid(), int(self.get_argument("signal")))
                 self.write(str(os.getpid()))
+
         return Application([("/", ProcessHandler)])
 
     def tearDown(self):
@@ -58,15 +49,18 @@ class ProcessTest(unittest.TestCase):
         super(ProcessTest, self).tearDown()
 
     def test_multi_process(self):
-        # This test can't work on twisted because we use the global reactor
-        # and have no way to get it back into a sane state after the fork.
-        skip_if_twisted()
-        with ExpectLog(gen_log, "(Starting .* processes|child .* exited|uncaught exception)"):
-            self.assertFalse(IOLoop.initialized())
+        # This test doesn't work on twisted because we use the global
+        # reactor and don't restore it to a sane state after the fork
+        # (asyncio has the same issue, but we have a special case in
+        # place for it).
+        with ExpectLog(
+            gen_log, "(Starting .* processes|child .* exited|uncaught exception)"
+        ):
             sock, port = bind_unused_port()
 
             def get_url(path):
                 return "http://127.0.0.1:%d%s" % (port, path)
+
             # ensure that none of these processes live too long
             signal.alarm(5)  # master process
             try:
@@ -81,11 +75,15 @@ class ProcessTest(unittest.TestCase):
                 sock.close()
                 return
             try:
+                if asyncio is not None:
+                    # Reset the global asyncio event loop, which was put into
+                    # a broken state by the fork.
+                    asyncio.set_event_loop(asyncio.new_event_loop())
                 if id in (0, 1):
                     self.assertEqual(id, task_id())
                     server = HTTPServer(self.get_app())
                     server.add_sockets([sock])
-                    IOLoop.instance().start()
+                    IOLoop.current().start()
                 elif id == 2:
                     self.assertEqual(id, task_id())
                     sock.close()
@@ -136,79 +134,132 @@ class ProcessTest(unittest.TestCase):
 
 @skipIfNonUnix
 class SubprocessTest(AsyncTestCase):
+    def term_and_wait(self, subproc):
+        subproc.proc.terminate()
+        subproc.proc.wait()
+
+    @gen_test
     def test_subprocess(self):
-        if IOLoop.configured_class().__name__.endswith('LayeredTwistedIOLoop'):
+        if IOLoop.configured_class().__name__.endswith("LayeredTwistedIOLoop"):
             # This test fails non-deterministically with LayeredTwistedIOLoop.
             # (the read_until('\n') returns '\n' instead of 'hello\n')
             # This probably indicates a problem with either TornadoReactor
             # or TwistedIOLoop, but I haven't been able to track it down
             # and for now this is just causing spurious travis-ci failures.
-            raise unittest.SkipTest("Subprocess tests not compatible with "
-                                    "LayeredTwistedIOLoop")
-        subproc = Subprocess([sys.executable, '-u', '-i'],
-                             stdin=Subprocess.STREAM,
-                             stdout=Subprocess.STREAM, stderr=subprocess.STDOUT,
-                             io_loop=self.io_loop)
-        self.addCleanup(lambda: os.kill(subproc.pid, signal.SIGTERM))
-        subproc.stdout.read_until(b'>>> ', self.stop)
-        self.wait()
+            raise unittest.SkipTest(
+                "Subprocess tests not compatible with " "LayeredTwistedIOLoop"
+            )
+        subproc = Subprocess(
+            [sys.executable, "-u", "-i"],
+            stdin=Subprocess.STREAM,
+            stdout=Subprocess.STREAM,
+            stderr=subprocess.STDOUT,
+        )
+        self.addCleanup(lambda: self.term_and_wait(subproc))
+        self.addCleanup(subproc.stdout.close)
+        self.addCleanup(subproc.stdin.close)
+        yield subproc.stdout.read_until(b">>> ")
         subproc.stdin.write(b"print('hello')\n")
-        subproc.stdout.read_until(b'\n', self.stop)
-        data = self.wait()
+        data = yield subproc.stdout.read_until(b"\n")
         self.assertEqual(data, b"hello\n")
 
-        subproc.stdout.read_until(b">>> ", self.stop)
-        self.wait()
+        yield subproc.stdout.read_until(b">>> ")
         subproc.stdin.write(b"raise SystemExit\n")
-        subproc.stdout.read_until_close(self.stop)
-        data = self.wait()
+        data = yield subproc.stdout.read_until_close()
         self.assertEqual(data, b"")
 
+    @gen_test
     def test_close_stdin(self):
         # Close the parent's stdin handle and see that the child recognizes it.
-        subproc = Subprocess([sys.executable, '-u', '-i'],
-                             stdin=Subprocess.STREAM,
-                             stdout=Subprocess.STREAM, stderr=subprocess.STDOUT,
-                             io_loop=self.io_loop)
-        self.addCleanup(lambda: os.kill(subproc.pid, signal.SIGTERM))
-        subproc.stdout.read_until(b'>>> ', self.stop)
-        self.wait()
+        subproc = Subprocess(
+            [sys.executable, "-u", "-i"],
+            stdin=Subprocess.STREAM,
+            stdout=Subprocess.STREAM,
+            stderr=subprocess.STDOUT,
+        )
+        self.addCleanup(lambda: self.term_and_wait(subproc))
+        yield subproc.stdout.read_until(b">>> ")
         subproc.stdin.close()
-        subproc.stdout.read_until_close(self.stop)
-        data = self.wait()
+        data = yield subproc.stdout.read_until_close()
         self.assertEqual(data, b"\n")
 
+    @gen_test
     def test_stderr(self):
-        subproc = Subprocess([sys.executable, '-u', '-c',
-                              r"import sys; sys.stderr.write('hello\n')"],
-                             stderr=Subprocess.STREAM,
-                             io_loop=self.io_loop)
-        self.addCleanup(lambda: os.kill(subproc.pid, signal.SIGTERM))
-        subproc.stderr.read_until(b'\n', self.stop)
-        data = self.wait()
-        self.assertEqual(data, b'hello\n')
+        # This test is mysteriously flaky on twisted: it succeeds, but logs
+        # an error of EBADF on closing a file descriptor.
+        subproc = Subprocess(
+            [sys.executable, "-u", "-c", r"import sys; sys.stderr.write('hello\n')"],
+            stderr=Subprocess.STREAM,
+        )
+        self.addCleanup(lambda: self.term_and_wait(subproc))
+        data = yield subproc.stderr.read_until(b"\n")
+        self.assertEqual(data, b"hello\n")
+        # More mysterious EBADF: This fails if done with self.addCleanup instead of here.
+        subproc.stderr.close()
 
     def test_sigchild(self):
-        # Twisted's SIGCHLD handler and Subprocess's conflict with each other.
-        skip_if_twisted()
-        Subprocess.initialize(io_loop=self.io_loop)
+        Subprocess.initialize()
         self.addCleanup(Subprocess.uninitialize)
-        subproc = Subprocess([sys.executable, '-c', 'pass'],
-                             io_loop=self.io_loop)
+        subproc = Subprocess([sys.executable, "-c", "pass"])
         subproc.set_exit_callback(self.stop)
         ret = self.wait()
         self.assertEqual(ret, 0)
         self.assertEqual(subproc.returncode, ret)
 
-    def test_sigchild_signal(self):
-        skip_if_twisted()
-        Subprocess.initialize(io_loop=self.io_loop)
+    @gen_test
+    def test_sigchild_future(self):
+        Subprocess.initialize()
         self.addCleanup(Subprocess.uninitialize)
-        subproc = Subprocess([sys.executable, '-c',
-                              'import time; time.sleep(30)'],
-                             io_loop=self.io_loop)
+        subproc = Subprocess([sys.executable, "-c", "pass"])
+        ret = yield subproc.wait_for_exit()
+        self.assertEqual(ret, 0)
+        self.assertEqual(subproc.returncode, ret)
+
+    def test_sigchild_signal(self):
+        Subprocess.initialize()
+        self.addCleanup(Subprocess.uninitialize)
+        subproc = Subprocess(
+            [sys.executable, "-c", "import time; time.sleep(30)"],
+            stdout=Subprocess.STREAM,
+        )
+        self.addCleanup(subproc.stdout.close)
         subproc.set_exit_callback(self.stop)
         os.kill(subproc.pid, signal.SIGTERM)
-        ret = self.wait()
+        try:
+            ret = self.wait(timeout=1.0)
+        except AssertionError:
+            # We failed to get the termination signal. This test is
+            # occasionally flaky on pypy, so try to get a little more
+            # information: did the process close its stdout
+            # (indicating that the problem is in the parent process's
+            # signal handling) or did the child process somehow fail
+            # to terminate?
+            fut = subproc.stdout.read_until_close()
+            fut.add_done_callback(lambda f: self.stop())  # type: ignore
+            try:
+                self.wait(timeout=1.0)
+            except AssertionError:
+                raise AssertionError("subprocess failed to terminate")
+            else:
+                raise AssertionError(
+                    "subprocess closed stdout but failed to " "get termination signal"
+                )
         self.assertEqual(subproc.returncode, ret)
         self.assertEqual(ret, -signal.SIGTERM)
+
+    @gen_test
+    def test_wait_for_exit_raise(self):
+        Subprocess.initialize()
+        self.addCleanup(Subprocess.uninitialize)
+        subproc = Subprocess([sys.executable, "-c", "import sys; sys.exit(1)"])
+        with self.assertRaises(subprocess.CalledProcessError) as cm:
+            yield subproc.wait_for_exit()
+        self.assertEqual(cm.exception.returncode, 1)
+
+    @gen_test
+    def test_wait_for_exit_raise_disabled(self):
+        Subprocess.initialize()
+        self.addCleanup(Subprocess.uninitialize)
+        subproc = Subprocess([sys.executable, "-c", "import sys; sys.exit(1)"])
+        ret = yield subproc.wait_for_exit(raise_error=False)
+        self.assertEqual(ret, 1)

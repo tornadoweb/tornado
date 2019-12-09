@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 r"""Installs files needed for tornado testing on windows.
 
 These instructions are compatible with the VMs provided by http://modern.ie.
@@ -28,16 +30,15 @@ import urllib
 TMPDIR = r'c:\tornado_bootstrap'
 
 PYTHON_VERSIONS = [
-    (r'c:\python26\python.exe', 'http://www.python.org/ftp/python/2.6.6/python-2.6.6.msi'),
     (r'c:\python27\python.exe', 'http://www.python.org/ftp/python/2.7.3/python-2.7.3.msi'),
-    (r'c:\python32\python.exe', 'http://www.python.org/ftp/python/3.2.3/python-3.2.3.msi'),
-    (r'c:\python33\python.exe', 'http://www.python.org/ftp/python/3.3.0/python-3.3.0.msi'),
-    ]
+    (r'c:\python36\python.exe', 'http://www.python.org/ftp/python/3.6.0/python-3.6.0.msi'),
+]
 
 SCRIPTS_DIR = r'c:\python27\scripts'
 EASY_INSTALL = os.path.join(SCRIPTS_DIR, 'easy_install.exe')
 
 PY_PACKAGES = ['tox', 'virtualenv', 'pip']
+
 
 def download_to_cache(url, local_name=None):
     if local_name is None:
@@ -49,15 +50,16 @@ def download_to_cache(url, local_name=None):
             f.write(data)
     return filename
 
+
 def main():
     if not os.path.exists(TMPDIR):
         os.mkdir(TMPDIR)
     os.chdir(TMPDIR)
     for exe, url in PYTHON_VERSIONS:
         if os.path.exists(exe):
-            print "%s already exists, skipping" % exe
+            print("%s already exists, skipping" % exe)
             continue
-        print "Installing %s" % url
+        print("Installing %s" % url)
         filename = download_to_cache(url)
         # http://blog.jaraco.com/2012/01/how-i-install-python-on-windows.html
         subprocess.check_call(['msiexec', '/i', filename,

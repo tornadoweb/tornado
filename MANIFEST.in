@@ -1,4 +1,7 @@
 recursive-include demos *.py *.yaml *.html *.css *.js *.xml *.sql README
+recursive-include docs *
+prune docs/build
+include tornado/py.typed
 include tornado/speedups.c
 include tornado/test/README
 include tornado/test/csv_translations/fr_FR.csv
@@ -6,9 +9,14 @@ include tornado/test/gettext_translations/fr_FR/LC_MESSAGES/tornado_test.mo
 include tornado/test/gettext_translations/fr_FR/LC_MESSAGES/tornado_test.po
 include tornado/test/options_test.cfg
 include tornado/test/static/robots.txt
+include tornado/test/static/sample.xml
+include tornado/test/static/sample.xml.gz
+include tornado/test/static/sample.xml.bz2
 include tornado/test/static/dir/index.html
+include tornado/test/static_foo.txt
 include tornado/test/templates/utf8.html
 include tornado/test/test.crt
 include tornado/test/test.key
+include LICENSE
 include README.rst
 include runtests.sh

@@ -13,6 +13,7 @@
 
    .. automethod:: BaseIOStream.write
    .. automethod:: BaseIOStream.read_bytes
+   .. automethod:: BaseIOStream.read_into
    .. automethod:: BaseIOStream.read_until
    .. automethod:: BaseIOStream.read_until_regex
    .. automethod:: BaseIOStream.read_until_close
@@ -47,5 +48,6 @@
    Exceptions
    ----------
 
+   .. autoexception:: StreamBufferFullError
    .. autoexception:: StreamClosedError
    .. autoexception:: UnsatisfiableReadError

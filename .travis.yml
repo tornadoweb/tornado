@@ -1,61 +1,48 @@
-# http://travis-ci.org/#!/facebook/tornado
-language: python
-python:
-    - 2.6
-    - 2.7
-    - pypy
-    - 3.2
-    - 3.3
-    - 3.4
+# https://travis-ci.org/tornadoweb/tornado
 
-env:
-    - DEPS=true
-    - DEPS=false
+dist: xenial
+language: python
+matrix:
+    fast_finish: true
+addons:
+  apt: 
+    packages:
+      - libgnutls-dev
+
+# For a list of available versions, run
+#     aws s3 ls s3://travis-python-archives/binaries/ubuntu/16.04/x86_64/
+jobs:
+  include:
+    # 3.5.2 is interesting because it's the version in ubuntu 16.04, and due to python's
+    # "provisional feature" rules there are significant differences between patch
+    # versions for asyncio and typing.
+    - python: 3.5.2
+      # Twisted doesn't install on python 3.5.2, so don't run the "full" tests.
+      env: TOX_ENV=py35
+    - python: '3.5'
+      env: TOX_ENV=py35-full
+    - python: '3.6'
+      env: TOX_ENV=py36-full
+    - python: '3.7'
+      env: TOX_ENV=py37-full
+    - python: '3.8'
+      env: TOX_ENV=py38-full
+    - python: pypy3.5-5.10.1
+      # Pypy is a lot slower due to jit warmup costs, so don't run the "full"
+      # test config there.
+      env: TOX_ENV=pypy3
+    - python: nightly
+      env: TOX_ENV=py3-full
+      # Docs and lint python versions must be synced with those in tox.ini
+    - python: '3.8'
+      env: TOX_ENV=docs
+    - python: '3.8'
+      env: TOX_ENV=lint
 
 install:
-    # always install unittest2 on py26 even if $DEPS is unset
-    - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then pip install unittest2; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then pip install futures mock Monotime==1.0; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 'pypy' && $DEPS == true ]]; then pip install futures mock; fi
-    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy' && $DEPS == true ]]; then pip install pycares pycurl; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.2' && $DEPS == true ]]; then pip install mock; fi
-    # Twisted runs on 2.x and 3.3+
-    - if [[ $TRAVIS_PYTHON_VERSION != '3.2' && $DEPS == true ]]; then pip install Twisted; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' && $DEPS == true ]]; then pip install sphinx==1.2.2; fi
-    # On travis the extension should always be built
-    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy' ]]; then export TORNADO_EXTENSION=1; fi
-    - python setup.py install
-    - pip install coveralls
+    - travis_retry pip install tox tox-venv
+    - python -VV
+    - curl-config --version; pip freeze
 
 script:
-    # Get out of the source directory before running tests to avoid PYTHONPATH
-    # confusion.  This is necessary to ensure that the speedups module can
-    # be found in the installation directory.
-    - cd maint
-    # Copy the coveragerc down so coveralls can find it.
-    - cp ../.coveragerc .
-    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy' ]]; then export TORNADO_EXTENSION=1; fi
-    - export TARGET="-m tornado.test.runtests"
-    # We use "python -m coverage" instead of the "bin/coverage" script
-    # so we can pass additional arguments to python.  However, this doesn't
-    # work on 2.6, so skip coverage on that version.
-    - if [[ $TRAVIS_PYTHON_VERSION != 2.6 ]]; then export TARGET="-m coverage run $TARGET"; fi
-    - python $TARGET
-    - python $TARGET --ioloop=tornado.platform.select.SelectIOLoop
-    - python -O $TARGET
-    - LANG=C python $TARGET
-    - LANG=en_US.utf-8 python $TARGET
-    - if [[ $TRAVIS_PYTHON_VERSION == 3* ]]; then python -bb $TARGET; fi
-    - if [[ $TRAVIS_PYTHON_VERSION != pypy && $DEPS == true ]]; then python $TARGET --resolver=tornado.netutil.ThreadedResolver; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then python $TARGET --httpclient=tornado.curl_httpclient.CurlAsyncHTTPClient; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then python $TARGET --ioloop_time_monotonic; fi
-    - if [[ $TRAVIS_PYTHON_VERSION != '3.2' && $DEPS == true ]]; then python $TARGET --ioloop=tornado.platform.twisted.TwistedIOLoop; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then python $TARGET --resolver=tornado.platform.twisted.TwistedResolver; fi
-    - if [[ $TRAVIS_PYTHON_VERSION != pypy && $DEPS == true ]]; then python $TARGET --resolver=tornado.platform.caresresolver.CaresResolver; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.3' ]]; then python $TARGET --ioloop_time_monotonic; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then python $TARGET --ioloop_time_monotonic; fi
-    - export TORNADO_EXTENSION=0
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' && $DEPS == true ]]; then cd ../docs && mkdir sphinx-out && sphinx-build -E -n -W -b html . sphinx-out; fi
-
-after_success:
-    coveralls
+    - "tox -e $TOX_ENV -- $TOX_ARGS"

@@ -1,0 +1,15 @@
+What's new in Tornado 4.5.1
+===========================
+
+Apr 20, 2017
+------------
+
+`tornado.log`
+~~~~~~~~~~~~~
+
+- Improved detection of libraries for colorized logging.
+
+`tornado.httputil`
+~~~~~~~~~~~~~~~~~~
+
+- `.url_concat` once again treats None as equivalent to an empty sequence.

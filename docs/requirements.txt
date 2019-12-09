@@ -1,0 +1,4 @@
+sphinx>1.8.2,<2.1
+sphinxcontrib-asyncio
+sphinx_rtd_theme
+Twisted

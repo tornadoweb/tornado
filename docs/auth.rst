@@ -1,6 +1,10 @@
 ``tornado.auth`` --- Third-party login with OpenID and OAuth
 ============================================================
 
+.. testsetup::
+
+   import tornado.auth, tornado.gen, tornado.web
+
 .. automodule:: tornado.auth
 
    Common protocols
@@ -9,7 +13,7 @@
    These classes implement the OpenID and OAuth standards.  They will
    generally need to be subclassed to use them with any particular site.
    The degree of customization required will vary, but in most cases
-   overridding the class attributes (which are named beginning with
+   overriding the class attributes (which are named beginning with
    underscores for historical reasons) should be sufficient.
 
    .. autoclass:: OpenIdMixin
@@ -29,9 +33,6 @@
    Google
    ------
 
-   .. autoclass:: GoogleMixin
-      :members:
-   
    .. autoclass:: GoogleOAuth2Mixin
       :members:
 
@@ -41,18 +42,8 @@
    .. autoclass:: FacebookGraphMixin
       :members:
 
-   .. autoclass:: FacebookMixin
-      :members:
-
    Twitter
    -------
 
    .. autoclass:: TwitterMixin
       :members:
-
-   FriendFeed
-   ----------
-
-   .. autoclass:: FriendFeedMixin
-      :members:
-

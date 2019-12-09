@@ -16,15 +16,16 @@ $(document).ready(function() {
     if (!window.console) window.console = {};
     if (!window.console.log) window.console.log = function() {};
 
-    $("#messageform").live("submit", function() {
+    $("#messageform").on("submit", function() {
         newMessage($(this));
         return false;
     });
-    $("#messageform").live("keypress", function(e) {
+    $("#messageform").on("keypress", function(e) {
         if (e.keyCode == 13) {
             newMessage($(this));
             return false;
         }
+        return true;
     });
     $("#message").select();
     updater.poll();
@@ -56,13 +57,13 @@ jQuery.postJSON = function(url, args, callback) {
             success: function(response) {
         if (callback) callback(eval("(" + response + ")"));
     }, error: function(response) {
-        console.log("ERROR:", response)
+        console.log("ERROR:", response);
     }});
 };
 
 jQuery.fn.formToDict = function() {
     var fields = this.serializeArray();
-    var json = {}
+    var json = {};
     for (var i = 0; i < fields.length; i++) {
         json[fields[i].name] = fields[i].value;
     }
@@ -115,7 +116,6 @@ var updater = {
 
     newMessages: function(response) {
         if (!response.messages) return;
-        updater.cursor = response.cursor;
         var messages = response.messages;
         updater.cursor = messages[messages.length - 1].id;
         console.log(messages.length, "new messages, cursor:", updater.cursor);

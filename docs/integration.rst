@@ -4,8 +4,7 @@ Integration with other services
 .. toctree::
 
    auth
-   asyncio
+   wsgi
    caresresolver
    twisted
-   websocket
-   wsgi
+   asyncio

@@ -80,7 +80,7 @@ HTTP Server
   backwards-incompatible change to an interface that was never technically
   private, but was not included in the documentation and does not appear
   to have been used outside Tornado itself.
-* Fixed a bug on python versions before 2.6.5 when `.URLSpec` regexes
+* Fixed a bug on python versions before 2.6.5 when `tornado.web.URLSpec` regexes
   are constructed from unicode strings and keyword arguments are extracted.
 * The ``reverse_url`` function in the template namespace now comes from
   the `.RequestHandler` rather than the `.Application`.  (Unless overridden,
@@ -102,9 +102,9 @@ Other modules
   function is called repeatedly.
 * `tornado.locale.get_supported_locales` no longer takes a meaningless
   ``cls`` argument.
-* `.StackContext` instances now have a deactivation callback that can be
+* ``StackContext`` instances now have a deactivation callback that can be
   used to prevent further propagation.
 * `tornado.testing.AsyncTestCase.wait` now resets its timeout on each call.
-* `tornado.wsgi.WSGIApplication` now parses arguments correctly on Python 3.
+* ``tornado.wsgi.WSGIApplication`` now parses arguments correctly on Python 3.
 * Exception handling on Python 3 has been improved; previously some exceptions
   such as `UnicodeDecodeError` would generate ``TypeErrors``

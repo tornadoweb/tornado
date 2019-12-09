@@ -1,0 +1,18 @@
+What's new in Tornado 5.0.2
+===========================
+
+Apr 7, 2018
+-----------
+
+Bug fixes
+~~~~~~~~~
+
+- Fixed a memory leak when `.IOLoop` objects are created and destroyed.
+- If `.AsyncTestCase.get_new_ioloop` returns a reference to a
+  preexisting event loop (typically when it has been overridden to
+  return `.IOLoop.current()`), the test's ``tearDown`` method will not
+  close this loop.
+- Fixed a confusing error message when the synchronous `.HTTPClient`
+  fails to initialize because an event loop is already running.
+- `.PeriodicCallback` no longer executes twice in a row due to
+  backwards clock adjustments.

@@ -1,8 +1,9 @@
 Running the Tornado Facebook example
-=====================================
-To work with the provided Facebook api key, this example must be
-accessed at http://localhost:8888/ to match the Connect URL set in the
-example application.
+====================================
 
-To use any other domain, a new Facebook application must be registered
-with a Connect URL set to that domain.
+To run this example, you must register a Facebook application with a
+Connect URL set to the domain the this demo will be running on
+(i.e. http://localhost:8888/ by default).  The API key and secret
+for this application must be passed on the command line:
+
+    python facebook.py --facebook_api_key=ABC --facebook_secret=XYZ
