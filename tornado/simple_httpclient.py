@@ -1,5 +1,5 @@
 from tornado.escape import _unicode
-from tornado import gen
+from tornado import gen, version
 from tornado.httpclient import (
     HTTPResponse,
     HTTPError,
@@ -392,6 +392,9 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     )
                 if self.request.user_agent:
                     self.request.headers["User-Agent"] = self.request.user_agent
+                else:
+                    if "User-Agent" not in list(self.request.headers.keys()):
+                        self.request.headers["User-Agent"] = "Tornado/{}".format(version)
                 if not self.request.allow_nonstandard_methods:
                     # Some HTTP methods nearly always have bodies while others
                     # almost never do. Fail in this case unless the user has
