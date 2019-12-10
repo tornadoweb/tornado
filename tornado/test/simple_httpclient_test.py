@@ -251,7 +251,7 @@ class SimpleHTTPClientTestMixin(object):
     def test_default_user_agent(self):
         response = self.fetch("/user_agent", method="GET")
         self.assertEqual(200, response.code)
-        self.assertEqual(response.body.decode(),  "Tornado/{}".format(version))
+        self.assertEqual(response.body.decode(), "Tornado/{}".format(version))
 
     def test_see_other_redirect(self: typing.Any):
         for code in (302, 303):
