@@ -248,7 +248,7 @@ class SimpleHTTPClientTestMixin(object):
         self.fetch("/hello", headers=headers)
         self.assertEqual(list(headers.get_all()), [("User-Agent", "Foo")])
 
-    def test_default_user_agent(self):
+    def test_default_user_agent(self: typing.Any):
         response = self.fetch("/user_agent", method="GET")
         self.assertEqual(200, response.code)
         self.assertEqual(response.body.decode(), "Tornado/{}".format(version))
