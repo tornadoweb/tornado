@@ -392,9 +392,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     )
                 if self.request.user_agent:
                     self.request.headers["User-Agent"] = self.request.user_agent
-                else:
-                    if "User-Agent" not in list(self.request.headers.keys()):
-                        self.request.headers["User-Agent"] = "Tornado/{}".format(version)
+                elif self.request.headers.get("User-Agent") is None:
+                    self.request.headers["User-Agent"] = "Tornado/{}".format(version)
                 if not self.request.allow_nonstandard_methods:
                     # Some HTTP methods nearly always have bodies while others
                     # almost never do. Fail in this case unless the user has
