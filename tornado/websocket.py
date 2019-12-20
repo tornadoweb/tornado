@@ -1341,7 +1341,8 @@ class WebSocketProtocol13(WebSocketProtocol):
             since_last_ping < 2 * self.ping_interval
             and since_last_pong > self.ping_timeout
         ):
-            self.close()
+            app_log.warning("Closing connection due to exceeded time of waiting for a pong")
+            self.close(1001, "Connection seems dead")
             return
 
         self.write_ping(b"")
