@@ -3264,7 +3264,7 @@ class TemplateModule(UIModule):
     Template()) instead of inheriting the outer template's namespace.
 
     Templates rendered through this module also get access to UIModule's
-    automatic javascript/css features.  Simply call set_resources
+    automatic JavaScript/CSS features.  Simply call set_resources
     inside the template and give it keyword arguments corresponding to
     the methods on UIModule: {{ set_resources(js_files=static_url("my.js")) }}
     Note that these resources are output once per template file, not once

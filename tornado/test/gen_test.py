@@ -952,7 +952,7 @@ class RunnerGCTest(AsyncTestCase):
 
     @gen_test
     def test_gc(self):
-        # Github issue 1769: Runner objects can get GCed unexpectedly
+        # GitHub issue 1769: Runner objects can get GCed unexpectedly
         # while their future is alive.
         weakref_scope = [None]  # type: List[Optional[weakref.ReferenceType]]
 
@@ -970,7 +970,7 @@ class RunnerGCTest(AsyncTestCase):
         yield gen.with_timeout(datetime.timedelta(seconds=0.2), tester())
 
     def test_gc_infinite_coro(self):
-        # Github issue 2229: suspended coroutines should be GCed when
+        # GitHub issue 2229: suspended coroutines should be GCed when
         # their loop is closed, even if they're involved in a reference
         # cycle.
         loop = self.get_new_ioloop()

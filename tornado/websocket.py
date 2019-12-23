@@ -190,7 +190,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
     Web browsers allow any site to open a websocket connection to any other,
     instead of using the same-origin policy that governs other network
-    access from javascript.  This can be surprising and is a potential
+    access from JavaScript.  This can be surprising and is a potential
     security hole, so since Tornado 4.0 `WebSocketHandler` requires
     applications that wish to receive cross-origin websockets to opt in
     by overriding the `~WebSocketHandler.check_origin` method (see that
