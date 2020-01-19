@@ -34,6 +34,7 @@ from tornado.web import Application, RequestHandler, stream_request_body
 from contextlib import closing
 import datetime
 import gzip
+import logging
 import os
 import shutil
 import socket
@@ -480,7 +481,7 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
         self.wait()
 
     def test_malformed_first_line_response(self):
-        with ExpectLog(gen_log, ".*Malformed HTTP request line"):
+        with ExpectLog(gen_log, ".*Malformed HTTP request line", level=logging.INFO):
             self.stream.write(b"asdf\r\n\r\n")
             start_line, headers, response = self.io_loop.run_sync(
                 lambda: read_stream_body(self.stream)
@@ -490,7 +491,7 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
             self.assertEqual("Bad Request", start_line.reason)
 
     def test_malformed_first_line_log(self):
-        with ExpectLog(gen_log, ".*Malformed HTTP request line"):
+        with ExpectLog(gen_log, ".*Malformed HTTP request line", level=logging.INFO):
             self.stream.write(b"asdf\r\n\r\n")
             # TODO: need an async version of ExpectLog so we don't need
             # hard-coded timeouts here.
@@ -498,7 +499,11 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
             self.wait()
 
     def test_malformed_headers(self):
-        with ExpectLog(gen_log, ".*Malformed HTTP message.*no colon in header line"):
+        with ExpectLog(
+            gen_log,
+            ".*Malformed HTTP message.*no colon in header line",
+            level=logging.INFO,
+        ):
             self.stream.write(b"GET / HTTP/1.0\r\nasdf\r\n\r\n")
             self.io_loop.add_timeout(datetime.timedelta(seconds=0.05), self.stop)
             self.wait()
@@ -553,7 +558,9 @@ bar
 
     @gen_test
     def test_invalid_content_length(self):
-        with ExpectLog(gen_log, ".*Only integer Content-Length is allowed"):
+        with ExpectLog(
+            gen_log, ".*Only integer Content-Length is allowed", level=logging.INFO
+        ):
             self.stream.write(
                 b"""\
 POST /echo HTTP/1.1
@@ -1215,14 +1222,14 @@ class BodyLimitsTest(AsyncHTTPTestCase):
         self.assertEqual(response.body, b"4096")
 
     def test_large_body_buffered(self):
-        with ExpectLog(gen_log, ".*Content-Length too long"):
+        with ExpectLog(gen_log, ".*Content-Length too long", level=logging.INFO):
             response = self.fetch("/buffered", method="PUT", body=b"a" * 10240)
         self.assertEqual(response.code, 400)
 
     @unittest.skipIf(os.name == "nt", "flaky on windows")
     def test_large_body_buffered_chunked(self):
         # This test is flaky on windows for unknown reasons.
-        with ExpectLog(gen_log, ".*chunked body too large"):
+        with ExpectLog(gen_log, ".*chunked body too large", level=logging.INFO):
             response = self.fetch(
                 "/buffered",
                 method="PUT",
@@ -1231,13 +1238,13 @@ class BodyLimitsTest(AsyncHTTPTestCase):
         self.assertEqual(response.code, 400)
 
     def test_large_body_streaming(self):
-        with ExpectLog(gen_log, ".*Content-Length too long"):
+        with ExpectLog(gen_log, ".*Content-Length too long", level=logging.INFO):
             response = self.fetch("/streaming", method="PUT", body=b"a" * 10240)
         self.assertEqual(response.code, 400)
 
     @unittest.skipIf(os.name == "nt", "flaky on windows")
     def test_large_body_streaming_chunked(self):
-        with ExpectLog(gen_log, ".*chunked body too large"):
+        with ExpectLog(gen_log, ".*chunked body too large", level=logging.INFO):
             response = self.fetch(
                 "/streaming",
                 method="PUT",
@@ -1270,7 +1277,7 @@ class BodyLimitsTest(AsyncHTTPTestCase):
                 b"PUT /streaming?body_timeout=0.1 HTTP/1.0\r\n"
                 b"Content-Length: 42\r\n\r\n"
             )
-            with ExpectLog(gen_log, "Timeout reading body"):
+            with ExpectLog(gen_log, "Timeout reading body", level=logging.INFO):
                 response = yield stream.read_until_close()
             self.assertEqual(response, b"")
         finally:
@@ -1294,7 +1301,7 @@ class BodyLimitsTest(AsyncHTTPTestCase):
             stream.write(
                 b"PUT /streaming HTTP/1.1\r\n" b"Content-Length: 10240\r\n\r\n"
             )
-            with ExpectLog(gen_log, ".*Content-Length too long"):
+            with ExpectLog(gen_log, ".*Content-Length too long", level=logging.INFO):
                 data = yield stream.read_until_close()
             self.assertEqual(data, b"HTTP/1.1 400 Bad Request\r\n\r\n")
         finally:

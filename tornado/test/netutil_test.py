@@ -163,6 +163,7 @@ class ThreadedResolverImportTest(unittest.TestCase):
 # name with spaces used in this test.
 @skipIfNoNetwork
 @unittest.skipIf(pycares is None, "pycares module not present")
+@unittest.skipIf(sys.platform == "win32", "pycares doesn't return loopback on windows")
 class CaresResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
         super(CaresResolverTest, self).setUp()
@@ -181,6 +182,7 @@ class CaresResolverTest(AsyncTestCase, _ResolverTestMixin):
 @unittest.skipIf(
     getattr(twisted, "__version__", "0.0") < "12.1", "old version of twisted"
 )
+@unittest.skipIf(sys.platform == "win32", "twisted resolver hangs on windows")
 class TwistedResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
         super(TwistedResolverTest, self).setUp()
