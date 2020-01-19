@@ -316,7 +316,9 @@ class SimpleHTTPClientTestMixin(object):
         response = self.fetch("/content_length?value=2,%202,2")
         self.assertEqual(response.body, b"ok")
 
-        with ExpectLog(gen_log, ".*Multiple unequal Content-Lengths"):
+        with ExpectLog(
+            gen_log, ".*Multiple unequal Content-Lengths", level=logging.INFO
+        ):
             with self.assertRaises(HTTPStreamClosedError):
                 self.fetch("/content_length?value=2,4", raise_error=True)
             with self.assertRaises(HTTPStreamClosedError):
@@ -657,7 +659,9 @@ class HTTP204NoContentTestCase(AsyncHTTPTestCase):
 
     def test_204_invalid_content_length(self):
         # 204 status with non-zero content length is malformed
-        with ExpectLog(gen_log, ".*Response with code 204 should not have body"):
+        with ExpectLog(
+            gen_log, ".*Response with code 204 should not have body", level=logging.INFO
+        ):
             with self.assertRaises(HTTPStreamClosedError):
                 self.fetch("/?error=1", raise_error=True)
                 if not self.http1:
@@ -768,7 +772,9 @@ class MaxBodySizeTest(AsyncHTTPTestCase):
 
     def test_large_body(self):
         with ExpectLog(
-            gen_log, "Malformed HTTP message from None: Content-Length too long"
+            gen_log,
+            "Malformed HTTP message from None: Content-Length too long",
+            level=logging.INFO,
         ):
             with self.assertRaises(HTTPStreamClosedError):
                 self.fetch("/large", raise_error=True)
@@ -815,6 +821,7 @@ class ChunkedWithContentLengthTest(AsyncHTTPTestCase):
                 "Malformed HTTP message from None: Response "
                 "with both Transfer-Encoding and Content-Length"
             ),
+            level=logging.INFO,
         ):
             with self.assertRaises(HTTPStreamClosedError):
                 self.fetch("/chunkwithcl", raise_error=True)

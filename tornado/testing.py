@@ -657,6 +657,7 @@ class ExpectLog(logging.Filter):
         logger: Union[logging.Logger, basestring_type],
         regex: str,
         required: bool = True,
+        level: Optional[int] = None,
     ) -> None:
         """Constructs an ExpectLog context manager.
 
@@ -666,6 +667,15 @@ class ExpectLog(logging.Filter):
             the specified logger that match this regex will be suppressed.
         :param required: If true, an exception will be raised if the end of
             the ``with`` statement is reached without matching any log entries.
+        :param level: A constant from the ``logging`` module indicating the
+            expected log level. If this parameter is provided, only log messages
+            at this level will be considered to match. Additionally, the
+            supplied ``logger`` will have its level adjusted if necessary
+            (for the duration of the ``ExpectLog`` to enable the expected
+            message.
+
+        .. versionchanged:: 6.1
+           Added the ``level`` parameter.
         """
         if isinstance(logger, basestring_type):
             logger = logging.getLogger(logger)
@@ -674,17 +684,28 @@ class ExpectLog(logging.Filter):
         self.required = required
         self.matched = False
         self.logged_stack = False
+        self.level = level
+        self.orig_level = None  # type: Optional[int]
 
     def filter(self, record: logging.LogRecord) -> bool:
         if record.exc_info:
             self.logged_stack = True
         message = record.getMessage()
         if self.regex.match(message):
+            if self.level is not None and record.levelno != self.level:
+                app_log.warning(
+                    "Got expected log message %r at unexpected level (%s vs %s)"
+                    % (message, logging.getLevelName(self.level), record.levelname)
+                )
+                return True
             self.matched = True
             return False
         return True
 
     def __enter__(self) -> "ExpectLog":
+        if self.level is not None and self.level < self.logger.getEffectiveLevel():
+            self.orig_level = self.logger.level
+            self.logger.setLevel(self.level)
         self.logger.addFilter(self)
         return self
 
@@ -694,6 +715,8 @@ class ExpectLog(logging.Filter):
         value: Optional[BaseException],
         tb: Optional[TracebackType],
     ) -> None:
+        if self.orig_level is not None:
+            self.logger.setLevel(self.orig_level)
         self.logger.removeFilter(self)
         if not typ and self.required and not self.matched:
             raise Exception("did not get expected log message")

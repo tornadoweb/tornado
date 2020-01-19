@@ -25,6 +25,7 @@ from tornado.test.util import skipIfNonUnix, refusing_port, skipPypy3V58
 from tornado.web import RequestHandler, Application
 import errno
 import hashlib
+import logging
 import os
 import platform
 import random
@@ -366,7 +367,7 @@ class TestReadWriteMixin(object):
 
             # Not enough space, but we don't know it until all we can do is
             # log a warning and close the connection.
-            with ExpectLog(gen_log, "Unsatisfiable read"):
+            with ExpectLog(gen_log, "Unsatisfiable read", level=logging.INFO):
                 fut = rs.read_until(b"def", max_bytes=5)
                 ws.write(b"123456")
                 yield closed.wait()
@@ -385,7 +386,7 @@ class TestReadWriteMixin(object):
             # inline.  For consistency with the out-of-line case, we
             # do not raise the error synchronously.
             ws.write(b"123456")
-            with ExpectLog(gen_log, "Unsatisfiable read"):
+            with ExpectLog(gen_log, "Unsatisfiable read", level=logging.INFO):
                 with self.assertRaises(StreamClosedError):
                     yield rs.read_until(b"def", max_bytes=5)
             yield closed.wait()
@@ -403,7 +404,7 @@ class TestReadWriteMixin(object):
             # puts us over the limit, we fail the request because it was not
             # found within the limit.
             ws.write(b"abcdef")
-            with ExpectLog(gen_log, "Unsatisfiable read"):
+            with ExpectLog(gen_log, "Unsatisfiable read", level=logging.INFO):
                 rs.read_until(b"def", max_bytes=5)
                 yield closed.wait()
         finally:
@@ -430,7 +431,7 @@ class TestReadWriteMixin(object):
 
             # Not enough space, but we don't know it until all we can do is
             # log a warning and close the connection.
-            with ExpectLog(gen_log, "Unsatisfiable read"):
+            with ExpectLog(gen_log, "Unsatisfiable read", level=logging.INFO):
                 rs.read_until_regex(b"def", max_bytes=5)
                 ws.write(b"123456")
                 yield closed.wait()
@@ -449,7 +450,7 @@ class TestReadWriteMixin(object):
             # inline.  For consistency with the out-of-line case, we
             # do not raise the error synchronously.
             ws.write(b"123456")
-            with ExpectLog(gen_log, "Unsatisfiable read"):
+            with ExpectLog(gen_log, "Unsatisfiable read", level=logging.INFO):
                 rs.read_until_regex(b"def", max_bytes=5)
                 yield closed.wait()
         finally:
@@ -466,7 +467,7 @@ class TestReadWriteMixin(object):
             # puts us over the limit, we fail the request because it was not
             # found within the limit.
             ws.write(b"abcdef")
-            with ExpectLog(gen_log, "Unsatisfiable read"):
+            with ExpectLog(gen_log, "Unsatisfiable read", level=logging.INFO):
                 rs.read_until_regex(b"def", max_bytes=5)
                 yield closed.wait()
         finally:
