@@ -21,6 +21,7 @@ the same event loop.
 
 import concurrent.futures
 import functools
+import sys
 
 from threading import get_ident
 from tornado.gen import convert_yielded
@@ -307,7 +308,15 @@ def to_asyncio_future(tornado_future: asyncio.Future) -> asyncio.Future:
     return convert_yielded(tornado_future)
 
 
-class AnyThreadEventLoopPolicy(asyncio.DefaultEventLoopPolicy):  # type: ignore
+if sys.platform == "win32" and hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
+    # "Any thread" and "selector" should be orthogonal, but there's not a clean
+    # interface for composing policies so pick the right base.
+    _BasePolicy = asyncio.WindowsSelectorEventLoopPolicy  # type: ignore
+else:
+    _BasePolicy = asyncio.DefaultEventLoopPolicy
+
+
+class AnyThreadEventLoopPolicy(_BasePolicy):  # type: ignore
     """Event loop policy that allows loop creation on any thread.
 
     The default `asyncio` event loop policy only automatically creates
