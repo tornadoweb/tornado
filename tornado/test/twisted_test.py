@@ -51,7 +51,10 @@ skipIfNoTwisted = unittest.skipUnless(have_twisted, "twisted module not present"
 
 def save_signal_handlers():
     saved = {}
-    for sig in [signal.SIGINT, signal.SIGTERM, signal.SIGCHLD]:
+    signals = [signal.SIGINT, signal.SIGTERM]
+    if hasattr(signal, "SIGCHLD"):
+        signals.append(signal.SIGCHLD)
+    for sig in signals:
         saved[sig] = signal.getsignal(sig)
     if "twisted" in repr(saved):
         # This indicates we're not cleaning up after ourselves properly.
