@@ -50,6 +50,18 @@ environment:
       TOX_ENV: "py37"
       TOX_ARGS: ""
 
+    - PYTHON: "C:\\Python38"
+      PYTHON_VERSION: "3.8.x"
+      PYTHON_ARCH: "32"
+      TOX_ENV: "py38"
+      TOX_ARGS: "tornado.test.websocket_test"
+
+    - PYTHON: "C:\\Python38-x64"
+      PYTHON_VERSION: "3.8.x"
+      PYTHON_ARCH: "64"
+      TOX_ENV: "py38"
+      TOX_ARGS: ""
+
 install:
   # Make sure the right python version is first on the PATH.
   - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
