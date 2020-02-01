@@ -599,6 +599,15 @@ class BaseIOStream(object):
             if self._read_until_close:
                 self._read_until_close = False
                 self._finish_read(self._read_buffer_size, False)
+            elif self._read_future is not None:
+                # resolve reads that are pending and ready to complete
+                try:
+                    pos = self._find_read_pos()
+                except UnsatisfiableReadError:
+                    pass
+                else:
+                    if pos is not None:
+                        self._read_from_buffer(pos)
             if self._state is not None:
                 self.io_loop.remove_handler(self.fileno())
                 self._state = None
@@ -784,8 +793,25 @@ class BaseIOStream(object):
             self._read_from_buffer(pos)
 
     def _start_read(self) -> Future:
-        self._check_closed()  # Before reading, check that stream is not closed.
-        assert self._read_future is None, "Already reading"
+        if self._read_future is not None:
+            # It is an error to start a read while a prior read is unresolved.
+            # However, if the prior read is unresolved because the stream was
+            # closed without satisfying it, it's better to raise
+            # StreamClosedError instead of AssertionError. In particular, this
+            # situation occurs in harmless situations in http1connection.py and
+            # an AssertionError would be logged noisily.
+            #
+            # On the other hand, it is legal to start a new read while the
+            # stream is closed, in case the read can be satisfied from the
+            # read buffer. So we only want to check the closed status of the
+            # stream if we need to decide what kind of error to raise for
+            # "already reading".
+            #
+            # These conditions have proven difficult to test; we have no
+            # unittests that reliably verify this behavior so be careful
+            # when making changes here. See #2651 and #2719.
+            self._check_closed()
+            assert self._read_future is None, "Already reading"
         self._read_future = Future()
         return self._read_future
 
