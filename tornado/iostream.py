@@ -794,8 +794,22 @@ class BaseIOStream(object):
 
     def _start_read(self) -> Future:
         if self._read_future is not None:
-            # raise StreamClosedError instead of assert
-            # in case of starting a second read after the stream is closed
+            # It is an error to start a read while a prior read is unresolved.
+            # However, if the prior read is unresolved because the stream was
+            # closed without satisfying it, it's better to raise
+            # StreamClosedError instead of AssertionError. In particular, this
+            # situation occurs in harmless situations in http1connection.py and
+            # an AssertionError would be logged noisily.
+            #
+            # On the other hand, it is legal to start a new read while the
+            # stream is closed, in case the read can be satisfied from the
+            # read buffer. So we only want to check the closed status of the
+            # stream if we need to decide what kind of error to raise for
+            # "already reading".
+            #
+            # These conditions have proven difficult to test; we have no
+            # unittests that reliably verify this behavior so be careful
+            # when making changes here. See #2651 and #2719.
             self._check_closed()
             assert self._read_future is None, "Already reading"
         self._read_future = Future()
