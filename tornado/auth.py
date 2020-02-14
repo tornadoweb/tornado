@@ -44,7 +44,7 @@ Example usage for Google OAuth:
                     code=self.get_argument('code'))
                 # Save the user with e.g. set_secure_cookie
             else:
-                await self.authorize_redirect(
+                self.authorize_redirect(
                     redirect_uri='http://your.site.com/auth/google',
                     client_id=self.settings['google_oauth']['key'],
                     scope=['profile', 'email'],
@@ -886,7 +886,7 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
                         # Save the user and access token with
                         # e.g. set_secure_cookie.
                     else:
-                        await self.authorize_redirect(
+                        self.authorize_redirect(
                             redirect_uri='http://your.site.com/auth/google',
                             client_id=self.settings['google_oauth']['key'],
                             scope=['profile', 'email'],
