@@ -752,7 +752,7 @@ class MaxHeaderSizeTest(AsyncHTTPTestCase):
         self.assertEqual(response.body, b"ok")
 
     def test_large_headers(self):
-        with ExpectLog(gen_log, "Unsatisfiable read"):
+        with ExpectLog(gen_log, "Unsatisfiable read", level=logging.INFO):
             with self.assertRaises(UnsatisfiableReadError):
                 self.fetch("/large", raise_error=True)
 
