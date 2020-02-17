@@ -943,6 +943,7 @@ class TestIOStreamStartTLS(AsyncTestCase):
             self.server_stream.close()
         if self.client_stream is not None:
             self.client_stream.close()
+        self.io_loop.remove_handler(self.listener.fileno())
         self.listener.close()
         super(TestIOStreamStartTLS, self).tearDown()
 
