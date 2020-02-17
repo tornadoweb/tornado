@@ -500,10 +500,12 @@ X-XSS-Protection: 1;
                 stream.close()
 
             netutil.add_accept_handler(sock, accept_callback)  # type: ignore
-            resp = self.fetch("http://127.0.0.1:%d/" % port)
-            resp.rethrow()
-            self.assertEqual(resp.headers["X-XSS-Protection"], "1; mode=block")
-            self.io_loop.remove_handler(sock.fileno())
+            try:
+                resp = self.fetch("http://127.0.0.1:%d/" % port)
+                resp.rethrow()
+                self.assertEqual(resp.headers["X-XSS-Protection"], "1; mode=block")
+            finally:
+                self.io_loop.remove_handler(sock.fileno())
 
     def test_304_with_content_length(self):
         # According to the spec 304 responses SHOULD NOT include
