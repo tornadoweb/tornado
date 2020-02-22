@@ -75,6 +75,13 @@ def restore_signal_handlers(saved):
 class CompatibilityTests(unittest.TestCase):
     def setUp(self):
         self.saved_signals = save_signal_handlers()
+        self.saved_policy = asyncio.get_event_loop_policy()
+        if hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
+            # Twisted requires a selector event loop, even if Tornado is
+            # doing its own tricks in AsyncIOLoop to support proactors.
+            # Setting an AddThreadSelectorEventLoop exposes various edge
+            # cases so just use a regular selector.
+            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())  # type: ignore
         self.io_loop = IOLoop()
         self.io_loop.make_current()
         self.reactor = AsyncioSelectorReactor()
@@ -83,6 +90,7 @@ class CompatibilityTests(unittest.TestCase):
         self.reactor.disconnectAll()
         self.io_loop.clear_current()
         self.io_loop.close(all_fds=True)
+        asyncio.set_event_loop_policy(self.saved_policy)
         restore_signal_handlers(self.saved_signals)
 
     def start_twisted_server(self):
