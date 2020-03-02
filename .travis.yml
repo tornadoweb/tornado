@@ -6,9 +6,6 @@
 dist: trusty
 sudo: false
 
-matrix:
-    fast_finish: true
-
 language: python
 # For a list of available versions, run
 #     aws s3 ls s3://travis-python-archives/binaries/ubuntu/14.04/x86_64/
@@ -26,6 +23,7 @@ language: python
       packages:
         - libgnutls-dev
 jobs:
+  fast_finish: true
   include:
     # 3.5.2 is interesting because it's the version in ubuntu 16.04, and due to python's
     # "provisional feature" rules there are significant differences between patch
