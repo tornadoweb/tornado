@@ -79,7 +79,7 @@ class _Connector(object):
 
     @staticmethod
     def split(
-        addrinfo: List[Tuple]
+        addrinfo: List[Tuple],
     ) -> Tuple[
         List[Tuple[socket.AddressFamily, Tuple]],
         List[Tuple[socket.AddressFamily, Tuple]],
