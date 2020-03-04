@@ -1,0 +1,21 @@
+What's new in Tornado 6.0.4
+===========================
+
+Mar 3, 2020
+-----------
+
+General changes
+~~~~~~~~~~~~~~~
+
+- Binary wheels are now available for Python 3.8 on Windows. Note that it is
+  still necessary to use
+  ``asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())`` for
+  this platform/version.
+
+Bug fixes
+~~~~~~~~~
+
+- Fixed an issue in `.IOStream` (introduced in 6.0.0) that resulted in
+  ``StreamClosedError`` being incorrectly raised if a stream is closed mid-read
+  but there is enough buffered data to satisfy the read. 
+- `.AnyThreadEventLoopPolicy` now always uses the selector event loop on Windows.
