@@ -4,7 +4,7 @@ attrs==19.1.0
 automat==0.7.0
 babel==2.6.0
 black==19.3b0
-bleach==3.1.0
+bleach==3.1.1
 certifi==2019.3.9
 cffi==1.12.3
 chardet==3.0.4
