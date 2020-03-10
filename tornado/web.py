@@ -569,10 +569,10 @@ class RequestHandler(object):
         """
         try:
             return _unicode(value)
-        except UnicodeDecodeError:
+        except UnicodeDecodeError as e:
             raise HTTPError(
                 400, "Invalid unicode in %s: %r" % (name or "url", value[:40])
-            )
+            ) from e
 
     @property
     def cookies(self) -> Dict[str, http.cookies.Morsel]:
@@ -3343,7 +3343,7 @@ class _UIModuleNamespace(object):
         try:
             return self[key]
         except KeyError as e:
-            raise AttributeError(str(e))
+            raise AttributeError(str(e)) from e
 
 
 def create_signed_value(
