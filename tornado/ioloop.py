@@ -907,7 +907,7 @@ class PeriodicCallback(object):
             if isawaitable(val):
                 await val  # type: ignore
         except Exception:
-            app_log.error("Exception in async callback %r", self.callback, exc_info=True)
+            app_log.error("Exception in callback %r", self.callback, exc_info=True)
         finally:
             self._schedule_next()
 
