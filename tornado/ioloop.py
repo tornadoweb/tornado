@@ -905,7 +905,7 @@ class PeriodicCallback(object):
         try:
             val = self.callback()
             if isawaitable(val):
-                await val
+                await val  # type: ignore
         except Exception:
             app_log.error("Exception in async callback %r", self.callback, exc_info=True)
         finally:
@@ -914,7 +914,7 @@ class PeriodicCallback(object):
     def _schedule_next(self) -> None:
         if self._running:
             self._update_next(self.io_loop.time())
-            self._timeout = self.io_loop.add_timeout(self._next_timeout, self._run)
+            self._timeout = self.io_loop.add_timeout(self._next_timeout, self._run)  # type: ignore
 
     def _update_next(self, current_time: float) -> None:
         callback_time_sec = self.callback_time / 1000.0
