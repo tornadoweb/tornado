@@ -867,6 +867,13 @@ class PeriodicCallback(object):
         self, callback: Callable[[], None], callback_time: float, jitter: float = 0
     ) -> None:
         self.callback = callback
+
+        if (asyncio.iscoroutinefunction(callback)
+                or getattr(callback, "__tornado_coroutine__", False)):
+            self._run = self._async_run
+        else:
+            self._run = self._sync_run
+
         if callback_time <= 0:
             raise ValueError("Periodic callback must have a positive callback_time")
         self.callback_time = callback_time
@@ -898,13 +905,23 @@ class PeriodicCallback(object):
         """
         return self._running
 
-    def _run(self) -> None:
+    def _sync_run(self) -> None:
         if not self._running:
             return
         try:
             return self.callback()
         except Exception:
-            app_log.error("Exception in callback %r", self.callback, exc_info=True)
+            app_log.error("Exception in sync callback %r", self.callback, exc_info=True)
+        finally:
+            self._schedule_next()
+
+    async def _async_run(self) -> None:
+        if not self._running:
+            return
+        try:
+            await self.callback()
+        except Exception:
+            app_log.error("Exception in async callback %r", self.callback, exc_info=True)
         finally:
             self._schedule_next()
 
