@@ -248,9 +248,10 @@ class Locale(object):
                 return cls.get(code)
             if parts[0].lower() in _supported_locales:
                 return cls.get(parts[0].lower())
-            for supported in _supported_locales:
-                if code == supported.split("_")[0]:
-                    return cls.get(supported)
+            if len(parts) == 1:
+                for supported in _supported_locales:
+                    if code == supported.split("_")[0]:
+                        return cls.get(supported)
         return cls.get(_default_locale)
 
     @classmethod
