@@ -238,7 +238,7 @@ class Locale(object):
         for code in locale_codes:
             if not code:
                 continue
-            code = code.replace("-", "_")
+            code = code.replace("-", "_").split(";")[0]
             parts = code.split("_")
             if len(parts) > 2:
                 continue
@@ -248,6 +248,9 @@ class Locale(object):
                 return cls.get(code)
             if parts[0].lower() in _supported_locales:
                 return cls.get(parts[0].lower())
+            for supported in _supported_locales:
+                if code == supported.split("_")[0]:
+                    return cls.get(supported)
         return cls.get(_default_locale)
 
     @classmethod
