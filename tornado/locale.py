@@ -238,7 +238,7 @@ class Locale(object):
         for code in locale_codes:
             if not code:
                 continue
-            code = code.replace("-", "_").split(";")[0]
+            code = code.replace("-", "_")
             parts = code.split("_")
             if len(parts) > 2:
                 continue
