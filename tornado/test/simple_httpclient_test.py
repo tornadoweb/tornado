@@ -10,7 +10,7 @@ import sys
 import typing  # noqa: F401
 
 from tornado.escape import to_unicode, utf8
-from tornado import gen
+from tornado import gen, version
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders, ResponseStartLine
 from tornado.ioloop import IOLoop
@@ -28,6 +28,7 @@ from tornado.test.httpclient_test import (
     CountdownHandler,
     HelloWorldHandler,
     RedirectHandler,
+    UserAgentHandler,
 )
 from tornado.test import httpclient_test
 from tornado.testing import (
@@ -171,6 +172,7 @@ class SimpleHTTPClientTestMixin(object):
                 url("/echo_post", EchoPostHandler),
                 url("/respond_in_prepare", RespondInPrepareHandler),
                 url("/redirect", RedirectHandler),
+                url("/user_agent", UserAgentHandler),
             ],
             gzip=True,
         )
@@ -245,6 +247,11 @@ class SimpleHTTPClientTestMixin(object):
         headers = HTTPHeaders({"User-Agent": "Foo"})
         self.fetch("/hello", headers=headers)
         self.assertEqual(list(headers.get_all()), [("User-Agent", "Foo")])
+
+    def test_default_user_agent(self: typing.Any):
+        response = self.fetch("/user_agent", method="GET")
+        self.assertEqual(200, response.code)
+        self.assertEqual(response.body.decode(), "Tornado/{}".format(version))
 
     def test_see_other_redirect(self: typing.Any):
         for code in (302, 303):
