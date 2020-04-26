@@ -142,7 +142,7 @@ Of course a nested `RuleRouter` or a `~.web.Application` is allowed:
 
     router = RuleRouter([
         Rule(HostMatches("example.com"), RuleRouter([
-            Rule(PathMatches("/app1/.*"), Application([(r"/app1/handler", Handler)]))),
+            Rule(PathMatches("/app1/.*"), Application([(r"/app1/handler", Handler)])),
         ]))
     ])
 
