@@ -279,7 +279,7 @@ all requests::
 For ``PUT`` and ``DELETE`` requests (as well as ``POST`` requests that
 do not use form-encoded arguments), the XSRF token may also be passed
 via an HTTP header named ``X-XSRFToken``.  The XSRF cookie is normally
-set when ``xsrf_form_html`` is used, but in a pure-Javascript application
+set when ``xsrf_form_html`` is used, but in a pure-JavaScript application
 that does not use any regular forms you may need to access
 ``self.xsrf_token`` manually (just reading the property is enough to
 set the cookie as a side effect).
