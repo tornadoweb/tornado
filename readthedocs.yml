@@ -1,4 +1,0 @@
-# TODO: remove when RTD supports Python 3.7 without conda.
-# https://github.com/rtfd/readthedocs-docker-images/pull/73
-conda:
-  file: docs/conda.yml
