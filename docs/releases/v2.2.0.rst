@@ -56,7 +56,7 @@ Backwards-incompatible changes
 
 * ``IOStream.write`` now works correctly when given an empty string.
 * ``IOStream.read_until`` (and ``read_until_regex``) now perform better
-  when there is a lot of buffered data, which improves peformance of
+  when there is a lot of buffered data, which improves performance of
   ``SimpleAsyncHTTPClient`` when downloading files with lots of
   chunks.
 * `.SSLIOStream` now works correctly when ``ssl_version`` is set to

@@ -338,7 +338,7 @@ class AnyThreadEventLoopPolicy(_BasePolicy):  # type: ignore
         try:
             return super().get_event_loop()
         except (RuntimeError, AssertionError):
-            # This was an AssertionError in python 3.4.2 (which ships with debian jessie)
+            # This was an AssertionError in Python 3.4.2 (which ships with Debian Jessie)
             # and changed to a RuntimeError in 3.4.3.
             # "There is no current event loop in thread %r"
             loop = self.new_event_loop()

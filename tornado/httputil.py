@@ -520,7 +520,7 @@ class HTTPMessageDelegate(object):
     .. versionadded:: 4.0
     """
 
-    # TODO: genericize this class to avoid exposing the Union.
+    # TODO: generalize this class to avoid exposing the Union.
     def headers_received(
         self,
         start_line: Union["RequestStartLine", "ResponseStartLine"],

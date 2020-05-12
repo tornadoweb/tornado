@@ -212,7 +212,7 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
 
         This method does not currently close open websocket connections.
 
-        Note that this method is a coroutine and must be caled with ``await``.
+        Note that this method is a coroutine and must be called with ``await``.
 
         """
         while self._connections:
@@ -346,7 +346,7 @@ class _HTTPRequestContext(object):
         )
         if proto_header:
             # use only the last proto entry if there is more than one
-            # TODO: support trusting mutiple layers of proxied protocol
+            # TODO: support trusting multiple layers of proxied protocol
             proto_header = proto_header.split(",")[-1].strip()
         if proto_header in ("http", "https"):
             self.protocol = proto_header

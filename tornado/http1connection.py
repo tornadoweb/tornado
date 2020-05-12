@@ -753,7 +753,7 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
                 # chunk at this point we'd need to change the
                 # interface to make finish() a coroutine.
                 raise ValueError(
-                    "decompressor.flush returned data; possile truncated input"
+                    "decompressor.flush returned data; possible truncated input"
                 )
         return self._delegate.finish()
 

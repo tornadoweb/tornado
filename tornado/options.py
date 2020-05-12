@@ -491,7 +491,7 @@ class _Mockable(object):
     As of ``mock`` version 1.0.1, when an object uses ``__getattr__``
     hooks instead of ``__dict__``, ``patch.__exit__`` tries to delete
     the attribute it set instead of setting a new one (assuming that
-    the object does not catpure ``__setattr__``, so the patch
+    the object does not capture ``__setattr__``, so the patch
     created a new attribute in ``__dict__``).
 
     _Mockable's getattr and setattr pass through to the underlying

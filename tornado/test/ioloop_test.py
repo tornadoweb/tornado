@@ -518,7 +518,7 @@ class TestIOLoopFutures(AsyncTestCase):
 
         # Go through an async wrapper to ensure that the result of
         # run_in_executor works with await and not just gen.coroutine
-        # (simply passing the underlying concurrrent future would do that).
+        # (simply passing the underlying concurrent future would do that).
         async def async_wrapper(self_event, other_event):
             return await IOLoop.current().run_in_executor(
                 None, sync_func, self_event, other_event
