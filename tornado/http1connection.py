@@ -448,7 +448,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         header_lines = (
             native_str(n) + ": " + native_str(v) for n, v in headers.get_all()
         )
-        lines.extend(l.encode("latin1") for l in header_lines)
+        lines.extend(line.encode("latin1") for line in header_lines)
         for line in lines:
             if b"\n" in line:
                 raise ValueError("Newline in header: " + repr(line))

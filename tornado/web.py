@@ -1300,7 +1300,7 @@ class RequestHandler(object):
                 locales.append((parts[0], score))
             if locales:
                 locales.sort(key=lambda pair: pair[1], reverse=True)
-                codes = [l[0] for l in locales]
+                codes = [loc[0] for loc in locales]
                 return locale.get(*codes)
         return locale.get(default)
 
