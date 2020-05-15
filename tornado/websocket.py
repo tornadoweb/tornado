@@ -1285,6 +1285,9 @@ class WebSocketProtocol13(WebSocketProtocol):
             self._waiting = self.stream.io_loop.add_timeout(
                 self.stream.io_loop.time() + 5, self._abort
             )
+        if self.ping_callback:
+            self.ping_callback.stop()
+            self.ping_callback = None
 
     def is_closing(self) -> bool:
         """Return ``True`` if this connection is closing.
