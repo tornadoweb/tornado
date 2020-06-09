@@ -737,6 +737,10 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
                     if ret is not None:
                         await ret
                 compressed_data = self._decompressor.unconsumed_tail
+                if compressed_data and not decompressed:
+                    raise httputil.HTTPInputError(
+                        "encountered unconsumed gzip data without making progress"
+                    )
         else:
             ret = self._delegate.data_received(chunk)
             if ret is not None:
