@@ -1334,6 +1334,10 @@ def websocket_connect(url, callback=None, connect_timeout=None,
         request = httpclient.HTTPRequest(url, connect_timeout=connect_timeout)
     request = httpclient._RequestProxy(
         request, httpclient.HTTPRequest._DEFAULTS)
+
+    # Websocket connection is currently unable to follow redirects
+    # Set follow_redirects to False to prevent a silent failure
+    request.follow_redirects = False
     conn = WebSocketClientConnection(request,
                                      on_message_callback=on_message_callback,
                                      compression_options=compression_options,
