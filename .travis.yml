@@ -37,6 +37,9 @@ jobs:
       env: TOX_ENV=docs
     - python: '3.8'
       env: TOX_ENV=lint
+  allow_failures:
+    # Currently failing due to https://foss.heptapod.net/pypy/cffi/issues/458
+    - python: nightly
 
 install:
     - travis_retry pip install tox
