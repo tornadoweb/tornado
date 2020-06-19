@@ -401,7 +401,9 @@ class HTTPRequest(object):
         :type headers: `~tornado.httputil.HTTPHeaders` or `dict`
         :arg body: HTTP request body as a string (byte or unicode; if unicode
            the utf-8 encoding will be used)
-        :arg body_producer: Callable used for lazy/asynchronous request bodies.
+        :type body: `str` or `bytes`
+        :arg collections.abc.Callable body_producer: Callable used for
+           lazy/asynchronous request bodies.
            It is called with one argument, a ``write`` function, and should
            return a `.Future`.  It should call the write function with new
            data as it becomes available.  The write function returns a
