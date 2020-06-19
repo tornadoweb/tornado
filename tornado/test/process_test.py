@@ -4,6 +4,7 @@ import os
 import signal
 import subprocess
 import sys
+import time
 import unittest
 
 from tornado.httpclient import HTTPClient, HTTPError
@@ -224,6 +225,14 @@ class SubprocessTest(AsyncTestCase):
         )
         self.addCleanup(subproc.stdout.close)
         subproc.set_exit_callback(self.stop)
+
+        # For unclear reasons, killing a process too soon after
+        # creating it can result in an exit status corresponding to
+        # SIGKILL instead of the actual signal involved. This has been
+        # observed on macOS 10.15 with Python 3.8 installed via brew,
+        # but not with the system-installed Python 3.7.
+        time.sleep(0.1)
+
         os.kill(subproc.pid, signal.SIGTERM)
         try:
             ret = self.wait(timeout=1.0)
