@@ -39,7 +39,7 @@ jobs:
       env: TOX_ENV=lint
 
 install:
-    - travis_retry pip install tox tox-venv
+    - travis_retry pip install tox
     - python -VV
     - curl-config --version; pip freeze
 
