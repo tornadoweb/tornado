@@ -600,7 +600,7 @@ class RequestHandler(object):
         domain: Optional[str] = None,
         expires: Optional[Union[float, Tuple, datetime.datetime]] = None,
         path: str = "/",
-        expires_days: Optional[int] = None,
+        expires_days: Optional[float] = None,
         **kwargs: Any
     ) -> None:
         """Sets an outgoing cookie name/value with the given options.
@@ -686,7 +686,7 @@ class RequestHandler(object):
         self,
         name: str,
         value: Union[str, bytes],
-        expires_days: Optional[int] = 30,
+        expires_days: Optional[float] = 30,
         version: Optional[int] = None,
         **kwargs: Any
     ) -> None:
@@ -751,7 +751,7 @@ class RequestHandler(object):
         self,
         name: str,
         value: Optional[str] = None,
-        max_age_days: int = 31,
+        max_age_days: float = 31,
         min_version: Optional[int] = None,
     ) -> Optional[bytes]:
         """Returns the given signed cookie if it validates, or None.
@@ -3440,7 +3440,7 @@ def decode_signed_value(
     secret: _CookieSecretTypes,
     name: str,
     value: Union[None, str, bytes],
-    max_age_days: int = 31,
+    max_age_days: float = 31,
     clock: Optional[Callable[[], float]] = None,
     min_version: Optional[int] = None,
 ) -> Optional[bytes]:
@@ -3471,7 +3471,7 @@ def _decode_signed_value_v1(
     secret: Union[str, bytes],
     name: str,
     value: bytes,
-    max_age_days: int,
+    max_age_days: float,
     clock: Callable[[], float],
 ) -> Optional[bytes]:
     parts = utf8(value).split(b"|")
@@ -3526,7 +3526,7 @@ def _decode_signed_value_v2(
     secret: _CookieSecretTypes,
     name: str,
     value: bytes,
-    max_age_days: int,
+    max_age_days: float,
     clock: Callable[[], float],
 ) -> Optional[bytes]:
     try:
