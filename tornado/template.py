@@ -98,8 +98,9 @@ template directives use ``{% %}``.
 To comment out a section so that it is omitted from the output, surround it
 with ``{# ... #}``.
 
-These tags may be escaped as ``{{!``, ``{%!``, and ``{#!``
-if you need to include a literal ``{{``, ``{%``, or ``{#`` in the output.
+
+To include a literal ``{{``, ``{%``, or ``{#`` in the output, escape them as
+``{{!``, ``{%!``, and ``{#!``, respectively.
 
 
 ``{% apply *function* %}...{% end %}``
