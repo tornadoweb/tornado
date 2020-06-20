@@ -235,7 +235,7 @@ class SubprocessTest(AsyncTestCase):
 
         os.kill(subproc.pid, signal.SIGTERM)
         try:
-            ret = self.wait(timeout=1.0)
+            ret = self.wait()
         except AssertionError:
             # We failed to get the termination signal. This test is
             # occasionally flaky on pypy, so try to get a little more
@@ -246,7 +246,7 @@ class SubprocessTest(AsyncTestCase):
             fut = subproc.stdout.read_until_close()
             fut.add_done_callback(lambda f: self.stop())  # type: ignore
             try:
-                self.wait(timeout=1.0)
+                self.wait()
             except AssertionError:
                 raise AssertionError("subprocess failed to terminate")
             else:
