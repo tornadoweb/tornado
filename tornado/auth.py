@@ -634,7 +634,7 @@ class OAuth2Mixin(object):
 
                     if not new_entry:
                         # Call failed; perhaps missing permission?
-                        await self.authorize_redirect()
+                        self.authorize_redirect()
                         return
                     self.finish("Posted a message!")
 
@@ -772,7 +772,7 @@ class TwitterMixin(OAuthMixin):
                         access_token=self.current_user["access_token"])
                     if not new_entry:
                         # Call failed; perhaps missing permission?
-                        yield self.authorize_redirect()
+                        await self.authorize_redirect()
                         return
                     self.finish("Posted a message!")
 
@@ -954,7 +954,7 @@ class FacebookGraphMixin(OAuth2Mixin):
                           code=self.get_argument("code"))
                       # Save the user with e.g. set_secure_cookie
                   else:
-                      await self.authorize_redirect(
+                      self.authorize_redirect(
                           redirect_uri='/auth/facebookgraph/',
                           client_id=self.settings["facebook_api_key"],
                           extra_params={"scope": "read_stream,offline_access"})
@@ -1072,7 +1072,7 @@ class FacebookGraphMixin(OAuth2Mixin):
 
                     if not new_entry:
                         # Call failed; perhaps missing permission?
-                        yield self.authorize_redirect()
+                        self.authorize_redirect()
                         return
                     self.finish("Posted a message!")
 
