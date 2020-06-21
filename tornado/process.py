@@ -347,18 +347,21 @@ class Subprocess(object):
 
     @classmethod
     def _cleanup(cls) -> None:
+        print('in signal handler')
         for pid in list(cls._waiting.keys()):  # make a copy
             cls._try_cleanup_process(pid)
 
     @classmethod
     def _try_cleanup_process(cls, pid: int) -> None:
         try:
+            print('waiting for ', pid)
             ret_pid, status = os.waitpid(pid, os.WNOHANG)  # type: ignore
         except ChildProcessError:
             return
         if ret_pid == 0:
             return
         assert ret_pid == pid
+        print(pid, ' exited')
         subproc = cls._waiting.pop(pid)
         subproc.io_loop.add_callback_from_signal(subproc._set_returncode, status)
 

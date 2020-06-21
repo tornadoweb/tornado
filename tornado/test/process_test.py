@@ -220,7 +220,7 @@ class SubprocessTest(AsyncTestCase):
         Subprocess.initialize()
         self.addCleanup(Subprocess.uninitialize)
         subproc = Subprocess(
-            [sys.executable, "-c", "import time; time.sleep(30)"],
+            [sys.executable, "-c", "import sys, time; print(1, file=sys.stderr); time.sleep(60); print(2, file=sys.stderr)"],
             stdout=Subprocess.STREAM,
         )
         self.addCleanup(subproc.stdout.close)
@@ -251,7 +251,7 @@ class SubprocessTest(AsyncTestCase):
                 raise AssertionError("subprocess failed to terminate")
             else:
                 raise AssertionError(
-                    "subprocess closed stdout but failed to " "get termination signal"
+                    "subprocess closed stdout but failed to get termination signal"
                 )
         self.assertEqual(subproc.returncode, ret)
         self.assertEqual(ret, -signal.SIGTERM)
