@@ -158,8 +158,7 @@ def add_reload_hook(fn: Callable[[], None]) -> None:
 
     Note that for open file and socket handles it is generally
     preferable to set the ``FD_CLOEXEC`` flag (using `fcntl` or
-    ``tornado.platform.auto.set_close_exec``) instead
-    of using a reload hook to close them.
+    `os.set_inheritable`) instead of using a reload hook to close them.
     """
     _reload_hooks.append(fn)
 

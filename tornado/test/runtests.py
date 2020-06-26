@@ -50,7 +50,6 @@ TEST_MODULES = [
     "tornado.test.util_test",
     "tornado.test.web_test",
     "tornado.test.websocket_test",
-    "tornado.test.windows_test",
     "tornado.test.wsgi_test",
 ]
 

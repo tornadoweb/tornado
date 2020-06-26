@@ -34,10 +34,9 @@ from tornado.concurrent import (
 from tornado import ioloop
 from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
-from tornado.platform.auto import set_close_exec
 
 import typing
-from typing import Tuple, Optional, Any, Callable
+from typing import Optional, Any, Callable
 
 if typing.TYPE_CHECKING:
     from typing import List  # noqa: F401
@@ -75,13 +74,6 @@ def _reseed_random() -> None:
     except NotImplementedError:
         seed = int(time.time() * 1000) ^ os.getpid()
     random.seed(seed)
-
-
-def _pipe_cloexec() -> Tuple[int, int]:
-    r, w = os.pipe()
-    set_close_exec(r)
-    set_close_exec(w)
-    return r, w
 
 
 _task_id = None
@@ -227,19 +219,19 @@ class Subprocess(object):
         pipe_fds = []  # type: List[int]
         to_close = []  # type: List[int]
         if kwargs.get("stdin") is Subprocess.STREAM:
-            in_r, in_w = _pipe_cloexec()
+            in_r, in_w = os.pipe()
             kwargs["stdin"] = in_r
             pipe_fds.extend((in_r, in_w))
             to_close.append(in_r)
             self.stdin = PipeIOStream(in_w)
         if kwargs.get("stdout") is Subprocess.STREAM:
-            out_r, out_w = _pipe_cloexec()
+            out_r, out_w = os.pipe()
             kwargs["stdout"] = out_w
             pipe_fds.extend((out_r, out_w))
             to_close.append(out_w)
             self.stdout = PipeIOStream(out_r)
         if kwargs.get("stderr") is Subprocess.STREAM:
-            err_r, err_w = _pipe_cloexec()
+            err_r, err_w = os.pipe()
             kwargs["stderr"] = err_w
             pipe_fds.extend((err_r, err_w))
             to_close.append(err_w)
