@@ -59,11 +59,6 @@ if typing.TYPE_CHECKING:
 
 _IOStreamType = TypeVar("_IOStreamType", bound="IOStream")
 
-try:
-    from tornado.platform.posix import _set_nonblocking
-except ImportError:
-    _set_nonblocking = None  # type: ignore
-
 # These errnos indicate that a connection has been abruptly terminated.
 # They should be caught and handled less noisily than other errors.
 _ERRNO_CONNRESET = (errno.ECONNRESET, errno.ECONNABORTED, errno.EPIPE, errno.ETIMEDOUT)
@@ -1620,12 +1615,14 @@ class PipeIOStream(BaseIOStream):
     by `os.pipe`) rather than an open file object.  Pipes are generally
     one-way, so a `PipeIOStream` can be used for reading or writing but not
     both.
+
+    ``PipeIOStream`` is only available on Unix-based platforms.
     """
 
     def __init__(self, fd: int, *args: Any, **kwargs: Any) -> None:
         self.fd = fd
         self._fio = io.FileIO(self.fd, "r+")
-        _set_nonblocking(fd)
+        os.set_blocking(fd, False)
         super(PipeIOStream, self).__init__(*args, **kwargs)
 
     def fileno(self) -> int:

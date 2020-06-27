@@ -25,7 +25,6 @@ import stat
 
 from tornado.concurrent import dummy_executor, run_on_executor
 from tornado.ioloop import IOLoop
-from tornado.platform.auto import set_close_exec
 from tornado.util import Configurable, errno_from_exception
 
 from typing import List, Callable, Any, Type, Dict, Union, Tuple, Awaitable, Optional
@@ -130,7 +129,6 @@ def bind_sockets(
             if errno_from_exception(e) == errno.EAFNOSUPPORT:
                 continue
             raise
-        set_close_exec(sock.fileno())
         if os.name != "nt":
             try:
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -203,7 +201,6 @@ if hasattr(socket, "AF_UNIX"):
         `bind_sockets`)
         """
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        set_close_exec(sock.fileno())
         try:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         except socket.error as e:
@@ -276,7 +273,6 @@ def add_accept_handler(
                 # but it was closed while still in the accept queue.
                 # (observed on FreeBSD).
                 continue
-            set_close_exec(connection.fileno())
             callback(connection, address)
 
     def remove_handler() -> None:
