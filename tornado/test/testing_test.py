@@ -51,10 +51,13 @@ class AsyncTestCaseTest(AsyncTestCase):
         This test makes sure that a second call to wait()
         clears the first timeout.
         """
+        # The first wait ends with time left on the clock
         self.io_loop.add_timeout(self.io_loop.time() + 0.00, self.stop)
-        self.wait(timeout=0.02)
-        self.io_loop.add_timeout(self.io_loop.time() + 0.03, self.stop)
-        self.wait(timeout=0.15)
+        self.wait(timeout=0.1)
+        # The second wait has enough time for itself but would fail if the
+        # first wait's deadline were still in effect.
+        self.io_loop.add_timeout(self.io_loop.time() + 0.2, self.stop)
+        self.wait(timeout=0.4)
 
 
 class LeakTest(AsyncTestCase):
