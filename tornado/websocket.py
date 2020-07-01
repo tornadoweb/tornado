@@ -207,7 +207,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
     value, a ping will be sent periodically and the connection will be
     closed if a response is not received before the ``websocket_ping_timeout``.
     Setting ``websocket_ping_timeout`` to a lower value than
-    ``websocket_ping_interval`` will result in the websocket connection being 
+    ``websocket_ping_interval`` will result in the websocket connection being
     closed after ``websocket_ping_interval``.
 
     Messages larger than the ``websocket_max_message_size`` application setting
