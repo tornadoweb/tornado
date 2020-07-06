@@ -400,9 +400,14 @@ class TestIOLoop(AsyncTestCase):
             client.close()
             server.close()
 
+    @skipIfNonUnix
     @gen_test
     def test_init_close_race(self):
         # Regression test for #2367
+        #
+        # Skipped on windows because of what looks like a bug in the
+        # proactor event loop when started and stopped on non-main
+        # threads.
         def f():
             for i in range(10):
                 loop = IOLoop()

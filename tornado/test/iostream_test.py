@@ -1,6 +1,7 @@
 from tornado.concurrent import Future
 from tornado import gen
 from tornado import netutil
+from tornado.ioloop import IOLoop
 from tornado.iostream import (
     IOStream,
     SSLIOStream,
@@ -12,6 +13,7 @@ from tornado.httputil import HTTPHeaders
 from tornado.locks import Condition, Event
 from tornado.log import gen_log
 from tornado.netutil import ssl_wrap_socket
+from tornado.platform.asyncio import AddThreadSelectorEventLoop
 from tornado.tcpserver import TCPServer
 from tornado.testing import (
     AsyncHTTPTestCase,
@@ -246,11 +248,11 @@ class TestReadWriteMixin(object):
         rs, ws = yield self.make_iostream_pair()
         try:
             ws.write(b"1234")
-            ws.close()
             # Read one byte to make sure the client has received the data.
             # It won't run the close callback as long as there is more buffered
             # data that could satisfy a later read.
             data = yield rs.read_bytes(1)
+            ws.close()
             self.assertEqual(data, b"1")
             data = yield rs.read_until_close()
             self.assertEqual(data, b"234")
@@ -298,6 +300,10 @@ class TestReadWriteMixin(object):
         # in size
         async with self.iostream_pair() as (rs, ws):
             rf = asyncio.ensure_future(rs.read_until(b"done"))
+            # We need to wait for the read_until to actually start. On
+            # windows that's tricky because the selector runs in
+            # another thread; sleeping is the simplest way.
+            await asyncio.sleep(0.1)
             await ws.write(b"x" * 2048)
             ws.write(b"done")
             ws.close()
@@ -796,6 +802,17 @@ class TestIOStreamMixin(TestReadWriteMixin):
         # on socket FDs, but we can't close the socket object normally
         # because we won't get the error we want if the socket knows
         # it's closed.
+        #
+        # This test is also disabled when the
+        # AddThreadSelectorEventLoop is used, because a race between
+        # this thread closing the socket and the selector thread
+        # calling the select system call can make this test flaky.
+        # This event loop implementation is normally only used on
+        # windows, making this check redundant with skipIfNonUnix, but
+        # we sometimes enable it on other platforms for testing.
+        io_loop = IOLoop.current()
+        if isinstance(io_loop.selector_loop, AddThreadSelectorEventLoop):
+            self.skipTest("AddThreadSelectorEventLoop not supported")
         server, client = yield self.make_iostream_pair()
         try:
             os.close(server.socket.fileno())
