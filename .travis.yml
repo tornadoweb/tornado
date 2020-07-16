@@ -7,7 +7,13 @@ addons:
     packages:
       - libgnutls-dev
 
-# For a list of available versions, run
+env:
+  global:
+    - CIBW_ENVIRONMENT="PYCURL_SSL_LIBRARY=nss"
+    - CIBW_BEFORE_BUILD="yum install -y libcurl-devel openssl-devel"
+    - CIBW_TEST_REQUIRES="tox"
+
+# For a list of available versions,run
 #     aws s3 ls s3://travis-python-archives/binaries/ubuntu/16.04/x86_64/
 jobs:
   fast_finish: true
@@ -19,13 +25,33 @@ jobs:
       # Twisted doesn't install on python 3.5.2, so don't run the "full" tests.
       env: TOX_ENV=py35
     - python: '3.5'
-      env: TOX_ENV=py35-full
+      services: docker
+      env: TOX_ENV=py35-full BUILD_WHEEL=1 CIBW_BUILD=cp35-manylinux_x86_64
+    - python: '3.5'
+      arch: arm64
+      services: docker
+      env: TOX_ENV=py35-full BUILD_WHEEL=1 CIBW_BUILD=cp35-manylinux_aarch64
     - python: '3.6'
-      env: TOX_ENV=py36-full
+      services: docker
+      env: TOX_ENV=py36-full BUILD_WHEEL=1 CIBW_BUILD=cp36-manylinux_x86_64
+    - python: '3.6'
+      arch: arm64
+      services: docker
+      env: TOX_ENV=py36-full BUILD_WHEEL=1 CIBW_BUILD=cp36-manylinux_aarch64
     - python: '3.7'
-      env: TOX_ENV=py37-full
+      services: docker
+      env: TOX_ENV=py37-full BUILD_WHEEL=1 CIBW_BUILD=cp37-manylinux_x86_64
+    - python: '3.7'
+      arch: arm64
+      services: docker
+      env: TOX_ENV=py37-full BUILD_WHEEL=1 CIBW_BUILD=cp37-manylinux_aarch64
     - python: '3.8'
-      env: TOX_ENV=py38-full
+      services: docker
+      env: TOX_ENV=py38-full BUILD_WHEEL=1 CIBW_BUILD=cp38-manylinux_x86_64
+    - python: '3.8'
+      arch: arm64
+      services: docker
+      env: TOX_ENV=py38-full BUILD_WHEEL=1 CIBW_BUILD=cp38-manylinux_aarch64
     - python: pypy3.5-5.10.1
       # Pypy is a lot slower due to jit warmup costs, so don't run the "full"
       # test config there.
@@ -36,15 +62,29 @@ jobs:
     - python: '3.8'
       env: TOX_ENV=docs
     - python: '3.8'
+      arch: arm64
+      env: TOX_ENV=docs
+    - python: '3.8'
       env: TOX_ENV=lint
   allow_failures:
     # Currently failing due to https://foss.heptapod.net/pypy/cffi/issues/458
     - python: nightly
 
 install:
+    - |
+      if [[ -n ${BUILD_WHEEL} ]]; then
+         # To test it's own built wheel
+         export CIBW_TEST_COMMAND="cd {project} && tox -e $TOX_ENV"
+         pip install -U cibuildwheel
+         cibuildwheel --output-dir dist
+      fi
     - travis_retry pip install tox
     - python -VV
     - curl-config --version; pip freeze
 
 script:
-    - "tox -e $TOX_ENV -- $TOX_ARGS"
+    - |
+      # Skipping the tests for which we have already tested using it's own built wheel 
+      if [[ -z ${BUILD_WHEEL} ]]; then
+         tox -e $TOX_ENV -- $TOX_ARGS
+      fi
