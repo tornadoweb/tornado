@@ -74,8 +74,7 @@ dummy_executor = DummyExecutor()
 def run_on_executor(*args: Any, **kwargs: Any) -> Callable:
     """Decorator to run a synchronous method asynchronously on an executor.
 
-    The decorated method may be called with a ``callback`` keyword
-    argument and returns a future.
+    Returns a future.
 
     The executor to be used is determined by the ``executor``
     attributes of ``self``. To use a different attribute name, pass a
