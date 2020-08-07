@@ -60,7 +60,8 @@ environment:
       PYTHON_VERSION: "3.8.x"
       PYTHON_ARCH: "64"
       TOX_ENV: "py38"
-      TOX_ARGS: ""
+      # Suppress the log-cleanliness assertions because of https://bugs.python.org/issue39010
+      TOX_ARGS: "--fail-if-logs=false"
 
 install:
   # Make sure the right python version is first on the PATH.

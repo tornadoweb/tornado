@@ -12,7 +12,7 @@ import warnings
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 from tornado.netutil import Resolver
-from tornado.options import define, add_parse_callback
+from tornado.options import define, add_parse_callback, options
 
 
 TEST_MODULES = [
@@ -182,6 +182,11 @@ def main():
             reduce(operator.or_, (getattr(gc, v) for v in values))
         ),
     )
+    define(
+        "fail-if-logs",
+        default=True,
+        help="If true, fail the tests if any log output is produced (unless captured by ExpectLog)",
+    )
 
     def set_locale(x):
         locale.setlocale(locale.LC_ALL, x)
@@ -228,7 +233,8 @@ def main():
                 log_counter.error_count,
                 counting_stderr.byte_count,
             )
-            sys.exit(1)
+            if options.fail_if_logs:
+                sys.exit(1)
 
 
 if __name__ == "__main__":
