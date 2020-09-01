@@ -1,4 +1,4 @@
 sphinx>1.8.2,<2.1
-sphinxcontrib-asyncio
+sphinxcontrib-asyncio==0.2.0
 sphinx_rtd_theme
 Twisted
