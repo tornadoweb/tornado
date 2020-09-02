@@ -406,7 +406,10 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                     "Unsupported proxy_auth_mode %s" % request.proxy_auth_mode
                 )
         else:
-            curl.setopt(pycurl.PROXY, "")
+            try:
+                curl.unsetopt(pycurl.PROXY)
+            except TypeError:  # not supported, disable proxy
+                curl.setopt(pycurl.PROXY, "")
             curl.unsetopt(pycurl.PROXYUSERPWD)
         if request.validate_cert:
             curl.setopt(pycurl.SSL_VERIFYPEER, 1)
