@@ -19,13 +19,33 @@ jobs:
       # Twisted doesn't install on python 3.5.2, so don't run the "full" tests.
       env: TOX_ENV=py35
     - python: '3.5'
-      env: TOX_ENV=py35-full
+      services: docker
+      env: TOX_ENV=py35-full BUILD_WHEEL=1 CIBW_BUILD=cp35-manylinux_x86_64
+    - python: '3.5'
+      arch: arm64
+      services: docker
+      env: TOX_ENV=py35-full BUILD_WHEEL=1 CIBW_BUILD=cp35-manylinux_aarch64
     - python: '3.6'
-      env: TOX_ENV=py36-full
+      services: docker
+      env: TOX_ENV=py36-full BUILD_WHEEL=1 CIBW_BUILD=cp36-manylinux_x86_64
+    - python: '3.6'
+      arch: arm64
+      services: docker
+      env: TOX_ENV=py36-full BUILD_WHEEL=1 CIBW_BUILD=cp36-manylinux_aarch64
     - python: '3.7'
-      env: TOX_ENV=py37-full
+      services: docker
+      env: TOX_ENV=py37-full BUILD_WHEEL=1 CIBW_BUILD=cp37-manylinux_x86_64
+    - python: '3.7'
+      arch: arm64
+      services: docker
+      env: TOX_ENV=py37-full BUILD_WHEEL=1 CIBW_BUILD=cp37-manylinux_aarch64
     - python: '3.8'
-      env: TOX_ENV=py38-full
+      services: docker
+      env: TOX_ENV=py38-full BUILD_WHEEL=1 CIBW_BUILD=cp38-manylinux_x86_64
+    - python: '3.8'
+      arch: arm64
+      services: docker
+      env: TOX_ENV=py38-full BUILD_WHEEL=1 CIBW_BUILD=cp38-manylinux_aarch64
     - python: pypy3.5-5.10.1
       # Pypy is a lot slower due to jit warmup costs, so don't run the "full"
       # test config there.
@@ -34,6 +54,9 @@ jobs:
       env: TOX_ENV=py3-full
       # Docs and lint python versions must be synced with those in tox.ini
     - python: '3.8'
+      env: TOX_ENV=docs
+    - python: '3.8'
+      arch: arm64
       env: TOX_ENV=docs
     - python: '3.8'
       env: TOX_ENV=lint
@@ -47,4 +70,13 @@ install:
     - curl-config --version; pip freeze
 
 script:
-    - "tox -e $TOX_ENV -- $TOX_ARGS"
+    - |
+      #Skipping the tests for which we have already tested using it's own built wheel 
+      if [[ -z ${BUILD_WHEEL} ]]; then
+         tox -e $TOX_ENV -- $TOX_ARGS
+      else
+         pip install -U cibuildwheel
+         cibuildwheel --output-dir dist
+         sudo rm -rf dist/*manylinux2010_x86_64.whl
+         tox --installpkg dist/*.whl -e $TOX_ENV -- $TOX_ARGS
+      fi
