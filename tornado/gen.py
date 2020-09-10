@@ -154,7 +154,7 @@ def _create_future() -> Future:
 
 
 def coroutine(
-    func: Callable[..., "Generator[Any, Any, _T]"]
+    func: Callable[..., "Union[Generator[Any, Any, _T], _T]"]
 ) -> Callable[..., "Future[_T]"]:
     """Decorator for asynchronous generators.
 
