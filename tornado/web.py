@@ -844,6 +844,7 @@ class RequestHandler(object):
             self.set_header("Content-Type", "application/json; charset=UTF-8")
         chunk = utf8(chunk)
         self._write_buffer.append(chunk)
+        self.chunk = chunk
 
     def render(self, template_name: str, **kwargs: Any) -> "Future[None]":
         """Renders the template with the given arguments as the response.
