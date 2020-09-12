@@ -49,7 +49,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
     def initialize(  # type: ignore
         self, max_clients: int = 10, defaults: Optional[Dict[str, Any]] = None
     ) -> None:
-        super(CurlAsyncHTTPClient, self).initialize(defaults=defaults)
+        super().initialize(defaults=defaults)
         # Typeshed is incomplete for CurlMulti, so just use Any for now.
         self._multi = pycurl.CurlMulti()  # type: Any
         self._multi.setopt(pycurl.M_TIMERFUNCTION, self._set_timeout)
@@ -87,7 +87,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         for curl in self._curls:
             curl.close()
         self._multi.close()
-        super(CurlAsyncHTTPClient, self).close()
+        super().close()
 
         # Set below properties to None to reduce the reference count of current
         # instance, because those properties hold some methods of current

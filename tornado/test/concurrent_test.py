@@ -102,7 +102,7 @@ class ClientTestMixin(object):
     client_class = None  # type: typing.Callable
 
     def setUp(self):
-        super(ClientTestMixin, self).setUp()  # type: ignore
+        super().setUp()  # type: ignore
         self.server = CapServer()
         sock, port = bind_unused_port()
         self.server.add_sockets([sock])
@@ -110,7 +110,7 @@ class ClientTestMixin(object):
 
     def tearDown(self):
         self.server.stop()
-        super(ClientTestMixin, self).tearDown()  # type: ignore
+        super().tearDown()  # type: ignore
 
     def test_future(self: typing.Any):
         future = self.client.capitalize("hello")

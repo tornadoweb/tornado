@@ -51,7 +51,7 @@ class HTTPTimeoutError(HTTPError):
     """
 
     def __init__(self, message: str) -> None:
-        super(HTTPTimeoutError, self).__init__(599, message=message)
+        super().__init__(599, message=message)
 
     def __str__(self) -> str:
         return self.message or "Timeout"
@@ -70,7 +70,7 @@ class HTTPStreamClosedError(HTTPError):
     """
 
     def __init__(self, message: str) -> None:
-        super(HTTPStreamClosedError, self).__init__(599, message=message)
+        super().__init__(599, message=message)
 
     def __str__(self) -> str:
         return self.message or "Stream closed"
@@ -128,7 +128,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         .. versionchanged:: 4.2
            Added the ``max_body_size`` argument.
         """
-        super(SimpleAsyncHTTPClient, self).initialize(defaults=defaults)
+        super().initialize(defaults=defaults)
         self.max_clients = max_clients
         self.queue = (
             collections.deque()
@@ -157,7 +157,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.tcp_client = TCPClient(resolver=self.resolver)
 
     def close(self) -> None:
-        super(SimpleAsyncHTTPClient, self).close()
+        super().close()
         if self.own_resolver:
             self.resolver.close()
         self.tcp_client.close()

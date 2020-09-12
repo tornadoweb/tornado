@@ -519,7 +519,7 @@ class SimpleHTTPClientTestMixin(object):
 
 class SimpleHTTPClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPTestCase):
     def setUp(self):
-        super(SimpleHTTPClientTestCase, self).setUp()
+        super().setUp()
         self.http_client = self.create_client()
 
     def create_client(self, **kwargs):
@@ -528,7 +528,7 @@ class SimpleHTTPClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPTestCase):
 
 class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
     def setUp(self):
-        super(SimpleHTTPSClientTestCase, self).setUp()
+        super().setUp()
         self.http_client = self.create_client()
 
     def create_client(self, **kwargs):
@@ -572,12 +572,12 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
 
 class CreateAsyncHTTPClientTestCase(AsyncTestCase):
     def setUp(self):
-        super(CreateAsyncHTTPClientTestCase, self).setUp()
+        super().setUp()
         self.saved = AsyncHTTPClient._save_configuration()
 
     def tearDown(self):
         AsyncHTTPClient._restore_configuration(self.saved)
-        super(CreateAsyncHTTPClientTestCase, self).tearDown()
+        super().tearDown()
 
     def test_max_clients(self):
         AsyncHTTPClient.configure(SimpleAsyncHTTPClient)
@@ -679,7 +679,7 @@ class HTTP204NoContentTestCase(AsyncHTTPTestCase):
 
 class HostnameMappingTestCase(AsyncHTTPTestCase):
     def setUp(self):
-        super(HostnameMappingTestCase, self).setUp()
+        super().setUp()
         self.http_client = SimpleAsyncHTTPClient(
             hostname_mapping={
                 "www.example.com": "127.0.0.1",
@@ -714,7 +714,7 @@ class ResolveTimeoutTestCase(AsyncHTTPTestCase):
                 # Return something valid so the test doesn't raise during cleanup.
                 return [(socket.AF_INET, ("127.0.0.1", test.get_http_port()))]
 
-        super(ResolveTimeoutTestCase, self).setUp()
+        super().setUp()
         self.http_client = SimpleAsyncHTTPClient(resolver=BadResolver())
 
     def get_app(self):

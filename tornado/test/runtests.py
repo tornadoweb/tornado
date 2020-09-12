@@ -62,10 +62,10 @@ def test_runner_factory(stderr):
     class TornadoTextTestRunner(unittest.TextTestRunner):
         def __init__(self, *args, **kwargs):
             kwargs["stream"] = stderr
-            super(TornadoTextTestRunner, self).__init__(*args, **kwargs)
+            super().__init__(*args, **kwargs)
 
         def run(self, test):
-            result = super(TornadoTextTestRunner, self).run(test)
+            result = super().run(test)
             if result.skipped:
                 skip_reasons = set(reason for (test, reason) in result.skipped)
                 self.stream.write(  # type: ignore
@@ -84,7 +84,7 @@ class LogCounter(logging.Filter):
     """Counts the number of WARNING or higher log records."""
 
     def __init__(self, *args, **kwargs):
-        super(LogCounter, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.info_count = self.warning_count = self.error_count = 0
 
     def filter(self, record):

@@ -744,7 +744,7 @@ class WSGISafeWebTest(WebTestCase):
         )
 
     def tearDown(self):
-        super(WSGISafeWebTest, self).tearDown()
+        super().tearDown()
         RequestHandler._template_loaders.clear()
 
     def get_handlers(self):
@@ -1935,7 +1935,7 @@ class UIMethodUIModuleTest(SimpleHandlerTestCase):
         )
 
     def tearDown(self):
-        super(UIMethodUIModuleTest, self).tearDown()
+        super().tearDown()
         # TODO: fix template loader caching so this isn't necessary.
         RequestHandler._template_loaders.clear()
 
@@ -2014,7 +2014,7 @@ class GetCurrentUserTest(WebTestCase):
         )
 
     def tearDown(self):
-        super(GetCurrentUserTest, self).tearDown()
+        super().tearDown()
         RequestHandler._template_loaders.clear()
 
     def get_handlers(self):
@@ -2262,7 +2262,7 @@ class StreamingRequestBodyTest(WebTestCase):
                 self.test = test
 
             def on_connection_close(self):
-                super(CloseDetectionHandler, self).on_connection_close()
+                super().on_connection_close()
                 self.test.close_future.set_result(None)
 
         return [
@@ -2734,7 +2734,7 @@ class XSRFTest(SimpleHandlerTestCase):
         return dict(xsrf_cookies=True)
 
     def setUp(self):
-        super(XSRFTest, self).setUp()
+        super().setUp()
         self.xsrf_token = self.get_token()
 
     def get_token(self, old_token=None, version=None):

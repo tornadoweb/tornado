@@ -66,7 +66,7 @@ def _failing_getaddrinfo(*args):
 @skipIfNoNetwork
 class BlockingResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
-        super(BlockingResolverTest, self).setUp()
+        super().setUp()
         self.resolver = BlockingResolver()
 
 
@@ -75,19 +75,19 @@ class BlockingResolverTest(AsyncTestCase, _ResolverTestMixin):
 # our default timeout.
 class BlockingResolverErrorTest(AsyncTestCase, _ResolverErrorTestMixin):
     def setUp(self):
-        super(BlockingResolverErrorTest, self).setUp()
+        super().setUp()
         self.resolver = BlockingResolver()
         self.real_getaddrinfo = socket.getaddrinfo
         socket.getaddrinfo = _failing_getaddrinfo
 
     def tearDown(self):
         socket.getaddrinfo = self.real_getaddrinfo
-        super(BlockingResolverErrorTest, self).tearDown()
+        super().tearDown()
 
 
 class OverrideResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
-        super(OverrideResolverTest, self).setUp()
+        super().setUp()
         mapping = {
             ("google.com", 80): ("1.2.3.4", 80),
             ("google.com", 80, socket.AF_INET): ("1.2.3.4", 80),
@@ -112,24 +112,24 @@ class OverrideResolverTest(AsyncTestCase, _ResolverTestMixin):
 @skipIfNoNetwork
 class ThreadedResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
-        super(ThreadedResolverTest, self).setUp()
+        super().setUp()
         self.resolver = ThreadedResolver()
 
     def tearDown(self):
         self.resolver.close()
-        super(ThreadedResolverTest, self).tearDown()
+        super().tearDown()
 
 
 class ThreadedResolverErrorTest(AsyncTestCase, _ResolverErrorTestMixin):
     def setUp(self):
-        super(ThreadedResolverErrorTest, self).setUp()
+        super().setUp()
         self.resolver = BlockingResolver()
         self.real_getaddrinfo = socket.getaddrinfo
         socket.getaddrinfo = _failing_getaddrinfo
 
     def tearDown(self):
         socket.getaddrinfo = self.real_getaddrinfo
-        super(ThreadedResolverErrorTest, self).tearDown()
+        super().tearDown()
 
 
 @skipIfNoNetwork
@@ -166,7 +166,7 @@ class ThreadedResolverImportTest(unittest.TestCase):
 @unittest.skipIf(sys.platform == "win32", "pycares doesn't return loopback on windows")
 class CaresResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
-        super(CaresResolverTest, self).setUp()
+        super().setUp()
         self.resolver = CaresResolver()
 
 
@@ -185,7 +185,7 @@ class CaresResolverTest(AsyncTestCase, _ResolverTestMixin):
 @unittest.skipIf(sys.platform == "win32", "twisted resolver hangs on windows")
 class TwistedResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
-        super(TwistedResolverTest, self).setUp()
+        super().setUp()
         self.resolver = TwistedResolver()
 
 

@@ -535,7 +535,7 @@ class TestIOLoopFutures(AsyncTestCase):
         class MyExecutor(futures.ThreadPoolExecutor):
             def submit(self, func, *args):
                 count[0] += 1
-                return super(MyExecutor, self).submit(func, *args)
+                return super().submit(func, *args)
 
         event = threading.Event()
 

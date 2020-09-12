@@ -47,7 +47,7 @@ class ProcessTest(unittest.TestCase):
             os._exit(1)
         # In the surviving process, clear the alarm we set earlier
         signal.alarm(0)
-        super(ProcessTest, self).tearDown()
+        super().tearDown()
 
     def test_multi_process(self):
         # This test doesn't work on twisted because we use the global

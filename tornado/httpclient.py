@@ -717,7 +717,7 @@ class HTTPClientError(Exception):
         self.code = code
         self.message = message or httputil.responses.get(code, "Unknown")
         self.response = response
-        super(HTTPClientError, self).__init__(code, message, response)
+        super().__init__(code, message, response)
 
     def __str__(self) -> str:
         return "HTTP %d: %s" % (self.code, self.message)

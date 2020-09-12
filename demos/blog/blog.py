@@ -77,7 +77,7 @@ class Application(tornado.web.Application):
             login_url="/auth/login",
             debug=True,
         )
-        super(Application, self).__init__(handlers, **settings)
+        super().__init__(handlers, **settings)
 
 
 class BaseHandler(tornado.web.RequestHandler):

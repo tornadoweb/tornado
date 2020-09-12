@@ -115,7 +115,7 @@ SecondHandler = _get_named_handler("second_handler")
 
 class CustomRouter(ReversibleRouter):
     def __init__(self):
-        super(CustomRouter, self).__init__()
+        super().__init__()
         self.routes = {}  # type: typing.Dict[str, typing.Any]
 
     def add_routes(self, routes):

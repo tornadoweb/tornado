@@ -111,7 +111,7 @@ class Condition(_TimeoutGarbageCollector):
     """
 
     def __init__(self) -> None:
-        super(Condition, self).__init__()
+        super().__init__()
         self.io_loop = ioloop.IOLoop.current()
 
     def __repr__(self) -> str:
@@ -380,14 +380,14 @@ class Semaphore(_TimeoutGarbageCollector):
     """
 
     def __init__(self, value: int = 1) -> None:
-        super(Semaphore, self).__init__()
+        super().__init__()
         if value < 0:
             raise ValueError("semaphore initial value must be >= 0")
 
         self._value = value
 
     def __repr__(self) -> str:
-        res = super(Semaphore, self).__repr__()
+        res = super().__repr__()
         extra = (
             "locked" if self._value == 0 else "unlocked,value:{0}".format(self._value)
         )
@@ -473,14 +473,14 @@ class BoundedSemaphore(Semaphore):
     """
 
     def __init__(self, value: int = 1) -> None:
-        super(BoundedSemaphore, self).__init__(value=value)
+        super().__init__(value=value)
         self._initial_value = value
 
     def release(self) -> None:
         """Increment the counter and wake one waiter."""
         if self._value >= self._initial_value:
             raise ValueError("Semaphore released too many times")
-        super(BoundedSemaphore, self).release()
+        super().release()
 
 
 class Lock(object):
