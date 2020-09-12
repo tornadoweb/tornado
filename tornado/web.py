@@ -1943,9 +1943,7 @@ class _ApplicationRouter(ReversibleRuleRouter):
                 request, target, **target_params
             )
 
-        return super().get_target_delegate(
-            target, request, **target_params
-        )
+        return super().get_target_delegate(target, request, **target_params)
 
 
 class Application(ReversibleRouter):
@@ -2418,9 +2416,7 @@ class MissingArgumentError(HTTPError):
     """
 
     def __init__(self, arg_name: str) -> None:
-        super().__init__(
-            400, "Missing argument %s" % arg_name
-        )
+        super().__init__(400, "Missing argument %s" % arg_name)
         self.arg_name = arg_name
 
 
