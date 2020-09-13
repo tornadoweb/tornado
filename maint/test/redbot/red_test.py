@@ -248,7 +248,7 @@ class GzipHTTPTest(AsyncHTTPTestCase, TestMixin):
         return Application(self.get_handlers(), gzip=True, **self.get_app_kwargs())
 
     def get_allowed_errors(self):
-        return super(GzipHTTPTest, self).get_allowed_errors() + [
+        return super().get_allowed_errors() + [
             # TODO: The Etag is supposed to change when Content-Encoding is
             # used.  This should be fixed, but it's difficult to do with the
             # way GZipContentEncoding fits into the pipeline, and in practice

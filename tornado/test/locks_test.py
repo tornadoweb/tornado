@@ -22,7 +22,7 @@ from tornado.testing import gen_test, AsyncTestCase
 
 class ConditionTest(AsyncTestCase):
     def setUp(self):
-        super(ConditionTest, self).setUp()
+        super().setUp()
         self.history = []  # type: typing.List[typing.Union[int, str]]
 
     def record_done(self, future, key):

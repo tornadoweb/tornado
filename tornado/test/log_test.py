@@ -131,7 +131,7 @@ class UnicodeLogFormatterTest(LogFormatterTest):
 
 class EnablePrettyLoggingTest(unittest.TestCase):
     def setUp(self):
-        super(EnablePrettyLoggingTest, self).setUp()
+        super().setUp()
         self.options = OptionParser()
         define_logging_options(self.options)
         self.logger = logging.Logger("tornado.test.log_test.EnablePrettyLoggingTest")

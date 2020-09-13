@@ -465,7 +465,7 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
         return Application([("/echo", EchoHandler)])
 
     def setUp(self):
-        super(HTTPServerRawTest, self).setUp()
+        super().setUp()
         self.stream = IOStream(socket.socket())
         self.io_loop.run_sync(
             lambda: self.stream.connect(("127.0.0.1", self.get_http_port()))
@@ -473,7 +473,7 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
 
     def tearDown(self):
         self.stream.close()
-        super(HTTPServerRawTest, self).tearDown()
+        super().tearDown()
 
     def test_empty_request(self):
         self.stream.close()
@@ -675,7 +675,7 @@ class SSLXHeaderTest(AsyncHTTPSTestCase, HandlerBaseTestCase):
         return Application([("/", XHeaderTest.Handler)])
 
     def get_httpserver_options(self):
-        output = super(SSLXHeaderTest, self).get_httpserver_options()
+        output = super().get_httpserver_options()
         output["xheaders"] = True
         return output
 
@@ -721,7 +721,7 @@ class UnixSocketTest(AsyncTestCase):
     """
 
     def setUp(self):
-        super(UnixSocketTest, self).setUp()
+        super().setUp()
         self.tmpdir = tempfile.mkdtemp()
         self.sockfile = os.path.join(self.tmpdir, "test.sock")
         sock = netutil.bind_unix_socket(self.sockfile)
@@ -736,7 +736,7 @@ class UnixSocketTest(AsyncTestCase):
         self.io_loop.run_sync(self.server.close_all_connections)
         self.server.stop()
         shutil.rmtree(self.tmpdir)
-        super(UnixSocketTest, self).tearDown()
+        super().tearDown()
 
     @gen_test
     def test_unix_socket(self):
@@ -815,7 +815,7 @@ class KeepAliveTest(AsyncHTTPTestCase):
         )
 
     def setUp(self):
-        super(KeepAliveTest, self).setUp()
+        super().setUp()
         self.http_version = b"HTTP/1.1"
 
     def tearDown(self):
@@ -826,7 +826,7 @@ class KeepAliveTest(AsyncHTTPTestCase):
 
         if hasattr(self, "stream"):
             self.stream.close()
-        super(KeepAliveTest, self).tearDown()
+        super().tearDown()
 
     # The next few methods are a crude manual http client
     @gen.coroutine
@@ -1140,11 +1140,11 @@ class IdleTimeoutTest(AsyncHTTPTestCase):
         return dict(idle_connection_timeout=0.1)
 
     def setUp(self):
-        super(IdleTimeoutTest, self).setUp()
+        super().setUp()
         self.streams = []  # type: List[IOStream]
 
     def tearDown(self):
-        super(IdleTimeoutTest, self).tearDown()
+        super().tearDown()
         for stream in self.streams:
             stream.close()
 

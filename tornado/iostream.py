@@ -96,7 +96,7 @@ class StreamClosedError(IOError):
     """
 
     def __init__(self, real_error: Optional[BaseException] = None) -> None:
-        super(StreamClosedError, self).__init__("Stream is closed")
+        super().__init__("Stream is closed")
         self.real_error = real_error
 
 
@@ -1122,7 +1122,7 @@ class IOStream(BaseIOStream):
     def __init__(self, socket: socket.socket, *args: Any, **kwargs: Any) -> None:
         self.socket = socket
         self.socket.setblocking(False)
-        super(IOStream, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def fileno(self) -> Union[int, ioloop._Selectable]:
         return self.socket
@@ -1360,7 +1360,7 @@ class SSLIOStream(IOStream):
         for `ssl.wrap_socket`
         """
         self._ssl_options = kwargs.pop("ssl_options", _client_ssl_defaults)
-        super(SSLIOStream, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._ssl_accepting = True
         self._handshake_reading = False
         self._handshake_writing = False
@@ -1378,10 +1378,10 @@ class SSLIOStream(IOStream):
             self._add_io_state(self.io_loop.WRITE)
 
     def reading(self) -> bool:
-        return self._handshake_reading or super(SSLIOStream, self).reading()
+        return self._handshake_reading or super().reading()
 
     def writing(self) -> bool:
-        return self._handshake_writing or super(SSLIOStream, self).writing()
+        return self._handshake_writing or super().writing()
 
     def _do_ssl_handshake(self) -> None:
         # Based on code from test_ssl.py in the python stdlib
@@ -1477,13 +1477,13 @@ class SSLIOStream(IOStream):
         if self._ssl_accepting:
             self._do_ssl_handshake()
             return
-        super(SSLIOStream, self)._handle_read()
+        super()._handle_read()
 
     def _handle_write(self) -> None:
         if self._ssl_accepting:
             self._do_ssl_handshake()
             return
-        super(SSLIOStream, self)._handle_write()
+        super()._handle_write()
 
     def connect(
         self, address: Tuple, server_hostname: Optional[str] = None
@@ -1500,13 +1500,13 @@ class SSLIOStream(IOStream):
         # (There's a test for it, but I think in practice users
         # either wait for the connect before performing a write or
         # they don't care about the connect Future at all)
-        fut = super(SSLIOStream, self).connect(address)
+        fut = super().connect(address)
         fut.add_done_callback(lambda f: f.exception())
         return self.wait_for_handshake()
 
     def _handle_connect(self) -> None:
         # Call the superclass method to check for errors.
-        super(SSLIOStream, self)._handle_connect()
+        super()._handle_connect()
         if self.closed():
             return
         # When the connection is complete, wrap the socket for SSL
@@ -1605,7 +1605,7 @@ class SSLIOStream(IOStream):
     def _is_connreset(self, e: BaseException) -> bool:
         if isinstance(e, ssl.SSLError) and e.args[0] == ssl.SSL_ERROR_EOF:
             return True
-        return super(SSLIOStream, self)._is_connreset(e)
+        return super()._is_connreset(e)
 
 
 class PipeIOStream(BaseIOStream):
@@ -1623,7 +1623,7 @@ class PipeIOStream(BaseIOStream):
         self.fd = fd
         self._fio = io.FileIO(self.fd, "r+")
         os.set_blocking(fd, False)
-        super(PipeIOStream, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def fileno(self) -> int:
         return self.fd

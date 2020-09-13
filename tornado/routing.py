@@ -411,10 +411,10 @@ class ReversibleRuleRouter(ReversibleRouter, RuleRouter):
 
     def __init__(self, rules: Optional[_RuleList] = None) -> None:
         self.named_rules = {}  # type: Dict[str, Any]
-        super(ReversibleRuleRouter, self).__init__(rules)
+        super().__init__(rules)
 
     def process_rule(self, rule: "Rule") -> "Rule":
-        rule = super(ReversibleRuleRouter, self).process_rule(rule)
+        rule = super().process_rule(rule)
 
         if rule.name:
             if rule.name in self.named_rules:
@@ -679,7 +679,7 @@ class URLSpec(Rule):
 
         """
         matcher = PathMatches(pattern)
-        super(URLSpec, self).__init__(matcher, handler, kwargs, name)
+        super().__init__(matcher, handler, kwargs, name)
 
         self.regex = matcher.regex
         self.handler_class = self.target

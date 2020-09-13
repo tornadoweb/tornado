@@ -455,7 +455,7 @@ class Loader(BaseLoader):
     """
 
     def __init__(self, root_directory: str, **kwargs: Any) -> None:
-        super(Loader, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.root = os.path.abspath(root_directory)
 
     def resolve_path(self, name: str, parent_path: Optional[str] = None) -> str:
@@ -483,7 +483,7 @@ class DictLoader(BaseLoader):
     """A template loader that loads from a dictionary."""
 
     def __init__(self, dict: Dict[str, str], **kwargs: Any) -> None:
-        super(DictLoader, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.dict = dict
 
     def resolve_path(self, name: str, parent_path: Optional[str] = None) -> str:
@@ -677,7 +677,7 @@ class _Expression(_Node):
 
 class _Module(_Expression):
     def __init__(self, expression: str, line: int) -> None:
-        super(_Module, self).__init__("_tt_modules." + expression, line, raw=True)
+        super().__init__("_tt_modules." + expression, line, raw=True)
 
 
 class _Text(_Node):

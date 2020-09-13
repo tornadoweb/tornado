@@ -31,7 +31,7 @@ class RaiseExcInfoTest(unittest.TestCase):
         # doesn't have a "copy constructor"
         class TwoArgException(Exception):
             def __init__(self, a, b):
-                super(TwoArgException, self).__init__()
+                super().__init__()
                 self.a, self.b = a, b
 
         try:

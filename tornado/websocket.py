@@ -221,7 +221,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         request: httputil.HTTPServerRequest,
         **kwargs: Any
     ) -> None:
-        super(WebSocketHandler, self).__init__(application, request, **kwargs)
+        super().__init__(application, request, **kwargs)
         self.ws_connection = None  # type: Optional[WebSocketProtocol]
         self.close_code = None  # type: Optional[int]
         self.close_reason = None  # type: Optional[str]
@@ -582,11 +582,11 @@ class WebSocketHandler(tornado.web.RequestHandler):
         # connection (if it was established in the first place,
         # indicated by status code 101).
         if self.get_status() != 101 or self._on_close_called:
-            super(WebSocketHandler, self)._break_cycles()
+            super()._break_cycles()
 
     def send_error(self, *args: Any, **kwargs: Any) -> None:
         if self.stream is None:
-            super(WebSocketHandler, self).send_error(*args, **kwargs)
+            super().send_error(*args, **kwargs)
         else:
             # If we get an uncaught exception during the handshake,
             # we have no choice but to abruptly close the connection.
@@ -1410,7 +1410,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             ] = "permessage-deflate; client_max_window_bits"
 
         self.tcp_client = TCPClient()
-        super(WebSocketClientConnection, self).__init__(
+        super().__init__(
             None,
             request,
             lambda: None,
@@ -1442,7 +1442,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             self.connect_future.set_exception(StreamClosedError())
         self._on_message(None)
         self.tcp_client.close()
-        super(WebSocketClientConnection, self).on_connection_close()
+        super().on_connection_close()
 
     def on_ws_connection_close(
         self, close_code: Optional[int] = None, close_reason: Optional[str] = None
@@ -1467,9 +1467,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
     ) -> None:
         assert isinstance(start_line, httputil.ResponseStartLine)
         if start_line.code != 101:
-            await super(WebSocketClientConnection, self).headers_received(
-                start_line, headers
-            )
+            await super().headers_received(start_line, headers)
             return
 
         if self._timeout is not None:

@@ -83,7 +83,7 @@ class CustomFailReasonHandler(RequestHandler):
 @unittest.skipIf(pycurl is None, "pycurl module not present")
 class CurlHTTPClientTestCase(AsyncHTTPTestCase):
     def setUp(self):
-        super(CurlHTTPClientTestCase, self).setUp()
+        super().setUp()
         self.http_client = self.create_client()
 
     def get_app(self):

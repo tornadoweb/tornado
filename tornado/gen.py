@@ -288,7 +288,7 @@ class Return(Exception):
     """
 
     def __init__(self, value: Any = None) -> None:
-        super(Return, self).__init__()
+        super().__init__()
         self.value = value
         # Cython recognizes subclasses of StopIteration with a .args tuple.
         self.args = (value,)

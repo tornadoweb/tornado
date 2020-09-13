@@ -161,7 +161,7 @@ class AsyncTestCase(unittest.TestCase):
     """
 
     def __init__(self, methodName: str = "runTest") -> None:
-        super(AsyncTestCase, self).__init__(methodName)
+        super().__init__(methodName)
         self.__stopped = False
         self.__running = False
         self.__failure = None  # type: Optional[_ExcInfoTuple]
@@ -178,7 +178,7 @@ class AsyncTestCase(unittest.TestCase):
         self._test_generator = None  # type: Optional[Union[Generator, Coroutine]]
 
     def setUp(self) -> None:
-        super(AsyncTestCase, self).setUp()
+        super().setUp()
         self.io_loop = self.get_new_ioloop()
         self.io_loop.make_current()
 
@@ -222,7 +222,7 @@ class AsyncTestCase(unittest.TestCase):
             # in the same process with autoreload (because curl does not
             # set FD_CLOEXEC on its file descriptors)
             self.io_loop.close(all_fds=True)
-        super(AsyncTestCase, self).tearDown()
+        super().tearDown()
         # In case an exception escaped or the StackContext caught an exception
         # when there wasn't a wait() to re-raise it, do so here.
         # This is our last chance to raise an exception in a way that the
@@ -263,7 +263,7 @@ class AsyncTestCase(unittest.TestCase):
     def run(
         self, result: Optional[unittest.TestResult] = None
     ) -> Optional[unittest.TestResult]:
-        ret = super(AsyncTestCase, self).run(result)
+        ret = super().run(result)
         # As a last resort, if an exception escaped super.run() and wasn't
         # re-raised in tearDown, raise it here.  This will cause the
         # unittest run to fail messily, but that's better than silently
@@ -379,7 +379,7 @@ class AsyncHTTPTestCase(AsyncTestCase):
     """
 
     def setUp(self) -> None:
-        super(AsyncHTTPTestCase, self).setUp()
+        super().setUp()
         sock, port = bind_unused_port()
         self.__port = port
 
@@ -473,7 +473,7 @@ class AsyncHTTPTestCase(AsyncTestCase):
         self.http_client.close()
         del self.http_server
         del self._app
-        super(AsyncHTTPTestCase, self).tearDown()
+        super().tearDown()
 
 
 class AsyncHTTPSTestCase(AsyncHTTPTestCase):

@@ -456,7 +456,7 @@ class BlockingResolver(ExecutorResolver):
     """
 
     def initialize(self) -> None:  # type: ignore
-        super(BlockingResolver, self).initialize()
+        super().initialize()
 
 
 class ThreadedResolver(ExecutorResolver):
@@ -485,9 +485,7 @@ class ThreadedResolver(ExecutorResolver):
 
     def initialize(self, num_threads: int = 10) -> None:  # type: ignore
         threadpool = ThreadedResolver._create_threadpool(num_threads)
-        super(ThreadedResolver, self).initialize(
-            executor=threadpool, close_executor=False
-        )
+        super().initialize(executor=threadpool, close_executor=False)
 
     @classmethod
     def _create_threadpool(

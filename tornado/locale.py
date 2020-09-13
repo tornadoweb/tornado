@@ -481,7 +481,7 @@ class CSVLocale(Locale):
 
     def __init__(self, code: str, translations: Dict[str, Dict[str, str]]) -> None:
         self.translations = translations
-        super(CSVLocale, self).__init__(code)
+        super().__init__(code)
 
     def translate(
         self,
@@ -520,7 +520,7 @@ class GettextLocale(Locale):
         self.gettext = translations.gettext
         # self.gettext must exist before __init__ is called, since it
         # calls into self.translate
-        super(GettextLocale, self).__init__(code)
+        super().__init__(code)
 
     def translate(
         self,

@@ -285,10 +285,10 @@ class GenCoroutineTest(AsyncTestCase):
         # so we need explicit checks here to make sure the tests run all
         # the way through.
         self.finished = False
-        super(GenCoroutineTest, self).setUp()
+        super().setUp()
 
     def tearDown(self):
-        super(GenCoroutineTest, self).tearDown()
+        super().tearDown()
         assert self.finished
 
     def test_attributes(self):

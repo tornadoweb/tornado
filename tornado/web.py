@@ -206,7 +206,7 @@ class RequestHandler(object):
         request: httputil.HTTPServerRequest,
         **kwargs: Any
     ) -> None:
-        super(RequestHandler, self).__init__()
+        super().__init__()
 
         self.application = application
         self.request = request
@@ -1923,10 +1923,10 @@ class _ApplicationRouter(ReversibleRuleRouter):
     ) -> None:
         assert isinstance(application, Application)
         self.application = application
-        super(_ApplicationRouter, self).__init__(rules)
+        super().__init__(rules)
 
     def process_rule(self, rule: Rule) -> Rule:
-        rule = super(_ApplicationRouter, self).process_rule(rule)
+        rule = super().process_rule(rule)
 
         if isinstance(rule.target, (list, tuple)):
             rule.target = _ApplicationRouter(
@@ -1943,9 +1943,7 @@ class _ApplicationRouter(ReversibleRuleRouter):
                 request, target, **target_params
             )
 
-        return super(_ApplicationRouter, self).get_target_delegate(
-            target, request, **target_params
-        )
+        return super().get_target_delegate(target, request, **target_params)
 
 
 class Application(ReversibleRouter):
@@ -2418,9 +2416,7 @@ class MissingArgumentError(HTTPError):
     """
 
     def __init__(self, arg_name: str) -> None:
-        super(MissingArgumentError, self).__init__(
-            400, "Missing argument %s" % arg_name
-        )
+        super().__init__(400, "Missing argument %s" % arg_name)
         self.arg_name = arg_name
 
 
@@ -3273,7 +3269,7 @@ class TemplateModule(UIModule):
     """
 
     def __init__(self, handler: RequestHandler) -> None:
-        super(TemplateModule, self).__init__(handler)
+        super().__init__(handler)
         # keep resources in both a list and a dict to preserve order
         self._resource_list = []  # type: List[Dict[str, Any]]
         self._resource_dict = {}  # type: Dict[str, Dict[str, Any]]

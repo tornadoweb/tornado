@@ -86,7 +86,7 @@ class LeakTest(AsyncTestCase):
 
 class AsyncHTTPTestCaseTest(AsyncHTTPTestCase):
     def setUp(self):
-        super(AsyncHTTPTestCaseTest, self).setUp()
+        super().setUp()
         # Bind a second port.
         sock, port = bind_unused_port()
         app = Application()
@@ -113,7 +113,7 @@ class AsyncHTTPTestCaseTest(AsyncHTTPTestCase):
 
     def tearDown(self):
         self.second_server.stop()
-        super(AsyncHTTPTestCaseTest, self).tearDown()
+        super().tearDown()
 
 
 class AsyncTestCaseWrapperTest(unittest.TestCase):
@@ -221,12 +221,12 @@ class AsyncHTTPTestCaseSetUpTearDownTest(unittest.TestCase):
 
 class GenTest(AsyncTestCase):
     def setUp(self):
-        super(GenTest, self).setUp()
+        super().setUp()
         self.finished = False
 
     def tearDown(self):
         self.assertTrue(self.finished)
-        super(GenTest, self).tearDown()
+        super().tearDown()
 
     @gen_test
     def test_sync(self):
@@ -336,10 +336,10 @@ class GetNewIOLoopTest(AsyncTestCase):
         self.orig_loop = asyncio.get_event_loop()
         self.new_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.new_loop)
-        super(GetNewIOLoopTest, self).setUp()
+        super().setUp()
 
     def tearDown(self):
-        super(GetNewIOLoopTest, self).tearDown()
+        super().tearDown()
         # AsyncTestCase must not affect the existing asyncio loop.
         self.assertFalse(asyncio.get_event_loop().is_closed())
         asyncio.set_event_loop(self.orig_loop)

@@ -133,7 +133,7 @@ class PathArgsHandler(TestWebSocketHandler):
 
 class CoroutineOnMessageHandler(TestWebSocketHandler):
     def initialize(self, **kwargs):
-        super(CoroutineOnMessageHandler, self).initialize(**kwargs)
+        super().initialize(**kwargs)
         self.sleeping = 0
 
     @gen.coroutine
@@ -153,7 +153,7 @@ class RenderMessageHandler(TestWebSocketHandler):
 
 class SubprotocolHandler(TestWebSocketHandler):
     def initialize(self, **kwargs):
-        super(SubprotocolHandler, self).initialize(**kwargs)
+        super().initialize(**kwargs)
         self.select_subprotocol_called = False
 
     def select_subprotocol(self, subprotocols):
@@ -172,7 +172,7 @@ class SubprotocolHandler(TestWebSocketHandler):
 
 class OpenCoroutineHandler(TestWebSocketHandler):
     def initialize(self, test, **kwargs):
-        super(OpenCoroutineHandler, self).initialize(**kwargs)
+        super().initialize(**kwargs)
         self.test = test
         self.open_finished = False
 
@@ -275,7 +275,7 @@ class WebSocketTest(WebSocketBaseTestCase):
         return SimpleAsyncHTTPClient()
 
     def tearDown(self):
-        super(WebSocketTest, self).tearDown()
+        super().tearDown()
         RequestHandler._template_loaders.clear()
 
     def test_http_request(self):
