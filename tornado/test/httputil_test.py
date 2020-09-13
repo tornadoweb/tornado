@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from tornado.httputil import (
     url_concat,
     parse_multipart_form_data,
