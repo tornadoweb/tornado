@@ -91,7 +91,7 @@ from tornado.log import app_log
 from tornado.util import TimeoutError
 
 import typing
-from typing import Union, Any, Callable, List, Type, Tuple, Awaitable, Dict
+from typing import Union, Any, Callable, List, Type, Tuple, Awaitable, Dict, overload
 
 if typing.TYPE_CHECKING:
     from typing import Sequence, Deque, Optional, Set, Iterable  # noqa: F401
@@ -153,8 +153,20 @@ def _create_future() -> Future:
     return future
 
 
+@overload
 def coroutine(
     func: Callable[..., "Generator[Any, Any, _T]"]
+) -> Callable[..., "Future[_T]"]:
+    ...
+
+
+@overload
+def coroutine(func: Callable[..., _T]) -> Callable[..., "Future[_T]"]:
+    ...
+
+
+def coroutine(
+    func: Union[Callable[..., "Generator[Any, Any, _T]"], Callable[..., _T]]
 ) -> Callable[..., "Future[_T]"]:
     """Decorator for asynchronous generators.
 
