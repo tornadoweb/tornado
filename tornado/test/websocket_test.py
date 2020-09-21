@@ -12,7 +12,7 @@ from tornado.log import gen_log, app_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
-from tornado.web import Application, RequestHandler
+from tornado.web import Application, RequestHandler, RedirectHandler
 
 try:
     import tornado.websocket  # noqa: F401
@@ -220,6 +220,8 @@ class WebSocketTest(WebSocketBaseTestCase):
         return Application(
             [
                 ("/echo", EchoHandler, dict(close_future=self.close_future)),
+                ("/redirect", RedirectHandler, dict(url="/echo")),
+                ("/double_redirect", RedirectHandler, dict(url="/redirect")),
                 ("/non_ws", NonWebSocketHandler),
                 ("/header", HeaderHandler, dict(close_future=self.close_future)),
                 (
@@ -364,6 +366,20 @@ class WebSocketTest(WebSocketBaseTestCase):
     def test_websocket_http_success(self):
         with self.assertRaises(WebSocketError):
             yield self.ws_connect("/non_ws")
+
+    @gen_test
+    def test_websocket_redirect(self):
+        conn = yield self.ws_connect("/redirect")
+        yield conn.write_message("hello redirect")
+        msg = yield conn.read_message()
+        self.assertEqual("hello redirect", msg)
+
+    @gen_test
+    def test_websocket_double_redirect(self):
+        conn = yield self.ws_connect("/double_redirect")
+        yield conn.write_message("hello redirect")
+        msg = yield conn.read_message()
+        self.assertEqual("hello redirect", msg)
 
     @gen_test
     def test_websocket_network_fail(self):

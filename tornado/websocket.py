@@ -19,16 +19,21 @@ the protocol (known as "draft 76") and are not compatible with this module.
 import abc
 import asyncio
 import base64
+import copy
 import hashlib
 import os
 import sys
 import struct
 import tornado.escape
 import tornado.web
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 import zlib
 
-from tornado.concurrent import Future, future_set_result_unless_cancelled
+from tornado.concurrent import (
+    Future,
+    future_set_result_unless_cancelled,
+    future_set_exception_unless_cancelled,
+)
 from tornado.escape import utf8, native_str, to_unicode
 from tornado import gen, httpclient, httputil
 from tornado.ioloop import IOLoop, PeriodicCallback
@@ -110,6 +115,23 @@ class WebSocketClosedError(WebSocketError):
     """Raised by operations on a closed connection.
 
     .. versionadded:: 3.2
+    """
+
+    pass
+
+
+class WebSocketRedirect(WebSocketError):
+    """Raised when code is 302/303 in received headers
+       while doing websocket handshake
+    """
+
+    def __init__(self, target_location: str) -> None:
+        self.target_location = target_location
+
+
+class RequestRedirectError(WebSocketError):
+    """Raised when request's max_redirects <= 0
+       or follow_redirect is False
     """
 
     pass
@@ -1466,6 +1488,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         headers: httputil.HTTPHeaders,
     ) -> None:
         assert isinstance(start_line, httputil.ResponseStartLine)
+
         if start_line.code != 101:
             await super().headers_received(start_line, headers)
             return
@@ -1474,7 +1497,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             self.io_loop.remove_timeout(self._timeout)
             self._timeout = None
 
-        self.headers = headers
+        self.headers = headers  # type: httputil.HTTPHeaders
         self.protocol = self.get_websocket_protocol()
         self.protocol._process_server_headers(self.key, self.headers)
         self.protocol.stream = self.connection.detach()
@@ -1489,6 +1512,19 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         self.final_callback = None  # type: ignore
 
         future_set_result_unless_cancelled(self.connect_future, self)
+
+    def finish(self) -> None:
+        if self._should_follow_redirect():
+            redirect_location = self.headers.get("Location", None)
+            if redirect_location:
+                self.connect_future.set_exception(WebSocketRedirect(redirect_location))
+            else:
+                raise ValueError("redirect location is None")
+            # close connection
+            self.on_connection_close()
+            self.connection.close()
+        else:
+            super().finish()
 
     def write_message(
         self, message: Union[str, bytes], binary: bool = False
@@ -1649,6 +1685,103 @@ def websocket_connect(
         httpclient.HTTPRequest,
         httpclient._RequestProxy(request, httpclient.HTTPRequest._DEFAULTS),
     )
+
+    def do_connect(
+        request: httpclient.HTTPRequest
+    ) -> "Future[WebSocketClientConnection]":
+        conn_future = _websocket_connect(
+            request,
+            callback,
+            connect_timeout,
+            on_message_callback,
+            compression_options,
+            ping_interval,
+            ping_timeout,
+            max_message_size,
+            subprotocols,
+        )
+        return conn_future
+
+    def wrap_conn_future_callback(
+        conn_future: "Future[WebSocketClientConnection]"
+    ) -> None:
+        try:
+            conn = conn_future.result()
+        except WebSocketRedirect as e:
+            try:
+                new_request = redirect_request(request, e.target_location)
+            except RequestRedirectError as e:
+                future_set_exception_unless_cancelled(wrapped_conn_future, e)
+            else:
+                conn_future = do_connect(new_request)
+                IOLoop.current().add_future(conn_future, wrap_conn_future_callback)
+        except Exception as e:
+            future_set_exception_unless_cancelled(wrapped_conn_future, e)
+        else:
+            future_set_result_unless_cancelled(wrapped_conn_future, conn)
+
+    wrapped_conn_future = Future()  # type: Future[WebSocketClientConnection]
+    conn_future = do_connect(request)
+    IOLoop.current().add_future(conn_future, wrap_conn_future_callback)
+
+    return wrapped_conn_future
+
+
+def redirect_request(
+    request: httpclient.HTTPRequest, target_location: str
+) -> httpclient.HTTPRequest:
+    request_proxy = cast(httpclient._RequestProxy, request)
+
+    if not request_proxy.follow_redirects:
+        raise RequestRedirectError("follow_redirects is not True")
+
+    if request_proxy.max_redirects is None or request_proxy.max_redirects <= 0:
+        raise RequestRedirectError("max_redirects occurred, no more redirect")
+
+    original_request = getattr(request, "original_request", request)
+    new_request = copy.copy(request_proxy.request)
+    new_request.url = urljoin(request_proxy.request.url, target_location)
+
+    new_request.max_redirects = request_proxy.max_redirects - 1
+    del new_request.headers["Host"]
+    # http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.3.4
+    # Client SHOULD make a GET request after a 303.
+    # According to the spec, 302 should be followed by the same
+    # method as the original request, but in practice browsers
+    # treat 302 the same as 303, and many servers use 302 for
+    # compatibility with pre-HTTP/1.1 user agents which don't
+    # understand the 303 status.
+    new_request.method = "GET"
+    new_request.body = cast(bytes, None)
+    for h in [
+        "Content-Length",
+        "Content-Type",
+        "Content-Encoding",
+        "Transfer-Encoding",
+    ]:
+        try:
+            del new_request.headers[h]
+        except KeyError:
+            pass
+    new_request.original_request = original_request  # type: ignore
+    new_request = cast(
+        httpclient.HTTPRequest,
+        httpclient._RequestProxy(new_request, httpclient.HTTPRequest._DEFAULTS),
+    )
+    return new_request
+
+
+def _websocket_connect(
+    request: httpclient.HTTPRequest,
+    callback: Callable[["Future[WebSocketClientConnection]"], None] = None,
+    connect_timeout: float = None,
+    on_message_callback: Callable[[Union[None, str, bytes]], None] = None,
+    compression_options: Dict[str, Any] = None,
+    ping_interval: float = None,
+    ping_timeout: float = None,
+    max_message_size: int = _default_max_message_size,
+    subprotocols: List[str] = None,
+) -> "Future[WebSocketClientConnection]":
     conn = WebSocketClientConnection(
         request,
         on_message_callback=on_message_callback,
