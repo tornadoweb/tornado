@@ -634,11 +634,12 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             # redirect, the request method should be preserved.
             # However, browsers implemented this by changing the
             # method to GET, and the behavior stuck. 303 redirects
-            # always specified this POST-to-GET behavior (arguably 303
-            # redirects should change *all* requests to GET, but
-            # libcurl only does this for POST so we follow their
-            # example).
-            if self.code in (301, 302, 303) and self.request.method == "POST":
+            # always specified this POST-to-GET behavior, arguably
+            # for *all* methods, but libcurl < 7.70 only does this
+            # for POST, while libcurl >= 7.70 does it for other methods.
+            if (self.code == 303 and self.request.method != "HEAD") or (
+                self.code in (301, 302) and self.request.method == "POST"
+            ):
                 new_request.method = "GET"
                 new_request.body = None
                 for h in [
