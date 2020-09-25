@@ -1409,6 +1409,9 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
                 "Sec-WebSocket-Extensions"
             ] = "permessage-deflate; client_max_window_bits"
 
+        # Websocket connection is currently unable to follow redirects
+        request.follow_redirects = False
+
         self.tcp_client = TCPClient()
         super().__init__(
             None,

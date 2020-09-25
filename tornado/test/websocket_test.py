@@ -111,6 +111,11 @@ class NonWebSocketHandler(RequestHandler):
         self.write("ok")
 
 
+class RedirectHandler(RequestHandler):
+    def get(self):
+        self.redirect("/echo")
+
+
 class CloseReasonHandler(TestWebSocketHandler):
     def open(self):
         self.on_close_called = False
@@ -221,6 +226,7 @@ class WebSocketTest(WebSocketBaseTestCase):
             [
                 ("/echo", EchoHandler, dict(close_future=self.close_future)),
                 ("/non_ws", NonWebSocketHandler),
+                ("/redirect", RedirectHandler),
                 ("/header", HeaderHandler, dict(close_future=self.close_future)),
                 (
                     "/header_echo",
@@ -364,6 +370,11 @@ class WebSocketTest(WebSocketBaseTestCase):
     def test_websocket_http_success(self):
         with self.assertRaises(WebSocketError):
             yield self.ws_connect("/non_ws")
+
+    @gen_test
+    def test_websocket_http_redirect(self):
+        with self.assertRaises(HTTPError):
+            yield self.ws_connect("/redirect")
 
     @gen_test
     def test_websocket_network_fail(self):
