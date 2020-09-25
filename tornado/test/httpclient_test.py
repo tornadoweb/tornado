@@ -331,10 +331,14 @@ Transfer-Encoding: chunked
             resp = self.fetch(url, method="POST", body=b"")
             self.assertEqual(b"GET", resp.body)
 
-            # Other methods are left alone.
+            # Other methods are left alone, except for 303 redirect, depending on client
             for method in ["GET", "OPTIONS", "PUT", "DELETE"]:
                 resp = self.fetch(url, method=method, allow_nonstandard_methods=True)
-                self.assertEqual(utf8(method), resp.body)
+                if status in [301, 302]:
+                    self.assertEqual(utf8(method), resp.body)
+                else:
+                    self.assertIn(resp.body, [utf8(method), b"GET"])
+
             # HEAD is different so check it separately.
             resp = self.fetch(url, method="HEAD")
             self.assertEqual(200, resp.code)
