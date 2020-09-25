@@ -421,9 +421,9 @@ class HTTPRequest(object):
            supports "basic" and "digest"; ``simple_httpclient`` only supports
            "basic"
         :arg float connect_timeout: Timeout for initial connection in seconds,
-           default 20 seconds
+           default 20 seconds (0 means no timeout)
         :arg float request_timeout: Timeout for entire request in seconds,
-           default 20 seconds
+           default 20 seconds (0 means no timeout)
         :arg if_modified_since: Timestamp for ``If-Modified-Since`` header
         :type if_modified_since: `datetime` or `float`
         :arg bool follow_redirects: Should redirects be followed automatically
