@@ -46,7 +46,7 @@ jobs:
       arch: arm64
       services: docker
       env: TOX_ENV=py38-full BUILD_WHEEL=1 CIBW_BUILD=cp38-manylinux_aarch64
-    - python: pypy3.5-5.10.1
+    - python: pypy3.6-7.3.1
       # Pypy is a lot slower due to jit warmup costs, so don't run the "full"
       # test config there.
       env: TOX_ENV=pypy3
