@@ -138,6 +138,19 @@ class SetHeaderHandler(RequestHandler):
             self.set_header(k, v)
 
 
+class InvalidGzipHandler(RequestHandler):
+    def get(self):
+        # set Content-Encoding manually to avoid automatic gzip encoding
+        self.set_header("Content-Type", "text/plain")
+        self.set_header("Content-Encoding", "gzip")
+        # Triggering the potential bug seems to depend on input length.
+        # This length is taken from the bad-response example reported in
+        # https://github.com/tornadoweb/tornado/pull/2875 (uncompressed).
+        body = "".join("Hello World {}\n".format(i) for i in range(9000))[:149051]
+        body = gzip.compress(body.encode(), compresslevel=6) + b"\00"
+        self.write(body)
+
+
 # These tests end up getting run redundantly: once here with the default
 # HTTPClient implementation, and then again in each implementation's own
 # test suite.
@@ -161,6 +174,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
                 url("/all_methods", AllMethodsHandler),
                 url("/patch", PatchHandler),
                 url("/set_header", SetHeaderHandler),
+                url("/invalid_gzip", InvalidGzipHandler),
             ],
             gzip=True,
         )
@@ -418,6 +432,19 @@ Transfer-Encoding: chunked
         self.assertEqual(len(response.body), 34)
         f = gzip.GzipFile(mode="r", fileobj=response.buffer)
         self.assertEqual(f.read(), b"asdfqwer")
+
+    def test_invalid_gzip(self):
+        # test if client hangs on tricky invalid gzip
+        # curl/simple httpclient have different behavior (exception, logging)
+        with ExpectLog(
+            app_log, "(Uncaught exception|Exception in callback)", required=False
+        ):
+            try:
+                response = self.fetch("/invalid_gzip")
+                self.assertEqual(response.code, 200)
+                self.assertEqual(response.body[:14], b"Hello World 0\n")
+            except HTTPError:
+                pass  # acceptable
 
     def test_header_callback(self):
         first_line = []
