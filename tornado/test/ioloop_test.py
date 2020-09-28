@@ -694,6 +694,60 @@ class TestPeriodicCallbackMath(unittest.TestCase):
         self.assertEqual(pc.callback_time, expected_callback_time)
 
 
+class TestPeriodicCallbackAsync(AsyncTestCase):
+    def test_periodic_plain(self):
+        count = 0
+
+        def callback() -> None:
+            nonlocal count
+            count += 1
+            if count == 3:
+                self.stop()
+
+        pc = PeriodicCallback(callback, 10)
+        pc.start()
+        self.wait()
+        pc.stop()
+        self.assertEqual(count, 3)
+
+    def test_periodic_coro(self):
+        counts = [0, 0]
+        pc = None
+
+        @gen.coroutine
+        def callback() -> None:
+            counts[0] += 1
+            yield gen.sleep(0.025)
+            counts[1] += 1
+            if counts[1] == 3:
+                pc.stop()
+                self.io_loop.add_callback(self.stop)
+
+        pc = PeriodicCallback(callback, 10)
+        pc.start()
+        self.wait()
+        self.assertEqual(counts[0], 3)
+        self.assertEqual(counts[1], 3)
+
+    def test_periodic_async(self):
+        counts = [0, 0]
+        pc = None
+
+        async def callback() -> None:
+            counts[0] += 1
+            await gen.sleep(0.025)
+            counts[1] += 1
+            if counts[1] == 3:
+                pc.stop()
+                self.io_loop.add_callback(self.stop)
+
+        pc = PeriodicCallback(callback, 10)
+        pc.start()
+        self.wait()
+        self.assertEqual(counts[0], 3)
+        self.assertEqual(counts[1], 3)
+
+
 class TestIOLoopConfiguration(unittest.TestCase):
     def run_python(self, *statements):
         stmt_list = [
