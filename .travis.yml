@@ -1,5 +1,6 @@
 # https://travis-ci.org/tornadoweb/tornado
 
+os: linux
 dist: xenial
 language: python
 addons:
@@ -7,76 +8,98 @@ addons:
     packages:
       - libgnutls-dev
 
-# For a list of available versions, run
-#     aws s3 ls s3://travis-python-archives/binaries/ubuntu/16.04/x86_64/
+env:
+  global:
+    - CIBW_BUILD="cp3[5678]*"
+    - CIBW_TEST_COMMAND="python3 -m tornado.test"
+    - CIBW_TEST_COMMAND_WINDOWS="python -m tornado.test --fail-if-logs=false"
+
+# Before starting the full build matrix, run one test configuration
+# and the linter (the `black` linter is especially likely to catch
+# first-time contributors).
+stages:
+  - quick
+  - test
+
 jobs:
   fast_finish: true
   include:
+    # We have two and a half types of builds: Wheel builds run on all supported
+    # platforms and run the basic test suite for all supported python versions.
+    # Sdist builds (the "and a half") just build an sdist and run some basic
+    # validation. Both of these upload their artifacts to pypi if there is a
+    # tag on the build and the key is available.
+    #
+    # Tox builds run a more comprehensive test suite with more configurations
+    # and dependencies (getting all these dependencies installed for wheel
+    # builds is a pain, and slows things down because we don't use as much
+    # parallelism there. We could parallelize wheel builds more but we're also
+    # amortizing download costs across the different builds). The wheel builds
+    # take longer, so we run them before the tox builds for better bin packing
+    # in our allotted concurrency.
+    - python: '3.8'
+      arch: amd64
+      services: docker
+      env: BUILD_WHEEL=1
+    - python: '3.8'
+      arch: arm64
+      services: docker
+      env: BUILD_WHEEL=1  ASYNC_TEST_TIMEOUT=15
+    - os: windows
+      env: PATH=/c/Python38:/c/Python38/Scripts:$PATH BUILD_WHEEL=1
+      language: shell
+      before_install:
+        - choco install python --version 3.8.0
+    - os: osx
+      env: BUILD_WHEEL=1
+      language: shell
+
+    - python: '3.8'
+      arch: amd64
+      env: BUILD_SDIST=1
+
     # 3.5.2 is interesting because it's the version in ubuntu 16.04, and due to python's
     # "provisional feature" rules there are significant differences between patch
     # versions for asyncio and typing.
     - python: 3.5.2
       # Twisted doesn't install on python 3.5.2, so don't run the "full" tests.
       env: TOX_ENV=py35
+      stage: test
     - python: '3.5'
-      services: docker
-      env: TOX_ENV=py35-full BUILD_WHEEL=1 CIBW_BUILD=cp35-manylinux_x86_64
-    - python: '3.5'
-      arch: arm64
-      services: docker
-      env: TOX_ENV=py35-full BUILD_WHEEL=1 CIBW_BUILD=cp35-manylinux_aarch64
+      env: TOX_ENV=py35-full
     - python: '3.6'
-      services: docker
-      env: TOX_ENV=py36-full BUILD_WHEEL=1 CIBW_BUILD=cp36-manylinux_x86_64
-    - python: '3.6'
-      arch: arm64
-      services: docker
-      env: TOX_ENV=py36-full BUILD_WHEEL=1 CIBW_BUILD=cp36-manylinux_aarch64
+      env: TOX_ENV=py36-full
     - python: '3.7'
-      services: docker
-      env: TOX_ENV=py37-full BUILD_WHEEL=1 CIBW_BUILD=cp37-manylinux_x86_64
-    - python: '3.7'
-      arch: arm64
-      services: docker
-      env: TOX_ENV=py37-full BUILD_WHEEL=1 CIBW_BUILD=cp37-manylinux_aarch64
+      env: TOX_ENV=py37-full
     - python: '3.8'
-      services: docker
-      env: TOX_ENV=py38-full BUILD_WHEEL=1 CIBW_BUILD=cp38-manylinux_x86_64
-    - python: '3.8'
-      arch: arm64
-      services: docker
-      env: TOX_ENV=py38-full BUILD_WHEEL=1 CIBW_BUILD=cp38-manylinux_aarch64
+      env: TOX_ENV=py38-full
+    - python: '3.9-dev'
+      env: TOX_ENV=py3-full
+    - python: nightly
+      env: TOX_ENV=py3
     - python: pypy3.6-7.3.1
       # Pypy is a lot slower due to jit warmup costs, so don't run the "full"
       # test config there.
       env: TOX_ENV=pypy3
-    - python: nightly
-      env: TOX_ENV=py3-full
-      # Docs and lint python versions must be synced with those in tox.ini
+    # Docs and lint python versions must be synced with those in tox.ini
     - python: '3.8'
       env: TOX_ENV=docs
+
+    # the quick stage runs first, but putting this at the end lets us take
+    # advantage of travis-ci's defaults and not repeat stage:test in the others.
     - python: '3.8'
-      arch: arm64
-      env: TOX_ENV=docs
-    - python: '3.8'
-      env: TOX_ENV=lint
-  allow_failures:
-    # Currently failing due to https://foss.heptapod.net/pypy/cffi/issues/458
-    - python: nightly
+      env: TOX_ENV=py38,lint
+      stage: quick
 
 install:
-    - travis_retry pip install tox
-    - python -VV
-    - curl-config --version; pip freeze
+  - if [[ -n "$TOX_ENV" ]]; then pip3 install tox; fi
+  - if [[ -n "$BUILD_WHEEL" ]]; then pip3 install cibuildwheel; fi
+  - if [[ -n "$BUILD_WHEEL" || -n "$BUILD_SDIST" ]]; then pip3 install twine; fi
 
 script:
-    - |
-      # Skipping the tests for which we have already tested using it's own built wheel 
-      if [[ -z ${BUILD_WHEEL} ]]; then
-         tox -e $TOX_ENV -- $TOX_ARGS
-      else
-         export CIBW_MANYLINUX_X86_64_IMAGE=manylinux1
-         pip install -U cibuildwheel
-         cibuildwheel --output-dir dist
-         tox --installpkg dist/*.whl -e $TOX_ENV -- $TOX_ARGS
-      fi
+  - if [[ -n "$TOX_ENV" ]]; then tox -e $TOX_ENV -- $TOX_ARGS; fi
+  - if [[ -n "$BUILD_WHEEL" ]]; then cibuildwheel --output-dir dist && ls -l dist; fi
+  - if [[ -n "$BUILD_SDIST" ]]; then python setup.py check sdist && ls -l dist; fi
+
+after_success:
+  - if [[ ( -n "$BUILD_WHEEL" || -n "$BUILD_SDIST" ) && -n "$TRAVIS_TAG" && -n "$TWINE_PASSWORD" ]]; then twine upload -r testpypi -u __token__ dist/*; fi
