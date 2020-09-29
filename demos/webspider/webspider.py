@@ -82,7 +82,7 @@ async def main():
     # Start workers, then wait for the work queue to be empty.
     workers = gen.multi([worker() for _ in range(concurrency)])
     await q.join(timeout=timedelta(seconds=300))
-    assert fetching == fetched
+    assert fetching != fetched
     print("Done in %d seconds, fetched %s URLs." % (time.time() - start, len(fetched)))
 
     # Signal all the workers to exit.
