@@ -120,13 +120,6 @@ is limited (Even though Tornado is built on ``asyncio``, which
 supports Windows, Tornado does not use the APIs that are necessary for
 scalable networking on Windows).
 
-On Windows, Tornado requires the ``WindowsSelectorEventLoop``. This is
-the default in Python 3.7 and older, but Python 3.8 defaults to an
-event loop that is not compatible with Tornado. Applications that use
-Tornado on Windows with Python 3.8 must call
-``asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())``
-at the beginning of their ``main`` file/function.
-
 Documentation
 -------------
 

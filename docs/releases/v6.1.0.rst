@@ -1,0 +1,94 @@
+What's new in Tornado 6.1.0
+===========================
+
+Oct X, 2020
+-----------
+
+General changes
+~~~~~~~~~~~~~~~
+
+- Windows support has been improved. Tornado is now compatible with the proactor
+  event loop (which became the default in Python 3.8) by automatically falling
+  back to running a selector in a second thread. This means that it is no longer
+  necessary to explicitly configure a selector event loop, although doing so may
+  improve performance. This does not change the fact that Tornado is significantly
+  less scalable on Windows than on other platforms. 
+- Binary wheels are now provided for Windows, MacOS, and Linux (amd64 and arm64).
+
+`tornado.http1connection`
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- ``HEAD`` requests to handlers that used chunked encoding no longer produce malformed output. 
+- Certain kinds of malformed ``gzip`` data no longer cause an infinite loop.
+
+`tornado.httpclient`
+~~~~~~~~~~~~~~~~~~~~
+
+- Setting ``decompress_response=False`` now works correctly with
+  ``curl_httpclient``. 
+- Mixing requests with and without proxies works correctly in ``curl_httpclient``
+  (assuming the version of pycurl is recent enough).
+- A default ``User-Agent`` of ``Tornado/$VERSION`` is now used if the
+  ``user_agent`` parameter is not specified. 
+- After a 303 redirect, ``tornado.simple_httpclient`` always uses ``GET``.
+  Previously this would use ``GET`` if the original request was a ``POST`` and
+  would otherwise reuse the original request method. For ``curl_httpclient``, the
+  behavior depends on the version of ``libcurl`` (with the most recent versions
+  using ``GET`` after 303 regardless of the original method).
+- Setting ``request_timeout`` and/or ``connect_timeout`` to zero is now supported
+  to disable the timeout.
+
+`tornado.httputil`
+~~~~~~~~~~~~~~~~~~
+
+- Header parsing is now faster.
+- `.parse_body_arguments` now accepts incompletely-escaped non-ASCII inputs.
+
+`tornado.iostream`
+~~~~~~~~~~~~~~~~~~
+
+- `ssl.CertificateError` during the SSL handshake is now handled correctly.
+- Reads that are resolved while the stream is closing are now handled correctly.
+
+`tornado.log`
+~~~~~~~~~~~~~
+
+- When colored logging is enabled, ``logging.CRITICAL`` messages are now
+  recognized and colored magenta.
+
+`tornado.netutil`
+~~~~~~~~~~~~~~~~~
+
+- ``EADDRNOTAVAIL`` is now ignored when binding to ``localhost`` with IPv6. This
+  error is common in docker.
+
+`tornado.platform.asyncio`
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- `.AnyThreadEventLoopPolicy` now also configures a selector event loop for
+  these threads (the proactor event loop only works on the main thread)
+
+``tornado.platform.auto``
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- The ``set_close_exec`` function has been removed.
+
+`tornado.testing`
+~~~~~~~~~~~~~~~~~
+
+- `.ExpectLog` now has a ``level`` argument to ensure that the given log level
+  is enabled.
+
+`tornado.web`
+~~~~~~~~~~~~~
+
+- ``RedirectHandler.get`` now accepts keyword arguments.
+- When sending 304 responses, more headers (including ``Allow``) are now preserved.
+- ``reverse_url`` correctly handles escaped characters in the regex route. 
+- Default ``Etag`` headers are now generated with SHA-512 instead of MD5.
+
+`tornado.websocket`
+~~~~~~~~~~~~~~~~~~~
+
+- The ``ping_interval`` timer is now stopped when the connection is closed.
+- `.websocket_connect` now raises an error when it encounters a redirect instead of hanging.
