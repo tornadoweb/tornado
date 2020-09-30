@@ -4,6 +4,12 @@ What's new in Tornado 6.1.0
 Oct X, 2020
 -----------
 
+Deprecation notice
+~~~~~~~~~~~~~~~~~~
+
+- This is the last release of Tornado to support Python 3.5. Future versions
+  will require Python 3.6 or newer.
+
 General changes
 ~~~~~~~~~~~~~~~
 
