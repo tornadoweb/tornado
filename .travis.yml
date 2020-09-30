@@ -102,4 +102,4 @@ script:
   - if [[ -n "$BUILD_SDIST" ]]; then python setup.py check sdist && ls -l dist; fi
 
 after_success:
-  - if [[ ( -n "$BUILD_WHEEL" || -n "$BUILD_SDIST" ) && -n "$TRAVIS_TAG" && -n "$TWINE_PASSWORD" ]]; then twine upload -r testpypi -u __token__ dist/*; fi
+  - if [[ ( -n "$BUILD_WHEEL" || -n "$BUILD_SDIST" ) && -n "$TRAVIS_TAG" && -n "$TWINE_PASSWORD" ]]; then twine upload -u __token__ dist/*; fi
