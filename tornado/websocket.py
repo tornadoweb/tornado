@@ -1095,13 +1095,13 @@ class WebSocketProtocol13(WebSocketProtocol):
         try:
             fut = self._write_frame(True, opcode, message, flags=flags)
         except StreamClosedError:
-            raise WebSocketClosedError()
+            raise WebSocketClosedError() from None
 
         async def wrapper() -> None:
             try:
                 await fut
             except StreamClosedError:
-                raise WebSocketClosedError()
+                raise WebSocketClosedError() from None
 
         return asyncio.ensure_future(wrapper())
 
