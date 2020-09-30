@@ -10,7 +10,7 @@ addons:
 
 env:
   global:
-    - CIBW_BUILD="cp3[5678]*"
+    - CIBW_BUILD="cp3[56789]*"
     - CIBW_TEST_COMMAND="python3 -m tornado.test"
     - CIBW_TEST_COMMAND_WINDOWS="python -m tornado.test --fail-if-logs=false"
 
@@ -74,7 +74,7 @@ jobs:
     - python: '3.8'
       env: TOX_ENV=py38-full
     - python: '3.9-dev'
-      env: TOX_ENV=py3-full
+      env: TOX_ENV=py39-full
     - python: nightly
       env: TOX_ENV=py3
     - python: pypy3.6-7.3.1
