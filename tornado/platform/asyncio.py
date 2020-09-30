@@ -14,9 +14,12 @@ the same event loop.
 
 .. note::
 
-   Tornado requires the `~asyncio.AbstractEventLoop.add_reader` family of
-   methods, so it is not compatible with the `~asyncio.ProactorEventLoop` on
-   Windows. Use the `~asyncio.SelectorEventLoop` instead.
+   Tornado is designed to use a selector-based event loop. On Windows,
+   where a proactor-based event loop has been the default since Python 3.8,
+   a selector event loop is emulated by running ``select`` on a separate thread.
+   Configuring ``asyncio`` to use a selector event loop may improve performance
+   of Tornado (but may reduce performance of other ``asyncio``-based libraries
+   in the same process).
 """
 
 import asyncio
