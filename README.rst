@@ -1,3 +1,12 @@
+iostreamConfigurable branch
+===========================
+
+This branch contains a special patch that allows the IOStream to be configurable.
+That allows us to use M2Crypto as the SSL layer instead of pySSL.
+The pull request was rejected upstream, although deemed as correct. The reason for it
+is that it may prove incompatible with future developments they already had in mind.
+For the records, `link to the PR <https://github.com/tornadoweb/tornado/pull/2422>`_
+
 Tornado Web Server
 ==================
 
