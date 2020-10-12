@@ -54,7 +54,7 @@ environment:
       PYTHON_VERSION: "3.8.x"
       PYTHON_ARCH: "32"
       TOX_ENV: "py38"
-      TOX_ARGS: "tornado.test.websocket_test"
+      TOX_ARGS: "--fail-if-logs=false tornado.test.websocket_test"
 
     - PYTHON: "C:\\Python38-x64"
       PYTHON_VERSION: "3.8.x"
