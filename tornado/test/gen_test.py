@@ -1106,6 +1106,14 @@ class ContextVarsTest(AsyncTestCase):
             self.gen_root(4),
         ]
 
+    @gen_test
+    def test_reset(self):
+        token = ctx_var.set(1)
+        yield
+        # reset asserts that we are still at the same level of the context tree,
+        # so we must make sure that we maintain that property across yield.
+        ctx_var.reset(token)
+
 
 if __name__ == "__main__":
     unittest.main()
