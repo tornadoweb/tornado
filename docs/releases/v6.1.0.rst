@@ -21,6 +21,12 @@ General changes
   less scalable on Windows than on other platforms. 
 - Binary wheels are now provided for Windows, MacOS, and Linux (amd64 and arm64).
 
+`tornado.gen`
+~~~~~~~~~~~~~
+
+- `.coroutine` now has better support for the Python 3.7+ ``contextvars`` module. 
+  In particular, the ``ContextVar.reset`` method is now supported.
+
 `tornado.http1connection`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
