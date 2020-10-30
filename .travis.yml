@@ -50,6 +50,11 @@ jobs:
       language: shell
       before_install:
         - choco install python --version 3.8.0
+        # Windows build images have outdated root certificates; until that's
+        # fixed use certifi instead.
+        # https://github.com/joerick/cibuildwheel/issues/452
+        - python -m pip install certifi
+        - export SSL_CERT_FILE=`python -c "import certifi; print(certifi.where())"`
     - os: osx
       env: BUILD_WHEEL=1
       language: shell
