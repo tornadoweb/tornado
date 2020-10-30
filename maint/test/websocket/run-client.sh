@@ -10,7 +10,7 @@ FUZZING_SERVER_PID=$!
 sleep 1
 
 .tox/py27/bin/python client.py --name='Tornado/py27'
-.tox/py35/bin/python client.py --name='Tornado/py35'
+.tox/py39/bin/python client.py --name='Tornado/py39'
 .tox/pypy/bin/python client.py --name='Tornado/pypy'
 
 kill $FUZZING_SERVER_PID

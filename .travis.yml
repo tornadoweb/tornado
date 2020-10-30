@@ -10,7 +10,7 @@ addons:
 
 env:
   global:
-    - CIBW_BUILD="cp3[56789]*"
+    - CIBW_BUILD="cp3[6789]*"
     - CIBW_TEST_COMMAND="python3 -m tornado.test"
     - CIBW_TEST_COMMAND_WINDOWS="python -m tornado.test --fail-if-logs=false"
 
@@ -63,15 +63,6 @@ jobs:
       arch: amd64
       env: BUILD_SDIST=1
 
-    # 3.5.2 is interesting because it's the version in ubuntu 16.04, and due to python's
-    # "provisional feature" rules there are significant differences between patch
-    # versions for asyncio and typing.
-    - python: 3.5.2
-      # Twisted doesn't install on python 3.5.2, so don't run the "full" tests.
-      env: TOX_ENV=py35
-      stage: test
-    - python: '3.5'
-      env: TOX_ENV=py35-full
     - python: '3.6'
       env: TOX_ENV=py36-full
     - python: '3.7'

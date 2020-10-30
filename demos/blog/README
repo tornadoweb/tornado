@@ -15,7 +15,7 @@ its prerequisites can be installed with `docker-compose up`.
 
 2. Install Python prerequisites
 
-   This demo requires Python 3.5 or newer, and the packages listed in
+   This demo requires Python 3.6 or newer, and the packages listed in
    requirements.txt. Install them with `pip -r requirements.txt`
 
 3. Create a database and user for the blog.

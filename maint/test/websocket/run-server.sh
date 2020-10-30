@@ -15,8 +15,8 @@ tox
 .tox/py27/bin/python server.py --port=9001 &
 PY27_SERVER_PID=$!
 
-.tox/py35/bin/python server.py --port=9002 &
-PY35_SERVER_PID=$!
+.tox/py39/bin/python server.py --port=9002 &
+PY39_SERVER_PID=$!
 
 .tox/pypy/bin/python server.py --port=9003 &
 PYPY_SERVER_PID=$!
@@ -26,7 +26,7 @@ sleep 1
 .tox/py27/bin/wstest -m fuzzingclient
 
 kill $PY27_SERVER_PID
-kill $PY35_SERVER_PID
+kill $PY39_SERVER_PID
 kill $PYPY_SERVER_PID
 wait
 
