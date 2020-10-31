@@ -33,14 +33,10 @@ from tornado.util import raise_exc_info, basestring_type
 from tornado.web import Application
 
 import typing
-from typing import Tuple, Any, Callable, Type, Dict, Union, Optional
+from typing import Tuple, Any, Callable, Type, Dict, Union, Optional, Coroutine
 from types import TracebackType
 
 if typing.TYPE_CHECKING:
-    # Coroutine wasn't added to typing until 3.5.3, so only import it
-    # when mypy is running and use forward references.
-    from typing import Coroutine  # noqa: F401
-
     _ExcInfoTuple = Tuple[
         Optional[Type[BaseException]], Optional[BaseException], Optional[TracebackType]
     ]

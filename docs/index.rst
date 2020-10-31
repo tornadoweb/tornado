@@ -96,7 +96,7 @@ installed in this way, so you may wish to download a copy of the
 source tarball or clone the `git repository
 <https://github.com/tornadoweb/tornado>`_ as well.
 
-**Prerequisites**: Tornado 6.0 requires Python 3.5.2 or newer (See
+**Prerequisites**: Tornado 6.0 requires Python 3.6 or newer (See
 `Tornado 5.1 <https://www.tornadoweb.org/en/branch5.1/>`_ if
 compatibility with Python 2.7 is required). The following optional
 packages may be useful:

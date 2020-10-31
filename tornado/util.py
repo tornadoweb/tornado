@@ -74,8 +74,7 @@ class TimeoutError(Exception):
 
 
 class ObjectDict(Dict[str, Any]):
-    """Makes a dictionary behave like an object, with attribute-style access.
-    """
+    """Makes a dictionary behave like an object, with attribute-style access."""
 
     def __getattr__(self, name: str) -> Any:
         try:
@@ -115,8 +114,7 @@ class GzipDecompressor(object):
 
     @property
     def unconsumed_tail(self) -> bytes:
-        """Returns the unconsumed portion left over
-        """
+        """Returns the unconsumed portion left over"""
         return self.decompressobj.unconsumed_tail
 
     def flush(self) -> bytes:
@@ -168,14 +166,8 @@ def exec_in(
 
 
 def raise_exc_info(
-    exc_info,  # type: Tuple[Optional[type], Optional[BaseException], Optional[TracebackType]]
-):
-    # type: (...) -> typing.NoReturn
-    #
-    # This function's type annotation must use comments instead of
-    # real annotations because typing.NoReturn does not exist in
-    # python 3.5's typing module. The formatting is funky because this
-    # is apparently what flake8 wants.
+    exc_info: Tuple[Optional[type], Optional[BaseException], Optional["TracebackType"]]
+) -> typing.NoReturn:
     try:
         if exc_info[1] is not None:
             raise exc_info[1].with_traceback(exc_info[2])

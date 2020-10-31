@@ -651,7 +651,9 @@ class _Option(object):
                 num = float(m.group(1))
                 units = m.group(2) or "seconds"
                 units = self._TIMEDELTA_ABBREV_DICT.get(units, units)
-                sum += datetime.timedelta(**{units: num})
+                # This line confuses mypy when setup.py sets python_version=3.6
+                # https://github.com/python/mypy/issues/9676
+                sum += datetime.timedelta(**{units: num})  # type: ignore
                 start = m.end()
             return sum
         except Exception:

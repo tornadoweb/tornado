@@ -1,17 +1,42 @@
 {
-   "options": {"failByDrop": false},
-   "outdir": "./reports/servers",
-
-   "servers": [
-       {"agent": "Tornado/py27", "url": "ws://localhost:9001",
-        "options": {"version": 18}},
-       {"agent": "Tornado/py35", "url": "ws://localhost:9002",
-        "options": {"version": 18}},
-       {"agent": "Tornado/pypy", "url": "ws://localhost:9003",
-        "options": {"version": 18}}
-       ],
-
-   "cases": ["*"],
-   "exclude-cases": ["9.*", "12.*.1","12.2.*", "12.3.*", "12.4.*", "12.5.*", "13.*.1"],
-   "exclude-agent-cases": {}
+    "options": {
+        "failByDrop": false
+    },
+    "outdir": "./reports/servers",
+    "servers": [
+        {
+            "agent": "Tornado/py27",
+            "url": "ws://localhost:9001",
+            "options": {
+                "version": 18
+            }
+        },
+        {
+            "agent": "Tornado/py39",
+            "url": "ws://localhost:9002",
+            "options": {
+                "version": 18
+            }
+        },
+        {
+            "agent": "Tornado/pypy",
+            "url": "ws://localhost:9003",
+            "options": {
+                "version": 18
+            }
+        }
+    ],
+    "cases": [
+        "*"
+    ],
+    "exclude-cases": [
+        "9.*",
+        "12.*.1",
+        "12.2.*",
+        "12.3.*",
+        "12.4.*",
+        "12.5.*",
+        "13.*.1"
+    ],
+    "exclude-agent-cases": {}
 }
