@@ -111,8 +111,7 @@ class UnsatisfiableReadError(Exception):
 
 
 class StreamBufferFullError(Exception):
-    """Exception raised by `IOStream` methods when the buffer is full.
-    """
+    """Exception raised by `IOStream` methods when the buffer is full."""
 
 
 class _StreamBuffer(object):

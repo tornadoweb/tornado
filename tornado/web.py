@@ -1671,11 +1671,15 @@ class RequestHandler(object):
             )
             # If XSRF cookies are turned on, reject form submissions without
             # the proper cookie
-            if self.request.method not in (
-                "GET",
-                "HEAD",
-                "OPTIONS",
-            ) and self.application.settings.get("xsrf_cookies"):
+            if (
+                self.request.method
+                not in (
+                    "GET",
+                    "HEAD",
+                    "OPTIONS",
+                )
+                and self.application.settings.get("xsrf_cookies")
+            ):
                 self.check_xsrf_cookie()
 
             result = self.prepare()

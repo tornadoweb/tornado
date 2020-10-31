@@ -602,8 +602,7 @@ class HTTPConnection(object):
         raise NotImplementedError()
 
     def finish(self) -> None:
-        """Indicates that the last body data has been written.
-        """
+        """Indicates that the last body data has been written."""
         raise NotImplementedError()
 
 

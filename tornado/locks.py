@@ -262,10 +262,10 @@ class Event(object):
 class _ReleasingContextManager(object):
     """Releases a Lock or Semaphore at the end of a "with" statement.
 
-        with (yield semaphore.acquire()):
-            pass
+    with (yield semaphore.acquire()):
+        pass
 
-        # Now semaphore.release() has been called.
+    # Now semaphore.release() has been called.
     """
 
     def __init__(self, obj: Any) -> None:

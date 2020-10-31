@@ -6,7 +6,7 @@
 # is the lockfile, and maint/requirements.in is the input file containing only
 # direct dependencies.
 
-black==19.10b0
+black==20.8b1
 flake8==3.8.4
 mypy==0.740
 tox==3.20.1

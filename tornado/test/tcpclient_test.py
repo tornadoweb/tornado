@@ -137,8 +137,7 @@ class TCPClientTest(AsyncTestCase):
             yield self.client.connect("127.0.0.1", port)
 
     def test_source_ip_fail(self):
-        """Fail when trying to use the source IP Address '8.8.8.8'.
-        """
+        """Fail when trying to use the source IP Address '8.8.8.8'."""
         self.assertRaises(
             socket.error,
             self.do_test_connect,
@@ -148,14 +147,12 @@ class TCPClientTest(AsyncTestCase):
         )
 
     def test_source_ip_success(self):
-        """Success when trying to use the source IP Address '127.0.0.1'.
-        """
+        """Success when trying to use the source IP Address '127.0.0.1'."""
         self.do_test_connect(socket.AF_INET, "127.0.0.1", source_ip="127.0.0.1")
 
     @skipIfNonUnix
     def test_source_port_fail(self):
-        """Fail when trying to use source port 1.
-        """
+        """Fail when trying to use source port 1."""
         if getpass.getuser() == "root":
             # Root can use any port so we can't easily force this to fail.
             # This is mainly relevant for docker.
