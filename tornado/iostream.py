@@ -1622,6 +1622,13 @@ class PipeIOStream(BaseIOStream):
     def __init__(self, fd: int, *args: Any, **kwargs: Any) -> None:
         self.fd = fd
         self._fio = io.FileIO(self.fd, "r+")
+        if sys.platform == "win32":
+            # The form and placement of this assertion is important to mypy.
+            # A plain assert statement isn't recognized here. If the assertion
+            # were earlier it would worry that the attributes of self aren't
+            # set on windows. If it were missing it would complain about
+            # the absence of the set_blocking function.
+            raise AssertionError("PipeIOStream is not supported on Windows")
         os.set_blocking(fd, False)
         super().__init__(*args, **kwargs)
 
