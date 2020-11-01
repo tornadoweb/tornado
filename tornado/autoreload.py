@@ -207,7 +207,7 @@ def _reload() -> None:
     _reload_attempted = True
     for fn in _reload_hooks:
         fn()
-    if hasattr(signal, "setitimer"):
+    if sys.platform != "win32":
         # Clear the alarm signal set by
         # ioloop.set_blocking_log_threshold so it doesn't fire
         # after the exec.
@@ -340,7 +340,8 @@ def main() -> None:
             # SyntaxErrors are special:  their innermost stack frame is fake
             # so extract_tb won't see it and we have to get the filename
             # from the exception object.
-            watch(e.filename)
+            if e.filename is not None:
+                watch(e.filename)
     else:
         logging.basicConfig()
         gen_log.info("Script exited normally")

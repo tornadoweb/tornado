@@ -9,5 +9,5 @@
 
 black
 flake8
-mypy==0.740
+mypy
 tox

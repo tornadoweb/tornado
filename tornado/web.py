@@ -399,14 +399,10 @@ class RequestHandler(object):
         # cases are covered by the first match for str.
         if isinstance(value, str):
             retval = value
-        elif isinstance(value, bytes):  # py3
+        elif isinstance(value, bytes):
             # Non-ascii characters in headers are not well supported,
             # but if you pass bytes, use latin1 so they pass through as-is.
             retval = value.decode("latin1")
-        elif isinstance(value, unicode_type):  # py2
-            # TODO: This is inconsistent with the use of latin1 above,
-            # but it's been that way for a long time. Should it change?
-            retval = escape.utf8(value)
         elif isinstance(value, numbers.Integral):
             # return immediately since we know the converted value will be safe
             return str(value)
@@ -996,7 +992,7 @@ class RequestHandler(object):
         if not template_path:
             frame = sys._getframe(0)
             web_file = frame.f_code.co_filename
-            while frame.f_code.co_filename == web_file:
+            while frame.f_code.co_filename == web_file and frame.f_back is not None:
                 frame = frame.f_back
             assert frame.f_code.co_filename is not None
             template_path = os.path.dirname(frame.f_code.co_filename)

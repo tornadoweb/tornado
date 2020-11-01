@@ -156,10 +156,12 @@ def chain_future(a: "Future[_T]", b: "Future[_T]") -> None:
             return
         if hasattr(a, "exc_info") and a.exc_info() is not None:  # type: ignore
             future_set_exc_info(b, a.exc_info())  # type: ignore
-        elif a.exception() is not None:
-            b.set_exception(a.exception())
         else:
-            b.set_result(a.result())
+            a_exc = a.exception()
+            if a_exc is not None:
+                b.set_exception(a_exc)
+            else:
+                b.set_result(a.result())
 
     if isinstance(a, Future):
         future_add_done_callback(a, copy)

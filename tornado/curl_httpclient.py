@@ -228,7 +228,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                     "callback": callback,
                     "queue_start_time": queue_start_time,
                     "curl_start_time": time.time(),
-                    "curl_start_ioloop_time": self.io_loop.current().time(),
+                    "curl_start_ioloop_time": self.io_loop.current().time(),  # type: ignore
                 }
                 try:
                     self._curl_setup_request(
@@ -369,7 +369,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 return len(b)
 
         else:
-            write_function = buffer.write
+            write_function = buffer.write  # type: ignore
         curl.setopt(pycurl.WRITEFUNCTION, write_function)
         curl.setopt(pycurl.FOLLOWLOCATION, request.follow_redirects)
         curl.setopt(pycurl.MAXREDIRS, request.max_redirects)
