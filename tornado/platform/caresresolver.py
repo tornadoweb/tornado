@@ -26,6 +26,10 @@ class CaresResolver(Resolver):
 
     .. versionchanged:: 5.0
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
+
+    .. deprecated:: 6.2
+       This class is deprecated and will be removed in Tornado 7.0. Use the default
+       thread-based resolver instead.
     """
 
     def initialize(self) -> None:
