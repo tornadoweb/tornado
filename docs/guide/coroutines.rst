@@ -232,11 +232,11 @@ immediately, so you can start another operation before waiting.
         # This is equivalent to asyncio.ensure_future() (both work in Tornado).
         fetch_future = convert_yielded(self.fetch_next_chunk())
         while True:
-            chunk = yield fetch_future
+            chunk = await fetch_future
             if chunk is None: break
             self.write(chunk)
             fetch_future = convert_yielded(self.fetch_next_chunk())
-            yield self.flush()
+            await self.flush()
 
 .. testoutput::
    :hide:
