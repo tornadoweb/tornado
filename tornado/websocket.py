@@ -225,7 +225,6 @@ class WebSocketHandler(tornado.web.RequestHandler):
         self.ws_connection = None  # type: Optional[WebSocketProtocol]
         self.close_code = None  # type: Optional[int]
         self.close_reason = None  # type: Optional[str]
-        self.stream = None  # type: Optional[IOStream]
         self._on_close_called = False
 
     async def get(self, *args: Any, **kwargs: Any) -> None:
@@ -583,16 +582,6 @@ class WebSocketHandler(tornado.web.RequestHandler):
         # indicated by status code 101).
         if self.get_status() != 101 or self._on_close_called:
             super()._break_cycles()
-
-    def send_error(self, *args: Any, **kwargs: Any) -> None:
-        if self.stream is None:
-            super().send_error(*args, **kwargs)
-        else:
-            # If we get an uncaught exception during the handshake,
-            # we have no choice but to abruptly close the connection.
-            # TODO: for uncaught exceptions after the handshake,
-            # we can close the connection more gracefully.
-            self.stream.close()
 
     def get_websocket_protocol(self) -> Optional["WebSocketProtocol"]:
         websocket_version = self.request.headers.get("Sec-WebSocket-Version")
