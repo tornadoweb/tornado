@@ -839,11 +839,10 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
 
     * Go to the Google Dev Console at http://console.developers.google.com
     * Select a project, or create a new one.
-    * In the sidebar on the left, select APIs & Auth.
-    * In the list of APIs, find the Google+ API service and set it to ON.
     * In the sidebar on the left, select Credentials.
-    * In the OAuth section of the page, select Create New Client ID.
-    * Set the Redirect URI to point to your auth handler
+    * Click CREATE CREDENTIALS and click OAuth client ID.
+    * Under Application type, select Web application.
+    * Name OAuth 2.0 client and click Create.
     * Copy the "Client secret" and "Client ID" to the application settings as
       ``{"google_oauth": {"key": CLIENT_ID, "secret": CLIENT_SECRET}}``
 
