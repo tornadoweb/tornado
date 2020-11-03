@@ -547,7 +547,7 @@ class IOLoop(Configurable):
     def add_timeout(
         self,
         deadline: Union[float, datetime.timedelta],
-        callback: Callable[..., None],
+        callback: Callable[..., Optional[Awaitable]],
         *args: Any,
         **kwargs: Any
     ) -> object:
@@ -601,7 +601,11 @@ class IOLoop(Configurable):
         return self.call_at(self.time() + delay, callback, *args, **kwargs)
 
     def call_at(
-        self, when: float, callback: Callable[..., None], *args: Any, **kwargs: Any
+        self,
+        when: float,
+        callback: Callable[..., Optional[Awaitable]],
+        *args: Any,
+        **kwargs: Any
     ) -> object:
         """Runs the ``callback`` at the absolute time designated by ``when``.
 
@@ -864,11 +868,14 @@ class PeriodicCallback(object):
 
     .. versionchanged:: 5.1
        The ``jitter`` argument is added.
+
+    .. versionchanged:: 6.2
+       The ``callback`` argument may be a coroutine.
     """
 
     def __init__(
         self,
-        callback: Callable[[], None],
+        callback: Callable[[], Optional[Awaitable]],
         callback_time: Union[datetime.timedelta, float],
         jitter: float = 0,
     ) -> None:
@@ -912,8 +919,8 @@ class PeriodicCallback(object):
             return
         try:
             val = self.callback()
-            if isawaitable(val):
-                await val  # type: ignore
+            if val is not None and isawaitable(val):
+                await val
         except Exception:
             app_log.error("Exception in callback %r", self.callback, exc_info=True)
         finally:
@@ -922,7 +929,7 @@ class PeriodicCallback(object):
     def _schedule_next(self) -> None:
         if self._running:
             self._update_next(self.io_loop.time())
-            self._timeout = self.io_loop.add_timeout(self._next_timeout, self._run)  # type: ignore
+            self._timeout = self.io_loop.add_timeout(self._next_timeout, self._run)
 
     def _update_next(self, current_time: float) -> None:
         callback_time_sec = self.callback_time / 1000.0
