@@ -20,7 +20,7 @@ via `tornado.web.RequestHandler.request`.
 """
 
 import calendar
-import collections
+import collections.abc
 import copy
 import datetime
 import email.utils
@@ -602,8 +602,7 @@ class HTTPConnection(object):
         raise NotImplementedError()
 
     def finish(self) -> None:
-        """Indicates that the last body data has been written.
-        """
+        """Indicates that the last body data has been written."""
         raise NotImplementedError()
 
 

@@ -69,8 +69,7 @@ class _ExceptionLoggingContext(object):
 
 
 class HTTP1ConnectionParameters(object):
-    """Parameters for `.HTTP1Connection` and `.HTTP1ServerConnection`.
-    """
+    """Parameters for `.HTTP1Connection` and `.HTTP1ServerConnection`."""
 
     def __init__(
         self,
@@ -703,8 +702,7 @@ class HTTP1Connection(httputil.HTTPConnection):
 
 
 class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
-    """Wraps an `HTTPMessageDelegate` to decode ``Content-Encoding: gzip``.
-    """
+    """Wraps an `HTTPMessageDelegate` to decode ``Content-Encoding: gzip``."""
 
     def __init__(self, delegate: httputil.HTTPMessageDelegate, chunk_size: int) -> None:
         self._delegate = delegate

@@ -626,8 +626,7 @@ def _raise_not_supported_for_websockets(*args: Any, **kwargs: Any) -> None:
 
 
 class WebSocketProtocol(abc.ABC):
-    """Base class for WebSocket protocol versions.
-    """
+    """Base class for WebSocket protocol versions."""
 
     def __init__(self, handler: "_WebSocketDelegate") -> None:
         self.handler = handler

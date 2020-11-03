@@ -1,7 +1,8 @@
-# Ensure we get the local copy of tornado instead of what's on the standard path
 import os
+import sphinx.errors
 import sys
 
+# Ensure we get the local copy of tornado instead of what's on the standard path
 sys.path.insert(0, os.path.abspath(".."))
 import tornado
 
@@ -81,7 +82,7 @@ latex_documents = [
     )
 ]
 
-intersphinx_mapping = {"python": ("https://docs.python.org/3.6/", None)}
+intersphinx_mapping = {"python": ("https://docs.python.org/3/", None)}
 
 on_rtd = os.environ.get("READTHEDOCS", None) == "True"
 
@@ -93,3 +94,50 @@ if not on_rtd:
 
     html_theme = "sphinx_rtd_theme"
     html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+
+# Suppress warnings about "class reference target not found" for these types.
+# In most cases these types come from type annotations and are for mypy's use.
+missing_references = {
+    # Generic type variables; nothing to link to.
+    "_IOStreamType",
+    "_S",
+    "_T",
+    # Standard library types which are defined in one module and documented
+    # in another. We could probably remap them to their proper location if
+    # there's not an upstream fix in python and/or sphinx.
+    "_asyncio.Future",
+    "_io.BytesIO",
+    "asyncio.AbstractEventLoop.run_forever",
+    "asyncio.events.AbstractEventLoop",
+    "concurrent.futures._base.Executor",
+    "concurrent.futures._base.Future",
+    "futures.Future",
+    "socket.socket",
+    "TextIO",
+    # Other stuff. I'm not sure why some of these are showing up, but
+    # I'm just listing everything here to avoid blocking the upgrade of sphinx.
+    "Future",
+    "httputil.HTTPServerConnectionDelegate",
+    "httputil.HTTPServerRequest",
+    "OutputTransform",
+    "Pattern",
+    "RAISE",
+    "Rule",
+    "tornado.ioloop._Selectable",
+    "tornado.locks._ReleasingContextManager",
+    "tornado.options._Mockable",
+    "tornado.web._ArgDefaultMarker",
+    "tornado.web._HandlerDelegate",
+    "traceback",
+    "WSGIAppType",
+    "Yieldable",
+}
+
+
+def missing_reference_handler(app, env, node, contnode):
+    if node["reftarget"] in missing_references:
+        raise sphinx.errors.NoUri
+
+
+def setup(app):
+    app.connect("missing-reference", missing_reference_handler)

@@ -451,8 +451,7 @@ class BaseLoader(object):
 
 
 class Loader(BaseLoader):
-    """A template loader that loads from a single root directory.
-    """
+    """A template loader that loads from a single root directory."""
 
     def __init__(self, root_directory: str, **kwargs: Any) -> None:
         super().__init__(**kwargs)

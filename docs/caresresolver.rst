@@ -18,3 +18,7 @@ wrapper ``pycares``).
     so it is only recommended for use in ``AF_INET`` (i.e. IPv4).  This is
     the default for ``tornado.simple_httpclient``, but other libraries
     may default to ``AF_UNSPEC``.
+
+    .. deprecated:: 6.2
+       This class is deprecated and will be removed in Tornado 7.0. Use the default
+       thread-based resolver instead.

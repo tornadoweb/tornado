@@ -325,11 +325,16 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                         % (self.request.network_interface,)
                     )
 
-            timeout = (
-                min(self.request.connect_timeout, self.request.request_timeout)
-                or self.request.connect_timeout
-                or self.request.request_timeout
-            )  # min but skip zero
+            if self.request.connect_timeout and self.request.request_timeout:
+                timeout = min(
+                    self.request.connect_timeout, self.request.request_timeout
+                )
+            elif self.request.connect_timeout:
+                timeout = self.request.connect_timeout
+            elif self.request.request_timeout:
+                timeout = self.request.request_timeout
+            else:
+                timeout = 0
             if timeout:
                 self._timeout = self.io_loop.add_timeout(
                     self.start_time + timeout,
@@ -626,10 +631,12 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         original_request = getattr(self.request, "original_request", self.request)
         if self._should_follow_redirect():
             assert isinstance(self.request, _RequestProxy)
+            assert self.headers is not None
             new_request = copy.copy(self.request.request)
             new_request.url = urllib.parse.urljoin(
                 self.request.url, self.headers["Location"]
             )
+            assert self.request.max_redirects is not None
             new_request.max_redirects = self.request.max_redirects - 1
             del new_request.headers["Host"]
             # https://tools.ietf.org/html/rfc7231#section-6.4
@@ -645,7 +652,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 self.code in (301, 302) and self.request.method == "POST"
             ):
                 new_request.method = "GET"
-                new_request.body = None
+                new_request.body = None  # type: ignore
                 for h in [
                     "Content-Length",
                     "Content-Type",
@@ -656,10 +663,11 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                         del self.request.headers[h]
                     except KeyError:
                         pass
-            new_request.original_request = original_request
+            new_request.original_request = original_request  # type: ignore
             final_callback = self.final_callback
-            self.final_callback = None
+            self.final_callback = None  # type: ignore
             self._release()
+            assert self.client is not None
             fut = self.client.fetch(new_request, raise_error=False)
             fut.add_done_callback(lambda f: final_callback(f.result()))
             self._on_end_request()

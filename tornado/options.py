@@ -266,17 +266,22 @@ class OptionParser(object):
                 % (normalized, self._options[normalized].file_name)
             )
         frame = sys._getframe(0)
-        options_file = frame.f_code.co_filename
+        if frame is not None:
+            options_file = frame.f_code.co_filename
 
-        # Can be called directly, or through top level define() fn, in which
-        # case, step up above that frame to look for real caller.
-        if (
-            frame.f_back.f_code.co_filename == options_file
-            and frame.f_back.f_code.co_name == "define"
-        ):
-            frame = frame.f_back
+            # Can be called directly, or through top level define() fn, in which
+            # case, step up above that frame to look for real caller.
+            if (
+                frame.f_back is not None
+                and frame.f_back.f_code.co_filename == options_file
+                and frame.f_back.f_code.co_name == "define"
+            ):
+                frame = frame.f_back
 
-        file_name = frame.f_back.f_code.co_filename
+            assert frame.f_back is not None
+            file_name = frame.f_back.f_code.co_filename
+        else:
+            file_name = "<unknown>"
         if file_name == options_file:
             file_name = ""
         if type is None:

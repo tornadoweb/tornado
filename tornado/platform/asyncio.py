@@ -463,7 +463,9 @@ class AddThreadSelectorEventLoop(asyncio.AbstractEventLoop):
         )  # type: Optional[Tuple[List[_FileDescriptorLike], List[_FileDescriptorLike]]]
         self._closing_selector = False
         self._thread = threading.Thread(
-            name="Tornado selector", daemon=True, target=self._run_select,
+            name="Tornado selector",
+            daemon=True,
+            target=self._run_select,
         )
         self._thread.start()
         # Start the select loop once the loop is started.
@@ -582,7 +584,9 @@ class AddThreadSelectorEventLoop(asyncio.AbstractEventLoop):
         self._start_select()
 
     def _handle_event(
-        self, fd: "_FileDescriptorLike", cb_map: Dict["_FileDescriptorLike", Callable],
+        self,
+        fd: "_FileDescriptorLike",
+        cb_map: Dict["_FileDescriptorLike", Callable],
     ) -> None:
         try:
             callback = cb_map[fd]
