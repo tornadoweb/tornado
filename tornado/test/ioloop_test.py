@@ -161,7 +161,7 @@ class TestIOLoop(AsyncTestCase):
 
             self.io_loop.add_handler(client.fileno(), handler, IOLoop.READ)
             self.io_loop.add_timeout(
-                self.io_loop.time() + 0.01, functools.partial(server.send, b"asdf")  # type: ignore
+                self.io_loop.time() + 0.01, functools.partial(server.send, b"asdf")
             )
             self.wait()
             self.io_loop.remove_handler(client.fileno())
