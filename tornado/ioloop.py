@@ -441,7 +441,7 @@ class IOLoop(Configurable):
             ]
         ):
             # same as logging.basicConfig() but doesn't affect user's logger. issue #2961
-            logger = logging.getLogger('tornado')
+            logger = logging.getLogger("tornado")
             logger.addHandler(logging.StreamHandler())
 
     def stop(self) -> None:
