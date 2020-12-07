@@ -76,7 +76,6 @@ if __name__ == "__main__":
         del sys.path[0]
 
 import functools
-import logging
 import os
 import pkgutil  # type: ignore
 import sys
