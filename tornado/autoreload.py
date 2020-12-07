@@ -325,10 +325,8 @@ def main() -> None:
                 del __package__
                 exec_in(f.read(), globals(), globals())
     except SystemExit as e:
-        logging.basicConfig()
         gen_log.info("Script exited with status %s", e.code)
     except Exception as e:
-        logging.basicConfig()
         gen_log.warning("Script exited with uncaught exception", exc_info=True)
         # If an exception occurred at import time, the file with the error
         # never made it into sys.modules and so we won't know to watch it.
@@ -343,7 +341,6 @@ def main() -> None:
             if e.filename is not None:
                 watch(e.filename)
     else:
-        logging.basicConfig()
         gen_log.info("Script exited normally")
     # restore sys.argv so subsequent executions will include autoreload
     sys.argv = original_argv
