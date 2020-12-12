@@ -400,7 +400,7 @@ class WaitIterator(object):
         self._running_future = Future()
 
         if self._finished:
-            self._return_result(self._finished.popleft())
+            return self._return_result(self._finished.popleft())
 
         return self._running_future
 
@@ -418,8 +418,12 @@ class WaitIterator(object):
             raise Exception("no future is running")
         chain_future(done, self._running_future)
 
+        res = self._running_future
+        self._running_future = None
         self.current_future = done
         self.current_index = self._unfinished.pop(done)
+
+        return res
 
     def __aiter__(self) -> typing.AsyncIterator:
         return self
