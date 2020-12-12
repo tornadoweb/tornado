@@ -410,7 +410,7 @@ class WaitIterator(object):
         else:
             self._finished.append(done)
 
-    def _return_result(self, done: Future) -> None:
+    def _return_result(self, done: Future) -> Future:
         """Called set the returned future's state that of the future
         we yielded, and set the current future for the iterator.
         """
