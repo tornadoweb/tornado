@@ -1588,7 +1588,7 @@ class SSLIOStream(IOStream):
                 # depending on the SSL version)
                 return None
             if len(buf) >> 30:
-                buf = memoryview(buf)[: 1 << 30] 
+                buf = memoryview(buf)[: 1 << 30]
             try:
                 return self.socket.recv_into(buf, len(buf))
             except ssl.SSLError as e:
