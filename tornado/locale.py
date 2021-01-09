@@ -200,7 +200,9 @@ def load_gettext_translations(directory: str, domain: str) -> None:
     global _use_gettext
     _translations = {}
 
-    for filename in glob.glob(os.path.join(directory, '*', 'LC_MESSAGES', domain + '.mo')):
+    for filename in glob.glob(
+        os.path.join(directory, "*", "LC_MESSAGES", domain + ".mo")
+    ):
         lang = os.path.basename(os.path.dirname(os.path.dirname(filename)))
         try:
             _translations[lang] = gettext.translation(
