@@ -30,7 +30,7 @@ from tornado.util import Configurable, errno_from_exception
 from typing import List, Callable, Any, Type, Dict, Union, Tuple, Awaitable, Optional
 
 # Note that the naming of ssl.Purpose is confusing; the purpose
-# of a context is to authentiate the opposite side of the connection.
+# of a context is to authenticate the opposite side of the connection.
 _client_ssl_defaults = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
 _server_ssl_defaults = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
 if hasattr(ssl, "OP_NO_COMPRESSION"):
