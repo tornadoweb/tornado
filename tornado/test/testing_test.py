@@ -66,7 +66,8 @@ class LeakTest(AsyncTestCase):
         # Trigger a gc to make warnings more deterministic.
         gc.collect()
 
-    def test_leaked_coroutine(self):
+    @gen_test
+    async def test_leaked_coroutine(self):
         # This test verifies that "leaked" coroutines are shut down
         # without triggering warnings like "task was destroyed but it
         # is pending". If this test were to fail, it would fail
@@ -79,9 +80,7 @@ class LeakTest(AsyncTestCase):
             except asyncio.CancelledError:
                 pass
 
-        self.io_loop.add_callback(callback)
-        self.io_loop.add_callback(self.stop)
-        self.wait()
+        asyncio.ensure_future(callback())
 
 
 class AsyncHTTPTestCaseTest(AsyncHTTPTestCase):

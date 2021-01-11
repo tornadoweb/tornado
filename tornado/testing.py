@@ -173,12 +173,22 @@ class AsyncTestCase(unittest.TestCase):
         # Not used in this class itself, but used by @gen_test
         self._test_generator = None  # type: Optional[Union[Generator, Coroutine]]
 
+    async def asyncSetUp(self) -> None:
+        """Coroutine equivalent of setUp."""
+        pass
+
+    async def asyncTearDown(self) -> None:
+        """Coroutine equivalent of tearDown."""
+        pass
+
     def setUp(self) -> None:
         super().setUp()
         self.io_loop = self.get_new_ioloop()
         self.io_loop.make_current()
+        self.io_loop.run_sync(self.asyncSetUp, timeout=get_async_test_timeout())
 
     def tearDown(self) -> None:
+        self.io_loop.run_sync(self.asyncTearDown, timeout=get_async_test_timeout())
         # Native coroutines tend to produce warnings if they're not
         # allowed to run to completion. It's difficult to ensure that
         # this always happens in tests, so cancel any tasks that are
@@ -374,8 +384,8 @@ class AsyncHTTPTestCase(AsyncTestCase):
     ``stop()`` and ``wait()`` yourself.
     """
 
-    def setUp(self) -> None:
-        super().setUp()
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
         sock, port = bind_unused_port()
         self.__port = port
 
@@ -395,6 +405,16 @@ class AsyncHTTPTestCase(AsyncTestCase):
         `tornado.web.Application` or other `.HTTPServer` callback.
         """
         raise NotImplementedError()
+
+    async def async_fetch(
+        self, path: str, raise_error: bool = False, **kwargs: Any
+    ) -> HTTPResponse:
+        """Convenience method to fetch a URL."""
+        if path.lower().startswith(("http://", "https://")):
+            url = path
+        else:
+            url = self.get_url(path)
+        return await self.http_client.fetch(url, raise_error=raise_error, **kwargs)
 
     def fetch(
         self, path: str, raise_error: bool = False, **kwargs: Any
@@ -432,12 +452,8 @@ class AsyncHTTPTestCase(AsyncTestCase):
            response codes.
 
         """
-        if path.lower().startswith(("http://", "https://")):
-            url = path
-        else:
-            url = self.get_url(path)
         return self.io_loop.run_sync(
-            lambda: self.http_client.fetch(url, raise_error=raise_error, **kwargs),
+            lambda: self.async_fetch(path, raise_error=raise_error, **kwargs),
             timeout=get_async_test_timeout(),
         )
 
@@ -461,15 +477,13 @@ class AsyncHTTPTestCase(AsyncTestCase):
         """Returns an absolute url for the given path on the test server."""
         return "%s://127.0.0.1:%s%s" % (self.get_protocol(), self.get_http_port(), path)
 
-    def tearDown(self) -> None:
+    async def asyncTearDown(self) -> None:
         self.http_server.stop()
-        self.io_loop.run_sync(
-            self.http_server.close_all_connections, timeout=get_async_test_timeout()
-        )
+        await self.http_server.close_all_connections()
         self.http_client.close()
         del self.http_server
         del self._app
-        super().tearDown()
+        await super().asyncTearDown()
 
 
 class AsyncHTTPSTestCase(AsyncHTTPTestCase):
