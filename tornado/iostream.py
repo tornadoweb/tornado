@@ -1587,6 +1587,9 @@ class SSLIOStream(IOStream):
                 # to read (attempting to read may or may not raise an exception
                 # depending on the SSL version)
                 return None
+            # clip buffer size at 1GB since SSL sockets only support upto 2GB
+            # this change in behaviour is transparent, since the function is
+            # already expected to (possibly) read less than the provided buffer
             if len(buf) >> 30:
                 buf = memoryview(buf)[: 1 << 30]
             try:
