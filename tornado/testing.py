@@ -52,9 +52,9 @@ def bind_unused_port(
 
     Returns a tuple (socket, port).
 
-    .. versionchanged:: 4.4
-       Default binds to ``127.0.0.1`` without resolving the name
-       ``localhost``.
+    .. versionchanged:: 6.2
+       Added optional ``address`` argument to
+       override the default "127.0.0.1".
     """
     sock = netutil.bind_sockets(
         0, address, family=socket.AF_INET, reuse_port=reuse_port
