@@ -54,6 +54,7 @@ def bind_unused_port(
 
     .. versionchanged:: 4.4
        Always binds to ``127.0.0.1`` without resolving the name
+       ``localhost``.
 
     .. versionchanged:: 6.2
        Added optional ``address`` argument to
