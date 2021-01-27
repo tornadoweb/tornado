@@ -1072,7 +1072,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         return self.stream.write(frame)
 
     def write_message(
-        self, message: Union[str, bytes, dict], binary: bool = False
+        self, message: Union[str, bytes, Dict[str, any]], binary: bool = False
     ) -> "Future[None]":
         """Sends the given message to the client of this Web Socket."""
         if binary:
@@ -1495,7 +1495,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         future_set_result_unless_cancelled(self.connect_future, self)
 
     def write_message(
-        self, message: Union[str, bytes, dict], binary: bool = False
+        self, message: Union[str, bytes, Dict[str, any]], binary: bool = False
     ) -> "Future[None]":
         """Sends a message to the WebSocket server.
 
