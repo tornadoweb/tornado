@@ -23,6 +23,8 @@ import hashlib
 import os
 import sys
 import struct
+from itertools import chain
+
 import tornado.escape
 import tornado.web
 from urllib.parse import urlparse
@@ -757,11 +759,19 @@ class _PerMessageDeflateCompressor(object):
             self._compression_level, zlib.DEFLATED, -self._max_wbits, self._mem_level
         )
 
-    def compress(self, data: bytes) -> bytes:
+    def compress(self, data: Union[bytes, memoryview, List[Union[bytes, memoryview]]]) -> Union[bytes, List[bytes]]:
         compressor = self._compressor or self._create_compressor()
-        data = compressor.compress(data) + compressor.flush(zlib.Z_SYNC_FLUSH)
-        assert data.endswith(b"\x00\x00\xff\xff")
-        return data[:-4]
+        if isinstance(data, list):
+            data = [compressor.compress(i) for i in data]
+            # https://www.zlib.net/manual.html
+            ending = compressor.flush(zlib.Z_SYNC_FLUSH)
+            assert(len(ending) > 4)
+            assert ending.endswith(b"\x00\x00\xff\xff")
+            return data + [ending[:-4]]
+        else:
+            data = compressor.compress(data) + compressor.flush(zlib.Z_SYNC_FLUSH)
+            assert data.endswith(b"\x00\x00\xff\xff")
+            return data[:-4]
 
 
 class _PerMessageDeflateDecompressor(object):
@@ -1039,9 +1049,12 @@ class WebSocketProtocol13(WebSocketProtocol):
         )
 
     def _write_frame(
-        self, fin: bool, opcode: int, data: bytes, flags: int = 0
+        self, fin: bool, opcode: int, data: Union[bytes, memoryview, List[Union[bytes, memoryview]]], flags: int = 0
     ) -> "Future[None]":
-        data_len = len(data)
+        if isinstance(data, list):
+            data_len = sum(len(data) for i in data)
+        else:
+            data_len = len(data)
         if opcode & 0x8:
             # All control frames MUST have a payload length of 125
             # bytes or less and MUST NOT be fragmented.
@@ -1066,23 +1079,40 @@ class WebSocketProtocol13(WebSocketProtocol):
             frame += struct.pack("!BQ", 127 | mask_bit, data_len)
         if self.mask_outgoing:
             mask = os.urandom(4)
-            data = mask + _websocket_mask(mask, data)
-        frame += data
-        self._wire_bytes_out += len(frame)
-        return self.stream.write(frame)
+            data = [mask, _websocket_mask(mask, bytearray(chain(*data) if isinstance(data, list) else data))]
+            data_len += 4
+
+        self._wire_bytes_out += len(frame) + data_len
+        if isinstance(data, list):
+            return self.stream.write_many([frame] + data)
+        else:
+            # TODO: possibly, it's better to concat here for Windows. It depends on
+            # cost of data concatenation and cost of calling socket.send().
+            return self.stream.write_many([frame, data])
 
     def write_message(
-        self, message: Union[str, bytes], binary: bool = False
+        self, message: Union[str, bytes, memoryview, List[Union[bytes, memoryview]]], binary: bool = False
     ) -> "Future[None]":
         """Sends the given message to the client of this Web Socket."""
         if binary:
             opcode = 0x2
         else:
             opcode = 0x1
-        message = tornado.escape.utf8(message)
-        assert isinstance(message, bytes)
-        self._message_bytes_out += len(message)
+
         flags = 0
+
+        if isinstance(message, list):
+            # Only bytes or memoryviews
+            message = [i.cast('b') if type(i) is memoryview and len(i) != i.nbytes else i for i in message]
+            self._message_bytes_out += sum(len(i) for i in message)
+        else:
+            if isinstance(message, str):
+                message = tornado.escape.utf8(message)
+            assert isinstance(message, (bytes, memoryview))
+            if type(message) is memoryview and len(message) != message.nbytes:
+                message = message.cast('b')
+            self._message_bytes_out += len(message)
+
         if self._compressor:
             message = self._compressor.compress(message)
             flags |= self.RSV1
