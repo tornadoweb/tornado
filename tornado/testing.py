@@ -45,7 +45,9 @@ if typing.TYPE_CHECKING:
 _NON_OWNED_IOLOOPS = AsyncIOMainLoop
 
 
-def bind_unused_port(reuse_port: bool = False) -> Tuple[socket.socket, int]:
+def bind_unused_port(
+    reuse_port: bool = False, address: str = "127.0.0.1"
+) -> Tuple[socket.socket, int]:
     """Binds a server socket to an available port on localhost.
 
     Returns a tuple (socket, port).
@@ -53,9 +55,13 @@ def bind_unused_port(reuse_port: bool = False) -> Tuple[socket.socket, int]:
     .. versionchanged:: 4.4
        Always binds to ``127.0.0.1`` without resolving the name
        ``localhost``.
+
+    .. versionchanged:: 6.2
+       Added optional ``address`` argument to
+       override the default "127.0.0.1".
     """
     sock = netutil.bind_sockets(
-        0, "127.0.0.1", family=socket.AF_INET, reuse_port=reuse_port
+        0, address, family=socket.AF_INET, reuse_port=reuse_port
     )[0]
     port = sock.getsockname()[1]
     return sock, port
