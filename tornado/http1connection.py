@@ -131,8 +131,8 @@ class HTTP1Connection(httputil.HTTPConnection):
         self.no_keep_alive = params.no_keep_alive
         # The body limits can be altered by the delegate, so save them
         # here instead of just referencing self.params later.
-        self._max_body_size = self.params.max_body_size if self.params.max_body_size is not None \
-                                                                else self.stream.max_buffer_size
+        self._max_body_size = self.params.max_body_size \
+            if self.params.max_body_size is not None else self.stream.max_buffer_size
         self._body_timeout = self.params.body_timeout
         # _write_finished is set to True when finish() has been called,
         # i.e. there will be no more data sent.  Data may still be in the
