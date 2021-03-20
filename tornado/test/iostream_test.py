@@ -1047,6 +1047,17 @@ class TestIOStreamStartTLS(AsyncTestCase):
                 # The server fails to connect, but the exact error is unspecified.
                 yield server_future
 
+    @gen_test
+    def test_typed_memoryview(self):
+        # Test support of memoryviews with an item size greater than 1 byte.
+        buf = memoryview(bytes(80)).cast("L")
+        assert self.server_stream is not None
+        yield self.server_stream.write(buf)
+        assert self.client_stream is not None
+        # This will timeout if the calculation of the buffer size is incorrect
+        recv = yield self.client_stream.read_bytes(buf.nbytes)
+        self.assertEqual(bytes(recv), bytes(buf))
+
 
 class WaitForHandshakeTest(AsyncTestCase):
     @gen.coroutine
