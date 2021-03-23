@@ -77,9 +77,7 @@ if __name__ == "__main__":
 
 import functools
 import logging
-import os
 import pkgutil  # type: ignore
-import sys
 import traceback
 import types
 import subprocess
