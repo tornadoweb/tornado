@@ -631,7 +631,7 @@ def url_concat(
     if isinstance(args, dict):
         parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
         parsed_query.extend(args.items())
-    elif isinstance(args, list) or isinstance(args, tuple):
+    elif isinstance(args, (list, tuple)):
         parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
         parsed_query.extend(args)
     else:
