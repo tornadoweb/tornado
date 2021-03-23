@@ -307,7 +307,7 @@ class Return(Exception):
         self.args = (value,)
 
 
-class WaitIterator(object):
+class WaitIterator:
     """Provides an iterator to yield the results of awaitables as they finish.
 
     Yielding a set of awaitables like this:
@@ -672,7 +672,7 @@ def sleep(duration: float) -> "Future[None]":
     return f
 
 
-class _NullFuture(object):
+class _NullFuture:
     """_NullFuture resembles a Future that finished with a result of None.
 
     It's not actually a `Future` to avoid depending on a particular event loop.
@@ -717,7 +717,7 @@ In native coroutines, the equivalent of ``yield gen.moment`` is
 """
 
 
-class Runner(object):
+class Runner:
     """Internal implementation of `tornado.gen.coroutine`.
 
     Maintains information about pending callbacks and their results.
