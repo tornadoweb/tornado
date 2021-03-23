@@ -2138,7 +2138,7 @@ class Application(ReversibleRouter):
             for name, fn in methods.items():
                 if (
                     not name.startswith("_")
-                    and hasattr(fn, "__call__")
+                    and callable(fn)
                     and name[0].lower() == name[0]
                 ):
                     self.ui_methods[name] = fn
