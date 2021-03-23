@@ -461,7 +461,7 @@ class Locale(object):
         comma = u" \u0648 " if self.code.startswith("fa") else u", "
         return _("%(commas)s and %(last)s") % {
             "commas": comma.join(parts[:-1]),
-            "last": parts[len(parts) - 1],
+            "last": parts[-1],
         }
 
     def friendly_number(self, value: int) -> str:
