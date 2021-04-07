@@ -204,6 +204,7 @@ class IsValidIPTest(unittest.TestCase):
         self.assertTrue(not is_valid_ip(" "))
         self.assertTrue(not is_valid_ip("\n"))
         self.assertTrue(not is_valid_ip("\x00"))
+        self.assertTrue(not is_valid_ip("a" * 100))
 
 
 class TestPortAllocation(unittest.TestCase):

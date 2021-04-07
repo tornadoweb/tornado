@@ -301,6 +301,12 @@ def is_valid_ip(ip: str) -> bool:
         if e.args[0] == socket.EAI_NONAME:
             return False
         raise
+    except UnicodeError:
+        # `socket.getaddrinfo` will raise a UnicodeError from the
+        # `idna` decoder if the input is longer than 63 characters,
+        # even for socket.AI_NUMERICHOST.  See
+        # https://bugs.python.org/issue32958 for discussion
+        return False
     return True
 
 
