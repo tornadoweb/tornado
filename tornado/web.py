@@ -630,7 +630,7 @@ class RequestHandler(object):
         if domain:
             morsel["domain"] = domain
         if expires_days is not None and not expires:
-            expires = datetime.datetime.utcnow() + datetime.timedelta(days=expires_days)
+            expires = datetime.datetime.now() + datetime.timedelta(days=expires_days)
         if expires:
             morsel["expires"] = httputil.format_timestamp(expires)
         if path:
