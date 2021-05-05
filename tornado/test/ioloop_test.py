@@ -688,6 +688,11 @@ class TestPeriodicCallbackMath(unittest.TestCase):
         with mock.patch("random.random", mock_random):
             self.assertEqual(self.simulate_calls(pc, call_durations), expected)
 
+    def test_timedelta(self):
+        pc = PeriodicCallback(lambda: None, datetime.timedelta(minutes=1, seconds=23))
+        expected_callback_time = 83000
+        self.assertEqual(pc.callback_time, expected_callback_time)
+
 
 class TestIOLoopConfiguration(unittest.TestCase):
     def run_python(self, *statements):
