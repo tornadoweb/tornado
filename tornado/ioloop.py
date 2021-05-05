@@ -839,9 +839,11 @@ class _Timeout(object):
 class PeriodicCallback(object):
     """Schedules the given callback to be called periodically.
 
-    The callback is called every ``callback_time`` milliseconds.
-    Note that the timeout is given in milliseconds, while most other
-    time-related functions in Tornado use seconds.
+    The callback is called every ``callback_time`` milliseconds when
+    ``callback_time`` is a float. Note that the timeout is given in
+    milliseconds, while most other time-related functions in Tornado use
+    seconds. ``callback_time`` may alternatively be given as a
+    `datetime.timedelta` object.
 
     If ``jitter`` is specified, each callback time will be randomly selected
     within a window of ``jitter * callback_time`` milliseconds.
