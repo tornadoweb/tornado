@@ -291,7 +291,6 @@ class WebSocketHandler(tornado.web.RequestHandler):
     def ping_timeout(self) -> Optional[float]:
         """If no ping is received in this many seconds,
         close the websocket connection (VPNs, etc. can fail to cleanly close ws connections).
-        Default is max of 3 pings or 30 seconds.
         """
         return self.settings.get("websocket_ping_timeout", None)
 
