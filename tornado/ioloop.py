@@ -839,9 +839,11 @@ class _Timeout(object):
 class PeriodicCallback(object):
     """Schedules the given callback to be called periodically.
 
-    The callback is called every ``callback_time`` milliseconds.
-    Note that the timeout is given in milliseconds, while most other
-    time-related functions in Tornado use seconds.
+    The callback is called every ``callback_time`` milliseconds when
+    ``callback_time`` is a float. Note that the timeout is given in
+    milliseconds, while most other time-related functions in Tornado use
+    seconds. ``callback_time`` may alternatively be given as a
+    `datetime.timedelta` object.
 
     If ``jitter`` is specified, each callback time will be randomly selected
     within a window of ``jitter * callback_time`` milliseconds.
@@ -864,12 +866,18 @@ class PeriodicCallback(object):
     """
 
     def __init__(
-        self, callback: Callable[[], None], callback_time: float, jitter: float = 0
+        self,
+        callback: Callable[[], None],
+        callback_time: Union[datetime.timedelta, float],
+        jitter: float = 0,
     ) -> None:
         self.callback = callback
-        if callback_time <= 0:
-            raise ValueError("Periodic callback must have a positive callback_time")
-        self.callback_time = callback_time
+        if isinstance(callback_time, datetime.timedelta):
+            self.callback_time = callback_time / datetime.timedelta(milliseconds=1)
+        else:
+            if callback_time <= 0:
+                raise ValueError("Periodic callback must have a positive callback_time")
+            self.callback_time = callback_time
         self.jitter = jitter
         self._running = False
         self._timeout = None  # type: object
