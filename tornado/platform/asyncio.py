@@ -412,6 +412,8 @@ class SelectorThread:
     but can be attached to a running asyncio loop.
     """
 
+    _closed = False
+
     def __init__(self, real_loop: asyncio.AbstractEventLoop) -> None:
         self._real_loop = real_loop
 
@@ -456,6 +458,8 @@ class SelectorThread:
         self._waker_w.close()
 
     def close(self) -> None:
+        if self._closed:
+            return
         with self._select_cond:
             self._closing_selector = True
             self._select_cond.notify()
@@ -464,6 +468,7 @@ class SelectorThread:
         _selector_loops.discard(self)
         self._waker_r.close()
         self._waker_w.close()
+        self._closed = True
 
     def _wake_selector(self) -> None:
         try:

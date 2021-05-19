@@ -20,6 +20,7 @@ from tornado.platform.asyncio import (
     AsyncIOLoop,
     to_asyncio_future,
     AnyThreadEventLoopPolicy,
+    AddThreadSelectorEventLoop,
 )
 from tornado.testing import AsyncTestCase, gen_test
 
@@ -106,6 +107,11 @@ class AsyncIOLoopTest(AsyncTestCase):
             ),
             42,
         )
+
+    def test_add_thread_close_idempotent(self):
+        loop = AddThreadSelectorEventLoop(asyncio.get_event_loop())
+        loop.close()
+        loop.close()
 
 
 class LeakTest(unittest.TestCase):
