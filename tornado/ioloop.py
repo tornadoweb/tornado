@@ -41,6 +41,7 @@ import sys
 import time
 import math
 import random
+from inspect import isawaitable
 
 from tornado.concurrent import (
     Future,
@@ -546,7 +547,7 @@ class IOLoop(Configurable):
     def add_timeout(
         self,
         deadline: Union[float, datetime.timedelta],
-        callback: Callable[..., None],
+        callback: Callable[..., Optional[Awaitable]],
         *args: Any,
         **kwargs: Any
     ) -> object:
@@ -585,7 +586,7 @@ class IOLoop(Configurable):
             raise TypeError("Unsupported deadline %r" % deadline)
 
     def call_later(
-        self, delay: float, callback: Callable[..., None], *args: Any, **kwargs: Any
+        self, delay: float, callback: Callable, *args: Any, **kwargs: Any
     ) -> object:
         """Runs the ``callback`` after ``delay`` seconds have passed.
 
@@ -600,7 +601,7 @@ class IOLoop(Configurable):
         return self.call_at(self.time() + delay, callback, *args, **kwargs)
 
     def call_at(
-        self, when: float, callback: Callable[..., None], *args: Any, **kwargs: Any
+        self, when: float, callback: Callable, *args: Any, **kwargs: Any
     ) -> object:
         """Runs the ``callback`` at the absolute time designated by ``when``.
 
@@ -863,11 +864,17 @@ class PeriodicCallback(object):
 
     .. versionchanged:: 5.1
        The ``jitter`` argument is added.
+
+    .. versionchanged:: 6.2
+       If the ``callback`` argument is a coroutine, and a callback runs for
+       longer than ``callback_time``, subsequent invocations will be skipped.
+       Previously this was only true for regular functions, not coroutines,
+       which were "fire-and-forget" for `PeriodicCallback`.
     """
 
     def __init__(
         self,
-        callback: Callable[[], None],
+        callback: Callable[[], Optional[Awaitable]],
         callback_time: Union[datetime.timedelta, float],
         jitter: float = 0,
     ) -> None:
@@ -906,11 +913,13 @@ class PeriodicCallback(object):
         """
         return self._running
 
-    def _run(self) -> None:
+    async def _run(self) -> None:
         if not self._running:
             return
         try:
-            return self.callback()
+            val = self.callback()
+            if val is not None and isawaitable(val):
+                await val
         except Exception:
             app_log.error("Exception in callback %r", self.callback, exc_info=True)
         finally:
