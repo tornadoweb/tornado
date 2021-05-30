@@ -601,11 +601,7 @@ class IOLoop(Configurable):
         return self.call_at(self.time() + delay, callback, *args, **kwargs)
 
     def call_at(
-        self,
-        when: float,
-        callback: Callable,
-        *args: Any,
-        **kwargs: Any
+        self, when: float, callback: Callable, *args: Any, **kwargs: Any
     ) -> object:
         """Runs the ``callback`` at the absolute time designated by ``when``.
 
