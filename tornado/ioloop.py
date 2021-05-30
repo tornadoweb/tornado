@@ -586,7 +586,7 @@ class IOLoop(Configurable):
             raise TypeError("Unsupported deadline %r" % deadline)
 
     def call_later(
-        self, delay: float, callback: Callable[..., None], *args: Any, **kwargs: Any
+        self, delay: float, callback: Callable, *args: Any, **kwargs: Any
     ) -> object:
         """Runs the ``callback`` after ``delay`` seconds have passed.
 
@@ -603,7 +603,7 @@ class IOLoop(Configurable):
     def call_at(
         self,
         when: float,
-        callback: Callable[..., Optional[Awaitable]],
+        callback: Callable,
         *args: Any,
         **kwargs: Any
     ) -> object:
