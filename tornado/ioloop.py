@@ -870,7 +870,10 @@ class PeriodicCallback(object):
        The ``jitter`` argument is added.
 
     .. versionchanged:: 6.2
-       The ``callback`` argument may be a coroutine.
+       If the ``callback`` argument is a coroutine, and a callback runs for
+       longer than ``callback_time``, subsequent invocations will be skipped.
+       Previously this was only true for regular functions, not coroutines,
+       which were "fire-and-forget" for `PeriodicCallback`.
     """
 
     def __init__(
