@@ -547,7 +547,7 @@ class IOLoop(Configurable):
     def add_timeout(
         self,
         deadline: Union[float, datetime.timedelta],
-        callback: Callable[..., Optional[Awaitable]],
+        callback: Callable,
         *args: Any,
         **kwargs: Any
     ) -> object:

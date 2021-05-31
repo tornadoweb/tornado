@@ -204,11 +204,7 @@ class BaseAsyncIOLoop(IOLoop):
         self.asyncio_loop.stop()
 
     def call_at(
-        self,
-        when: float,
-        callback: Callable[..., Optional[Awaitable]],
-        *args: Any,
-        **kwargs: Any
+        self, when: float, callback: Callable, *args: Any, **kwargs: Any
     ) -> object:
         # asyncio.call_at supports *args but not **kwargs, so bind them here.
         # We do not synchronize self.time and asyncio_loop.time, so
