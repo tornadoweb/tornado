@@ -714,7 +714,8 @@ class IOLoop(Configurable):
                 from tornado.process import cpu_count
 
                 self._executor = concurrent.futures.ThreadPoolExecutor(
-                    max_workers=(cpu_count() * 5)
+                    max_workers=(cpu_count() * 5),
+                    thread_name_prefix='default-tornado-executor'
                 )  # type: concurrent.futures.Executor
             executor = self._executor
         c_future = executor.submit(func, *args)

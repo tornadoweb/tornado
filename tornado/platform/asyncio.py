@@ -258,10 +258,10 @@ class BaseAsyncIOLoop(IOLoop):
         func: Callable[..., _T],
         *args: Any
     ) -> Awaitable[_T]:
-        return self.asyncio_loop.run_in_executor(executor, func, *args)
+        return super().run_in_executor(executor, func, *args)
 
     def set_default_executor(self, executor: concurrent.futures.Executor) -> None:
-        return self.asyncio_loop.set_default_executor(executor)
+        return super().set_default_executor(executor)
 
 
 class AsyncIOMainLoop(BaseAsyncIOLoop):

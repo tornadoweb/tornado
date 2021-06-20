@@ -534,6 +534,16 @@ class TestIOLoopFutures(AsyncTestCase):
         self.assertEqual([event1, event2], res)
 
     @gen_test
+    def test_executor_name_prefix(self):
+
+        def sync_func():
+            return threading.currentThread().name
+
+        loop = IOLoop.current()
+        thread_name = yield loop.run_in_executor(None, sync_func)
+        self.assertRegex(thread_name, 'default-tornado-executor_[0-9]+')
+
+    @gen_test
     def test_set_default_executor(self):
         count = [0]
 
