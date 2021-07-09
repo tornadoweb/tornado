@@ -718,7 +718,7 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
         start_line: Union[httputil.RequestStartLine, httputil.ResponseStartLine],
         headers: httputil.HTTPHeaders,
     ) -> Optional[Awaitable[None]]:
-        if headers.get("Content-Encoding") == "gzip":
+        if headers.get("Content-Encoding", "").lower() == "gzip":
             self._decompressor = GzipDecompressor()
             # Downstream delegates will only see uncompressed data,
             # so rename the content-encoding header.
