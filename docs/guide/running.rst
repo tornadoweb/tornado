@@ -166,7 +166,7 @@ You can serve static files from Tornado by specifying the
     application = tornado.web.Application([
         (r"/", MainHandler),
         (r"/login", LoginHandler),
-        (r"/(apple-touch-icon\.png)", tornado.web.StaticFileHandler,
+        (r"/static/(apple-touch-icon\.png)", tornado.web.StaticFileHandler,
          dict(path=settings['static_path'])),
     ], **settings)
 
