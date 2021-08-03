@@ -664,7 +664,9 @@ class HTTPFile(ObjectDict):
     * ``content_type``
     """
 
-    pass
+    filename: str
+    body: bytes
+    content_type: str
 
 
 def _parse_request_range(
