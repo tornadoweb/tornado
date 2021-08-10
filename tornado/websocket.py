@@ -761,7 +761,7 @@ class _PerMessageDeflateDecompressor(object):
         max_message_size: int,
         compression_options: Optional[Dict[str, Any]] = None,
     ) -> None:
-        self._max_message_size = max_message_size
+        self._max_message_size = int(max_message_size)
         if max_wbits is None:
             max_wbits = zlib.MAX_WBITS
         if not (8 <= max_wbits <= zlib.MAX_WBITS):
