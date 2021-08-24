@@ -1566,6 +1566,11 @@ class SSLIOStream(IOStream):
         return future
 
     def write_to_fd(self, data: memoryview) -> int:
+        # clip buffer size at 1GB since SSL sockets only support upto 2GB
+        # this change in behaviour is transparent, since the function is
+        # already expected to (possibly) read less than the provided buffer
+        if len(data) >> 30:
+            data = memoryview(data)[: 1 << 30]
         try:
             return self.socket.send(data)  # type: ignore
         except ssl.SSLError as e:
