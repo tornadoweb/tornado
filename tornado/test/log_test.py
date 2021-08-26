@@ -112,7 +112,7 @@ class LogFormatterTest(unittest.TestCase):
         # This will be "Exception: \xe9" on python 2 or
         # "Exception: b'\xe9'" on python 3.
         output = self.get_output()
-        self.assertRegexpMatches(output, br"Exception.*\\xe9")
+        self.assertRegex(output, br"Exception.*\\xe9")
         # The traceback contains newlines, which should not have been escaped.
         self.assertNotIn(br"\n", output)
 
@@ -148,7 +148,7 @@ class EnablePrettyLoggingTest(unittest.TestCase):
             filenames = glob.glob(tmpdir + "/test_log*")
             self.assertEqual(1, len(filenames))
             with open(filenames[0]) as f:
-                self.assertRegexpMatches(f.read(), r"^\[E [^]]*\] hello$")
+                self.assertRegex(f.read(), r"^\[E [^]]*\] hello$")
         finally:
             for handler in self.logger.handlers:
                 handler.flush()
@@ -168,7 +168,7 @@ class EnablePrettyLoggingTest(unittest.TestCase):
             filenames = glob.glob(tmpdir + "/test_log*")
             self.assertEqual(1, len(filenames))
             with open(filenames[0]) as f:
-                self.assertRegexpMatches(f.read(), r"^\[E [^]]*\] hello$")
+                self.assertRegex(f.read(), r"^\[E [^]]*\] hello$")
         finally:
             for handler in self.logger.handlers:
                 handler.flush()
