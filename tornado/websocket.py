@@ -1501,6 +1501,8 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
            Exception raised on a closed stream changed from `.StreamClosedError`
            to `WebSocketClosedError`.
         """
+        if self.protocol is None:
+            raise WebSocketClosedError("Client connection has been closed")
         return self.protocol.write_message(message, binary=binary)
 
     def read_message(
