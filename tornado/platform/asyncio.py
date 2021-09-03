@@ -576,7 +576,21 @@ class AddThreadSelectorEventLoop(asyncio.AbstractEventLoop):
                         raise
                 else:
                     raise
-            self._real_loop.call_soon_threadsafe(self._handle_select, rs, ws)
+
+            try:
+                self._real_loop.call_soon_threadsafe(self._handle_select, rs, ws)
+            except RuntimeError:
+                # "Event loop is closed". Swallow the exception for
+                # consistency with PollIOLoop (and logical consistency
+                # with the fact that we can't guarantee that an
+                # add_callback that completes without error will
+                # eventually execute).
+                pass
+            except AttributeError:
+                # ProactorEventLoop may raise this instead of RuntimeError
+                # if call_soon_threadsafe races with a call to close().
+                # Swallow it too for consistency.
+                pass
 
     def _handle_select(
         self, rs: List["_FileDescriptorLike"], ws: List["_FileDescriptorLike"]
