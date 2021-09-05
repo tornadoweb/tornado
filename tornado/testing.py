@@ -95,6 +95,7 @@ class _TestMethodWrapper(object):
 
     def __init__(self, orig_method: Callable) -> None:
         self.orig_method = orig_method
+        self.__wrapped__ = orig_method
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
         result = self.orig_method(*args, **kwargs)
