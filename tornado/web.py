@@ -1286,9 +1286,9 @@ class RequestHandler(object):
             locales = []
             for language in languages:
                 parts = language.strip().split(";")
-                if len(parts) > 1 and parts[1].startswith("q="):
+                if len(parts) > 1 and parts[1].strip().startswith("q="):
                     try:
-                        score = float(parts[1][2:])
+                        score = float(parts[1].strip()[2:])
                     except (ValueError, TypeError):
                         score = 0.0
                 else:
