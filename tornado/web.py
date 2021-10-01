@@ -1293,7 +1293,8 @@ class RequestHandler(object):
                         score = 0.0
                 else:
                     score = 1.0
-                locales.append((parts[0], score))
+                if score > 0:
+                    locales.append((parts[0], score))
             if locales:
                 locales.sort(key=lambda pair: pair[1], reverse=True)
                 codes = [loc[0] for loc in locales]
