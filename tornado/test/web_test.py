@@ -3154,3 +3154,39 @@ class RedirectHandlerTest(WebTestCase):
         response = self.fetch("/a/b/c", follow_redirects=False)
         self.assertEqual(response.code, 301)
         self.assertEqual(response.headers["Location"], "/b/a/c")
+
+
+class AcceptLanguageTest(WebTestCase):
+    """Test evaluation of Accept-Language header"""
+
+    def get_handlers(self):
+        locale.load_gettext_translations(
+            os.path.join(os.path.dirname(__file__), "gettext_translations"),
+            "tornado_test",
+        )
+
+        class AcceptLanguageHandler(RequestHandler):
+            def get(self):
+                self.set_header(
+                    "Content-Language", self.get_browser_locale().code.replace("_", "-")
+                )
+                self.finish(b"")
+
+        return [
+            ("/", AcceptLanguageHandler),
+        ]
+
+    def test_accept_language(self):
+        response = self.fetch("/", headers={"Accept-Language": "fr-FR;q=0.9"})
+        self.assertEqual(response.headers["Content-Language"], "fr-FR")
+
+        response = self.fetch("/", headers={"Accept-Language": "fr-FR; q=0.9"})
+        self.assertEqual(response.headers["Content-Language"], "fr-FR")
+
+    def test_accept_language_ignore(self):
+        response = self.fetch("/", headers={"Accept-Language": "fr-FR;q=0"})
+        self.assertEqual(response.headers["Content-Language"], "en-US")
+
+    def test_accept_language_invalid(self):
+        response = self.fetch("/", headers={"Accept-Language": "fr-FR;q=-1"})
+        self.assertEqual(response.headers["Content-Language"], "en-US")
