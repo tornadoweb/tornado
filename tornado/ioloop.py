@@ -468,7 +468,7 @@ class IOLoop(Configurable):
 
         The keyword-only argument ``timeout`` may be used to set
         a maximum duration for the function.  If the timeout expires,
-        a `tornado.util.TimeoutError` is raised.
+        a `asyncio.TimeoutError` is raised.
 
         This method is useful to allow asynchronous calls in a
         ``main()`` function::
@@ -485,6 +485,8 @@ class IOLoop(Configurable):
         .. versionchanged:: 5.0
            If a timeout occurs, the ``func`` coroutine will be cancelled.
 
+        .. versionchanged:: 6.2
+           ``tornado.util.TimeoutError`` is now an alias to ``asyncio.TimeoutError``.
         """
         future_cell = [None]  # type: List[Optional[Future]]
 
