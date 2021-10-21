@@ -1,5 +1,5 @@
 alabaster==0.7.12
-babel==2.8.0
+babel==2.9.1
 certifi==2020.6.20
 chardet==3.0.4
 docutils==0.16
@@ -14,8 +14,8 @@ pytz==2020.1
 requests==2.24.0
 six==1.15.0
 snowballstemmer==2.0.0
-sphinx-rtd-theme==0.5.0
 sphinx==3.2.1
+sphinx-rtd-theme==0.5.0
 sphinxcontrib-applehelp==1.0.2
 sphinxcontrib-asyncio==0.3.0
 sphinxcontrib-devhelp==1.0.2
