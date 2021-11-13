@@ -1439,6 +1439,10 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
     def on_connection_close(self) -> None:
         if not self.connect_future.done():
             self.connect_future.set_exception(StreamClosedError())
+        else:
+            # avoid self reference
+            self.connect_future = Future()
+            self.connect_future.set_result(None)
         self._on_message(None)
         self.tcp_client.close()
         super().on_connection_close()
