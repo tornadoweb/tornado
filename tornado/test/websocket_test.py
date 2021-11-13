@@ -484,6 +484,14 @@ class WebSocketTest(WebSocketBaseTestCase):
             ws.write_message("hello")
 
     @gen_test
+    def test_reference_self_after_been_closed(self):
+        ws = yield websocket_connect(
+            "ws://127.0.0.1:%d/close_reason" % self.get_http_port())
+        msg = yield ws.read_message()
+        self.assertIs(msg, None)
+        self.assertIs(ws.connect_future.result(), None)
+
+    @gen_test
     def test_async_prepare(self):
         # Previously, an async prepare method triggered a bug that would
         # result in a timeout on test shutdown (and a memory leak).
