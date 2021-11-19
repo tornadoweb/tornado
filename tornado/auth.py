@@ -653,7 +653,10 @@ class OAuth2Mixin(object):
             all_args.update(args)
 
         if all_args:
-            url += "?" + urllib.parse.urlencode(all_args)
+            if "?" in url:
+                url += "&" + urllib.parse.urlencode(all_args)
+            else:
+                url += "?" + urllib.parse.urlencode(all_args)
         http = self.get_auth_http_client()
         if post_args is not None:
             response = await http.fetch(
