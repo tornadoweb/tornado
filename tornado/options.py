@@ -322,6 +322,10 @@ class OptionParser(object):
 
         Note that ``args[0]`` is ignored since it is the program name
         in `sys.argv`.
+        
+        Note that ``logging-related`` flags (such as ``log_to_stderr``,
+        ``log_file_prefix``) to options will not take effect if they
+        are setted after this line.
 
         We return a list of all arguments that are not parsed as options.
 
