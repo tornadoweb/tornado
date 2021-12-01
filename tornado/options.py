@@ -86,6 +86,12 @@ instances to define isolated sets of options, such as for subcommands.
        options.logging = None
        parse_command_line()
 
+.. note::
+
+   `parse_command_line` or `parse_config_file` function should called after
+   logging configuration and user-defined command line flags using the
+   `callback` option definition, or these configurations will not take effect.
+
 .. versionchanged:: 4.3
    Dashes and underscores are fully interchangeable in option names;
    options can be defined, set, and read with any mix of the two.
@@ -322,10 +328,6 @@ class OptionParser(object):
 
         Note that ``args[0]`` is ignored since it is the program name
         in `sys.argv`.
-        
-        Note that ``logging-related`` flags (such as ``log_to_stderr``,
-        ``log_file_prefix``) to options will not take effect if they
-        are setted after this line.
 
         We return a list of all arguments that are not parsed as options.
 
