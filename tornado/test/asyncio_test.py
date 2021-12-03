@@ -12,6 +12,7 @@
 
 import asyncio
 import unittest
+import warnings
 
 from concurrent.futures import ThreadPoolExecutor
 from tornado import gen
@@ -171,17 +172,21 @@ class AnyThreadEventLoopPolicyTest(unittest.TestCase):
         return future.result()
 
     def run_policy_test(self, accessor, expected_type):
-        # With the default policy, non-main threads don't get an event
-        # loop.
-        self.assertRaises(
-            (RuntimeError, AssertionError), self.executor.submit(accessor).result
-        )
-        # Set the policy and we can get a loop.
-        asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
-        self.assertIsInstance(self.executor.submit(accessor).result(), expected_type)
-        # Clean up to silence leak warnings. Always use asyncio since
-        # IOLoop doesn't (currently) close the underlying loop.
-        self.executor.submit(lambda: asyncio.get_event_loop().close()).result()  # type: ignore
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            # With the default policy, non-main threads don't get an event
+            # loop.
+            self.assertRaises(
+                (RuntimeError, AssertionError), self.executor.submit(accessor).result
+            )
+            # Set the policy and we can get a loop.
+            asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
+            self.assertIsInstance(
+                self.executor.submit(accessor).result(), expected_type
+            )
+            # Clean up to silence leak warnings. Always use asyncio since
+            # IOLoop doesn't (currently) close the underlying loop.
+            self.executor.submit(lambda: asyncio.get_event_loop().close()).result()  # type: ignore
 
     def test_asyncio_accessor(self):
         self.run_policy_test(asyncio.get_event_loop, asyncio.AbstractEventLoop)

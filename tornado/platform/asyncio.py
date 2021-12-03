@@ -32,6 +32,7 @@ import socket
 import sys
 import threading
 import typing
+import warnings
 from tornado.gen import convert_yielded
 from tornado.ioloop import IOLoop, _Selectable
 
@@ -391,7 +392,24 @@ class AnyThreadEventLoopPolicy(_BasePolicy):  # type: ignore
 
     .. versionadded:: 5.0
 
+    .. deprecated:: 6.2
+
+        ``AnyThreadEventLoopPolicy`` affects the implicit creation
+        of an event loop, which is deprecated in Python 3.10 and
+        will be removed in a future version of Python. At that time
+        ``AnyThreadEventLoopPolicy`` will no longer be useful.
+        If you are relying on it, use `asyncio.new_event_loop`
+        or `asyncio.run` explicitly in any non-main threads that
+        need event loops.
     """
+
+    def __init__(self) -> None:
+        super().__init__()
+        warnings.warn(
+            "AnyThreadEventLoopPolicy is deprecated, use asyncio.run "
+            "or asyncio.new_event_loop instead",
+            DeprecationWarning,
+        )
 
     def get_event_loop(self) -> asyncio.AbstractEventLoop:
         try:
