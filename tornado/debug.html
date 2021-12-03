@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ exc_type.__name__ }} at {{ handler.request.path }}</title>
+    <style type="text/css">
+        * {
+            padding: 0;
+            margin: 0;
+            box-sizing: border-box;
+        }
+        html {
+            font-size: 14px;
+        }
+        body {
+            font-family: sans-serif;
+            font-size: 1em;
+            line-height: 1.42;
+        }
+        pre {
+            font-size: 0.88rem;
+            line-height: 1.2;
+        }
+        .section {
+            padding: 15px 20px;
+            border-bottom: 1px solid transparent;
+            width: 100%;
+            display: table;
+        }
+        .summary {
+            background-color: #fff2f2;
+            border-bottom-color: #dcd2d2;
+            color: #170000;
+        }
+        .summary h1 {
+            color: #c10f0f;
+            font-weight: normal;
+        }
+        .summary h2 {
+            color: #7d4848;
+            font-weight: normal;
+            margin-top: 8px;
+        }
+        .traceback {
+            background-color: #f2f2f2;
+            border-bottom-color: #ddd;
+        }
+        .frame {
+            margin-bottom: 15px;
+            padding: 5px;
+        }
+        .frame .inner {
+            margin-left: 50px;
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+        .frame:first-child {
+            background-color: #fff;
+        }
+        .frame table.source {
+            margin-bottom: 10px;
+        }
+        .request {
+            background-color: #f6f6f6;
+            border-bottom-color: #ddd;
+        }
+        .request .row {
+            overflow-x: auto;
+            width: 100%;
+            margin-top: 25px;
+            margin-bottom: 25px;
+            padding-left: 160px;
+        }
+        .request h3 {
+            float: left;
+            margin-left: -160px;
+        }
+        .request h3 + p, 
+        .request h3 + table {
+            float: left;
+            width: 100%;
+        }
+        table.info {
+            margin-top: 15px;
+            font-size: 0.95rem;
+            border-collapse: collapse;
+        }
+        table.info th {
+            text-align: right;
+            color: #796262;
+            vertical-align: top;
+            padding-bottom: 2px;
+        }
+        table.info td {
+            padding-left: 10px;
+            padding-bottom: 2px;
+        }
+        table.source {
+            border-collapse: collapse;
+            color: #5d4545;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        table.source td:first-child {
+            padding-left: 15px;
+        }
+        table.source td:last-child {
+            width: 100%;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        table.source tr {
+            display: none;
+        }
+        table.source tr.hl {
+            position: relative;
+            display: table-row;
+        }
+        table.source.open tr {
+            display: table-row;
+        }
+        table.source tr.hl::after {
+            position: absolute;
+            left: 0;
+            content: '\2195';
+            vertical-align: middle;
+            display: inline-block;
+            font-size: 1.1em;
+        }
+        table.source tr.hl td {
+            background-color: #ddd;
+        }
+        .frame:first-child table.source tr.hl td {
+            color: #c10f0f;
+            background-color: #fdd;
+        }
+        table.compact {
+            text-align: left;
+            font-size: 0.88rem;
+            border-collapse: collapse;
+            width: 100%;
+            font-family: monospace;
+            background-color: #fff;
+        }
+        table.compact thead th {
+            font-weight: normal;
+            border: 1px solid #ddd;
+            padding: 4px 8px;
+        }
+        table.compact thead th:last-child {
+            width: 95%;
+        }
+        table.compact td {
+            border: 1px solid #ddd;
+            padding: 4px 8px;
+            vertical-align: top;
+        }
+        table.compact td:first-child {
+            white-space: nowrap;
+        }
+        table.compact tr:hover td {
+            background-color: #feffe8;
+        }
+        .small {
+            font-size: 0.85em;
+        }
+        .dropdown {
+            color: #000;
+            text-decoration: none;
+        }
+        .dropdown::after {
+            content: '';
+            vertical-align: middle;
+            display: inline-block;
+            line-height: 1;
+            margin-left: 0.15em;
+            border: 0.4em solid;
+            border-left-color: transparent;
+            border-right-color: transparent;
+            border-top: 0.65em solid;
+            border-bottom: none;
+        }
+        .dropdown.open::after {
+            border-top: none;
+            border-bottom: 0.65em solid;
+        }
+        .var-table {
+            display: none;
+        }
+        .dropdown.open + .var-table {
+            display: table;
+        }
+    </style>
+</head>
+<body>
+<div class="section summary">
+    <h1>{{ exc_type.__name__ }} at {{ handler.request.path }}</h1>
+
+    <h2>{% if exc_value %}{{ exc_value }}{% else %}No exception message supplied{% end %}</h2>
+
+    <table class="info">
+        <tr>
+            <th>Request method:</th>
+            <td>{{ handler.request.method }}</td>
+        </tr>
+        <tr>
+            <th>Request URL:</th>
+            <td>{{ handler.request.full_url() }}</td>
+        </tr>
+        <tr>
+            <th>Tornado version:</th>
+            <td>{{ tornado_version }}</td>
+        </tr>
+        <tr>
+            <th>Exception type:</th>
+            <td>{{ exc_type.__name__ }}</td>
+        </tr>
+        <tr>
+            <th>Exception value:</th>
+            <td><pre>{{ exc_value }}</pre></td>
+        </tr>
+        <tr>
+            <th>Exception location:</th>
+            <td>
+                {{ frames[-1]['filename'] }},
+                line {{ frames[-1]['lineno'] }},
+                in <code>{{ frames[-1]['function'] }}</code>
+            </td>
+        </tr>
+        <tr>
+            <th>Python executable:</th>
+            <td>{{ sys_executable }}</td>
+        </tr>
+        <tr>
+            <th>Python version:</th>
+            <td>{{ sys_version }}</td>
+        </tr>
+        <tr>
+            <th>Python path:</th>
+            <td><pre>{{ pprint(sys_path) }}</pre></td>
+        </tr>
+    </table>
+</div>
+
+<div class="section traceback">
+    <h2>Traceback</h2>
+
+    <div class="frames">
+    {% for frame in frames %}
+    <div class="frame">
+        <p class="title">
+            <code class="small">{{ frame['filename'] }}</code>,
+            line {{ frame['lineno'] }},
+            in <code>{{ frame['function'] }}</code>
+        </p>
+
+        <div class="inner">
+            {% if frame['lines'] %}
+            <table class="source" onclick="toggleSourceLines(this);">
+                <tbody>
+                    {% for lineno, line in frame['lines'] %}
+                    <tr {% if lineno == frame['lineno'] %}class="hl"{% end %}>
+                        <td>{{ lineno }}.</td>
+                        <td>{{ line }}</td>
+                    </tr>
+                    {% end %}
+                </tbody>
+            </table>
+            {% end %}
+            {% if frame['vars'] %}
+            <a href="#" class="dropdown" onclick="toggleSourceVars(event);">Local variables</a>
+            <table class="compact var-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for name, value in frame['vars'].items() %}
+                    <tr>
+                        <td>{{ name }}</td>
+                        <td>{{ value }}</td>
+                    </tr>
+                    {% end %}
+                </tbody>
+            </table>
+            {% end %}
+        </div>
+    </div>
+    {% end %}
+    </div>
+
+    <pre style="display: nne;">
+    {% for line in traceback.format_exception(exc_type, exc_value, exc_tb) %}
+        {{ line }}
+    {% end %}
+    </pre>
+</div>
+
+<div class="section request">
+    <h2>Request information</h2>
+
+    <div class="row">
+        <h3>User</h3>
+        <p>{{ handler.current_user }}</p>
+    </div>
+
+    <div class="row">
+        <h3>Query args</h3>
+        {% set query_args = handler.request.query_arguments %}
+        {% if query_args %}
+        <table class="compact">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for arg in query_args %}
+                <tr>
+                    <td>{{ arg }}</td>
+                    <td>{{ query_args[arg] }}</td>
+                </tr>
+                {% end %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No Query arguments</p>
+        {% end %}
+    </div>
+
+    <div class="row">
+        <h3>Body args</h3>
+        {% set body_args = handler.request.body_arguments %}
+        {% if body_args %}
+        <table class="compact">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for arg in body_args %}
+                <tr>
+                    <td>{{ arg }}</td>
+                    <td>{{ body_args[arg] }}</td>
+                </tr>
+                {% end %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No Body arguments</p>
+        {% end %}
+    </div>
+
+    <div class="row">
+        <h3>Headers</h3>
+        <table class="compact">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for arg, value in handler.request.headers.items() %}
+                <tr>
+                    <td>{{ arg }}</td>
+                    {% if arg == 'Cookie' %}
+                    <td><pre>{{ pprint(value) }}</pre></td>
+                    {% else %}
+                    <td>{{ value }}</td>
+                    {% end %}
+                </tr>
+                {% end %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="row">
+        <h3>App settings</h3>
+        <table class="compact">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for arg, value in app_settings.items() %}
+                <tr>
+                    <td>{{ arg }}</td>
+                    <td>{{ value }}</td>
+                </tr>
+                {% end %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="section">
+    <p>You're seeing this error because you have <code>debug=True</code> in your Tornado app settings.</p>
+    <p>Change that to <code>False</code>, and Tornado will display a standard page generated by the handler for this status code.
+    </p>
+</div>
+
+<script type="text/javascript">
+function toggleSourceLines(el) {
+    if (el.classList.contains('open'))
+        el.classList.remove('open');
+    else
+        el.classList.add('open');
+}
+
+function toggleSourceVars(e) {
+    e.preventDefault();
+
+    if (e.target.classList.contains('open'))
+        e.target.classList.remove('open');
+    else
+        e.target.classList.add('open');
+}
+</script>
+</body>
+</html>

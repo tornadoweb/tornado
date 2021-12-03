@@ -103,6 +103,7 @@ from tornado.routing import (
     _RuleList,
 )
 from tornado.util import ObjectDict, unicode_type, _websocket_mask
+from tornado.debug import ExceptionReporter
 
 url = URLSpec
 
@@ -1230,9 +1231,8 @@ class RequestHandler(object):
         """
         if self.settings.get("serve_traceback") and "exc_info" in kwargs:
             # in debug mode, try to send a traceback
-            self.set_header("Content-Type", "text/plain")
-            for line in traceback.format_exception(*kwargs["exc_info"]):
-                self.write(line)
+            reporter = ExceptionReporter(kwargs["exc_info"], self)
+            self.write(reporter.get_response())
             self.finish()
         else:
             self.finish(
