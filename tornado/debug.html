@@ -221,9 +221,9 @@
         <tr>
             <th>Exception location:</th>
             <td>
-                {{ frames[-1]['filename'] }},
-                line {{ frames[-1]['lineno'] }},
-                in <code>{{ frames[-1]['function'] }}</code>
+                {{ frames[0]['filename'] }},
+                line {{ frames[0]['lineno'] }},
+                in <code>{{ frames[0]['function'] }}</code>
             </td>
         </tr>
         <tr>
@@ -290,7 +290,7 @@
     {% end %}
     </div>
 
-    <pre style="display: nne;">
+    <pre style="display: none;">
     {% for line in traceback.format_exception(exc_type, exc_value, exc_tb) %}
         {{ line }}
     {% end %}
