@@ -497,7 +497,7 @@ class BaseIOStream(object):
         """
         future = self._start_read()
         if self.closed():
-            self._finish_read(self._read_buffer_size, False)
+            self._finish_read(self._read_buffer_size)
             return future
         self._read_until_close = True
         try:
@@ -595,7 +595,7 @@ class BaseIOStream(object):
                         self.error = exc_info[1]
             if self._read_until_close:
                 self._read_until_close = False
-                self._finish_read(self._read_buffer_size, False)
+                self._finish_read(self._read_buffer_size)
             elif self._read_future is not None:
                 # resolve reads that are pending and ready to complete
                 try:
@@ -812,7 +812,7 @@ class BaseIOStream(object):
         self._read_future = Future()
         return self._read_future
 
-    def _finish_read(self, size: int, streaming: bool) -> None:
+    def _finish_read(self, size: int) -> None:
         if self._user_read_buffer:
             self._read_buffer = self._after_user_read_buffer or bytearray()
             self._after_user_read_buffer = None
@@ -904,7 +904,7 @@ class BaseIOStream(object):
         """
         self._read_bytes = self._read_delimiter = self._read_regex = None
         self._read_partial = False
-        self._finish_read(pos, False)
+        self._finish_read(pos)
 
     def _find_read_pos(self) -> Optional[int]:
         """Attempts to find a position in the read buffer that satisfies
