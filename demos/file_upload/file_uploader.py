@@ -13,13 +13,8 @@ import mimetypes
 import os
 import sys
 from functools import partial
+from urllib.parse import quote
 from uuid import uuid4
-
-try:
-    from urllib.parse import quote
-except ImportError:
-    # Python 2.
-    from urllib import quote
 
 from tornado import gen, httpclient, ioloop
 from tornado.options import define, options
