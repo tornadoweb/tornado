@@ -195,11 +195,9 @@ class _StreamBuffer(object):
                 pos += size
                 size = 0
             else:
-                # Amortized O(1) shrink for Python 2
                 pos += size
-                if len(b) <= 2 * pos:
-                    del typing.cast(bytearray, b)[:pos]
-                    pos = 0
+                del typing.cast(bytearray, b)[:pos]
+                pos = 0
                 size = 0
 
         assert size == 0
@@ -1006,12 +1004,8 @@ class BaseIOStream(object):
         ).tobytes()
         self._read_buffer_pos += loc
         self._read_buffer_size -= loc
-        # Amortized O(1) shrink
-        # (this heuristic is implemented natively in Python 3.4+
-        #  but is replicated here for Python 2)
-        if self._read_buffer_pos > self._read_buffer_size:
-            del self._read_buffer[: self._read_buffer_pos]
-            self._read_buffer_pos = 0
+        del self._read_buffer[: self._read_buffer_pos]
+        self._read_buffer_pos = 0
         return b
 
     def _check_closed(self) -> None:
