@@ -191,7 +191,9 @@ class BaseAsyncIOLoop(IOLoop):
 
     def start(self) -> None:
         try:
-            old_loop = asyncio.get_event_loop()
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                old_loop = asyncio.get_event_loop()
         except (RuntimeError, AssertionError):
             old_loop = None  # type: ignore
         try:

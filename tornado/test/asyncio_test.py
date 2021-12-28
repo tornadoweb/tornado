@@ -32,7 +32,10 @@ class AsyncIOLoopTest(AsyncTestCase):
 
     def test_asyncio_callback(self):
         # Basic test that the asyncio loop is set up correctly.
-        asyncio.get_event_loop().call_soon(self.stop)
+        async def add_callback():
+            asyncio.get_event_loop().call_soon(self.stop)
+
+        self.asyncio_loop.run_until_complete(add_callback())
         self.wait()
 
     @gen_test
@@ -90,21 +93,15 @@ class AsyncIOLoopTest(AsyncTestCase):
         # Asyncio only supports coroutines that yield asyncio-compatible
         # Futures (which our Future is since 5.0).
         self.assertEqual(
-            asyncio.get_event_loop().run_until_complete(
-                native_coroutine_without_adapter()
-            ),
+            self.asyncio_loop.run_until_complete(native_coroutine_without_adapter()),
             42,
         )
         self.assertEqual(
-            asyncio.get_event_loop().run_until_complete(
-                native_coroutine_with_adapter()
-            ),
+            self.asyncio_loop.run_until_complete(native_coroutine_with_adapter()),
             42,
         )
         self.assertEqual(
-            asyncio.get_event_loop().run_until_complete(
-                native_coroutine_with_adapter2()
-            ),
+            self.asyncio_loop.run_until_complete(native_coroutine_with_adapter2()),
             42,
         )
 
@@ -119,7 +116,7 @@ class LeakTest(unittest.TestCase):
         asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
 
     def tearDown(self):
-        asyncio.get_event_loop().close()
+        asyncio.get_event_loop_policy().get_event_loop().close()
         asyncio.set_event_loop_policy(self.orig_policy)
 
     def test_ioloop_close_leak(self):
