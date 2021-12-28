@@ -161,6 +161,17 @@ class AsyncTestCase(unittest.TestCase):
                 response = self.wait()
                 # Test contents of response
                 self.assertIn("FriendFeed", response.body)
+
+    .. deprecated:: 6.2
+
+       AsyncTestCase and AsyncHTTPTestCase are deprecated due to changes
+       in future versions of Python (after 3.10). The interfaces used
+       in this class are incompatible with the deprecation and intended
+       removal of certain methods related to the idea of a "current"
+       event loop while no event loop is actually running. Use
+       `unittest.IsolatedAsyncioTestCase` instead. Note that this class
+       does not emit DeprecationWarnings until better migration guidance
+       can be provided.
     """
 
     def __init__(self, methodName: str = "runTest") -> None:
@@ -181,6 +192,13 @@ class AsyncTestCase(unittest.TestCase):
         self._test_generator = None  # type: Optional[Union[Generator, Coroutine]]
 
     def setUp(self) -> None:
+        setup_with_context_manager(self, warnings.catch_warnings())
+        warnings.filterwarnings(
+            "ignore",
+            message="There is no current event loop",
+            category=DeprecationWarning,
+            module=r"tornado\..*",
+        )
         super().setUp()
         # NOTE: this code attempts to navigate deprecation warnings introduced
         # in Python 3.10. The idea of an implicit current event loop is
