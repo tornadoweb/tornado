@@ -322,10 +322,18 @@ class AsyncIOLoop(BaseAsyncIOLoop):
 
     def close(self, all_fds: bool = False) -> None:
         if self.is_current:
-            self.clear_current()
+            with warnings.catch_warnings():
+                # We can't get here unless the warning in make_current
+                # was swallowed, so swallow the one from clear_current too.
+                warnings.simplefilter("ignore", DeprecationWarning)
+                self.clear_current()
         super().close(all_fds=all_fds)
 
     def make_current(self) -> None:
+        warnings.warn(
+            "make_current is deprecated; start the event loop first",
+            DeprecationWarning,
+        )
         if not self.is_current:
             try:
                 self.old_asyncio = asyncio.get_event_loop()

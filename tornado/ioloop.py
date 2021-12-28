@@ -41,6 +41,7 @@ import sys
 import time
 import math
 import random
+import warnings
 from inspect import isawaitable
 
 from tornado.concurrent import (
@@ -86,6 +87,7 @@ class IOLoop(Configurable):
 
     .. testcode::
 
+        import asyncio
         import errno
         import functools
         import socket
@@ -108,7 +110,7 @@ class IOLoop(Configurable):
                 io_loop = tornado.ioloop.IOLoop.current()
                 io_loop.spawn_callback(handle_connection, connection, address)
 
-        if __name__ == '__main__':
+        async def main():
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.setblocking(0)
@@ -118,18 +120,18 @@ class IOLoop(Configurable):
             io_loop = tornado.ioloop.IOLoop.current()
             callback = functools.partial(connection_ready, sock)
             io_loop.add_handler(sock.fileno(), callback, io_loop.READ)
-            io_loop.start()
+            await asyncio.Event().wait()
+
+        if __name__ == "__main__":
+            asyncio.run(main())
 
     .. testoutput::
        :hide:
 
-    By default, a newly-constructed `IOLoop` becomes the thread's current
-    `IOLoop`, unless there already is a current `IOLoop`. This behavior
-    can be controlled with the ``make_current`` argument to the `IOLoop`
-    constructor: if ``make_current=True``, the new `IOLoop` will always
-    try to become current and it raises an error if there is already a
-    current instance. If ``make_current=False``, the new `IOLoop` will
-    not try to become current.
+    Do not attempt to construct an `IOLoop` directly; this is deprecated
+    since Tornado 6.2. Instead, initialize the `asyncio` event loop and
+    use `IOLoop.current()` to access an `IOLoop` wrapper around the
+    current event loop.
 
     In general, an `IOLoop` cannot survive a fork or be shared across
     processes in any way. When multiple processes are being used, each
@@ -151,6 +153,12 @@ class IOLoop(Configurable):
        ``IOLoop.configure`` method cannot be used on Python 3 except
        to redundantly specify the `asyncio` event loop.
 
+    .. deprecated:: 6.2
+       It is deprecated to create an event loop that is "current" but not
+       currently running. This means it is deprecated to pass
+       ``make_current=True`` to the ``IOLoop`` constructor, or to create
+       an ``IOLoop`` while no asyncio event loop is running unless
+       ``make_current=False`` is used.
     """
 
     # These constants were originally based on constants from the epoll module.
@@ -259,6 +267,10 @@ class IOLoop(Configurable):
            an alias for this method). ``instance=False`` is deprecated,
            since even if we do not create an `IOLoop`, this method
            may initialize the asyncio loop.
+
+        .. deprecated:: 6.2
+           It is deprecated to call ``IOLoop.current()`` when no `asyncio`
+           event loop is running.
         """
         try:
             loop = asyncio.get_event_loop()
@@ -292,6 +304,13 @@ class IOLoop(Configurable):
 
         .. versionchanged:: 5.0
            This method also sets the current `asyncio` event loop.
+
+        .. deprecated:: 6.2
+           The concept of an event loop that is "current" without
+           currently running is deprecated in asyncio since Python
+           3.10. All related functionality in Tornado is also
+           deprecated. Instead, start the event loop with `asyncio.run`
+           before interacting with it.
         """
         # The asyncio event loops override this method.
         raise NotImplementedError()
@@ -304,7 +323,9 @@ class IOLoop(Configurable):
 
         .. versionchanged:: 5.0
            This method also clears the current `asyncio` event loop.
+        .. deprecated:: 6.2
         """
+        warnings.warn("clear_current is deprecated", DeprecationWarning)
         old = IOLoop.current(instance=False)
         if old is not None:
             old._clear_current_hook()

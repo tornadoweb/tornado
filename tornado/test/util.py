@@ -112,3 +112,11 @@ def ignore_deprecation():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         yield
+
+
+# From https://nedbatchelder.com/blog/201508/using_context_managers_in_test_setup.html
+def setup_with_context_manager(testcase, cm):
+    """Use a contextmanager to setUp a test case."""
+    val = cm.__enter__()
+    testcase.addCleanup(cm.__exit__, None, None, None)
+    return val

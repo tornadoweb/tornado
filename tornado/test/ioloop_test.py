@@ -17,7 +17,12 @@ from tornado import gen
 from tornado.ioloop import IOLoop, TimeoutError, PeriodicCallback
 from tornado.log import app_log
 from tornado.testing import AsyncTestCase, bind_unused_port, ExpectLog, gen_test
-from tornado.test.util import skipIfNonUnix, skipOnTravis
+from tornado.test.util import (
+    ignore_deprecation,
+    setup_with_context_manager,
+    skipIfNonUnix,
+    skipOnTravis,
+)
 
 import typing
 
@@ -420,6 +425,7 @@ class TestIOLoop(AsyncTestCase):
 # automatically set as current.
 class TestIOLoopCurrent(unittest.TestCase):
     def setUp(self):
+        setup_with_context_manager(self, ignore_deprecation())
         self.io_loop = None  # type: typing.Optional[IOLoop]
         IOLoop.clear_current()
 
@@ -466,6 +472,10 @@ class TestIOLoopCurrent(unittest.TestCase):
 
 
 class TestIOLoopCurrentAsync(AsyncTestCase):
+    def setUp(self):
+        super().setUp()
+        setup_with_context_manager(self, ignore_deprecation())
+
     @gen_test
     def test_clear_without_current(self):
         # If there is no current IOLoop, clear_current is a no-op (but
@@ -557,7 +567,7 @@ class TestIOLoopFutures(AsyncTestCase):
 
 class TestIOLoopRunSync(unittest.TestCase):
     def setUp(self):
-        self.io_loop = IOLoop()
+        self.io_loop = IOLoop(make_current=False)
 
     def tearDown(self):
         self.io_loop.close()
