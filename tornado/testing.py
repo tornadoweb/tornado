@@ -762,6 +762,14 @@ class ExpectLog(logging.Filter):
             raise Exception("did not get expected log message")
 
 
+# From https://nedbatchelder.com/blog/201508/using_context_managers_in_test_setup.html
+def setup_with_context_manager(testcase: unittest.TestCase, cm: Any) -> Any:
+    """Use a contextmanager to setUp a test case."""
+    val = cm.__enter__()
+    testcase.addCleanup(cm.__exit__, None, None, None)
+    return val
+
+
 def main(**kwargs: Any) -> None:
     """A simple test runner.
 
