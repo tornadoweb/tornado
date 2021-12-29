@@ -559,7 +559,8 @@ _SSL_CONTEXT_KEYWORDS = frozenset(
 
 
 def ssl_options_to_context(
-    ssl_options: Union[Dict[str, Any], ssl.SSLContext]
+    ssl_options: Union[Dict[str, Any], ssl.SSLContext],
+    server_side: Optional[bool] = None,
 ) -> ssl.SSLContext:
     """Try to convert an ``ssl_options`` dictionary to an
     `~ssl.SSLContext` object.
@@ -570,19 +571,34 @@ def ssl_options_to_context(
     `~ssl.SSLContext` equivalent, and may be used when a component which
     accepts both forms needs to upgrade to the `~ssl.SSLContext` version
     to use features like SNI or NPN.
+
+    .. versionchanged:: 6.2
+
+       Added server_side argument. Omitting this argument will
+       result in a DeprecationWarning on Python 3.10.
+
     """
     if isinstance(ssl_options, ssl.SSLContext):
         return ssl_options
     assert isinstance(ssl_options, dict)
     assert all(k in _SSL_CONTEXT_KEYWORDS for k in ssl_options), ssl_options
-    # Can't use create_default_context since this interface doesn't
-    # tell us client vs server.
-    context = ssl.SSLContext(ssl_options.get("ssl_version", ssl.PROTOCOL_SSLv23))
+    # TODO: Now that we have the server_side argument, can we switch to
+    # create_default_context or would that change behavior?
+    default_version = ssl.PROTOCOL_TLS
+    if server_side:
+        default_version = ssl.PROTOCOL_TLS_SERVER
+    elif server_side is not None:
+        default_version = ssl.PROTOCOL_TLS_CLIENT
+    context = ssl.SSLContext(ssl_options.get("ssl_version", default_version))
     if "certfile" in ssl_options:
         context.load_cert_chain(
             ssl_options["certfile"], ssl_options.get("keyfile", None)
         )
     if "cert_reqs" in ssl_options:
+        if ssl_options["cert_reqs"] == ssl.CERT_NONE:
+            # This may have been set automatically by PROTOCOL_TLS_CLIENT but is
+            # incompatible with CERT_NONE so we must manually clear it.
+            context.check_hostname = False
         context.verify_mode = ssl_options["cert_reqs"]
     if "ca_certs" in ssl_options:
         context.load_verify_locations(ssl_options["ca_certs"])
@@ -601,6 +617,7 @@ def ssl_wrap_socket(
     socket: socket.socket,
     ssl_options: Union[Dict[str, Any], ssl.SSLContext],
     server_hostname: Optional[str] = None,
+    server_side: Optional[bool] = None,
     **kwargs: Any
 ) -> ssl.SSLSocket:
     """Returns an ``ssl.SSLSocket`` wrapping the given socket.
@@ -610,14 +627,23 @@ def ssl_wrap_socket(
     keyword arguments are passed to ``wrap_socket`` (either the
     `~ssl.SSLContext` method or the `ssl` module function as
     appropriate).
+
+    .. versionchanged:: 6.2
+
+       Added server_side argument. Omitting this argument will
+       result in a DeprecationWarning on Python 3.10.
     """
-    context = ssl_options_to_context(ssl_options)
+    context = ssl_options_to_context(ssl_options, server_side=server_side)
+    if server_side is None:
+        server_side = False
     if ssl.HAS_SNI:
         # In python 3.4, wrap_socket only accepts the server_hostname
         # argument if HAS_SNI is true.
         # TODO: add a unittest (python added server-side SNI support in 3.4)
         # In the meantime it can be manually tested with
         # python3 -m tornado.httpclient https://sni.velox.ch
-        return context.wrap_socket(socket, server_hostname=server_hostname, **kwargs)
+        return context.wrap_socket(
+            socket, server_hostname=server_hostname, server_side=server_side, **kwargs
+        )
     else:
-        return context.wrap_socket(socket, **kwargs)
+        return context.wrap_socket(socket, server_side=server_side, **kwargs)
