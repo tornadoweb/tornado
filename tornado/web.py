@@ -1372,7 +1372,7 @@ class RequestHandler(object):
         requests. If the two do not match, we reject the form submission
         as a potential forgery.
 
-        See http://en.wikipedia.org/wiki/Cross-site_request_forgery
+        See https://developer.mozilla.org/en-US/docs/Web/Security/Types_of_attacks#cross-site_request_forgery_csrf
 
         This property is of type `bytes`, but it contains only ASCII
         characters. If a character string is required, there is no
@@ -1494,7 +1494,7 @@ class RequestHandler(object):
         or in a custom HTTP header named ``X-XSRFToken`` or ``X-CSRFToken``
         (the latter is accepted for compatibility with Django).
 
-        See http://en.wikipedia.org/wiki/Cross-site_request_forgery
+        See https://developer.mozilla.org/en-US/docs/Web/Security/Types_of_attacks#cross-site_request_forgery_csrf
 
         .. versionchanged:: 3.2.2
            Added support for cookie version 2.  Both versions 1 and 2 are
