@@ -1,0 +1,66 @@
+# The "test" workflow is run on every PR and runs tests across all
+# supported python versions and a range of configurations
+# specified in tox.ini. Also see the "build" workflow which is only
+# run for release branches and covers platforms other than linux-amd64
+# (Platform-specific issues are rare these days so we don't want to
+# take that time on every build).
+
+name: Test
+
+on: pull_request
+
+jobs:
+  # Before starting the full build matrix, run one test configuration
+  # and the linter (the `black` linter is especially likely to catch
+  # first-time contributors).
+  test_quick:
+    name: Run quick tests
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        name: Install Python
+        with:
+          # Lint python version must be synced with tox.ini
+          python-version: '3.8'
+      - name: Install tox
+        run: python -m pip install tox
+
+      - name: Run test suite
+        run: python -m tox -e py38,lint
+
+  test_tox:
+    name: Run full tests
+    needs: test_quick
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        include:
+          - python: '3.7'
+            tox_env: py37-full
+          - python: '3.8'
+            tox_env: py38-full
+          - python: '3.9'
+            tox_env: py39-full
+          - python: 'pypy3'
+            # Pypy is a lot slower due to jit warmup costs, so don't run the
+            # "full" test config there.
+            tox_env: pypy3
+          - python: '3.8'
+            # Docs python version must be synced with tox.ini
+            tox_env: docs
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        name: Install Python
+        with:
+          python-version: ${{ matrix.python}}
+      - name: Install apt packages
+        run: sudo apt-get update && sudo apt-get install libcurl4-openssl-dev
+      - name: Install tox
+        run: python -m pip install tox
+
+      - name: Run test suite
+        run: python -m tox -e ${{ matrix.tox_env }}
+  

@@ -1,0 +1,63 @@
+# The "build" workflow produces wheels (and the sdist) for all python
+# versions/platforms. Where possible (i.e. the build is not a cross-compile),
+# the test suite is also run for the wheel (this test covers fewer
+# configurations than the "test" workflow and tox.ini).
+name: Build
+
+on:
+  push:
+    branches:
+      # Run on release branches.
+      - "branch[0-9]*"
+      # Also run on certain other branches for testing.
+      - "build_workflow*"
+
+env:
+  python-version: '3.9'
+
+jobs:
+  build_sdist:
+    name: Build sdist
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        name: Install Python
+        with:
+          python-version: ${{ env.python-version }}
+
+      - name: Check metadata
+        run: "python setup.py check"
+      - name: Build sdist
+        run: "python setup.py sdist && ls -l dist"
+
+      - uses: actions/upload-artifact@v2
+        with:
+          path: ./dist/tornado-*.tar.gz
+
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-20.04, windows-2019, macos-10.15]
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        name: Install Python
+        with:
+          python-version: ${{ env.python-version }}
+      - name: Set up QEMU
+        if: runner.os == 'Linux'
+        uses: docker/setup-qemu-action@v1
+        with:
+          platforms: all
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.3.1
+
+      - uses: actions/upload-artifact@v2
+        with:
+          path: ./wheelhouse/*.whl
