@@ -420,7 +420,7 @@ class TestIOLoop(AsyncTestCase):
         # threads.
         def f():
             for i in range(10):
-                loop = IOLoop()
+                loop = IOLoop(make_current=False)
                 loop.close()
 
         yield gen.multi([self.io_loop.run_in_executor(None, f) for i in range(2)])
