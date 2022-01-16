@@ -279,9 +279,7 @@ class OptionsTest(unittest.TestCase):
                 options.define(a)
                 with self.assertRaises(Error) as cm:
                     options.define(b)
-                self.assertRegex(
-                    str(cm.exception), "Option.*foo.bar.*already defined"
-                )
+                self.assertRegex(str(cm.exception), "Option.*foo.bar.*already defined")
 
     def test_dash_underscore_cli(self):
         # Dashes and underscores should be interchangeable.
