@@ -12,6 +12,7 @@
 
 import asyncio
 import unittest
+import warnings
 
 from concurrent.futures import ThreadPoolExecutor
 from tornado import gen
@@ -26,12 +27,15 @@ from tornado.testing import AsyncTestCase, gen_test
 
 class AsyncIOLoopTest(AsyncTestCase):
     def get_new_ioloop(self):
-        io_loop = AsyncIOLoop()
+        io_loop = AsyncIOLoop(make_current=False)
         return io_loop
 
     def test_asyncio_callback(self):
         # Basic test that the asyncio loop is set up correctly.
-        asyncio.get_event_loop().call_soon(self.stop)
+        async def add_callback():
+            asyncio.get_event_loop().call_soon(self.stop)
+
+        self.asyncio_loop.run_until_complete(add_callback())
         self.wait()
 
     @gen_test
@@ -89,43 +93,42 @@ class AsyncIOLoopTest(AsyncTestCase):
         # Asyncio only supports coroutines that yield asyncio-compatible
         # Futures (which our Future is since 5.0).
         self.assertEqual(
-            asyncio.get_event_loop().run_until_complete(
-                native_coroutine_without_adapter()
-            ),
+            self.asyncio_loop.run_until_complete(native_coroutine_without_adapter()),
             42,
         )
         self.assertEqual(
-            asyncio.get_event_loop().run_until_complete(
-                native_coroutine_with_adapter()
-            ),
+            self.asyncio_loop.run_until_complete(native_coroutine_with_adapter()),
             42,
         )
         self.assertEqual(
-            asyncio.get_event_loop().run_until_complete(
-                native_coroutine_with_adapter2()
-            ),
+            self.asyncio_loop.run_until_complete(native_coroutine_with_adapter2()),
             42,
         )
+        # I'm not entirely sure why this manual cleanup is necessary but without
+        # it we have at-a-distance failures in ioloop_test.TestIOLoopCurrent.
+        asyncio.set_event_loop(None)
 
 
 class LeakTest(unittest.TestCase):
     def setUp(self):
         # Trigger a cleanup of the mapping so we start with a clean slate.
-        AsyncIOLoop().close()
+        AsyncIOLoop(make_current=False).close()
         # If we don't clean up after ourselves other tests may fail on
         # py34.
         self.orig_policy = asyncio.get_event_loop_policy()
         asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
 
     def tearDown(self):
-        asyncio.get_event_loop().close()
+        asyncio.get_event_loop_policy().get_event_loop().close()
         asyncio.set_event_loop_policy(self.orig_policy)
 
     def test_ioloop_close_leak(self):
         orig_count = len(IOLoop._ioloop_for_asyncio)
         for i in range(10):
             # Create and close an AsyncIOLoop using Tornado interfaces.
-            loop = AsyncIOLoop()
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                loop = AsyncIOLoop()
             loop.close()
         new_count = len(IOLoop._ioloop_for_asyncio) - orig_count
         self.assertEqual(new_count, 0)
@@ -171,17 +174,21 @@ class AnyThreadEventLoopPolicyTest(unittest.TestCase):
         return future.result()
 
     def run_policy_test(self, accessor, expected_type):
-        # With the default policy, non-main threads don't get an event
-        # loop.
-        self.assertRaises(
-            (RuntimeError, AssertionError), self.executor.submit(accessor).result
-        )
-        # Set the policy and we can get a loop.
-        asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
-        self.assertIsInstance(self.executor.submit(accessor).result(), expected_type)
-        # Clean up to silence leak warnings. Always use asyncio since
-        # IOLoop doesn't (currently) close the underlying loop.
-        self.executor.submit(lambda: asyncio.get_event_loop().close()).result()  # type: ignore
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            # With the default policy, non-main threads don't get an event
+            # loop.
+            self.assertRaises(
+                (RuntimeError, AssertionError), self.executor.submit(accessor).result
+            )
+            # Set the policy and we can get a loop.
+            asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
+            self.assertIsInstance(
+                self.executor.submit(accessor).result(), expected_type
+            )
+            # Clean up to silence leak warnings. Always use asyncio since
+            # IOLoop doesn't (currently) close the underlying loop.
+            self.executor.submit(lambda: asyncio.get_event_loop().close()).result()  # type: ignore
 
     def test_asyncio_accessor(self):
         self.run_policy_test(asyncio.get_event_loop, asyncio.AbstractEventLoop)

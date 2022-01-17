@@ -181,7 +181,9 @@ class TLSv1Test(BaseSSLTest, SSLTestMixin):
 
 class SSLContextTest(BaseSSLTest, SSLTestMixin):
     def get_ssl_options(self):
-        context = ssl_options_to_context(AsyncHTTPSTestCase.get_ssl_options(self))
+        context = ssl_options_to_context(
+            AsyncHTTPSTestCase.get_ssl_options(self), server_side=True
+        )
         assert isinstance(context, ssl.SSLContext)
         return context
 

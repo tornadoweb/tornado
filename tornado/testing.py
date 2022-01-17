@@ -20,6 +20,7 @@ import signal
 import socket
 import sys
 import unittest
+import warnings
 
 from tornado import gen
 from tornado.httpclient import AsyncHTTPClient, HTTPResponse
@@ -160,6 +161,17 @@ class AsyncTestCase(unittest.TestCase):
                 response = self.wait()
                 # Test contents of response
                 self.assertIn("FriendFeed", response.body)
+
+    .. deprecated:: 6.2
+
+       AsyncTestCase and AsyncHTTPTestCase are deprecated due to changes
+       in future versions of Python (after 3.10). The interfaces used
+       in this class are incompatible with the deprecation and intended
+       removal of certain methods related to the idea of a "current"
+       event loop while no event loop is actually running. Use
+       `unittest.IsolatedAsyncioTestCase` instead. Note that this class
+       does not emit DeprecationWarnings until better migration guidance
+       can be provided.
     """
 
     def __init__(self, methodName: str = "runTest") -> None:
@@ -180,9 +192,49 @@ class AsyncTestCase(unittest.TestCase):
         self._test_generator = None  # type: Optional[Union[Generator, Coroutine]]
 
     def setUp(self) -> None:
+        setup_with_context_manager(self, warnings.catch_warnings())
+        warnings.filterwarnings(
+            "ignore",
+            message="There is no current event loop",
+            category=DeprecationWarning,
+            module=r"tornado\..*",
+        )
         super().setUp()
-        self.io_loop = self.get_new_ioloop()
-        self.io_loop.make_current()
+        # NOTE: this code attempts to navigate deprecation warnings introduced
+        # in Python 3.10. The idea of an implicit current event loop is
+        # deprecated in that version, with the intention that tests like this
+        # explicitly create a new event loop and run on it. However, other
+        # packages such as pytest-asyncio (as of version 0.16.0) still rely on
+        # the implicit current event loop and we want to be compatible with them
+        # (even when run on 3.10, but not, of course, on the future version of
+        # python that removes the get/set_event_loop methods completely).
+        #
+        # Deprecation warnings were introduced inconsistently:
+        # asyncio.get_event_loop warns, but
+        # asyncio.get_event_loop_policy().get_event_loop does not. Similarly,
+        # none of the set_event_loop methods warn, although comments on
+        # https://bugs.python.org/issue39529 indicate that they are also
+        # intended for future removal.
+        #
+        # Therefore, we first attempt to access the event loop with the
+        # (non-warning) policy method, and if it fails, fall back to creating a
+        # new event loop. We do not have effective test coverage of the
+        # new event loop case; this will have to be watched when/if
+        # get_event_loop is actually removed.
+        self.should_close_asyncio_loop = False
+        try:
+            self.asyncio_loop = asyncio.get_event_loop_policy().get_event_loop()
+        except Exception:
+            self.asyncio_loop = asyncio.new_event_loop()
+            self.should_close_asyncio_loop = True
+
+        async def get_loop() -> IOLoop:
+            return self.get_new_ioloop()
+
+        self.io_loop = self.asyncio_loop.run_until_complete(get_loop())
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            self.io_loop.make_current()
 
     def tearDown(self) -> None:
         # Native coroutines tend to produce warnings if they're not
@@ -196,7 +248,7 @@ class AsyncTestCase(unittest.TestCase):
             tasks = asyncio.Task.all_tasks(asyncio_loop)
         # Tasks that are done may still appear here and may contain
         # non-cancellation exceptions, so filter them out.
-        tasks = [t for t in tasks if not t.done()]
+        tasks = [t for t in tasks if not t.done()]  # type: ignore
         for t in tasks:
             t.cancel()
         # Allow the tasks to run and finalize themselves (which means
@@ -217,13 +269,17 @@ class AsyncTestCase(unittest.TestCase):
 
         # Clean up Subprocess, so it can be used again with a new ioloop.
         Subprocess.uninitialize()
-        self.io_loop.clear_current()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            self.io_loop.clear_current()
         if not isinstance(self.io_loop, _NON_OWNED_IOLOOPS):
             # Try to clean up any file descriptors left open in the ioloop.
             # This avoids leaks, especially when tests are run repeatedly
             # in the same process with autoreload (because curl does not
             # set FD_CLOEXEC on its file descriptors)
             self.io_loop.close(all_fds=True)
+        if self.should_close_asyncio_loop:
+            self.asyncio_loop.close()
         super().tearDown()
         # In case an exception escaped or the StackContext caught an exception
         # when there wasn't a wait() to re-raise it, do so here.
@@ -242,7 +298,7 @@ class AsyncTestCase(unittest.TestCase):
         loop is being provided by another system (such as
         ``pytest-asyncio``).
         """
-        return IOLoop()
+        return IOLoop(make_current=False)
 
     def _handle_exception(
         self, typ: Type[Exception], value: Exception, tb: TracebackType
@@ -722,6 +778,14 @@ class ExpectLog(logging.Filter):
         self.logger.removeFilter(self)
         if not typ and self.required and not self.matched:
             raise Exception("did not get expected log message")
+
+
+# From https://nedbatchelder.com/blog/201508/using_context_managers_in_test_setup.html
+def setup_with_context_manager(testcase: unittest.TestCase, cm: Any) -> Any:
+    """Use a contextmanager to setUp a test case."""
+    val = cm.__enter__()
+    testcase.addCleanup(cm.__exit__, None, None, None)
+    return val
 
 
 def main(**kwargs: Any) -> None:

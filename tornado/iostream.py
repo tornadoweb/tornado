@@ -1530,6 +1530,7 @@ class SSLIOStream(IOStream):
             self._ssl_options,
             server_hostname=self._server_hostname,
             do_handshake_on_connect=False,
+            server_side=False,
         )
         self._add_io_state(old_state)
 

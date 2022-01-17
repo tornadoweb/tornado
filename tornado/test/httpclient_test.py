@@ -754,7 +754,7 @@ class HTTPResponseTestCase(unittest.TestCase):
 
 class SyncHTTPClientTest(unittest.TestCase):
     def setUp(self):
-        self.server_ioloop = IOLoop()
+        self.server_ioloop = IOLoop(make_current=False)
         event = threading.Event()
 
         @gen.coroutine

@@ -32,6 +32,7 @@ import socket
 import sys
 import threading
 import typing
+import warnings
 from tornado.gen import convert_yielded
 from tornado.ioloop import IOLoop, _Selectable
 
@@ -190,7 +191,9 @@ class BaseAsyncIOLoop(IOLoop):
 
     def start(self) -> None:
         try:
-            old_loop = asyncio.get_event_loop()
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                old_loop = asyncio.get_event_loop()
         except (RuntimeError, AssertionError):
             old_loop = None  # type: ignore
         try:
@@ -321,10 +324,18 @@ class AsyncIOLoop(BaseAsyncIOLoop):
 
     def close(self, all_fds: bool = False) -> None:
         if self.is_current:
-            self.clear_current()
+            with warnings.catch_warnings():
+                # We can't get here unless the warning in make_current
+                # was swallowed, so swallow the one from clear_current too.
+                warnings.simplefilter("ignore", DeprecationWarning)
+                self.clear_current()
         super().close(all_fds=all_fds)
 
     def make_current(self) -> None:
+        warnings.warn(
+            "make_current is deprecated; start the event loop first",
+            DeprecationWarning,
+        )
         if not self.is_current:
             try:
                 self.old_asyncio = asyncio.get_event_loop()
@@ -391,7 +402,24 @@ class AnyThreadEventLoopPolicy(_BasePolicy):  # type: ignore
 
     .. versionadded:: 5.0
 
+    .. deprecated:: 6.2
+
+        ``AnyThreadEventLoopPolicy`` affects the implicit creation
+        of an event loop, which is deprecated in Python 3.10 and
+        will be removed in a future version of Python. At that time
+        ``AnyThreadEventLoopPolicy`` will no longer be useful.
+        If you are relying on it, use `asyncio.new_event_loop`
+        or `asyncio.run` explicitly in any non-main threads that
+        need event loops.
     """
+
+    def __init__(self) -> None:
+        super().__init__()
+        warnings.warn(
+            "AnyThreadEventLoopPolicy is deprecated, use asyncio.run "
+            "or asyncio.new_event_loop instead",
+            DeprecationWarning,
+        )
 
     def get_event_loop(self) -> asyncio.AbstractEventLoop:
         try:
