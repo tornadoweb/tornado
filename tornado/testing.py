@@ -248,7 +248,7 @@ class AsyncTestCase(unittest.TestCase):
             tasks = asyncio.Task.all_tasks(asyncio_loop)
         # Tasks that are done may still appear here and may contain
         # non-cancellation exceptions, so filter them out.
-        tasks = [t for t in tasks if not t.done()]
+        tasks = [t for t in tasks if not t.done()]  # type: ignore
         for t in tasks:
             t.cancel()
         # Allow the tasks to run and finalize themselves (which means
