@@ -16,7 +16,8 @@ A minimal "hello world" example looks something like this:
 
 .. testcode::
 
-    import tornado.ioloop
+    import asyncio
+
     import tornado.web
 
     class MainHandler(tornado.web.RequestHandler):
@@ -28,10 +29,13 @@ A minimal "hello world" example looks something like this:
             (r"/", MainHandler),
         ])
 
-    if __name__ == "__main__":
+    async def main():
         app = make_app()
         app.listen(8888)
-        tornado.ioloop.IOLoop.current().start()
+        await asyncio.Event().wait()
+
+    if __name__ == "__main__":
+        asyncio.run(main())
 
 .. testoutput::
    :hide:
