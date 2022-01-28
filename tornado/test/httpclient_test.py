@@ -151,6 +151,11 @@ class InvalidGzipHandler(RequestHandler):
         self.write(body)
 
 
+class HeaderEncodingHandler(RequestHandler):
+    def get(self):
+        self.finish(self.request.headers["Foo"].encode("ISO8859-1"))
+
+
 # These tests end up getting run redundantly: once here with the default
 # HTTPClient implementation, and then again in each implementation's own
 # test suite.
@@ -175,6 +180,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
                 url("/patch", PatchHandler),
                 url("/set_header", SetHeaderHandler),
                 url("/invalid_gzip", InvalidGzipHandler),
+                url("/header-encoding", HeaderEncodingHandler),
             ],
             gzip=True,
         )
@@ -536,6 +542,16 @@ X-XSS-Protection: 1;
                 self.assertEqual(resp.headers["X-XSS-Protection"], "1; mode=block")
             finally:
                 self.io_loop.remove_handler(sock.fileno())
+
+    @gen_test
+    def test_header_encoding(self):
+        response = yield self.http_client.fetch(
+            self.get_url("/header-encoding"),
+            headers={
+                "Foo": "b\xe4r",
+            },
+        )
+        self.assertEqual(response.body, u"b\xe4r".encode("ISO8859-1"))
 
     def test_304_with_content_length(self):
         # According to the spec 304 responses SHOULD NOT include
