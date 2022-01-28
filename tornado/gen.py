@@ -606,6 +606,9 @@ def with_timeout(
     .. versionchanged:: 6.0.3
        ``asyncio.CancelledError`` is now always considered "quiet".
 
+    .. versionchanged:: 6.2
+       ``tornado.util.TimeoutError`` is now an alias to ``asyncio.TimeoutError``.
+
     """
     # It's tempting to optimize this by cancelling the input future on timeout
     # instead of creating a new one, but A) we can't know if we are the only
