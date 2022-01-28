@@ -351,6 +351,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             pycurl.HTTPHEADER,
             [
                 "%s: %s" % (native_str(k), native_str(v))
+                if v is not '' else "%s;" % native_str(k)
                 for k, v in request.headers.get_all()
             ],
         )
