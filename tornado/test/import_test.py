@@ -61,6 +61,7 @@ class ImportTest(unittest.TestCase):
         import tornado.ioloop
         import tornado.gen
         import tornado.util
+        import asyncio
 
         self.assertIs(tornado.ioloop.TimeoutError, tornado.util.TimeoutError)
         self.assertIs(tornado.gen.TimeoutError, tornado.util.TimeoutError)

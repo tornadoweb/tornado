@@ -350,7 +350,8 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         curl.setopt(
             pycurl.HTTPHEADER,
             [
-                "%s: %s" % (native_str(k), native_str(v))
+                b"%s: %s"
+                % (native_str(k).encode("ASCII"), native_str(v).encode("ISO8859-1"))
                 for k, v in request.headers.get_all()
             ],
         )
