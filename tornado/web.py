@@ -2307,7 +2307,10 @@ class _HandlerDelegate(httputil.HTTPMessageDelegate):
                 for loader in RequestHandler._template_loaders.values():
                     loader.reset()
         if not self.application.settings.get("static_hash_cache", True):
-            StaticFileHandler.reset()
+            static_handler_class = self.application.settings.get(
+                "static_handler_class", StaticFileHandler
+            )
+            static_handler_class.reset()
 
         self.handler = self.handler_class(
             self.application, self.request, **self.handler_kwargs
