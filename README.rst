@@ -20,7 +20,8 @@ Here is a simple "Hello, world" example web app for Tornado:
 
 .. code-block:: python
 
-    import tornado.ioloop
+    import asyncio
+
     import tornado.web
 
     class MainHandler(tornado.web.RequestHandler):
@@ -32,10 +33,13 @@ Here is a simple "Hello, world" example web app for Tornado:
             (r"/", MainHandler),
         ])
 
-    if __name__ == "__main__":
+    async def main():
         app = make_app()
         app.listen(8888)
-        tornado.ioloop.IOLoop.current().start()
+        await asyncio.Event().wait()
+
+    if __name__ == "__main__":
+        asyncio.run(main())
 
 This example does not use any of Tornado's asynchronous features; for
 that see this `simple chat room

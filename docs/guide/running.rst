@@ -8,10 +8,16 @@ configuring a WSGI container to find your application, you write a
 
 .. testcode::
 
-    def main():
+    import asyncio
+
+    async def amain():
         app = make_app()
         app.listen(8888)
-        IOLoop.current().start()
+        await asyncio.Event().wait()
+
+
+    def main():
+        asyncio.run(amain())
 
     if __name__ == '__main__':
         main()
