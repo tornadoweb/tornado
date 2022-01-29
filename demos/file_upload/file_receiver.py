@@ -9,12 +9,7 @@ See file_uploader.py in this directory for code that uploads files in this forma
 """
 
 import logging
-
-try:
-    from urllib.parse import unquote
-except ImportError:
-    # Python 2.
-    from urllib import unquote
+from urllib.parse import unquote
 
 import tornado.ioloop
 import tornado.web
