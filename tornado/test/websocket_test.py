@@ -346,6 +346,13 @@ class WebSocketTest(WebSocketBaseTestCase):
         self.assertEqual(response, u"hello \u00e9")
 
     @gen_test
+    def test_error_in_closed_client_write_message(self):
+        ws = yield self.ws_connect("/echo")
+        ws.close()
+        with self.assertRaises(WebSocketClosedError):
+            ws.write_message(u"hello \u00e9")
+
+    @gen_test
     def test_render_message(self):
         ws = yield self.ws_connect("/render")
         ws.write_message("hello")
