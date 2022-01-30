@@ -90,7 +90,7 @@ instances to define isolated sets of options, such as for subcommands.
 
    `parse_command_line` or `parse_config_file` function should called after
    logging configuration and user-defined command line flags using the
-   `callback` option definition, or these configurations will not take effect.
+   ``callback`` option definition, or these configurations will not take effect.
 
 .. versionchanged:: 4.3
    Dashes and underscores are fully interchangeable in option names;
