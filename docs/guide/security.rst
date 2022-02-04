@@ -215,10 +215,7 @@ Cross-site request forgery protection
 
 `Cross-site request
 forgery <http://en.wikipedia.org/wiki/Cross-site_request_forgery>`_, or
-XSRF, is a common problem for personalized web applications. See the
-`Wikipedia
-article <http://en.wikipedia.org/wiki/Cross-site_request_forgery>`_ for
-more information on how XSRF works.
+XSRF, is a common problem for personalized web applications.
 
 The generally accepted solution to prevent XSRF is to cookie every user
 with an unpredictable value and include that value as an additional
