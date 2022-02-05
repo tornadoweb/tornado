@@ -6,6 +6,7 @@ from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, 
 from tornado.web import Application
 import asyncio
 import contextlib
+import inspect
 import gc
 import os
 import platform
@@ -171,6 +172,14 @@ class AsyncTestCaseWrapperTest(unittest.TestCase):
         test.run(result)
         self.assertEqual(len(result.errors), 1)
         self.assertIn("Return value from test method ignored", result.errors[0][1])
+
+    def test_unwrap(self):
+        class Test(AsyncTestCase):
+            def test_foo(self):
+                pass
+
+        test = Test("test_foo")
+        self.assertIs(inspect.unwrap(test.test_foo), test.test_foo.orig_method)
 
 
 class SetUpTearDownTest(unittest.TestCase):
