@@ -15,6 +15,7 @@
 
 """Miscellaneous network utility code."""
 
+import asyncio
 import concurrent.futures
 import errno
 import os
@@ -323,6 +324,7 @@ class Resolver(Configurable):
     The implementations of this interface included with Tornado are
 
     * `tornado.netutil.DefaultExecutorResolver`
+    * `tornado.netutil.DefaultLoopResolver`
     * `tornado.netutil.BlockingResolver` (deprecated)
     * `tornado.netutil.ThreadedResolver` (deprecated)
     * `tornado.netutil.OverrideResolver`
@@ -405,6 +407,25 @@ class DefaultExecutorResolver(Resolver):
             None, _resolve_addr, host, port, family
         )
         return result
+
+
+class DefaultLoopResolver(Resolver):
+    """Resolver implementation using `asyncio.get_running_loop().getaddrinfo`."""
+
+    async def resolve(
+        self, host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
+    ) -> List[Tuple[int, Any]]:
+        # On Solaris, getaddrinfo fails if the given port is not found
+        # in /etc/services and no socket type is given, so we must pass
+        # one here.  The socket type used here doesn't seem to actually
+        # matter (we discard the one we get back in the results),
+        # so the addresses we return should still be usable with SOCK_DGRAM.
+        return [
+            (fam, address)
+            for fam, _, _, _, address in await asyncio.get_running_loop().getaddrinfo(
+                host, port, family=family, type=socket.SOCK_STREAM
+            )
+        ]
 
 
 class ExecutorResolver(Resolver):
