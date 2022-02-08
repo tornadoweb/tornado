@@ -128,6 +128,7 @@ missing_references = {
     "tornado.options._Mockable",
     "tornado.web._ArgDefaultMarker",
     "tornado.web._HandlerDelegate",
+    "_RequestHandlerType",
     "traceback",
     "WSGIAppType",
     "Yieldable",
