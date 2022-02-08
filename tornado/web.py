@@ -1822,10 +1822,10 @@ class RequestHandler(object):
             self.clear_header(h)
 
 
-RequestHandlerType = TypeVar("RequestHandlerType", bound=RequestHandler)
+_RequestHandlerType = TypeVar("_RequestHandlerType", bound=RequestHandler)
 
 
-def stream_request_body(cls: Type[RequestHandlerType]) -> Type[RequestHandlerType]:
+def stream_request_body(cls: Type[_RequestHandlerType]) -> Type[_RequestHandlerType]:
     """Apply to `RequestHandler` subclasses to enable streaming body support.
 
     This decorator implies the following changes:
