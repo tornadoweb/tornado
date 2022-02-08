@@ -430,7 +430,6 @@ class ExecutorResolver(Resolver):
         executor: Optional[concurrent.futures.Executor] = None,
         close_executor: bool = True,
     ) -> None:
-        self.io_loop = IOLoop.current()
         if executor is not None:
             self.executor = executor
             self.close_executor = close_executor
