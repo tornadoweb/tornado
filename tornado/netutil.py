@@ -446,8 +446,8 @@ class ExecutorResolver(Resolver):
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
 
     .. deprecated:: 5.0
-       The default `Resolver` now uses `.IOLoop.run_in_executor`; use that instead
-       of this class.
+       The default `Resolver` now uses `asyncio.get_running_loop().getaddrinfo`;
+       use that instead of this class.
     """
 
     def initialize(
