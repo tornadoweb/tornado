@@ -722,6 +722,7 @@ class ResolveTimeoutTestCase(AsyncTestCase):
 
         # Let the hanging coroutine clean up after itself
         cleanup_event.set()
+        await gen.sleep(0)
 
 
 class MaxHeaderSizeTest(AsyncHTTPTestCase):
