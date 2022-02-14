@@ -346,7 +346,7 @@ class Resolver(Configurable):
 
     @classmethod
     def configurable_default(cls) -> Type["Resolver"]:
-        return DefaultExecutorResolver
+        return DefaultLoopResolver
 
     def resolve(
         self, host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
