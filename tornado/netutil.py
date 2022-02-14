@@ -414,7 +414,7 @@ class DefaultExecutorResolver(Resolver):
 
 
 class DefaultLoopResolver(Resolver):
-    """Resolver implementation using `asyncio.get_running_loop().getaddrinfo`."""
+    """Resolver implementation using `asyncio.loop.getaddrinfo`."""
 
     async def resolve(
         self, host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
@@ -446,7 +446,7 @@ class ExecutorResolver(Resolver):
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
 
     .. deprecated:: 5.0
-       The default `Resolver` now uses `asyncio.get_running_loop().getaddrinfo`;
+       The default `Resolver` now uses `asyncio.loop.getaddrinfo`;
        use that instead of this class.
     """
 
