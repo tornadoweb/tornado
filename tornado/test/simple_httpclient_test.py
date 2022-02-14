@@ -264,7 +264,7 @@ class SimpleHTTPClientTestMixin(object):
 
     @skipOnTravis
     @gen_test
-    def test_connect_timeout(self: typing.Any):
+    async def test_connect_timeout(self: typing.Any):
         timeout = 0.1
 
         cleanup_event = Event()
@@ -278,8 +278,8 @@ class SimpleHTTPClientTestMixin(object):
 
         with closing(self.create_client(resolver=TimeoutResolver())) as client:
             with self.assertRaises(HTTPTimeoutError):
-                yield client.fetch(
-                    self.get_url("/hello"),
+                await client.fetch(
+                    "http://example.invalid/hello",
                     connect_timeout=timeout,
                     request_timeout=3600,
                     raise_error=True,
@@ -289,7 +289,7 @@ class SimpleHTTPClientTestMixin(object):
         # wait more than a single IOLoop iteration for the SSL case,
         # which logs errors on unexpected EOF.
         cleanup_event.set()
-        yield gen.sleep(0.2)
+        await gen.sleep(0.2)
 
     @skipOnTravis
     def test_request_timeout(self: typing.Any):
@@ -704,32 +704,24 @@ class HostnameMappingTestCase(AsyncHTTPTestCase):
         self.assertEqual(response.body, b"Hello world!")
 
 
-class ResolveTimeoutTestCase(AsyncHTTPTestCase):
-    def setUp(self):
-        self.cleanup_event = Event()
-        test = self
+class ResolveTimeoutTestCase(AsyncTestCase):
+    @gen_test
+    async def test_resolve_timeout(self):
+        cleanup_event = Event()
 
         # Dummy Resolver subclass that never finishes.
         class BadResolver(Resolver):
-            @gen.coroutine
-            def resolve(self, *args, **kwargs):
-                yield test.cleanup_event.wait()
+            async def resolve(self, *args, **kwargs):
+                await cleanup_event.wait()
                 # Return something valid so the test doesn't raise during cleanup.
-                return [(socket.AF_INET, ("127.0.0.1", test.get_http_port()))]
+                return [(socket.AF_INET, ("127.0.0.1", 80))]
 
-        super().setUp()
-        self.http_client = SimpleAsyncHTTPClient(resolver=BadResolver())
-
-    def get_app(self):
-        return Application([url("/hello", HelloWorldHandler)])
-
-    def test_resolve_timeout(self):
-        with self.assertRaises(HTTPTimeoutError):
-            self.fetch("/hello", connect_timeout=0.1, raise_error=True)
+        with closing(SimpleAsyncHTTPClient(resolver=BadResolver())) as http_client:
+            with self.assertRaises(HTTPTimeoutError):
+                await http_client.fetch("https://example.invalid", raise_error=False),
 
         # Let the hanging coroutine clean up after itself
-        self.cleanup_event.set()
-        self.io_loop.run_sync(lambda: gen.sleep(0))
+        cleanup_event.set()
 
 
 class MaxHeaderSizeTest(AsyncHTTPTestCase):
