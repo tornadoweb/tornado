@@ -195,6 +195,66 @@ class _Connector(object):
             stream.close()
 
 
+_HAS_IPv6 = hasattr(socket, "AF_INET6")
+
+
+def _ipaddr_info(
+    host: str, port: int, family: socket.AddressFamily
+) -> Optional[Tuple[int, Any]]:
+    # Based on the implementation from
+    # https://github.com/python/cpython/blob/3.10/Lib/asyncio/base_events.py#L103-L159
+    # Python Software Foundation License
+
+    # Try to skip getaddrinfo if "host" is already an IP. Users might have
+    # handled name resolution in their own code and pass in resolved IPs.
+    if not hasattr(socket, "inet_pton"):
+        return None
+
+    if host is None:
+        return None
+
+    if port is None:
+        port = 0
+    elif isinstance(port, bytes) and port == b"":
+        port = 0
+    elif isinstance(port, str) and port == "":
+        port = 0
+    else:
+        # If port's a service name like "http", don't skip getaddrinfo.
+        try:
+            port = int(port)
+        except (TypeError, ValueError):
+            return None
+
+    if family == socket.AF_UNSPEC:
+        afs = [socket.AF_INET]
+        if _HAS_IPv6:
+            afs.append(socket.AF_INET6)
+    else:
+        afs = [family]
+
+    if isinstance(host, bytes):
+        host = host.decode("idna")
+    if "%" in host:
+        # Linux's inet_pton doesn't accept an IPv6 zone index after host,
+        # like '::1%lo0'.
+        return None
+
+    for af in afs:
+        try:
+            socket.inet_pton(af, host)
+            # The host has already been resolved.
+            if _HAS_IPv6 and af == socket.AF_INET6:
+                return af, (host, port, 0, 0)
+            else:
+                return af, (host, port)
+        except OSError:
+            pass
+
+    # "host" is not an IP address.
+    return None
+
+
 class TCPClient(object):
     """A non-blocking TCP connection factory.
 
@@ -257,7 +317,13 @@ class TCPClient(object):
                 timeout = IOLoop.current().time() + timeout.total_seconds()
             else:
                 raise TypeError("Unsupported timeout %r" % timeout)
-        if timeout is not None:
+
+        info = _ipaddr_info(host, port, af)
+        if info is not None:
+            # "host" is already a resolved IP.
+            addrinfo = [info]  # type: Any
+
+        elif timeout is not None:
             addrinfo = await gen.with_timeout(
                 timeout, self.resolver.resolve(host, port, af)
             )
