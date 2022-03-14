@@ -26,5 +26,6 @@ toml==0.10.1
 tomli==2.0.1
 tox==3.20.1
 typed-ast==1.4.1
+types-pycurl==7.44.7
 typing-extensions==4.1.1
 virtualenv==20.1.0
