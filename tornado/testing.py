@@ -649,7 +649,7 @@ def gen_test(  # noqa: F811
         if inspect.iscoroutinefunction(f):
             coro = pre_coroutine
         else:
-            coro = gen.coroutine(pre_coroutine)
+            coro = gen.coroutine(pre_coroutine)  # type: ignore[assignment]
 
         @functools.wraps(coro)
         def post_coroutine(self, *args, **kwargs):

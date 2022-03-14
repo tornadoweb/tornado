@@ -147,7 +147,7 @@ class InvalidGzipHandler(RequestHandler):
         # This length is taken from the bad-response example reported in
         # https://github.com/tornadoweb/tornado/pull/2875 (uncompressed).
         body = "".join("Hello World {}\n".format(i) for i in range(9000))[:149051]
-        body = gzip.compress(body.encode(), compresslevel=6) + b"\00"
+        body = gzip.compress(body.encode(), compresslevel=6) + b"\00"  # type: ignore[assignment]
         self.write(body)
 
 

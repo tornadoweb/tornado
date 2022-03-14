@@ -408,7 +408,7 @@ class HTTPServerRequest(object):
 
     def full_url(self) -> str:
         """Reconstructs the full URL for this request."""
-        return self.protocol + "://" + self.host + self.uri
+        return self.protocol + "://" + self.host + self.uri  # type: ignore[operator]
 
     def request_time(self) -> float:
         """Returns the amount of time it took for this request to execute."""

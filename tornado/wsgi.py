@@ -191,7 +191,14 @@ class WSGIContainer(object):
         request_time = 1000.0 * request.request_time()
         assert request.method is not None
         assert request.uri is not None
-        summary = request.method + " " + request.uri + " (" + request.remote_ip + ")"
+        summary = (
+            request.method  # type: ignore[operator]
+            + " "
+            + request.uri
+            + " ("
+            + request.remote_ip
+            + ")"
+        )
         log_method("%d %s %.2fms", status_code, summary, request_time)
 
 

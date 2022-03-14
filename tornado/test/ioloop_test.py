@@ -730,12 +730,12 @@ class TestPeriodicCallbackAsync(AsyncTestCase):
         pc = None
 
         @gen.coroutine
-        def callback() -> None:
+        def callback() -> None:  # type: ignore[misc]
             counts[0] += 1
             yield gen.sleep(0.025)
             counts[1] += 1
             if counts[1] == 3:
-                pc.stop()
+                pc.stop()  # type: ignore[attr-defined]
                 self.io_loop.add_callback(self.stop)
 
         pc = PeriodicCallback(callback, 10)
@@ -753,7 +753,7 @@ class TestPeriodicCallbackAsync(AsyncTestCase):
             await gen.sleep(0.025)
             counts[1] += 1
             if counts[1] == 3:
-                pc.stop()
+                pc.stop()  # type: ignore[attr-defined]
                 self.io_loop.add_callback(self.stop)
 
         pc = PeriodicCallback(callback, 10)

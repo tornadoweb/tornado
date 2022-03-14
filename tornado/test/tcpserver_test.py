@@ -126,11 +126,11 @@ class TestMultiprocess(unittest.TestCase):
         proc = subprocess.Popen(
             sys.executable, stdin=subprocess.PIPE, stdout=subprocess.PIPE
         )
-        proc.stdin.write(utf8(code))
-        proc.stdin.close()
+        proc.stdin.write(utf8(code))  # type: ignore[union-attr]
+        proc.stdin.close()  # type: ignore[union-attr]
         proc.wait()
-        stdout = proc.stdout.read()
-        proc.stdout.close()
+        stdout = proc.stdout.read()  # type: ignore[union-attr]
+        proc.stdout.close()  # type: ignore[union-attr]
         if proc.returncode != 0:
             raise RuntimeError(
                 "Process returned %d. stdout=%r" % (proc.returncode, stdout)
