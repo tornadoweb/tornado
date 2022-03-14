@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from concurrent import futures
+from collections.abc import Generator
 import contextlib
 import datetime
 import functools
@@ -28,6 +29,7 @@ from tornado.test.util import (
     skipIfNonUnix,
     skipOnTravis,
 )
+from tornado.concurrent import Future
 
 import typing
 
@@ -725,17 +727,16 @@ class TestPeriodicCallbackAsync(AsyncTestCase):
         pc.stop()
         self.assertEqual(count, 3)
 
-    def test_periodic_coro(self):
+    def test_periodic_coro(self) -> None:
         counts = [0, 0]
-        pc = None
 
         @gen.coroutine
-        def callback() -> None:  # type: ignore[misc]
+        def callback() -> "Generator[Future[None], object, None]":
             counts[0] += 1
             yield gen.sleep(0.025)
             counts[1] += 1
             if counts[1] == 3:
-                pc.stop()  # type: ignore[attr-defined]
+                pc.stop()
                 self.io_loop.add_callback(self.stop)
 
         pc = PeriodicCallback(callback, 10)
@@ -744,16 +745,15 @@ class TestPeriodicCallbackAsync(AsyncTestCase):
         self.assertEqual(counts[0], 3)
         self.assertEqual(counts[1], 3)
 
-    def test_periodic_async(self):
+    def test_periodic_async(self) -> None:
         counts = [0, 0]
-        pc = None
 
         async def callback() -> None:
             counts[0] += 1
             await gen.sleep(0.025)
             counts[1] += 1
             if counts[1] == 3:
-                pc.stop()  # type: ignore[attr-defined]
+                pc.stop()
                 self.io_loop.add_callback(self.stop)
 
         pc = PeriodicCallback(callback, 10)
