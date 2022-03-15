@@ -364,6 +364,10 @@ class RequestHandler(object):
         """Returns the status code for our response."""
         return self._status_code
 
+    def get_reason(self) -> str:
+        """Returns the reason phrase for our response."""
+        return self._reason
+
     def set_header(self, name: str, value: _HeaderTypes) -> None:
         """Sets the given response header name and value.
 

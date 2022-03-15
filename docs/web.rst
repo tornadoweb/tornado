@@ -142,6 +142,7 @@
    .. automethod:: RequestHandler.get_browser_locale
    .. automethod:: RequestHandler.get_current_user
    .. automethod:: RequestHandler.get_login_url
+   .. automethod:: RequestHandler.get_reason
    .. automethod:: RequestHandler.get_status
    .. automethod:: RequestHandler.get_template_path
    .. automethod:: RequestHandler.get_user_locale

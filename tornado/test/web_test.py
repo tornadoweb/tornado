@@ -572,6 +572,7 @@ class TypeCheckHandler(RequestHandler):
         self.errors = {}  # type: typing.Dict[str, str]
 
         self.check_type("status", self.get_status(), int)
+        self.check_type("reason", self.get_reason(), str)
 
         # get_argument is an exception from the general rule of using
         # type str for non-body data mainly for historical reasons.
