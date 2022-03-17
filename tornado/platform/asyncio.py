@@ -75,6 +75,7 @@ def _atexit_callback() -> None:
 atexit.register(_atexit_callback)
 
 if sys.version_info >= (3, 10):
+
     def _get_event_loop() -> asyncio.AbstractEventLoop:
         try:
             return asyncio.get_running_loop()
@@ -82,6 +83,8 @@ if sys.version_info >= (3, 10):
             pass
 
         return asyncio.get_event_loop_policy().get_event_loop()
+
+
 else:
     from asyncio import get_event_loop as _get_event_loop
 
