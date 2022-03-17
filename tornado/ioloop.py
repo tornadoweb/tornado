@@ -315,8 +315,14 @@ class IOLoop(Configurable):
         # The asyncio event loops override this method.
         raise NotImplementedError()
 
+
     @staticmethod
     def clear_current() -> None:
+        warnings.warn("clear_current is deprecated", DeprecationWarning)
+        IOLoop._clear_current()
+
+    @staticmethod
+    def _clear_current() -> None:
         """Clears the `IOLoop` for the current thread.
 
         Intended primarily for use by test frameworks in between tests.
@@ -325,7 +331,6 @@ class IOLoop(Configurable):
            This method also clears the current `asyncio` event loop.
         .. deprecated:: 6.2
         """
-        warnings.warn("clear_current is deprecated", DeprecationWarning)
         old = IOLoop.current(instance=False)
         if old is not None:
             old._clear_current_hook()
