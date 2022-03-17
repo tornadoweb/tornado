@@ -315,7 +315,6 @@ class IOLoop(Configurable):
         # The asyncio event loops override this method.
         raise NotImplementedError()
 
-
     @staticmethod
     def clear_current() -> None:
         warnings.warn("clear_current is deprecated", DeprecationWarning)
