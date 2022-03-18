@@ -4,7 +4,6 @@ import sys
 import textwrap
 import unittest
 
-from tornado.escape import utf8, to_unicode
 from tornado import gen
 from tornado.iostream import IOStream
 from tornado.log import app_log
@@ -122,20 +121,20 @@ class TestMultiprocess(unittest.TestCase):
     # processes, each of which prints its task id to stdout (a single
     # byte, so we don't have to worry about atomicity of the shared
     # stdout stream) and then exits.
-    def run_subproc(self, code):
-        proc = subprocess.Popen(
-            sys.executable, stdin=subprocess.PIPE, stdout=subprocess.PIPE
-        )
-        proc.stdin.write(utf8(code))  # type: ignore[union-attr]
-        proc.stdin.close()  # type: ignore[union-attr]
-        proc.wait()
-        stdout = proc.stdout.read()  # type: ignore[union-attr]
-        proc.stdout.close()  # type: ignore[union-attr]
-        if proc.returncode != 0:
-            raise RuntimeError(
-                "Process returned %d. stdout=%r" % (proc.returncode, stdout)
+    def run_subproc(self, code: str) -> str:
+        try:
+            result = subprocess.run(
+                sys.executable,
+                capture_output=True,
+                input=code,
+                encoding="utf8",
+                check=True,
             )
-        return to_unicode(stdout)
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(
+                f"Process returned {e.returncode} stdout={e.stdout}"
+            ) from e
+        return result.stdout
 
     def test_single(self):
         # As a sanity check, run the single-process version through this test
