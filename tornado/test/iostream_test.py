@@ -816,7 +816,10 @@ class TestIOStreamMixin(TestReadWriteMixin):
         # windows, making this check redundant with skipIfNonUnix, but
         # we sometimes enable it on other platforms for testing.
         io_loop = IOLoop.current()
-        if isinstance(io_loop.selector_loop, AddThreadSelectorEventLoop):
+        if isinstance(
+            io_loop.selector_loop,  # type: ignore[attr-defined]
+            AddThreadSelectorEventLoop,
+        ):
             self.skipTest("AddThreadSelectorEventLoop not supported")
         server, client = yield self.make_iostream_pair()
         try:

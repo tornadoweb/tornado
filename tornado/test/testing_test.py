@@ -179,7 +179,10 @@ class AsyncTestCaseWrapperTest(unittest.TestCase):
                 pass
 
         test = Test("test_foo")
-        self.assertIs(inspect.unwrap(test.test_foo), test.test_foo.orig_method)
+        self.assertIs(
+            inspect.unwrap(test.test_foo),
+            test.test_foo.orig_method,  # type: ignore[attr-defined]
+        )
 
 
 class SetUpTearDownTest(unittest.TestCase):
@@ -347,7 +350,7 @@ class GetNewIOLoopTest(AsyncTestCase):
             try:
                 self.orig_loop = asyncio.get_event_loop()
             except RuntimeError:
-                self.orig_loop = None
+                self.orig_loop = None  # type: ignore[assignment]
         self.new_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.new_loop)
         super().setUp()

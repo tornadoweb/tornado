@@ -9,5 +9,6 @@
 
 black
 flake8
-mypy
+mypy>=0.941
+types-pycurl
 tox

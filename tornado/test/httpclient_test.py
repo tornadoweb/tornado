@@ -139,15 +139,15 @@ class SetHeaderHandler(RequestHandler):
 
 
 class InvalidGzipHandler(RequestHandler):
-    def get(self):
+    def get(self) -> None:
         # set Content-Encoding manually to avoid automatic gzip encoding
         self.set_header("Content-Type", "text/plain")
         self.set_header("Content-Encoding", "gzip")
         # Triggering the potential bug seems to depend on input length.
         # This length is taken from the bad-response example reported in
         # https://github.com/tornadoweb/tornado/pull/2875 (uncompressed).
-        body = "".join("Hello World {}\n".format(i) for i in range(9000))[:149051]
-        body = gzip.compress(body.encode(), compresslevel=6) + b"\00"
+        text = "".join("Hello World {}\n".format(i) for i in range(9000))[:149051]
+        body = gzip.compress(text.encode(), compresslevel=6) + b"\00"
         self.write(body)
 
 
