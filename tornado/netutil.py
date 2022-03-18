@@ -15,6 +15,7 @@
 
 """Miscellaneous network utility code."""
 
+import asyncio
 import concurrent.futures
 import errno
 import os
@@ -322,6 +323,7 @@ class Resolver(Configurable):
 
     The implementations of this interface included with Tornado are
 
+    * `tornado.netutil.DefaultLoopResolver`
     * `tornado.netutil.DefaultExecutorResolver`
     * `tornado.netutil.BlockingResolver` (deprecated)
     * `tornado.netutil.ThreadedResolver` (deprecated)
@@ -332,6 +334,10 @@ class Resolver(Configurable):
     .. versionchanged:: 5.0
        The default implementation has changed from `BlockingResolver` to
        `DefaultExecutorResolver`.
+
+    .. versionchanged:: 6.2
+       The default implementation has changed from `DefaultExecutorResolver` to
+       `DefaultLoopResolver`.
     """
 
     @classmethod
@@ -340,7 +346,7 @@ class Resolver(Configurable):
 
     @classmethod
     def configurable_default(cls) -> Type["Resolver"]:
-        return DefaultExecutorResolver
+        return DefaultLoopResolver
 
     def resolve(
         self, host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
@@ -407,6 +413,25 @@ class DefaultExecutorResolver(Resolver):
         return result
 
 
+class DefaultLoopResolver(Resolver):
+    """Resolver implementation using `asyncio.loop.getaddrinfo`."""
+
+    async def resolve(
+        self, host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
+    ) -> List[Tuple[int, Any]]:
+        # On Solaris, getaddrinfo fails if the given port is not found
+        # in /etc/services and no socket type is given, so we must pass
+        # one here.  The socket type used here doesn't seem to actually
+        # matter (we discard the one we get back in the results),
+        # so the addresses we return should still be usable with SOCK_DGRAM.
+        return [
+            (fam, address)
+            for fam, _, _, _, address in await asyncio.get_running_loop().getaddrinfo(
+                host, port, family=family, type=socket.SOCK_STREAM
+            )
+        ]
+
+
 class ExecutorResolver(Resolver):
     """Resolver implementation using a `concurrent.futures.Executor`.
 
@@ -421,8 +446,8 @@ class ExecutorResolver(Resolver):
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
 
     .. deprecated:: 5.0
-       The default `Resolver` now uses `.IOLoop.run_in_executor`; use that instead
-       of this class.
+       The default `Resolver` now uses `asyncio.loop.getaddrinfo`;
+       use that instead of this class.
     """
 
     def initialize(
