@@ -123,9 +123,12 @@ class BaseAsyncIOLoop(IOLoop):
         # TODO(bdarnell): consider making self.asyncio_loop a weakref
         # for AsyncIOMainLoop and make _ioloop_for_asyncio a
         # WeakKeyDictionary.
-        for loop in list(IOLoop._ioloop_for_asyncio):
+        for loop in IOLoop._ioloop_for_asyncio.copy():
             if loop.is_closed():
-                del IOLoop._ioloop_for_asyncio[loop]
+                try:
+                    del IOLoop._ioloop_for_asyncio[loop]
+                except KeyError:
+                    pass
         IOLoop._ioloop_for_asyncio[asyncio_loop] = self
 
         self._thread_identity = 0
