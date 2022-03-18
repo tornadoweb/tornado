@@ -326,6 +326,10 @@ class IOLoop(Configurable):
         .. deprecated:: 6.2
         """
         warnings.warn("clear_current is deprecated", DeprecationWarning)
+        IOLoop._clear_current()
+
+    @staticmethod
+    def _clear_current() -> None:
         old = IOLoop.current(instance=False)
         if old is not None:
             old._clear_current_hook()

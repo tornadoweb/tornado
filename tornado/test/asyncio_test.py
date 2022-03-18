@@ -129,7 +129,7 @@ class LeakTest(unittest.TestCase):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", DeprecationWarning)
                 loop = AsyncIOLoop()
-            loop.close()
+                loop.close()
         new_count = len(IOLoop._ioloop_for_asyncio) - orig_count
         self.assertEqual(new_count, 0)
 

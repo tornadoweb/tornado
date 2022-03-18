@@ -74,6 +74,20 @@ def _atexit_callback() -> None:
 
 atexit.register(_atexit_callback)
 
+if sys.version_info >= (3, 10):
+
+    def _get_event_loop() -> asyncio.AbstractEventLoop:
+        try:
+            return asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+
+        return asyncio.get_event_loop_policy().get_event_loop()
+
+
+else:
+    from asyncio import get_event_loop as _get_event_loop
+
 
 class BaseAsyncIOLoop(IOLoop):
     def initialize(  # type: ignore
@@ -191,9 +205,7 @@ class BaseAsyncIOLoop(IOLoop):
 
     def start(self) -> None:
         try:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", DeprecationWarning)
-                old_loop = asyncio.get_event_loop()
+            old_loop = _get_event_loop()
         except (RuntimeError, AssertionError):
             old_loop = None  # type: ignore
         try:
@@ -320,11 +332,7 @@ class AsyncIOLoop(BaseAsyncIOLoop):
 
     def close(self, all_fds: bool = False) -> None:
         if self.is_current:
-            with warnings.catch_warnings():
-                # We can't get here unless the warning in make_current
-                # was swallowed, so swallow the one from clear_current too.
-                warnings.simplefilter("ignore", DeprecationWarning)
-                self.clear_current()
+            self._clear_current()
         super().close(all_fds=all_fds)
 
     def make_current(self) -> None:
