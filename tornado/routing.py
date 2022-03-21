@@ -349,7 +349,7 @@ class RuleRouter(Router):
             passed to Rule constructor).
         """
         for rule in rules:
-            if isinstance(rule, (tuple, list)):
+            if isinstance(rule, (tuple, list, Sequence)):
                 assert len(rule) in (2, 3, 4)
                 if isinstance(rule[0], basestring_type):
                     rule = Rule(PathMatches(rule[0]), *rule[1:])
