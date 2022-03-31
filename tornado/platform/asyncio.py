@@ -212,7 +212,6 @@ class BaseAsyncIOLoop(IOLoop):
         except (RuntimeError, AssertionError):
             old_loop = None  # type: ignore
         try:
-            self._setup_logging()
             asyncio.set_event_loop(self.asyncio_loop)
             self.asyncio_loop.run_forever()
         finally:
