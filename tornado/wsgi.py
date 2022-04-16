@@ -41,7 +41,7 @@ import typing
 
 if typing.TYPE_CHECKING:
     from typing import Type  # noqa: F401
-    from wsgiref.types import WSGIApplication as WSGIAppType  # noqa: F401
+    from _typeshed.wsgi import WSGIApplication as WSGIAppType  # noqa: F401
 
 
 # PEP 3333 specifies that WSGI on python 3 generally deals with byte strings
