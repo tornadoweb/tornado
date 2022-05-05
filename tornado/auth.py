@@ -853,10 +853,19 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
     _OAUTH_ACCESS_TOKEN_URL = "https://www.googleapis.com/oauth2/v4/token"
     _OAUTH_USERINFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
     _OAUTH_NO_CALLBACKS = False
-    _OAUTH_SETTINGS_KEY = "google_oauth"
+
+    @property
+    def google_oauth_config(self) -> Dict:
+        """If your config is stored at a different location, override this method for custom provision."""
+        handler = cast(RequestHandler, self)
+        return handler.settings['google_oauth']
 
     async def get_authenticated_user(
-        self, redirect_uri: str, code: str
+        self,
+        redirect_uri: str,
+        code: str,
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Handles the login for the Google user, returning an access token.
 
@@ -887,7 +896,7 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
                     else:
                         self.authorize_redirect(
                             redirect_uri='http://your.site.com/auth/google',
-                            client_id=self.settings['google_oauth']['key'],
+                            client_id=self.google_oauth_config['key'],
                             scope=['profile', 'email'],
                             response_type='code',
                             extra_params={'approval_prompt': 'auto'})
@@ -899,14 +908,17 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
 
            The ``callback`` argument was removed. Use the returned awaitable object instead.
         """  # noqa: E501
-        handler = cast(RequestHandler, self)
+        if not client_id:
+            client_id = self.google_oauth_config["key"]
+        if not client_secret:
+            client_secret = self.google_oauth_config["secret"]
         http = self.get_auth_http_client()
         body = urllib.parse.urlencode(
             {
                 "redirect_uri": redirect_uri,
                 "code": code,
-                "client_id": handler.settings[self._OAUTH_SETTINGS_KEY]["key"],
-                "client_secret": handler.settings[self._OAUTH_SETTINGS_KEY]["secret"],
+                "client_id": client_id,
+                "client_secret": client_secret,
                 "grant_type": "authorization_code",
             }
         )
