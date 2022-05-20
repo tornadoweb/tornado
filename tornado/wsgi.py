@@ -75,10 +75,13 @@ class WSGIContainer(object):
             start_response(status, response_headers)
             return [b"Hello world!\n"]
 
-        container = tornado.wsgi.WSGIContainer(simple_app)
-        http_server = tornado.httpserver.HTTPServer(container)
-        http_server.listen(8888)
-        tornado.ioloop.IOLoop.current().start()
+        async def main():
+            container = tornado.wsgi.WSGIContainer(simple_app)
+            http_server = tornado.httpserver.HTTPServer(container)
+            http_server.listen(8888)
+            await asyncio.Event().wait()
+
+        asyncio.run(main())
 
     This class is intended to let other frameworks (Django, web.py, etc)
     run on the Tornado HTTP server and I/O loop.

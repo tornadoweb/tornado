@@ -30,6 +30,7 @@ S3 client with this module:
 
 """
 
+import asyncio
 import bisect
 import datetime
 import hashlib
@@ -39,7 +40,6 @@ import urllib
 
 from tornado import escape
 from tornado import httpserver
-from tornado import ioloop
 from tornado import web
 from tornado.util import unicode_type
 from tornado.options import options, define
@@ -54,12 +54,12 @@ define("root_directory", default="/tmp/s3", help="Root storage directory")
 define("bucket_depth", default=0, help="Bucket file system depth limit")
 
 
-def start(port, root_directory, bucket_depth):
+async def start(port, root_directory, bucket_depth):
     """Starts the mock S3 server on the given port at the given path."""
     application = S3Application(root_directory, bucket_depth)
     http_server = httpserver.HTTPServer(application)
     http_server.listen(port)
-    ioloop.IOLoop.current().start()
+    await asyncio.Event().wait()
 
 
 class S3Application(web.Application):
@@ -265,4 +265,4 @@ class ObjectHandler(BaseRequestHandler):
 
 if __name__ == "__main__":
     options.parse_command_line()
-    start(options.port, options.root_directory, options.bucket_depth)
+    asyncio.run(start(options.port, options.root_directory, options.bucket_depth))

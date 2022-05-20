@@ -15,6 +15,7 @@
 # under the License.
 
 import aiopg
+import asyncio
 import bcrypt
 import markdown
 import os.path
@@ -313,4 +314,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    tornado.ioloop.IOLoop.current().run_sync(main)
+    asyncio.run(main())

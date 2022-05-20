@@ -60,8 +60,8 @@ class Condition(_TimeoutGarbageCollector):
 
     .. testcode::
 
+        import asyncio
         from tornado import gen
-        from tornado.ioloop import IOLoop
         from tornado.locks import Condition
 
         condition = Condition()
@@ -80,7 +80,7 @@ class Condition(_TimeoutGarbageCollector):
             # Wait for waiter() and notifier() in parallel
             await gen.multi([waiter(), notifier()])
 
-        IOLoop.current().run_sync(runner)
+        asyncio.run(runner())
 
     .. testoutput::
 
@@ -109,10 +109,6 @@ class Condition(_TimeoutGarbageCollector):
        `notify`. Now, the notification will always be received on the
        next iteration of the `.IOLoop`.
     """
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.io_loop = ioloop.IOLoop.current()
 
     def __repr__(self) -> str:
         result = "<%s" % (self.__class__.__name__,)
@@ -169,8 +165,8 @@ class Event(object):
 
     .. testcode::
 
+        import asyncio
         from tornado import gen
-        from tornado.ioloop import IOLoop
         from tornado.locks import Event
 
         event = Event()
@@ -189,7 +185,7 @@ class Event(object):
         async def runner():
             await gen.multi([waiter(), setter()])
 
-        IOLoop.current().run_sync(runner)
+        asyncio.run(runner())
 
     .. testoutput::
 
@@ -302,8 +298,7 @@ class Semaphore(_TimeoutGarbageCollector):
        from tornado.ioloop import IOLoop
        from tornado.concurrent import Future
 
-       # Ensure reliable doctest output: resolve Futures one at a time.
-       futures_q = deque([Future() for _ in range(3)])
+       inited = False
 
        async def simulator(futures):
            for f in futures:
@@ -312,15 +307,21 @@ class Semaphore(_TimeoutGarbageCollector):
                await gen.sleep(0)
                f.set_result(None)
 
-       IOLoop.current().add_callback(simulator, list(futures_q))
-
        def use_some_resource():
+           global inited
+           global futures_q
+           if not inited:
+               inited = True
+               # Ensure reliable doctest output: resolve Futures one at a time.
+               futures_q = deque([Future() for _ in range(3)])
+               IOLoop.current().add_callback(simulator, list(futures_q))
+
            return futures_q.popleft()
 
     .. testcode:: semaphore
 
+        import asyncio
         from tornado import gen
-        from tornado.ioloop import IOLoop
         from tornado.locks import Semaphore
 
         sem = Semaphore(2)
@@ -338,7 +339,7 @@ class Semaphore(_TimeoutGarbageCollector):
             # Join all workers.
             await gen.multi([worker(i) for i in range(3)])
 
-        IOLoop.current().run_sync(runner)
+        asyncio.run(runner())
 
     .. testoutput:: semaphore
 

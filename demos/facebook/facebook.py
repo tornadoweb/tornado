@@ -14,11 +14,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import asyncio
 import os.path
 import tornado.auth
 import tornado.escape
 import tornado.httpserver
-import tornado.ioloop
 import tornado.options
 import tornado.web
 
@@ -109,15 +109,15 @@ class PostModule(tornado.web.UIModule):
         return self.render_string("modules/post.html", post=post)
 
 
-def main():
+async def main():
     tornado.options.parse_command_line()
     if not (options.facebook_api_key and options.facebook_secret):
         print("--facebook_api_key and --facebook_secret must be set")
         return
     http_server = tornado.httpserver.HTTPServer(Application())
     http_server.listen(options.port)
-    tornado.ioloop.IOLoop.current().start()
+    await asyncio.Event().wait()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

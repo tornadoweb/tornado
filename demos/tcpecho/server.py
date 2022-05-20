@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
+import asyncio
 import logging
-from tornado.ioloop import IOLoop
 from tornado import gen
 from tornado.iostream import StreamClosedError
 from tornado.tcpserver import TCPServer
@@ -28,9 +28,13 @@ class EchoServer(TCPServer):
                 print(e)
 
 
-if __name__ == "__main__":
+async def main():
     options.parse_command_line()
+    logger.info("Listening on TCP port %d", options.port)
     server = EchoServer()
     server.listen(options.port)
-    logger.info("Listening on TCP port %d", options.port)
-    IOLoop.current().start()
+    await asyncio.Event().wait()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

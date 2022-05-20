@@ -10,17 +10,13 @@ configuring a WSGI container to find your application, you write a
 
     import asyncio
 
-    async def amain():
+    async def main():
         app = make_app()
         app.listen(8888)
         await asyncio.Event().wait()
 
-
-    def main():
-        asyncio.run(amain())
-
     if __name__ == '__main__':
-        main()
+        asyncio.run(main())
 
 .. testoutput::
    :hide:
@@ -38,6 +34,15 @@ Processes and ports
 Due to the Python GIL (Global Interpreter Lock), it is necessary to run
 multiple Python processes to take full advantage of multi-CPU machines.
 Typically it is best to run one process per CPU.
+
+.. note::
+
+   This section is somewhat out of date; the built-in multi-process mode
+   produces deprecation warnings on Python 3.10 (in addition to its other
+   limitations). Updated guidance is still in development; tentative
+   recommendations include running independent processes as described
+   in the paragraph beginning "For more sophisticated deployments", or
+   using ``SO_REUSEPORT`` instead of forking. 
 
 Tornado includes a built-in multi-process mode to start several
 processes at once (note that multi-process mode does not work on
