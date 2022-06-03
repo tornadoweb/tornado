@@ -125,14 +125,15 @@ class TestMultiprocess(unittest.TestCase):
         try:
             result = subprocess.run(
                 sys.executable,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 input=code,
                 encoding="utf8",
                 check=True,
             )
         except subprocess.CalledProcessError as e:
             raise RuntimeError(
-                f"Process returned {e.returncode} stdout={e.stdout}"
+                f"Process returned {e.returncode} output={e.stdout}"
             ) from e
         return result.stdout
 
@@ -186,6 +187,30 @@ class TestMultiprocess(unittest.TestCase):
             IOLoop.current().run_sync(lambda: None)
             print(task_id(), end='')
         """
+        )
+        out = self.run_subproc(code)
+        self.assertEqual("".join(sorted(out)), "012")
+
+    def test_reuse_port(self):
+        code = textwrap.dedent(
+            """
+            import socket
+            from tornado.ioloop import IOLoop
+            from tornado.netutil import bind_sockets
+            from tornado.process import task_id, fork_processes
+            from tornado.tcpserver import TCPServer
+
+            # Pick an unused port which we will be able to bind to multiple times.
+            (sock,) = bind_sockets(0, address='127.0.0.1',
+                family=socket.AF_INET, reuse_port=True)
+            port = sock.getsockname()[1]
+
+            fork_processes(3)
+            server = TCPServer()
+            server.listen(port, address='127.0.0.1', reuse_port=True)
+            IOLoop.current().run_sync(lambda: None)
+            print(task_id(), end='')
+            """
         )
         out = self.run_subproc(code)
         self.assertEqual("".join(sorted(out)), "012")

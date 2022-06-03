@@ -24,7 +24,12 @@ from tornado import gen
 from tornado.log import app_log
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
-from tornado.netutil import bind_sockets, add_accept_handler, ssl_wrap_socket
+from tornado.netutil import (
+    bind_sockets,
+    add_accept_handler,
+    ssl_wrap_socket,
+    _DEFAULT_BACKLOG,
+)
 from tornado import process
 from tornado.util import errno_from_exception
 
@@ -140,15 +145,38 @@ class TCPServer(object):
                     'keyfile "%s" does not exist' % self.ssl_options["keyfile"]
                 )
 
-    def listen(self, port: int, address: str = "") -> None:
+    def listen(
+        self,
+        port: int,
+        address: Optional[str] = None,
+        family: socket.AddressFamily = socket.AF_UNSPEC,
+        backlog: int = _DEFAULT_BACKLOG,
+        flags: Optional[int] = None,
+        reuse_port: bool = False,
+    ) -> None:
         """Starts accepting connections on the given port.
 
         This method may be called more than once to listen on multiple ports.
         `listen` takes effect immediately; it is not necessary to call
-        `TCPServer.start` afterwards.  It is, however, necessary to start
-        the `.IOLoop`.
+        `TCPServer.start` afterwards.  It is, however, necessary to start the
+        event loop if it is not already running.
+
+        All arguments have the same meaning as in
+        `tornado.netutil.bind_sockets`.
+
+        .. versionchanged:: 6.2
+
+           Added ``family``, ``backlog``, ``flags``, and ``reuse_port``
+           arguments to match `tornado.netutil.bind_sockets`.
         """
-        sockets = bind_sockets(port, address=address)
+        sockets = bind_sockets(
+            port,
+            address=address,
+            family=family,
+            backlog=backlog,
+            flags=flags,
+            reuse_port=reuse_port,
+        )
         self.add_sockets(sockets)
 
     def add_sockets(self, sockets: Iterable[socket.socket]) -> None:
@@ -175,34 +203,43 @@ class TCPServer(object):
         port: int,
         address: Optional[str] = None,
         family: socket.AddressFamily = socket.AF_UNSPEC,
-        backlog: int = 128,
+        backlog: int = _DEFAULT_BACKLOG,
+        flags: Optional[int] = None,
         reuse_port: bool = False,
     ) -> None:
         """Binds this server to the given port on the given address.
 
-        To start the server, call `start`. If you want to run this server
-        in a single process, you can call `listen` as a shortcut to the
-        sequence of `bind` and `start` calls.
+        To start the server, call `start`. If you want to run this server in a
+        single process, you can call `listen` as a shortcut to the sequence of
+        `bind` and `start` calls.
 
         Address may be either an IP address or hostname.  If it's a hostname,
-        the server will listen on all IP addresses associated with the
-        name.  Address may be an empty string or None to listen on all
-        available interfaces.  Family may be set to either `socket.AF_INET`
-        or `socket.AF_INET6` to restrict to IPv4 or IPv6 addresses, otherwise
-        both will be used if available.
+        the server will listen on all IP addresses associated with the name.
+        Address may be an empty string or None to listen on all available
+        interfaces.  Family may be set to either `socket.AF_INET` or
+        `socket.AF_INET6` to restrict to IPv4 or IPv6 addresses, otherwise both
+        will be used if available.
 
-        The ``backlog`` argument has the same meaning as for
-        `socket.listen <socket.socket.listen>`. The ``reuse_port`` argument
-        has the same meaning as for `.bind_sockets`.
+        The ``backlog`` argument has the same meaning as for `socket.listen
+        <socket.socket.listen>`. The ``reuse_port`` argument has the same
+        meaning as for `.bind_sockets`.
 
-        This method may be called multiple times prior to `start` to listen
-        on multiple ports or interfaces.
+        This method may be called multiple times prior to `start` to listen on
+        multiple ports or interfaces.
 
         .. versionchanged:: 4.4
            Added the ``reuse_port`` argument.
+
+        .. versionchanged:: 6.2
+           Added the ``flags`` argument to match `.bind_sockets`.
         """
         sockets = bind_sockets(
-            port, address=address, family=family, backlog=backlog, reuse_port=reuse_port
+            port,
+            address=address,
+            family=family,
+            backlog=backlog,
+            flags=flags,
+            reuse_port=reuse_port,
         )
         if self._started:
             self.add_sockets(sockets)
