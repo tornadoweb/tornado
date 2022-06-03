@@ -22,19 +22,22 @@ Here is a simple "Hello, world" example app:
 
 .. testcode::
 
-    import tornado.ioloop
+    import asyncio
     import tornado.web
 
     class MainHandler(tornado.web.RequestHandler):
         def get(self):
             self.write("Hello, world")
 
-    if __name__ == "__main__":
+    async def main():
         application = tornado.web.Application([
             (r"/", MainHandler),
         ])
         application.listen(8888)
-        tornado.ioloop.IOLoop.current().start()
+        await asyncio.Event().wait()
+
+    if __name__ == "__main__":
+        asyncio.run(main())
 
 .. testoutput::
    :hide:
@@ -1966,7 +1969,6 @@ class Application(ReversibleRouter):
         ])
         http_server = httpserver.HTTPServer(application)
         http_server.listen(8080)
-        ioloop.IOLoop.current().start()
 
     The constructor for this class takes in a list of `~.routing.Rule`
     objects or tuples of values corresponding to the arguments of
@@ -2108,16 +2110,16 @@ class Application(ReversibleRouter):
     ) -> HTTPServer:
         """Starts an HTTP server for this application on the given port.
 
-        This is a convenience alias for creating an `.HTTPServer`
-        object and calling its listen method.  Keyword arguments not
-        supported by `HTTPServer.listen <.TCPServer.listen>` are passed to the
-        `.HTTPServer` constructor.  For advanced uses
-        (e.g. multi-process mode), do not use this method; create an
-        `.HTTPServer` and call its
+        This is a convenience alias for creating an `.HTTPServer` object and
+        calling its listen method.  Keyword arguments not supported by
+        `HTTPServer.listen <.TCPServer.listen>` are passed to the `.HTTPServer`
+        constructor.  For advanced uses (e.g. multi-process mode), do not use
+        this method; create an `.HTTPServer` and call its
         `.TCPServer.bind`/`.TCPServer.start` methods directly.
 
         Note that after calling this method you still need to call
-        ``IOLoop.current().start()`` to start the server.
+        ``IOLoop.current().start()`` (or run within ``asyncio.run``) to start
+        the server.
 
         Returns the `.HTTPServer` object.
 

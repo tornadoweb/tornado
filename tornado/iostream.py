@@ -1110,11 +1110,7 @@ class IOStream(BaseIOStream):
             stream.close()
 
         if __name__ == '__main__':
-            tornado.ioloop.IOLoop.current().run_sync(main)
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-            stream = tornado.iostream.IOStream(s)
-            stream.connect(("friendfeed.com", 80), send_request)
-            tornado.ioloop.IOLoop.current().start()
+            asyncio.run(main())
 
     .. testoutput::
        :hide:

@@ -85,7 +85,7 @@ class Queue(Generic[_T]):
 
     .. testcode::
 
-        from tornado import gen
+        import asyncio
         from tornado.ioloop import IOLoop
         from tornado.queues import Queue
 
@@ -95,7 +95,7 @@ class Queue(Generic[_T]):
             async for item in q:
                 try:
                     print('Doing work on %s' % item)
-                    await gen.sleep(0.01)
+                    await asyncio.sleep(0.01)
                 finally:
                     q.task_done()
 
@@ -111,7 +111,7 @@ class Queue(Generic[_T]):
             await q.join()       # Wait for consumer to finish all tasks.
             print('Done')
 
-        IOLoop.current().run_sync(main)
+        asyncio.run(main())
 
     .. testoutput::
 
@@ -353,16 +353,20 @@ class PriorityQueue(Queue):
 
     .. testcode::
 
+        import asyncio
         from tornado.queues import PriorityQueue
 
-        q = PriorityQueue()
-        q.put((1, 'medium-priority item'))
-        q.put((0, 'high-priority item'))
-        q.put((10, 'low-priority item'))
+        async def main():
+            q = PriorityQueue()
+            q.put((1, 'medium-priority item'))
+            q.put((0, 'high-priority item'))
+            q.put((10, 'low-priority item'))
 
-        print(q.get_nowait())
-        print(q.get_nowait())
-        print(q.get_nowait())
+            print(await q.get())
+            print(await q.get())
+            print(await q.get())
+
+        asyncio.run(main())
 
     .. testoutput::
 
@@ -386,16 +390,20 @@ class LifoQueue(Queue):
 
     .. testcode::
 
+        import asyncio
         from tornado.queues import LifoQueue
 
-        q = LifoQueue()
-        q.put(3)
-        q.put(2)
-        q.put(1)
+        async def main():
+            q = LifoQueue()
+            q.put(3)
+            q.put(2)
+            q.put(1)
 
-        print(q.get_nowait())
-        print(q.get_nowait())
-        print(q.get_nowait())
+            print(await q.get())
+            print(await q.get())
+            print(await q.get())
+
+        asyncio.run(main())
 
     .. testoutput::
 

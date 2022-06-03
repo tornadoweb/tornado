@@ -17,11 +17,11 @@ To run this app, you must first register an application with Twitter:
      browser.
 """
 
+import asyncio
 import logging
 
 from tornado.auth import TwitterMixin
 from tornado.escape import json_decode, json_encode
-from tornado.ioloop import IOLoop
 from tornado import gen
 from tornado.options import define, options, parse_command_line, parse_config_file
 from tornado.web import Application, RequestHandler, authenticated
@@ -86,7 +86,7 @@ class LogoutHandler(BaseHandler):
         self.clear_cookie(self.COOKIE_NAME)
 
 
-def main():
+async def main():
     parse_command_line(final=False)
     parse_config_file(options.config_file)
 
@@ -98,8 +98,8 @@ def main():
     app.listen(options.port)
 
     logging.info("Listening on http://localhost:%d" % options.port)
-    IOLoop.current().start()
+    await asyncio.Event().wait()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

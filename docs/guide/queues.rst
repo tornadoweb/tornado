@@ -3,9 +3,10 @@
 
 .. currentmodule:: tornado.queues
 
-Tornado's `tornado.queues` module implements an asynchronous producer /
-consumer pattern for coroutines, analogous to the pattern implemented for
-threads by the Python standard library's `queue` module.
+Tornado's `tornado.queues` module (and the very similar ``Queue`` classes in
+`asyncio`) implements an asynchronous producer / consumer pattern for
+coroutines, analogous to the pattern implemented for threads by the Python
+standard library's `queue` module.
 
 A coroutine that yields `Queue.get` pauses until there is an item in the queue.
 If the queue has a maximum size set, a coroutine that yields `Queue.put` pauses

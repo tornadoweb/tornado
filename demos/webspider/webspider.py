@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
+import asyncio
 import time
 from datetime import timedelta
 
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urldefrag
 
-from tornado import gen, httpclient, ioloop, queues
+from tornado import gen, httpclient, queues
 
 base_url = "http://www.tornadoweb.org/en/stable/"
 concurrency = 10
@@ -94,5 +95,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    io_loop = ioloop.IOLoop.current()
-    io_loop.run_sync(main)
+    asyncio.run(main())

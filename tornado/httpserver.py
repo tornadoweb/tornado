@@ -84,6 +84,11 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
     `HTTPServer` initialization follows one of three patterns (the
     initialization methods are defined on `tornado.tcpserver.TCPServer`):
 
+    .. note::
+
+       The multi-process examples here produce deprecation warnings in
+       Python 3.10; updated guidance is still in development.
+
     1. `~tornado.tcpserver.TCPServer.listen`: simple single-process::
 
             server = HTTPServer(app)

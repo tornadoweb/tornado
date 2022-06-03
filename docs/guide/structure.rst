@@ -32,13 +32,32 @@ A minimal "hello world" example looks something like this:
     async def main():
         app = make_app()
         app.listen(8888)
-        await asyncio.Event().wait()
+        shutdown_event = asyncio.Event()
+        await shutdown_event.wait()
 
     if __name__ == "__main__":
         asyncio.run(main())
 
 .. testoutput::
    :hide:
+
+The ``main`` coroutine
+~~~~~~~~~~~~~~~~~~~~~~
+
+Beginning with Tornado 6.2 and Python 3.10, the recommended pattern for starting
+a Tornado application is to create a ``main`` coroutine to be run with
+`asyncio.run`. (In older versions, it was common to do initialization in a
+regular function and then start the event loop with
+``IOLoop.current().start()``. However, this pattern produces deprecation
+warnings starting in Python 3.10 and will break in some future version of
+Python.)
+
+When the ``main`` function returns, the program exits, so most of the time for a
+web server ``main`` should run forever. Waiting on an `asyncio.Event` whose
+``set()`` method is never called is a convenient way to make an asynchronus
+function run forever. (and if you wish to have ``main`` exit early as a part of
+a graceful shutdown procedure, you can call ``shutdown_event.set()`` to make it
+exit).
 
 The ``Application`` object
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

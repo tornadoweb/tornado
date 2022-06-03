@@ -16,7 +16,6 @@
 
 import asyncio
 import tornado.escape
-import tornado.ioloop
 import tornado.locks
 import tornado.web
 import os.path
@@ -107,7 +106,7 @@ class MessageUpdatesHandler(tornado.web.RequestHandler):
         self.wait_future.cancel()
 
 
-def main():
+async def main():
     parse_command_line()
     app = tornado.web.Application(
         [
@@ -122,8 +121,8 @@ def main():
         debug=options.debug,
     )
     app.listen(options.port)
-    tornado.ioloop.IOLoop.current().start()
+    await asyncio.Event().wait()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
