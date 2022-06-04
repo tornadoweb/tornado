@@ -48,14 +48,13 @@ class TCPServer(object):
 
       from tornado.tcpserver import TCPServer
       from tornado.iostream import StreamClosedError
-      from tornado import gen
 
       class EchoServer(TCPServer):
           async def handle_stream(self, stream, address):
               while True:
                   try:
-                      data = await stream.read_until(b"\n")
-                      await stream.write(data)
+                      data = await stream.read_until(b"\n") await
+                      stream.write(data)
                   except StreamClosedError:
                       break
 
@@ -71,37 +70,49 @@ class TCPServer(object):
 
     `TCPServer` initialization follows one of three patterns:
 
-    1. `listen`: simple single-process::
+    1. `listen`: single-process::
 
-            server = TCPServer()
-            server.listen(8888)
-            IOLoop.current().start()
+            async def main():
+                server = TCPServer()
+                server.listen(8888)
+                await asyncio.Event.wait()
 
-    2. `bind`/`start`: simple multi-process::
+            asyncio.run(main())
+
+       While this example does not create multiple processes on its own, when
+       the ``reuse_port=True`` argument is passed to ``listen()`` you can run
+       the program multiple times to create a multi-process service.
+
+    2. `add_sockets`: multi-process::
+
+            sockets = bind_sockets(8888)
+            tornado.process.fork_processes(0)
+            async def post_fork_main():
+                server = TCPServer()
+                server.add_sockets(sockets)
+                await asyncio.Event().wait()
+            asyncio.run(post_fork_main())
+
+       The `add_sockets` interface is more complicated, but it can be used with
+       `tornado.process.fork_processes` to run a multi-process service with all
+       worker processes forked from a single parent.  `add_sockets` can also be
+       used in single-process servers if you want to create your listening
+       sockets in some way other than `~tornado.netutil.bind_sockets`.
+
+       Note that when using this pattern, nothing that touches the event loop
+       can be run before ``fork_processes``.
+
+    3. `bind`/`start`: simple **deprecated** multi-process::
 
             server = TCPServer()
             server.bind(8888)
             server.start(0)  # Forks multiple sub-processes
             IOLoop.current().start()
 
-       When using this interface, an `.IOLoop` must *not* be passed
-       to the `TCPServer` constructor.  `start` will always start
-       the server on the default singleton `.IOLoop`.
-
-    3. `add_sockets`: advanced multi-process::
-
-            sockets = bind_sockets(8888)
-            tornado.process.fork_processes(0)
-            server = TCPServer()
-            server.add_sockets(sockets)
-            IOLoop.current().start()
-
-       The `add_sockets` interface is more complicated, but it can be
-       used with `tornado.process.fork_processes` to give you more
-       flexibility in when the fork happens.  `add_sockets` can
-       also be used in single-process servers if you want to create
-       your listening sockets in some way other than
-       `~tornado.netutil.bind_sockets`.
+       This pattern is deprecated because it requires interfaces in the
+       `asyncio` module that have been deprecated since Python 3.10. Support for
+       creating multiple processes in the ``start`` method will be removed in a
+       future version of Tornado.
 
     .. versionadded:: 3.1
        The ``max_buffer_size`` argument.
@@ -232,6 +243,12 @@ class TCPServer(object):
 
         .. versionchanged:: 6.2
            Added the ``flags`` argument to match `.bind_sockets`.
+
+        .. deprecated:: 6.2
+           Use either ``listen()`` or ``add_sockets()`` instead of ``bind()``
+           and ``start()``. The ``bind()/start()`` pattern depends on
+           interfaces that have been deprecated in Python 3.10 and will be
+           removed in future versions of Python.
         """
         sockets = bind_sockets(
             port,
@@ -275,6 +292,12 @@ class TCPServer(object):
         .. versionchanged:: 6.0
 
            Added ``max_restarts`` argument.
+
+        .. deprecated:: 6.2
+           Use either ``listen()`` or ``add_sockets()`` instead of ``bind()``
+           and ``start()``. The ``bind()/start()`` pattern depends on
+           interfaces that have been deprecated in Python 3.10 and will be
+           removed in future versions of Python.
         """
         assert not self._started
         self._started = True
