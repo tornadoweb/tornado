@@ -853,12 +853,20 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
     _OAUTH_ACCESS_TOKEN_URL = "https://www.googleapis.com/oauth2/v4/token"
     _OAUTH_USERINFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
     _OAUTH_NO_CALLBACKS = False
+    _OAUTH_SETTINGS_KEY = "google_oauth"
 
-    @property
-    def google_oauth_config(self) -> Dict:
-        """If your config is stored at a different location, override this method for custom provision."""
+    def get_google_oauth_settings(self) -> Dict[str, str]:
+        """Return the Google OAuth 2.0 credentials that you created with
+        [Google Cloud Platform](https://console.cloud.google.com/apis/credentials). The dict format is:
+        {
+            "key": "your_client_id",
+            "secret": "your_client_secret"
+        }
+
+        If your credentials are stored differently (e.g. in a db) you can override this method for custom provision.
+        """
         handler = cast(RequestHandler, self)
-        return handler.settings['google_oauth']
+        return handler.settings[self._OAUTH_SETTINGS_KEY]
 
     async def get_authenticated_user(
         self,
@@ -896,7 +904,7 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
                     else:
                         self.authorize_redirect(
                             redirect_uri='http://your.site.com/auth/google',
-                            client_id=self.google_oauth_config['key'],
+                            client_id=self.get_google_oauth_settings()['key'],
                             scope=['profile', 'email'],
                             response_type='code',
                             extra_params={'approval_prompt': 'auto'})
@@ -908,10 +916,11 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
 
            The ``callback`` argument was removed. Use the returned awaitable object instead.
         """  # noqa: E501
+
         if not client_id:
-            client_id = self.google_oauth_config["key"]
+            client_id = self.get_google_oauth_settings()['key'],
         if not client_secret:
-            client_secret = self.google_oauth_config["secret"]
+            client_secret = self.get_google_oauth_settings()['secret'],
         http = self.get_auth_http_client()
         body = urllib.parse.urlencode(
             {
