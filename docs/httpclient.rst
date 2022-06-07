@@ -57,6 +57,16 @@ Implementations
 
    ``libcurl``-based HTTP client.
 
+   This implementation supports the following arguments, which can be passed
+   to ``configure()`` to control the global singleton, or to the constructor
+   when ``force_instance=True``.
+
+   ``max_clients`` is the number of concurrent requests that can be in progress;
+   when this limit is reached additional requests will be queued.
+
+   ``defaults`` is a dict of parameters that will be used as defaults on all
+   `.HTTPRequest` objects submitted to this client.
+
 Example Code
 ~~~~~~~~~~~~
 
