@@ -164,15 +164,12 @@ class IOLoop(Configurable):
     def configure(
         cls, impl: "Union[None, str, Type[Configurable]]", **kwargs: Any
     ) -> None:
-        if asyncio is not None:
-            from tornado.platform.asyncio import BaseAsyncIOLoop
+        from tornado.platform.asyncio import BaseAsyncIOLoop
 
-            if isinstance(impl, str):
-                impl = import_object(impl)
-            if isinstance(impl, type) and not issubclass(impl, BaseAsyncIOLoop):
-                raise RuntimeError(
-                    "only AsyncIOLoop is allowed when asyncio is available"
-                )
+        if isinstance(impl, str):
+            impl = import_object(impl)
+        if isinstance(impl, type) and not issubclass(impl, BaseAsyncIOLoop):
+            raise RuntimeError("only AsyncIOLoop is allowed when asyncio is available")
         super(IOLoop, cls).configure(impl, **kwargs)
 
     @staticmethod
@@ -323,8 +320,6 @@ class IOLoop(Configurable):
         old = IOLoop.current(instance=False)
         if old is not None:
             old._clear_current_hook()
-        if asyncio is None:
-            IOLoop._current.instance = None
 
     def _clear_current_hook(self) -> None:
         """Instance method called when an IOLoop ceases to be current.
