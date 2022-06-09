@@ -7,21 +7,31 @@ Jun XX, 2022
 Deprecation notice
 ~~~~~~~~~~~~~~~~~~
 
-- TODO py310 deprecations
+- Python 3.10 has begun the process of significant changes to the APIs for
+  managing the event loop. Calls to methods such as `asyncio.get_event_loop` may
+  now raise `DeprecationWarning` if no event loop is running. This has
+  significant impact on the patterns for initializing applications, and in
+  particular invalidates patterns that have long been the norm in Tornado's
+  documentation and actual usage. In the future (with some as-yet-unspecified
+  future version of Python), the old APIs will be removed. The new recommended
+  pattern is to start the event loop with `asyncio.run`. More detailed migration
+  guides will be coming in the future.
+
+  - The `.IOLoop` constructor is deprecated. Use `.IOLoop.current` when the loop
+    is already running instead.
+  - `.AsyncTestCase` (and `.AsyncHTTPTestCase`) are deprecated. Use
+    `unittest.IsolatedAsyncioTestCase` instead.
+  - Multi-process `.TCPServer.bind`/`.TCPServer.start` is deprecated. See
+    `.TCPServer` docs for supported alternatives.
+  - `.AnyThreadEventLoopPolicy` is deprecated. This class controls the creation of
+    the "current" event loop so it will be removed when that concept is no longer
+    supported.
+  - `.IOLoop.make_current` and `.IOLoop.clear_current` are deprecated. In the
+    future the concept of a "current" event loop as distinct from one that is
+    currently running will be removed.
+
 - ``TwistedResolver`` and ``CaresResolver`` are deprecated and will be
   removed in Tornado 7.0.
-- `.AnyThreadEventLoopPolicy` is deprecated. This class controls the creation of
-  the "current" event loop so it will be removed when that concept is no longer
-  supported.
-- `.IOLoop.make_current` and `.IOLoop.clear_current` are deprecated. In the
-  future the concept of a "current" event loop as distinct from one that is
-  currently running will be removed.
-- The `.IOLoop` constructor is deprecated. Use `.IOLoop.current` when the loop
-  is already running instead. 
-- `.AsyncTestCase` (and `.AsyncHTTPTestCase`) are deprecated. Use
-  `unittest.IsolatedAsyncioTestCase` instead.
-- Multi-process `.TCPServer.bind`/`.TCPServer.start` is deprecated. See
-  `.TCPServer` docs for supported alternatives.
 
 General changes
 ~~~~~~~~~~~~~~~
