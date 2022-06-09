@@ -435,6 +435,10 @@ class AsyncHTTPTestCase(AsyncTestCase):
     like ``http_client.fetch()``, into a synchronous operation. If you need
     to do other asynchronous operations in tests, you'll probably need to use
     ``stop()`` and ``wait()`` yourself.
+
+    .. deprecated:: 6.2
+       `AsyncTestCase` and `AsyncHTTPTestCase` are deprecated due to changes
+       in Python 3.10; see comments on `AsyncTestCase` for more details.
     """
 
     def setUp(self) -> None:
