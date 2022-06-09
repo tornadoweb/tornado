@@ -862,6 +862,9 @@ class PeriodicCallback(object):
        longer than ``callback_time``, subsequent invocations will be skipped.
        Previously this was only true for regular functions, not coroutines,
        which were "fire-and-forget" for `PeriodicCallback`.
+
+       The ``callback_time`` argument now accepts `datetime.timedelta` objects,
+       in addition to the previous numeric milliseconds.
     """
 
     def __init__(

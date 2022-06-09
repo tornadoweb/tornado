@@ -324,12 +324,12 @@ class Resolver(Configurable):
     The implementations of this interface included with Tornado are
 
     * `tornado.netutil.DefaultLoopResolver`
-    * `tornado.netutil.DefaultExecutorResolver`
+    * `tornado.netutil.DefaultExecutorResolver` (deprecated)
     * `tornado.netutil.BlockingResolver` (deprecated)
     * `tornado.netutil.ThreadedResolver` (deprecated)
     * `tornado.netutil.OverrideResolver`
-    * `tornado.platform.twisted.TwistedResolver`
-    * `tornado.platform.caresresolver.CaresResolver`
+    * `tornado.platform.twisted.TwistedResolver` (deprecated)
+    * `tornado.platform.caresresolver.CaresResolver` (deprecated)
 
     .. versionchanged:: 5.0
        The default implementation has changed from `BlockingResolver` to
@@ -402,6 +402,10 @@ class DefaultExecutorResolver(Resolver):
     """Resolver implementation using `.IOLoop.run_in_executor`.
 
     .. versionadded:: 5.0
+
+    .. deprecated:: 6.2
+
+       Use `DefaultLoopResolver` instead.
     """
 
     async def resolve(

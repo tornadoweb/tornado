@@ -1,0 +1,109 @@
+What's new in Tornado 6.2.0
+===========================
+
+Jun XX, 2022
+------------
+
+Deprecation notice
+~~~~~~~~~~~~~~~~~~
+
+- TODO py310 deprecations
+- ``TwistedResolver`` and ``CaresResolver`` are deprecated and will be
+  removed in Tornado 7.0.
+- `.AnyThreadEventLoopPolicy` is deprecated. This class controls the creation of
+  the "current" event loop so it will be removed when that concept is no longer
+  supported.
+- `.IOLoop.make_current` and `.IOLoop.clear_current` are deprecated. In the
+  future the concept of a "current" event loop as distinct from one that is
+  currently running will be removed.
+- The `.IOLoop` constructor is deprecated. Use `.IOLoop.current` when the loop
+  is already running instead. 
+- `.AsyncTestCase` (and `.AsyncHTTPTestCase`) are deprecated. Use
+  `unittest.IsolatedAsyncioTestCase` instead.
+- Multi-process `.TCPServer.bind`/`.TCPServer.start` is deprecated. See
+  `.TCPServer` docs for supported alternatives.
+
+General changes
+~~~~~~~~~~~~~~~
+
+- The minimum supported Python version is now 3.7.
+- SSL certificate verfication and hostname checks are now enabled by default in
+  more places (primarily in client-side usage of `.SSLIOStream`).
+- Various improvements to type hints throughout the package.
+- CI has moved from Travis and Appveyor to Github Actions.  
+
+`tornado.gen`
+~~~~~~~~~~~~~
+
+- Fixed a bug in which ``WaitIterator.current_index`` could be incorrect.
+- ``tornado.gen.TimeoutError``` is now an alias for `asyncio.TimeoutError`.
+
+`tornado.http1connection`
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- ``max_body_size`` may now be set to zero to disallow a non-empty body.
+- ``Content-Encoding: gzip`` is now recognized case-insensitively.
+
+`tornado.httpclient`
+~~~~~~~~~~~~~~~~~~~~
+
+- ``curl_httpclient`` now supports non-ASCII (ISO-8859-1) header values, same as
+  ``simple_httpclient``.
+
+`tornado.ioloop`
+~~~~~~~~~~~~~~~~
+
+- `.PeriodicCallback` now understands coroutines and will not start multiple
+  copies if a previous invocation runs too long.
+- `.PeriodicCallback` now accepts `datetime.timedelta` objects in addition to
+  numbers of milliseconds.
+- Avoid logging "Event loop is closed" during shutdown-related race conditions.
+- Tornado no longer calls `logging.basicConfig` when starting an IOLoop; this
+  has been unnecessary since Python 3.2 added a logger of last resort.
+
+`tornado.iostream`
+~~~~~~~~~~~~~~~~~~
+
+- `.SSLIOStream` now supports reading more than 2GB at a time.
+- ``IOStream.write`` now supports typed `memoryview` objects.
+
+`tornado.locale`
+~~~~~~~~~~~~~~~~
+
+- `.load_gettext_translations` no longer logs errors when language directories
+  exist but do not contain the expected file.
+
+`tornado.netutil`
+~~~~~~~~~~~~~~~~~
+
+- `.is_valid_ip` no longer raises exceptions when the input is too long.
+- The default resolver now uses the same methods (and thread pool) as `asyncio`.
+
+`tornado.tcpserver`
+~~~~~~~~~~~~~~~~~~~
+
+- `.TCPServer.listen` now supports more arguments to pass through to
+  `.netutil.bind_sockets`.
+
+`tornado.testing`
+~~~~~~~~~~~~~~~~~
+
+- `.bind_unused_port` now takes an optional ``address`` argument.
+- Wrapped test methods now include the ``__wrapped__`` attribute.
+  
+`tornado.web`
+~~~~~~~~~~~~~
+
+- When using a custom `.StaticFileHandler` subclass, the ``reset()`` method is
+  now called on this subclass instead of the base class.
+- Improved handling of the ``Accept-Language`` header.
+- `.Application.listen` now supports more arguments to pass through to
+  `.netutil.bind_sockets`.
+
+`tornado.websocket`
+~~~~~~~~~~~~~~~~~~~
+
+- `.WebSocketClientConnection.write_message` now accepts `dict` arguments for
+  consistency with `.WebSocketHandler.write_message`.
+- `.WebSocketClientConnection.write_message` now raises an exception as
+  documented if the connection is already closed.
