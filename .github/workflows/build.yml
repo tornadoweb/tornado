@@ -11,6 +11,8 @@ on:
       - "branch[0-9]*"
       # Also run on certain other branches for testing.
       - "build-workflow*"
+    tags:
+      - "v*"
 
 env:
   python-version: '3.9'
@@ -63,6 +65,7 @@ jobs:
           path: ./wheelhouse/*.whl
 
   upload_pypi_test:
+    name: Upload to PyPI (test)
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-20.04
     if: github.event_name == 'push' && startsWith(github.ref_name, 'build-workflow')
@@ -77,8 +80,10 @@ jobs:
           user: __token__
           password: ${{ secrets.TEST_PYPI_API_TOKEN }}
           repository_url: https://test.pypi.org/legacy/
+          skip_existing: true
 
   upload_pypi:
+    name: Upload to PyPI (prod)
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-20.04
     if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
