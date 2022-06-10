@@ -120,6 +120,7 @@ with open("tornado/__init__.py") as f:
 
 with open("README.rst") as f:
     kwargs["long_description"] = f.read()
+    kwargs["long_description_content_type"] = "text/x-rst"
 
 if (
     platform.python_implementation() == "CPython"
