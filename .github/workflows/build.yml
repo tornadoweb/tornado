@@ -10,7 +10,7 @@ on:
       # Run on release branches.
       - "branch[0-9]*"
       # Also run on certain other branches for testing.
-      - "build_workflow*"
+      - "build-workflow*"
 
 env:
   python-version: '3.9'
@@ -61,3 +61,19 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           path: ./wheelhouse/*.whl
+
+  upload_pypi_test:
+    needs: [build_wheels, build_sdist]
+    runs-on: ubuntu-20.04
+    if: github.event_name == 'push' && startsWith(github.ref_name, 'build-workflow')
+    steps:
+      - uses: actions/download-artifact@v2
+        with:
+          name: artifact
+          path: dist
+
+      - uses: pypa/gh-action-pypi-publish@v1.5.0
+        with:
+          user: __token__
+          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          repository_url: https://test.pypi.org/legacy/
