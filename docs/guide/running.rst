@@ -38,7 +38,7 @@ Typically it is best to run one process per CPU.
 The simplest way to do this is to add ``reuse_port=True`` to your ``listen()``
 calls and then simply run multiple copies of your application.
 
-Tornado also has the ability to start mulitple processes from a single parent
+Tornado also has the ability to start multiple processes from a single parent
 process (note that this does not work on Windows). This requires some
 alterations to application startup.
 
