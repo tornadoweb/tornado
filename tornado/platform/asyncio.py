@@ -74,6 +74,7 @@ def _atexit_callback() -> None:
 
 atexit.register(_atexit_callback)
 
+
 class BaseAsyncIOLoop(IOLoop):
     def initialize(  # type: ignore
         self, asyncio_loop: asyncio.AbstractEventLoop, **kwargs: Any
