@@ -310,6 +310,12 @@ class AsyncIOLoop(BaseAsyncIOLoop):
     Each ``AsyncIOLoop`` creates a new ``asyncio.EventLoop``; this object
     can be accessed with the ``asyncio_loop`` attribute.
 
+    .. versionchanged:: 6.2
+
+       Support explicit ``asyncio_loop`` argument
+       for specifying the asyncio loop to attach to,
+       rather than always creating a new one with the default policy.
+
     .. versionchanged:: 5.0
 
        When an ``AsyncIOLoop`` becomes the current `.IOLoop`, it also sets
@@ -323,13 +329,16 @@ class AsyncIOLoop(BaseAsyncIOLoop):
 
     def initialize(self, **kwargs: Any) -> None:  # type: ignore
         self.is_current = False
-        loop = asyncio.new_event_loop()
+        loop = None
+        if "asyncio_loop" not in kwargs:
+            kwargs["asyncio_loop"] = loop = asyncio.new_event_loop()
         try:
-            super().initialize(loop, **kwargs)
+            super().initialize(**kwargs)
         except Exception:
             # If initialize() does not succeed (taking ownership of the loop),
             # we have to close it.
-            loop.close()
+            if loop is not None:
+                loop.close()
             raise
 
     def close(self, all_fds: bool = False) -> None:
