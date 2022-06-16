@@ -432,6 +432,9 @@ class TestIOLoop(AsyncTestCase):
         asyncio_loop = asyncio.new_event_loop()
         loop = IOLoop(asyncio_loop=asyncio_loop, make_current=False)
         assert loop.asyncio_loop is asyncio_loop  # type: ignore
+        with self.assertRaises(RuntimeError):
+            # Can't register two IOLoops with the same asyncio_loop
+            IOLoop(asyncio_loop=asyncio_loop, make_current=False)
         loop.close()
 
 
