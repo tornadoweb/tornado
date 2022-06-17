@@ -58,7 +58,7 @@ jobs:
           platforms: all
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.3.1
+        uses: pypa/cibuildwheel@v2.6.1
 
       - uses: actions/upload-artifact@v2
         with:
