@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [tool.cibuildwheel]
 build = "cp3[789]* cp310*"
 test-command = "python -m tornado.test"
