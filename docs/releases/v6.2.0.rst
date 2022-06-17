@@ -17,8 +17,9 @@ Deprecation notice
   pattern is to start the event loop with `asyncio.run`. More detailed migration
   guides will be coming in the future.
 
-  - The `.IOLoop` constructor is deprecated. Use `.IOLoop.current` when the loop
-    is already running instead.
+  - The `.IOLoop` constructor is deprecated unless the ``make_current=False``
+    argument is used. Use `.IOLoop.current` when the loop is already running
+    instead.
   - `.AsyncTestCase` (and `.AsyncHTTPTestCase`) are deprecated. Use
     `unittest.IsolatedAsyncioTestCase` instead.
   - Multi-process `.TCPServer.bind`/`.TCPServer.start` is deprecated. See
@@ -37,6 +38,8 @@ General changes
 ~~~~~~~~~~~~~~~
 
 - The minimum supported Python version is now 3.7.
+- Wheels are now published with the Python stable ABI (``abi3``) for
+  compatibility across versions of Python.
 - SSL certificate verfication and hostname checks are now enabled by default in
   more places (primarily in client-side usage of `.SSLIOStream`).
 - Various improvements to type hints throughout the package.
@@ -70,6 +73,8 @@ General changes
 - Avoid logging "Event loop is closed" during shutdown-related race conditions.
 - Tornado no longer calls `logging.basicConfig` when starting an IOLoop; this
   has been unnecessary since Python 3.2 added a logger of last resort.
+- The `.IOLoop` constructor now accepts an ``asyncio_loop`` keyword argument to
+  initialize with a specfied asyncio event loop.
 
 `tornado.iostream`
 ~~~~~~~~~~~~~~~~~~
