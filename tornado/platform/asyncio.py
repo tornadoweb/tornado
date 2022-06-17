@@ -341,6 +341,7 @@ class AsyncIOLoop(BaseAsyncIOLoop):
         warnings.warn(
             "make_current is deprecated; start the event loop first",
             DeprecationWarning,
+            stacklevel=2,
         )
         if not self.is_current:
             try:
@@ -425,6 +426,7 @@ class AnyThreadEventLoopPolicy(_BasePolicy):  # type: ignore
             "AnyThreadEventLoopPolicy is deprecated, use asyncio.run "
             "or asyncio.new_event_loop instead",
             DeprecationWarning,
+            stacklevel=2,
         )
 
     def get_event_loop(self) -> asyncio.AbstractEventLoop:

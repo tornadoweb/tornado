@@ -312,7 +312,11 @@ class IOLoop(Configurable):
            This method also clears the current `asyncio` event loop.
         .. deprecated:: 6.2
         """
-        warnings.warn("clear_current is deprecated", DeprecationWarning)
+        warnings.warn(
+            "clear_current is deprecated",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         IOLoop._clear_current()
 
     @staticmethod
