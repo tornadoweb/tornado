@@ -119,10 +119,12 @@ class IOLoop(Configurable):
     .. testoutput::
        :hide:
 
-    Do not attempt to construct an `IOLoop` directly; this is deprecated since
-    Tornado 6.2. Instead, initialize the `asyncio` event loop and use
-    `IOLoop.current()` to access an `IOLoop` wrapper around the current event
-    loop.
+    Most applications should not attempt to construct an `IOLoop` directly,
+    and instead initialize the `asyncio` event loop and use `IOLoop.current()`.
+    In some cases, such as in test frameworks when initializing an `IOLoop`
+    to be run in a secondary thread, it may be appropriate to construct
+    an `IOLoop` with ``IOLoop(make_current=False)``. Constructing an `IOLoop`
+    without the ``make_current=False`` argument is deprecated since Tornado 6.2.
 
     In general, an `IOLoop` cannot survive a fork or be shared across processes
     in any way. When multiple processes are being used, each process should
