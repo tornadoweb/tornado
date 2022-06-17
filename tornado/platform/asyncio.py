@@ -129,6 +129,14 @@ class BaseAsyncIOLoop(IOLoop):
                     del IOLoop._ioloop_for_asyncio[loop]
                 except KeyError:
                     pass
+
+        # Make sure we don't already have an IOLoop for this asyncio loop
+        if asyncio_loop in IOLoop._ioloop_for_asyncio:
+            existing_loop = IOLoop._ioloop_for_asyncio[asyncio_loop]
+            raise RuntimeError(
+                f"IOLoop {existing_loop} already associated with asyncio loop {asyncio_loop}"
+            )
+
         IOLoop._ioloop_for_asyncio[asyncio_loop] = self
 
         self._thread_identity = 0
@@ -269,7 +277,7 @@ class BaseAsyncIOLoop(IOLoop):
         self,
         executor: Optional[concurrent.futures.Executor],
         func: Callable[..., _T],
-        *args: Any
+        *args: Any,
     ) -> Awaitable[_T]:
         return self.asyncio_loop.run_in_executor(executor, func, *args)
 
@@ -310,6 +318,12 @@ class AsyncIOLoop(BaseAsyncIOLoop):
     Each ``AsyncIOLoop`` creates a new ``asyncio.EventLoop``; this object
     can be accessed with the ``asyncio_loop`` attribute.
 
+    .. versionchanged:: 6.2
+
+       Support explicit ``asyncio_loop`` argument
+       for specifying the asyncio loop to attach to,
+       rather than always creating a new one with the default policy.
+
     .. versionchanged:: 5.0
 
        When an ``AsyncIOLoop`` becomes the current `.IOLoop`, it also sets
@@ -323,13 +337,16 @@ class AsyncIOLoop(BaseAsyncIOLoop):
 
     def initialize(self, **kwargs: Any) -> None:  # type: ignore
         self.is_current = False
-        loop = asyncio.new_event_loop()
+        loop = None
+        if "asyncio_loop" not in kwargs:
+            kwargs["asyncio_loop"] = loop = asyncio.new_event_loop()
         try:
-            super().initialize(loop, **kwargs)
+            super().initialize(**kwargs)
         except Exception:
             # If initialize() does not succeed (taking ownership of the loop),
             # we have to close it.
-            loop.close()
+            if loop is not None:
+                loop.close()
             raise
 
     def close(self, all_fds: bool = False) -> None:

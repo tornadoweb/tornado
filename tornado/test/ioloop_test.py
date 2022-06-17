@@ -1,3 +1,4 @@
+import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from concurrent import futures
 from collections.abc import Generator
@@ -426,6 +427,15 @@ class TestIOLoop(AsyncTestCase):
                 loop.close()
 
         yield gen.multi([self.io_loop.run_in_executor(None, f) for i in range(2)])
+
+    def test_explicit_asyncio_loop(self):
+        asyncio_loop = asyncio.new_event_loop()
+        loop = IOLoop(asyncio_loop=asyncio_loop, make_current=False)
+        assert loop.asyncio_loop is asyncio_loop  # type: ignore
+        with self.assertRaises(RuntimeError):
+            # Can't register two IOLoops with the same asyncio_loop
+            IOLoop(asyncio_loop=asyncio_loop, make_current=False)
+        loop.close()
 
 
 # Deliberately not a subclass of AsyncTestCase so the IOLoop isn't
