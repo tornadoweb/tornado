@@ -139,14 +139,7 @@ class BaseAsyncIOLoop(IOLoop):
 
         IOLoop._ioloop_for_asyncio[asyncio_loop] = self
 
-        self._thread_identity = 0
-
         super().initialize(**kwargs)
-
-        def assign_thread_identity() -> None:
-            self._thread_identity = threading.get_ident()
-
-        self.add_callback(assign_thread_identity)
 
     def close(self, all_fds: bool = False) -> None:
         self.closing = True
@@ -244,10 +237,14 @@ class BaseAsyncIOLoop(IOLoop):
         timeout.cancel()  # type: ignore
 
     def add_callback(self, callback: Callable, *args: Any, **kwargs: Any) -> None:
-        if threading.get_ident() == self._thread_identity:
-            call_soon = self.asyncio_loop.call_soon
-        else:
+        try:
+            if asyncio.get_running_loop() is self.asyncio_loop:
+                call_soon = self.asyncio_loop.call_soon
+            else:
+                call_soon = self.asyncio_loop.call_soon_threadsafe
+        except RuntimeError:
             call_soon = self.asyncio_loop.call_soon_threadsafe
+
         try:
             call_soon(self._run_callback, functools.partial(callback, *args, **kwargs))
         except RuntimeError:
