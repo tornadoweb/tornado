@@ -131,13 +131,11 @@ class BaseAsyncIOLoop(IOLoop):
                     pass
 
         # Make sure we don't already have an IOLoop for this asyncio loop
-        if asyncio_loop in IOLoop._ioloop_for_asyncio:
-            existing_loop = IOLoop._ioloop_for_asyncio[asyncio_loop]
+        existing_loop = IOLoop._ioloop_for_asyncio.setdefault(asyncio_loop, self)
+        if existing_loop is not self:
             raise RuntimeError(
                 f"IOLoop {existing_loop} already associated with asyncio loop {asyncio_loop}"
             )
-
-        IOLoop._ioloop_for_asyncio[asyncio_loop] = self
 
         self._thread_identity = 0
 
