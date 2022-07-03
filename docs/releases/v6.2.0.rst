@@ -1,8 +1,8 @@
 What's new in Tornado 6.2.0
 ===========================
 
-Jun XX, 2022
-------------
+Jul 3, 2022
+-----------
 
 Deprecation notice
 ~~~~~~~~~~~~~~~~~~
@@ -75,6 +75,8 @@ General changes
   has been unnecessary since Python 3.2 added a logger of last resort.
 - The `.IOLoop` constructor now accepts an ``asyncio_loop`` keyword argument to
   initialize with a specfied asyncio event loop.
+- It is now possible to construct an `.IOLoop` on one thread (with
+  ``make_current=False``) and start it on a different thread.
 
 `tornado.iostream`
 ~~~~~~~~~~~~~~~~~~
