@@ -2801,8 +2801,6 @@ class StaticFileHandler(RequestHandler):
         # the requested path so a request to root/ will match.
         if not (absolute_path + os.path.sep).startswith(root):
             raise HTTPError(403, "%s is not in root static directory", self.path)
-        if os.path.join(self.root, self.path) != absolute_path:
-            raise HTTPError(403, "%s was blocked", self.path)
         if os.path.isdir(absolute_path) and self.default_filename is not None:
             # need to look at the request.path here for when path is empty
             # but there is some prefix to the path that was already
@@ -2811,6 +2809,10 @@ class StaticFileHandler(RequestHandler):
                 self.redirect(self.request.path + "/", permanent=True)
                 return None
             absolute_path = os.path.join(absolute_path, self.default_filename)
+            if os.path.join(self.root, self.path, self.default_filename) != absolute_path:
+                raise HTTPError(403, "%s was blocked", self.path)
+        elif os.path.join(self.root, self.path) != absolute_path:
+            raise HTTPError(403, "%s was blocked", self.path)
         if not os.path.exists(absolute_path):
             raise HTTPError(404)
         if not os.path.isfile(absolute_path):
