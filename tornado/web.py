@@ -2801,6 +2801,8 @@ class StaticFileHandler(RequestHandler):
         # the requested path so a request to root/ will match.
         if not (absolute_path + os.path.sep).startswith(root):
             raise HTTPError(403, "%s is not in root static directory", self.path)
+        if os.path.join(self.root, self.path) != absolute_path:
+            raise HTTPError(403, "%s was blocked", self.path)
         if os.path.isdir(absolute_path) and self.default_filename is not None:
             # need to look at the request.path here for when path is empty
             # but there is some prefix to the path that was already
