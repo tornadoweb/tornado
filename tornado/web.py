@@ -2809,24 +2809,6 @@ class StaticFileHandler(RequestHandler):
                 self.redirect(self.request.path + "/", permanent=True)
                 return None
             absolute_path = os.path.join(absolute_path, self.default_filename)
-            canonical_path = os.path.normcase(os.path.normpath(absolute_path))
-            new_url = os.path.relpath(canonical_path, self.root).replace(os.path.sep, '/')
-            effective_request_path = os.path.join(self.request.path, self.default_filename).replace(os.path.sep, '/')
-            if os.path.join(self.root, self.path).replace('/',
-                                                          os.path.sep) != canonical_path or not effective_request_path.endswith(
-                    new_url):
-                if not new_url.startswith('/'):
-                    new_url = '/' + new_url
-                if effective_request_path.endswith(new_url):
-                    path_prefix = self.request.path[:-len(new_url)]
-                elif urllib.parse.unquote(effective_request_path).endswith(new_url):
-                    path_prefix = urllib.parse.unquote(effective_request_path)[:-len(new_url)]
-                else:
-                    raise HTTPError(403, "could not replicate URL parsing for %s", self.path)
-                path_prefix = os.path.normpath(path_prefix).replace(os.path.sep, '/')
-                full_new_url = (path_prefix + new_url).replace(os.path.sep, '/')
-                self.redirect(full_new_url, permanent=True)
-                return None
         else:
             canonical_path = os.path.normcase(os.path.normpath(absolute_path))
             new_url = os.path.relpath(canonical_path, self.root).replace(os.path.sep, '/')
