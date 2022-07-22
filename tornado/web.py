@@ -2809,10 +2809,23 @@ class StaticFileHandler(RequestHandler):
                 self.redirect(self.request.path + "/", permanent=True)
                 return None
             absolute_path = os.path.join(absolute_path, self.default_filename)
-            if os.path.join(self.root, self.path, self.default_filename) != absolute_path:
-                raise HTTPError(403, "%s was blocked", self.path)
-        elif os.path.join(self.root, self.path) != absolute_path:
-            raise HTTPError(403, "%s was blocked", self.path)
+            canonical_path = os.path.normcase(os.path.normpath(absolute_path))
+            if os.path.join(self.root, self.path, self.default_filename).replace('/', os.path.sep) != canonical_path:
+                # raise HTTPError(403, "%s is not the normalized path", self.path)
+                new_url = os.path.relpath(canonical_path, self.root).replace(os.path.sep, '/')
+                if not new_url.startswith('/'):
+                    new_url = '/' + new_url
+                self.redirect(new_url, permanent=True)
+                return None
+        else:
+            canonical_path = os.path.normcase(os.path.normpath(absolute_path))
+            if os.path.join(self.root, self.path).replace('/', os.path.sep) != canonical_path:
+                # raise HTTPError(403, "%s is not the normalized path", self.path)
+                new_url = os.path.relpath(canonical_path, self.root).replace(os.path.sep, '/')
+                if not new_url.startswith('/'):
+                    new_url = '/' + new_url
+                self.redirect(new_url, permanent=True)
+                return None
         if not os.path.exists(absolute_path):
             raise HTTPError(404)
         if not os.path.isfile(absolute_path):
