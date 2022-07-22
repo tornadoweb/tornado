@@ -15,4 +15,3 @@ MANIFEST
 # Used in demo apps
 secrets.cfg
 .mypy_cache/
-/.idea
