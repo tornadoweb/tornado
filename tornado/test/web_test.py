@@ -1404,6 +1404,30 @@ class StaticFileTest(WebTestCase):
         response = self.get_and_head("/root_static" + urllib.parse.quote(path))
         self.assertEqual(response.code, 200)
 
+    def test_same_directory_traversal(self):
+        response = self.fetch("/static/./password.txt", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertTrue(response.headers["Location"].endswith("/static/password.txt"))
+
+    def test_inside_directory_traversal(self):
+        response = self.fetch("/static/../static/password.txt", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertTrue(response.headers["Location"].endswith("/static/password.txt"))
+
+    def test_uri_encoding(self):
+        response = self.fetch("/static/password.tx%74", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertTrue(response.headers["Location"].endswith("/static/password.txt"))
+
+    def test_double_uri_encoding(self):
+        response = self.fetch("/static/password.tx%2574", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertTrue(response.headers["Location"].endswith("/static/password.tx%74"))
+
+    def test_slash_uri_encoding(self):
+        response = self.fetch("/static%2Fpassword.txt", follow_redirects=False)
+        self.assertEqual(response.code, 404)
+
 
 class StaticDefaultFilenameTest(WebTestCase):
     def get_app_kwargs(self):
