@@ -2812,7 +2812,8 @@ class StaticFileHandler(RequestHandler):
         else:
             canonical_path = os.path.normcase(os.path.normpath(absolute_path))
             new_url = os.path.relpath(canonical_path, self.root).replace(os.path.sep, '/')
-            if os.path.join(self.root, self.path).replace('/', os.path.sep) != canonical_path or not self.request.path.endswith(new_url):
+            if os.path.join(self.root, self.path).replace('/', os.path.sep)\
+                    != canonical_path or not self.request.path.endswith(new_url):
                 if not new_url.startswith('/'):
                     new_url = '/' + new_url
                 if self.request.path.endswith(new_url):
