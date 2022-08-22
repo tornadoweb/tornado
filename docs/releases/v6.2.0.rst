@@ -49,7 +49,7 @@ General changes
 ~~~~~~~~~~~~~
 
 - Fixed a bug in which ``WaitIterator.current_index`` could be incorrect.
-- ``tornado.gen.TimeoutError``` is now an alias for `asyncio.TimeoutError`.
+- ``tornado.gen.TimeoutError`` is now an alias for `asyncio.TimeoutError`.
 
 `tornado.http1connection`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
