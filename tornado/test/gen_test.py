@@ -1117,10 +1117,10 @@ class ContextVarsTest(AsyncTestCase):
     @gen_test
     def test_propagate_to_first_yield_with_native_async_function(self):
         x = 10
-                
+
         async def native_async_function():
             self.assertEquals(ctx_var.get(), x)
-        
+
         ctx_var.set(x)
         yield native_async_function()
 
