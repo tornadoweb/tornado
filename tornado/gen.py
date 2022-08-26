@@ -743,7 +743,7 @@ class Runner(object):
         self.running = False
         self.finished = False
         self.io_loop = IOLoop.current()
-        if self.handle_yield(first_yielded):
+        if self.ctx_run(self.handle_yield, first_yielded):
             gen = result_future = first_yielded = None  # type: ignore
             self.ctx_run(self.run)
 
