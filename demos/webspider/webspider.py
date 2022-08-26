@@ -86,7 +86,7 @@ async def main():
     await q.join(timeout=timedelta(seconds=300))
     assert fetching == (fetched | dead)
     print("Done in %d seconds, fetched %s URLs." % (time.time() - start, len(fetched)))
-    print("Unable to fetch %s URLS." % len(dead))
+    print("Unable to fetch %s URLs." % len(dead))
 
     # Signal all the workers to exit.
     for _ in range(concurrency):
