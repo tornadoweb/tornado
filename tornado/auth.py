@@ -857,13 +857,16 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
 
     def get_google_oauth_settings(self) -> Dict[str, str]:
         """Return the Google OAuth 2.0 credentials that you created with
-        [Google Cloud Platform](https://console.cloud.google.com/apis/credentials). The dict format is:
-        {
-            "key": "your_client_id",
-            "secret": "your_client_secret"
-        }
+        [Google Cloud
+        Platform](https://console.cloud.google.com/apis/credentials). The dict
+        format is::
 
-        If your credentials are stored differently (e.g. in a db) you can override this method for custom provision.
+            {
+                "key": "your_client_id", "secret": "your_client_secret"
+            }
+
+        If your credentials are stored differently (e.g. in a db) you can
+        override this method for custom provision.
         """
         handler = cast(RequestHandler, self)
         return handler.settings[self._OAUTH_SETTINGS_KEY]
@@ -917,10 +920,12 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
            The ``callback`` argument was removed. Use the returned awaitable object instead.
         """  # noqa: E501
 
-        if not client_id:
-            client_id = self.get_google_oauth_settings()['key'],
-        if not client_secret:
-            client_secret = self.get_google_oauth_settings()['secret'],
+        if client_id is None or client_secret is None:
+            settings = self.get_google_oauth_settings()
+            if client_id is None:
+                client_id = settings["key"]
+            if client_secret is None:
+                client_secret = settings["secret"]
         http = self.get_auth_http_client()
         body = urllib.parse.urlencode(
             {
