@@ -855,8 +855,25 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
     _OAUTH_NO_CALLBACKS = False
     _OAUTH_SETTINGS_KEY = "google_oauth"
 
+    def get_google_oauth_settings(self) -> Dict[str, str]:
+        """Return the Google OAuth 2.0 credentials that you created with
+        [Google Cloud Platform](https://console.cloud.google.com/apis/credentials). The dict format is:
+        {
+            "key": "your_client_id",
+            "secret": "your_client_secret"
+        }
+
+        If your credentials are stored differently (e.g. in a db) you can override this method for custom provision.
+        """
+        handler = cast(RequestHandler, self)
+        return handler.settings[self._OAUTH_SETTINGS_KEY]
+
     async def get_authenticated_user(
-        self, redirect_uri: str, code: str
+        self,
+        redirect_uri: str,
+        code: str,
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Handles the login for the Google user, returning an access token.
 
@@ -887,7 +904,7 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
                     else:
                         self.authorize_redirect(
                             redirect_uri='http://your.site.com/auth/google',
-                            client_id=self.settings['google_oauth']['key'],
+                            client_id=self.get_google_oauth_settings()['key'],
                             scope=['profile', 'email'],
                             response_type='code',
                             extra_params={'approval_prompt': 'auto'})
@@ -899,14 +916,18 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
 
            The ``callback`` argument was removed. Use the returned awaitable object instead.
         """  # noqa: E501
-        handler = cast(RequestHandler, self)
+
+        if not client_id:
+            client_id = self.get_google_oauth_settings()['key'],
+        if not client_secret:
+            client_secret = self.get_google_oauth_settings()['secret'],
         http = self.get_auth_http_client()
         body = urllib.parse.urlencode(
             {
                 "redirect_uri": redirect_uri,
                 "code": code,
-                "client_id": handler.settings[self._OAUTH_SETTINGS_KEY]["key"],
-                "client_secret": handler.settings[self._OAUTH_SETTINGS_KEY]["secret"],
+                "client_id": client_id,
+                "client_secret": client_secret,
                 "grant_type": "authorization_code",
             }
         )
