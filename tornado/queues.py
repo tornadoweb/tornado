@@ -381,7 +381,7 @@ class PriorityQueue(Queue):
     def _put(self, item: _T) -> None:
         heapq.heappush(self._queue, item)
 
-    def _get(self) -> _T:
+    def _get(self) -> _T:  # type: ignore[type-var]
         return heapq.heappop(self._queue)
 
 
@@ -418,5 +418,5 @@ class LifoQueue(Queue):
     def _put(self, item: _T) -> None:
         self._queue.append(item)
 
-    def _get(self) -> _T:
+    def _get(self) -> _T:  # type: ignore[type-var]
         return self._queue.pop()
