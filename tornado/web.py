@@ -1294,9 +1294,13 @@ class RequestHandler(object):
                 parts = language.strip().split(";")
                 score = 1.0
                 for part in parts[1:]:
-                    if "=" not in part or part.split("=", 1)[0].strip() != "q":
+                    try:
+                        pname, part = part.split("=", 1)
+                    except ValueError:
                         continue
-                    part = part.split("=", 1)[1].strip()
+                    if pname.strip() != "q":
+                        continue
+                    part = part.strip()
                     try:
                         score = float(part)
                         if score < 0:
