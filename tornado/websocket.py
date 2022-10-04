@@ -823,7 +823,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._masked_frame = None
         self._frame_mask = None  # type: Optional[bytes]
         self._frame_length = None
-        self._fragmented_message_buffer = None  # type: Optional[bytes]
+        self._fragmented_message_buffer = None  # type: Optional[bytearray]
         self._fragmented_message_opcode = None
         self._waiting = None  # type: object
         self._compression_options = params.compression_options
@@ -1178,10 +1178,10 @@ class WebSocketProtocol13(WebSocketProtocol):
                 # nothing to continue
                 self._abort()
                 return
-            self._fragmented_message_buffer += data
+            self._fragmented_message_buffer.extend(data)
             if is_final_frame:
                 opcode = self._fragmented_message_opcode
-                data = self._fragmented_message_buffer
+                data = bytes(self._fragmented_message_buffer)
                 self._fragmented_message_buffer = None
         else:  # start of new data message
             if self._fragmented_message_buffer is not None:
@@ -1190,7 +1190,7 @@ class WebSocketProtocol13(WebSocketProtocol):
                 return
             if not is_final_frame:
                 self._fragmented_message_opcode = opcode
-                self._fragmented_message_buffer = data
+                self._fragmented_message_buffer = bytearray(data)
 
         if is_final_frame:
             handled_future = self._handle_message(opcode, data)
