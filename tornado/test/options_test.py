@@ -204,6 +204,7 @@ class OptionsTest(unittest.TestCase):
         options.define("timedelta", type=datetime.timedelta)
         options.define("email", type=Email)
         options.define("list-of-int", type=int, multiple=True)
+        options.define("list-of-str", type=str, multiple=True)
         return options
 
     def _check_options_values(self, options):
@@ -216,6 +217,7 @@ class OptionsTest(unittest.TestCase):
         self.assertEqual(options.email.value, "tornado@web.com")
         self.assertTrue(isinstance(options.email, Email))
         self.assertEqual(options.list_of_int, [1, 2, 3])
+        self.assertEqual(options.list_of_str, ["a", "b", "c"])
 
     def test_types(self):
         options = self._define_options()
@@ -230,6 +232,7 @@ class OptionsTest(unittest.TestCase):
                 "--timedelta=45s",
                 "--email=tornado@web.com",
                 "--list-of-int=1,2,3",
+                "--list-of-str=a,b,c",
             ]
         )
         self._check_options_values(options)
