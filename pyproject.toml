@@ -3,7 +3,7 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.cibuildwheel]
-build = "cp3[789]* cp310*"
+build = "cp3[789]* cp310* cp311*"
 test-command = "python -m tornado.test"
 
 [tool.cibuildwheel.macos]
