@@ -36,8 +36,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - python: '3.7'
-            tox_env: py37-full
           - python: '3.8'
             tox_env: py38-full
           - python: '3.9'
