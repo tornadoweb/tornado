@@ -672,7 +672,7 @@ def gen_test(  # noqa: F811
                 if self._test_generator is not None and getattr(
                     self._test_generator, "cr_running", True
                 ):
-                    self._test_generator.throw(type(e), e)
+                    self._test_generator.throw(e)
                     # In case the test contains an overly broad except
                     # clause, we may get back here.
                 # Coroutine was stopped or didn't raise a useful stack trace,

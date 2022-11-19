@@ -1119,7 +1119,7 @@ class ContextVarsTest(AsyncTestCase):
         x = 10
 
         async def native_async_function():
-            self.assertEquals(ctx_var.get(), x)
+            self.assertEqual(ctx_var.get(), x)
 
         ctx_var.set(x)
         yield native_async_function()
