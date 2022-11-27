@@ -11,38 +11,31 @@ _import_everything = b"""
 import asyncio
 asyncio.set_event_loop(None)
 
-import tornado.auth
-import tornado.autoreload
-import tornado.concurrent
-import tornado.escape
-import tornado.gen
-import tornado.http1connection
-import tornado.httpclient
-import tornado.httpserver
-import tornado.httputil
-import tornado.ioloop
-import tornado.iostream
-import tornado.locale
-import tornado.log
-import tornado.netutil
-import tornado.options
-import tornado.process
-import tornado.simple_httpclient
-import tornado.tcpserver
-import tornado.tcpclient
-import tornado.template
-import tornado.testing
-import tornado.util
-import tornado.web
-import tornado.websocket
-import tornado.wsgi
+import importlib
+import tornado
 
-try:
-    import pycurl
-except ImportError:
-    pass
-else:
-    import tornado.curl_httpclient
+for mod in tornado.__all__:
+    if mod == "curl_httpclient":
+        # This module has extra dependencies; skip it if they're not installed.
+        try:
+            import pycurl
+        except ImportError:
+            continue
+    importlib.import_module(f"tornado.{mod}")
+"""
+
+_import_lazy = b"""
+import sys
+import tornado
+
+if "tornado.web" in sys.modules:
+    raise Exception("unexpected eager import")
+
+# Trigger a lazy import by referring to something in a submodule.
+tornado.web.RequestHandler
+
+if "tornado.web" not in sys.modules:
+    raise Exception("lazy import did not update sys.modules")
 """
 
 
@@ -54,6 +47,12 @@ class ImportTest(unittest.TestCase):
         # in our process, do it in a subprocess for a clean slate.
         proc = subprocess.Popen([sys.executable], stdin=subprocess.PIPE)
         proc.communicate(_import_everything)
+        self.assertEqual(proc.returncode, 0)
+
+    def test_lazy_import(self):
+        # Test that submodules can be referenced lazily after "import tornado"
+        proc = subprocess.Popen([sys.executable], stdin=subprocess.PIPE)
+        proc.communicate(_import_lazy)
         self.assertEqual(proc.returncode, 0)
 
     def test_import_aliases(self):

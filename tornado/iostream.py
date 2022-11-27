@@ -1069,9 +1069,8 @@ class IOStream(BaseIOStream):
 
     .. testcode::
 
-        import tornado.ioloop
-        import tornado.iostream
         import socket
+        import tornado
 
         async def main():
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)

@@ -15,9 +15,7 @@
 # under the License.
 
 import asyncio
-import tornado.escape
-import tornado.locks
-import tornado.web
+import tornado
 import os.path
 import uuid
 

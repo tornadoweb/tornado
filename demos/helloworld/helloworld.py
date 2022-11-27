@@ -15,9 +15,7 @@
 # under the License.
 
 import asyncio
-import tornado.httpserver
-import tornado.options
-import tornado.web
+import tornado
 
 from tornado.options import define, options
 

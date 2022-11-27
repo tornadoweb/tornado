@@ -56,7 +56,7 @@ Your ``main()`` method can parse the command line or parse a config file with
 either `parse_command_line` or `parse_config_file`::
 
     import myapp.db, myapp.server
-    import tornado.options
+    import tornado
 
     if __name__ == '__main__':
         tornado.options.parse_command_line()

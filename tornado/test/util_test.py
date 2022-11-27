@@ -4,7 +4,7 @@ import sys
 import datetime
 import unittest
 
-import tornado.escape
+import tornado
 from tornado.escape import utf8
 from tornado.util import (
     raise_exc_info,

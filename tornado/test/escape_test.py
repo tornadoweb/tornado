@@ -1,6 +1,6 @@
 import unittest
 
-import tornado.escape
+import tornado
 from tornado.escape import (
     utf8,
     xhtml_escape,

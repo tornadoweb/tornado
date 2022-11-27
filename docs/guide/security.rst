@@ -3,8 +3,7 @@ Authentication and security
 
 .. testsetup::
 
-   import tornado.auth
-   import tornado.web
+   import tornado
 
 Cookies and secure cookies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
