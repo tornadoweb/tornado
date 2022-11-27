@@ -10,6 +10,7 @@ import inspect
 import gc
 import os
 import platform
+import sys
 import traceback
 import unittest
 import warnings
@@ -133,6 +134,9 @@ class AsyncTestCaseWrapperTest(unittest.TestCase):
     @unittest.skipIf(
         platform.python_implementation() == "PyPy",
         "pypy destructor warnings cannot be silenced",
+    )
+    @unittest.skipIf(
+        sys.version_info >= (3, 12), "py312 has its own check for test case returns"
     )
     def test_undecorated_coroutine(self):
         class Test(AsyncTestCase):
