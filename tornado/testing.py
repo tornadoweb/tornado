@@ -724,28 +724,37 @@ class ExpectLog(logging.Filter):
     ) -> None:
         """Constructs an ExpectLog context manager.
 
-        :param logger: Logger object (or name of logger) to watch.  Pass
-            an empty string to watch the root logger.
-        :param regex: Regular expression to match.  Any log entries on
-            the specified logger that match this regex will be suppressed.
-        :param required: If true, an exception will be raised if the end of
-            the ``with`` statement is reached without matching any log entries.
+        :param logger: Logger object (or name of logger) to watch.  Pass an
+            empty string to watch the root logger.
+        :param regex: Regular expression to match.  Any log entries on the
+            specified logger that match this regex will be suppressed.
+        :param required: If true, an exception will be raised if the end of the
+            ``with`` statement is reached without matching any log entries.
         :param level: A constant from the ``logging`` module indicating the
             expected log level. If this parameter is provided, only log messages
             at this level will be considered to match. Additionally, the
-            supplied ``logger`` will have its level adjusted if necessary
-            (for the duration of the ``ExpectLog`` to enable the expected
-            message.
+            supplied ``logger`` will have its level adjusted if necessary (for
+            the duration of the ``ExpectLog`` to enable the expected message.
 
         .. versionchanged:: 6.1
            Added the ``level`` parameter.
+
+        .. deprecated:: 6.3
+           In Tornado 7.0, only ``WARNING`` and higher logging levels will be
+           matched by default. To match ``INFO`` and lower levels, the ``level``
+           argument must be used. This is changing to minimize differences
+           between ``tornado.testing.main`` (which enables ``INFO`` logs by
+           default) and most other test runners (including those in IDEs)
+           which have ``INFO`` logs disabled by default.
         """
         if isinstance(logger, basestring_type):
             logger = logging.getLogger(logger)
         self.logger = logger
         self.regex = re.compile(regex)
         self.required = required
-        self.matched = False
+        # matched and deprecated_level_matched are a counter for the respective event.
+        self.matched = 0
+        self.deprecated_level_matched = 0
         self.logged_stack = False
         self.level = level
         self.orig_level = None  # type: Optional[int]
@@ -755,13 +764,20 @@ class ExpectLog(logging.Filter):
             self.logged_stack = True
         message = record.getMessage()
         if self.regex.match(message):
+            if self.level is None and record.levelno < logging.WARNING:
+                # We're inside the logging machinery here so generating a DeprecationWarning
+                # here won't be reported cleanly (if warnings-as-errors is enabled, the error
+                # just gets swallowed by the logging module), and even if it were it would
+                # have the wrong stack trace. Just remember this fact and report it in
+                # __exit__ instead.
+                self.deprecated_level_matched += 1
             if self.level is not None and record.levelno != self.level:
                 app_log.warning(
                     "Got expected log message %r at unexpected level (%s vs %s)"
                     % (message, logging.getLevelName(self.level), record.levelname)
                 )
                 return True
-            self.matched = True
+            self.matched += 1
             return False
         return True
 
@@ -783,6 +799,15 @@ class ExpectLog(logging.Filter):
         self.logger.removeFilter(self)
         if not typ and self.required and not self.matched:
             raise Exception("did not get expected log message")
+        if (
+            not typ
+            and self.required
+            and (self.deprecated_level_matched >= self.matched)
+        ):
+            warnings.warn(
+                "ExpectLog matched at INFO or below without level argument",
+                DeprecationWarning,
+            )
 
 
 # From https://nedbatchelder.com/blog/201508/using_context_managers_in_test_setup.html

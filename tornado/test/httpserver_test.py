@@ -754,7 +754,7 @@ class UnixSocketTest(AsyncTestCase):
     def test_unix_socket_bad_request(self):
         # Unix sockets don't have remote addresses so they just return an
         # empty string.
-        with ExpectLog(gen_log, "Malformed HTTP message from"):
+        with ExpectLog(gen_log, "Malformed HTTP message from", level=logging.INFO):
             self.stream.write(b"garbage\r\n\r\n")
             response = yield self.stream.read_until_close()
         self.assertEqual(response, b"HTTP/1.1 400 Bad Request\r\n\r\n")

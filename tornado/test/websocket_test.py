@@ -388,7 +388,7 @@ class WebSocketTest(WebSocketBaseTestCase):
         sock, port = bind_unused_port()
         sock.close()
         with self.assertRaises(IOError):
-            with ExpectLog(gen_log, ".*"):
+            with ExpectLog(gen_log, ".*", required=False):
                 yield websocket_connect(
                     "ws://127.0.0.1:%d/" % port, connect_timeout=3600
                 )
