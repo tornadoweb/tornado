@@ -49,8 +49,8 @@ class LogFormatterTest(unittest.TestCase):
         # variable when the tests are run, so just patch in some values
         # for testing.  (testing with color off fails to expose some potential
         # encoding issues from the control characters)
-        self.formatter._colors = {logging.ERROR: u"\u0001"}
-        self.formatter._normal = u"\u0002"
+        self.formatter._colors = {logging.ERROR: "\u0001"}
+        self.formatter._normal = "\u0002"
         # construct a Logger directly to bypass getLogger's caching
         self.logger = logging.Logger("LogFormatterTest")
         self.logger.propagate = False
@@ -93,16 +93,16 @@ class LogFormatterTest(unittest.TestCase):
 
     def test_utf8_logging(self):
         with ignore_bytes_warning():
-            self.logger.error(u"\u00e9".encode("utf8"))
+            self.logger.error("\u00e9".encode("utf8"))
         if issubclass(bytes, basestring_type):
             # on python 2, utf8 byte strings (and by extension ascii byte
             # strings) are passed through as-is.
-            self.assertEqual(self.get_output(), utf8(u"\u00e9"))
+            self.assertEqual(self.get_output(), utf8("\u00e9"))
         else:
             # on python 3, byte strings always get repr'd even if
             # they're ascii-only, so this degenerates into another
             # copy of test_bytes_logging.
-            self.assertEqual(self.get_output(), utf8(repr(utf8(u"\u00e9"))))
+            self.assertEqual(self.get_output(), utf8(repr(utf8("\u00e9"))))
 
     def test_bytes_exception_logging(self):
         try:
@@ -112,9 +112,9 @@ class LogFormatterTest(unittest.TestCase):
         # This will be "Exception: \xe9" on python 2 or
         # "Exception: b'\xe9'" on python 3.
         output = self.get_output()
-        self.assertRegex(output, br"Exception.*\\xe9")
+        self.assertRegex(output, rb"Exception.*\\xe9")
         # The traceback contains newlines, which should not have been escaped.
-        self.assertNotIn(br"\n", output)
+        self.assertNotIn(rb"\n", output)
 
 
 class UnicodeLogFormatterTest(LogFormatterTest):
@@ -125,8 +125,8 @@ class UnicodeLogFormatterTest(LogFormatterTest):
         return logging.FileHandler(filename, encoding="utf8")
 
     def test_unicode_logging(self):
-        self.logger.error(u"\u00e9")
-        self.assertEqual(self.get_output(), utf8(u"\u00e9"))
+        self.logger.error("\u00e9")
+        self.assertEqual(self.get_output(), utf8("\u00e9"))
 
 
 class EnablePrettyLoggingTest(unittest.TestCase):

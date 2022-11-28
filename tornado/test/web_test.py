@@ -129,7 +129,7 @@ class SecureCookieV1Test(unittest.TestCase):
         # this string base64-encodes to '12345678'
         handler.set_secure_cookie("foo", binascii.a2b_hex(b"d76df8e7aefc"), version=1)
         cookie = handler._cookies["foo"]
-        match = re.match(br"12345678\|([0-9]+)\|([0-9a-f]+)", cookie)
+        match = re.match(rb"12345678\|([0-9]+)\|([0-9a-f]+)", cookie)
         assert match is not None
         timestamp = match.group(1)
         sig = match.group(2)
@@ -274,7 +274,7 @@ class CookieTest(WebTestCase):
                 # Try setting cookies with different argument types
                 # to ensure that everything gets encoded correctly
                 self.set_cookie("str", "asdf")
-                self.set_cookie("unicode", u"qwer")
+                self.set_cookie("unicode", "qwer")
                 self.set_cookie("bytes", b"zxcv")
 
         class GetCookieHandler(RequestHandler):
@@ -287,7 +287,7 @@ class CookieTest(WebTestCase):
             def get(self):
                 # unicode domain and path arguments shouldn't break things
                 # either (see bug #285)
-                self.set_cookie("unicode_args", "blah", domain=u"foo.com", path=u"/foo")
+                self.set_cookie("unicode_args", "blah", domain="foo.com", path="/foo")
 
         class SetCookieSpecialCharHandler(RequestHandler):
             def get(self):
@@ -542,9 +542,9 @@ class RequestEncodingTest(WebTestCase):
         self.assertEqual(
             self.fetch_json("/group/%C3%A9?arg=%C3%A9"),
             {
-                u"path": u"/group/%C3%A9",
-                u"path_args": [u"\u00e9"],
-                u"args": {u"arg": [u"\u00e9"]},
+                "path": "/group/%C3%A9",
+                "path_args": ["\u00e9"],
+                "args": {"arg": ["\u00e9"]},
             },
         )
 
@@ -813,15 +813,13 @@ class WSGISafeWebTest(WebTestCase):
             data = json_decode(response.body)
             self.assertEqual(
                 data,
-                {u"path": [u"unicode", u"\u00e9"], u"query": [u"unicode", u"\u00e9"]},
+                {"path": ["unicode", "\u00e9"], "query": ["unicode", "\u00e9"]},
             )
 
         response = self.fetch("/decode_arg/%C3%A9?foo=%C3%A9")
         response.rethrow()
         data = json_decode(response.body)
-        self.assertEqual(
-            data, {u"path": [u"bytes", u"c3a9"], u"query": [u"bytes", u"c3a9"]}
-        )
+        self.assertEqual(data, {"path": ["bytes", "c3a9"], "query": ["bytes", "c3a9"]})
 
     def test_decode_argument_invalid_unicode(self):
         # test that invalid unicode in URLs causes 400, not 500
@@ -843,7 +841,7 @@ class WSGISafeWebTest(WebTestCase):
             data = json_decode(response.body)
             self.assertEqual(
                 data,
-                {u"path": [u"unicode", u"1 + 1"], u"query": [u"unicode", u"1 + 1"]},
+                {"path": ["unicode", "1 + 1"], "query": ["unicode", "1 + 1"]},
             )
 
     def test_reverse_url(self):
@@ -851,7 +849,7 @@ class WSGISafeWebTest(WebTestCase):
         self.assertEqual(self.app.reverse_url("decode_arg", 42), "/decode_arg/42")
         self.assertEqual(self.app.reverse_url("decode_arg", b"\xe9"), "/decode_arg/%E9")
         self.assertEqual(
-            self.app.reverse_url("decode_arg", u"\u00e9"), "/decode_arg/%C3%A9"
+            self.app.reverse_url("decode_arg", "\u00e9"), "/decode_arg/%C3%A9"
         )
         self.assertEqual(
             self.app.reverse_url("decode_arg", "1 + 1"), "/decode_arg/1%20%2B%201"
@@ -892,8 +890,8 @@ js_embed()
         )
 
     def test_optional_path(self):
-        self.assertEqual(self.fetch_json("/optional_path/foo"), {u"path": u"foo"})
-        self.assertEqual(self.fetch_json("/optional_path/"), {u"path": None})
+        self.assertEqual(self.fetch_json("/optional_path/foo"), {"path": "foo"})
+        self.assertEqual(self.fetch_json("/optional_path/"), {"path": None})
 
     def test_multi_header(self):
         response = self.fetch("/multi_header")
@@ -1592,7 +1590,7 @@ class NamedURLSpecGroupsTest(WebTestCase):
 
         return [
             ("/str/(?P<path>.*)", EchoHandler),
-            (u"/unicode/(?P<path>.*)", EchoHandler),
+            ("/unicode/(?P<path>.*)", EchoHandler),
         ]
 
     def test_named_urlspec_groups(self):

@@ -167,7 +167,7 @@ Foo
         args, files = form_data_args()
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
-        self.assertEqual(file["filename"], u"áb.txt")
+        self.assertEqual(file["filename"], "áb.txt")
         self.assertEqual(file["body"], b"Foo")
 
     def test_boundary_starts_and_ends_with_quotes(self):
@@ -301,13 +301,13 @@ Foo: even
         # and cpython's unicodeobject.c (which defines the implementation
         # of unicode_type.splitlines(), and uses a different list than TR13).
         newlines = [
-            u"\u001b",  # VERTICAL TAB
-            u"\u001c",  # FILE SEPARATOR
-            u"\u001d",  # GROUP SEPARATOR
-            u"\u001e",  # RECORD SEPARATOR
-            u"\u0085",  # NEXT LINE
-            u"\u2028",  # LINE SEPARATOR
-            u"\u2029",  # PARAGRAPH SEPARATOR
+            "\u001b",  # VERTICAL TAB
+            "\u001c",  # FILE SEPARATOR
+            "\u001d",  # GROUP SEPARATOR
+            "\u001e",  # RECORD SEPARATOR
+            "\u0085",  # NEXT LINE
+            "\u2028",  # LINE SEPARATOR
+            "\u2029",  # PARAGRAPH SEPARATOR
         ]
         for newline in newlines:
             # Try the utf8 and latin1 representations of each newline

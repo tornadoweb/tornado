@@ -291,7 +291,7 @@ Transfer-Encoding: chunked
 
         # The standard mandates NFC. Give it a decomposed username
         # and ensure it is normalized to composed form.
-        username = unicodedata.normalize("NFD", u"josé")
+        username = unicodedata.normalize("NFD", "josé")
         self.assertEqual(
             self.fetch("/auth", auth_username=username, auth_password="səcrət").body,
             b"Basic am9zw6k6c8mZY3LJmXQ=",
@@ -380,7 +380,7 @@ Transfer-Encoding: chunked
         self.assertEqual(b"Basic " + base64.b64encode(b"me:secret"), response.body)
 
     def test_body_encoding(self):
-        unicode_body = u"\xe9"
+        unicode_body = "\xe9"
         byte_body = binascii.a2b_hex(b"e9")
 
         # unicode string in body gets converted to utf8
@@ -410,7 +410,7 @@ Transfer-Encoding: chunked
             method="POST",
             body=byte_body,
             headers={"Content-Type": "application/blah"},
-            user_agent=u"foo",
+            user_agent="foo",
         )
         self.assertEqual(response.headers["Content-Length"], "1")
         self.assertEqual(response.body, byte_body)
@@ -499,7 +499,7 @@ Transfer-Encoding: chunked
         # in a plain dictionary or an HTTPHeaders object.
         # Keys must always be the native str type.
         # All combinations should have the same results on the wire.
-        for value in [u"MyUserAgent", b"MyUserAgent"]:
+        for value in ["MyUserAgent", b"MyUserAgent"]:
             for container in [dict, HTTPHeaders]:
                 headers = container()
                 headers["User-Agent"] = value
@@ -551,7 +551,7 @@ X-XSS-Protection: 1;
                 "Foo": "b\xe4r",
             },
         )
-        self.assertEqual(response.body, u"b\xe4r".encode("ISO8859-1"))
+        self.assertEqual(response.body, "b\xe4r".encode("ISO8859-1"))
 
     def test_304_with_content_length(self):
         # According to the spec 304 responses SHOULD NOT include
@@ -681,7 +681,7 @@ X-XSS-Protection: 1;
         # Non-ascii headers are sent as latin1.
         response = self.fetch("/set_header?k=foo&v=%E9")
         response.rethrow()
-        self.assertEqual(response.headers["Foo"], native_str(u"\u00e9"))
+        self.assertEqual(response.headers["Foo"], native_str("\u00e9"))
 
     def test_response_times(self):
         # A few simple sanity checks of the response time fields to
@@ -690,6 +690,7 @@ X-XSS-Protection: 1;
         start_time = time.time()
         response = self.fetch("/hello")
         response.rethrow()
+        assert response.request_time is not None
         self.assertGreaterEqual(response.request_time, 0)
         self.assertLess(response.request_time, 1.0)
         # A very crude check to make sure that start_time is based on

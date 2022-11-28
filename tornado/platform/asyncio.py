@@ -36,10 +36,10 @@ import warnings
 from tornado.gen import convert_yielded
 from tornado.ioloop import IOLoop, _Selectable
 
-from typing import Any, TypeVar, Awaitable, Callable, Union, Optional, List, Tuple, Dict
+from typing import Any, TypeVar, Awaitable, Callable, Union, Optional, List, Dict
 
 if typing.TYPE_CHECKING:
-    from typing import Set  # noqa: F401
+    from typing import Set, Tuple  # noqa: F401
     from typing_extensions import Protocol
 
     class _HasFileno(Protocol):
@@ -83,7 +83,6 @@ if sys.version_info >= (3, 10):
             pass
 
         return asyncio.get_event_loop_policy().get_event_loop()
-
 
 else:
     from asyncio import get_event_loop as _get_event_loop
@@ -672,10 +671,18 @@ class AddThreadSelectorEventLoop(asyncio.AbstractEventLoop):
         self._writers[fd] = functools.partial(callback, *args)
         self._wake_selector()
 
-    def remove_reader(self, fd: "_FileDescriptorLike") -> None:
-        del self._readers[fd]
+    def remove_reader(self, fd: "_FileDescriptorLike") -> bool:
+        try:
+            del self._readers[fd]
+        except KeyError:
+            return False
         self._wake_selector()
+        return True
 
-    def remove_writer(self, fd: "_FileDescriptorLike") -> None:
-        del self._writers[fd]
+    def remove_writer(self, fd: "_FileDescriptorLike") -> bool:
+        try:
+            del self._writers[fd]
+        except KeyError:
+            return False
         self._wake_selector()
+        return True
