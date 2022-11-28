@@ -1643,7 +1643,7 @@ class RequestHandler(object):
         # Find all weak and strong etag values from If-None-Match header
         # because RFC 7232 allows multiple etag values in a single header.
         etags = re.findall(
-            br'\*|(?:W/)?"[^"]*"', utf8(self.request.headers.get("If-None-Match", ""))
+            rb'\*|(?:W/)?"[^"]*"', utf8(self.request.headers.get("If-None-Match", ""))
         )
         if not computed_etag or not etags:
             return False
@@ -1676,20 +1676,16 @@ class RequestHandler(object):
             )
             # If XSRF cookies are turned on, reject form submissions without
             # the proper cookie
-            if (
-                self.request.method
-                not in (
-                    "GET",
-                    "HEAD",
-                    "OPTIONS",
-                )
-                and self.application.settings.get("xsrf_cookies")
-            ):
+            if self.request.method not in (
+                "GET",
+                "HEAD",
+                "OPTIONS",
+            ) and self.application.settings.get("xsrf_cookies"):
                 self.check_xsrf_cookie()
 
             result = self.prepare()
             if result is not None:
-                result = await result
+                result = await result  # type: ignore
             if self._prepared_future is not None:
                 # Tell the Application we've finished with prepare()
                 # and are ready for the body to arrive.
@@ -3441,7 +3437,7 @@ def create_signed_value(
 
 # A leading version number in decimal
 # with no leading zeros, followed by a pipe.
-_signed_value_version_re = re.compile(br"^([1-9][0-9]*)\|(.*)$")
+_signed_value_version_re = re.compile(rb"^([1-9][0-9]*)\|(.*)$")
 
 
 def _get_version(value: bytes) -> int:

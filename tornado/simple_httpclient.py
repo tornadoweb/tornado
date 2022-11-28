@@ -547,7 +547,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         value: Optional[BaseException],
         tb: Optional[TracebackType],
     ) -> bool:
-        if self.final_callback:
+        if self.final_callback is not None:
             self._remove_timeout()
             if isinstance(value, StreamClosedError):
                 if value.real_error is None:

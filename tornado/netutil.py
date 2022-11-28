@@ -44,10 +44,10 @@ if hasattr(ssl, "OP_NO_COMPRESSION"):
 # module-import time, the import lock is already held by the main thread,
 # leading to deadlock. Avoid it by caching the idna encoder on the main
 # thread now.
-u"foo".encode("idna")
+"foo".encode("idna")
 
 # For undiagnosed reasons, 'latin1' codec may also need to be preloaded.
-u"foo".encode("latin1")
+"foo".encode("latin1")
 
 # Default backlog used when calling sock.listen()
 _DEFAULT_BACKLOG = 128
@@ -115,7 +115,7 @@ def bind_sockets(
             sys.platform == "darwin"
             and address == "localhost"
             and af == socket.AF_INET6
-            and sockaddr[3] != 0
+            and sockaddr[3] != 0  # type: ignore
         ):
             # Mac OS X includes a link-local address fe80::1%lo0 in the
             # getaddrinfo results for 'localhost'.  However, the firewall

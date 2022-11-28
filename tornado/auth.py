@@ -136,7 +136,7 @@ class OpenIdMixin(object):
         args = dict(
             (k, v[-1]) for k, v in handler.request.arguments.items()
         )  # type: Dict[str, Union[str, bytes]]
-        args["openid.mode"] = u"check_authentication"
+        args["openid.mode"] = "check_authentication"
         url = self._OPENID_ENDPOINT  # type: ignore
         if http_client is None:
             http_client = self.get_auth_http_client()
@@ -211,14 +211,14 @@ class OpenIdMixin(object):
         for key in handler.request.arguments:
             if (
                 key.startswith("openid.ns.")
-                and handler.get_argument(key) == u"http://openid.net/srv/ax/1.0"
+                and handler.get_argument(key) == "http://openid.net/srv/ax/1.0"
             ):
                 ax_ns = key[10:]
                 break
 
         def get_ax_arg(uri: str) -> str:
             if not ax_ns:
-                return u""
+                return ""
             prefix = "openid." + ax_ns + ".type."
             ax_name = None
             for name in handler.request.arguments.keys():
@@ -227,8 +227,8 @@ class OpenIdMixin(object):
                     ax_name = "openid." + ax_ns + ".value." + part
                     break
             if not ax_name:
-                return u""
-            return handler.get_argument(ax_name, u"")
+                return ""
+            return handler.get_argument(ax_name, "")
 
         email = get_ax_arg("http://axschema.org/contact/email")
         name = get_ax_arg("http://axschema.org/namePerson")
@@ -247,7 +247,7 @@ class OpenIdMixin(object):
         if name:
             user["name"] = name
         elif name_parts:
-            user["name"] = u" ".join(name_parts)
+            user["name"] = " ".join(name_parts)
         elif email:
             user["name"] = email.split("@")[0]
         if email:

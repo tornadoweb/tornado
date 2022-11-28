@@ -146,8 +146,8 @@ class RootHandler(BaseRequestHandler):
 
 class BucketHandler(BaseRequestHandler):
     def get(self, bucket_name):
-        prefix = self.get_argument("prefix", u"")
-        marker = self.get_argument("marker", u"")
+        prefix = self.get_argument("prefix", "")
+        marker = self.get_argument("marker", "")
         max_keys = int(self.get_argument("max-keys", 50000))
         path = os.path.abspath(os.path.join(self.application.directory, bucket_name))
         terse = int(self.get_argument("terse", 0))
