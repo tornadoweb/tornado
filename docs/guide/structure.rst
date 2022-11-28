@@ -2,7 +2,7 @@
 
 .. testsetup::
 
-   import tornado.web
+   import tornado
 
 Structure of a Tornado web application
 ======================================
@@ -17,8 +17,7 @@ A minimal "hello world" example looks something like this:
 .. testcode::
 
     import asyncio
-
-    import tornado.web
+    import tornado
 
     class MainHandler(tornado.web.RequestHandler):
         def get(self):

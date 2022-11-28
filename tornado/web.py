@@ -23,7 +23,7 @@ Here is a simple "Hello, world" example app:
 .. testcode::
 
     import asyncio
-    import tornado.web
+    import tornado
 
     class MainHandler(tornado.web.RequestHandler):
         def get(self):

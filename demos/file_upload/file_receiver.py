@@ -12,7 +12,7 @@ import asyncio
 import logging
 from urllib.parse import unquote
 
-import tornado.web
+import tornado
 from tornado import options
 
 

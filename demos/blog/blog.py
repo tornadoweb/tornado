@@ -21,12 +21,7 @@ import markdown
 import os.path
 import psycopg2
 import re
-import tornado.escape
-import tornado.httpserver
-import tornado.ioloop
-import tornado.locks
-import tornado.options
-import tornado.web
+import tornado
 import unicodedata
 
 from tornado.options import define, options

@@ -32,8 +32,7 @@ Hello, world
 Here is a simple "Hello, world" example web app for Tornado::
 
     import asyncio
-
-    import tornado.web
+    import tornado
 
     class MainHandler(tornado.web.RequestHandler):
         def get(self):

@@ -23,7 +23,6 @@ import hashlib
 import os
 import sys
 import struct
-import tornado.escape
 import tornado.web
 from urllib.parse import urlparse
 import zlib

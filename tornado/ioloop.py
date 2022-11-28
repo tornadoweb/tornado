@@ -83,7 +83,7 @@ class IOLoop(Configurable):
         import functools
         import socket
 
-        import tornado.ioloop
+        import tornado
         from tornado.iostream import IOStream
 
         async def handle_connection(connection, address):

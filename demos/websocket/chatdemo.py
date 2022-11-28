@@ -20,10 +20,7 @@ Authentication, error handling, etc are left as an exercise for the reader :)
 
 import asyncio
 import logging
-import tornado.escape
-import tornado.options
-import tornado.web
-import tornado.websocket
+import tornado
 import os.path
 import uuid
 

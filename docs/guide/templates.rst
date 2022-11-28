@@ -3,7 +3,7 @@ Templates and UI
 
 .. testsetup::
 
-   import tornado.web
+   import tornado
 
 Tornado includes a simple, fast, and flexible templating language.
 This section describes that language as well as related issues
