@@ -44,8 +44,10 @@ jobs:
             tox_env: py310-full
           - python: '3.11'
             tox_env: py311-full
-          - python: '3.12.0-alpha - 3.12'
-            tox_env: py312-full
+          # Need more work for python 3.12. See
+          # https://github.com/python/cpython/issues/93453
+          #- python: '3.12.0-alpha - 3.12'
+          #  tox_env: py312-full
           - python: 'pypy-3.8'
             # Pypy is a lot slower due to jit warmup costs, so don't run the
             # "full" test config there.
