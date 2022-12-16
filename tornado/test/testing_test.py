@@ -109,7 +109,7 @@ class AsyncHTTPTestCaseTest(AsyncHTTPTestCase):
     def test_fetch_full_http_url(self):
         # Ensure that self.fetch() recognizes absolute urls and does
         # not transform them into references to our main test server.
-        path = "http://localhost:%d/path" % self.second_port
+        path = "http://127.0.0.1:%d/path" % self.second_port
 
         response = self.fetch(path)
         self.assertEqual(response.request.url, path)

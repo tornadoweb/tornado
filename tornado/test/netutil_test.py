@@ -44,7 +44,14 @@ class _ResolverTestMixin(object):
     @gen_test
     def test_localhost(self: typing.Any):
         addrinfo = yield self.resolver.resolve("localhost", 80, socket.AF_UNSPEC)
-        self.assertIn((socket.AF_INET, ("127.0.0.1", 80)), addrinfo)
+        # Most of the time localhost resovles to either the ipv4 loopback
+        # address alone, or ipv4+ipv6. But some versions of pycares will only
+        # return the ipv6 version, so we have to check for either one alone.
+        self.assertTrue(
+            ((socket.AF_INET, ("127.0.0.1", 80)) in addrinfo)
+            or ((socket.AF_INET6, ("::1", 80)) in addrinfo),
+            f"loopback address not found in {addrinfo}",
+        )
 
 
 # It is impossible to quickly and consistently generate an error in name
