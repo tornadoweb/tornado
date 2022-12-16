@@ -119,7 +119,13 @@ class LeakTest(unittest.TestCase):
         asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
 
     def tearDown(self):
-        asyncio.get_event_loop_policy().get_event_loop().close()
+        try:
+            loop = asyncio.get_event_loop_policy().get_event_loop()
+        except Exception:
+            # We may not have a current event loop at this point.
+            pass
+        else:
+            loop.close()
         asyncio.set_event_loop_policy(self.orig_policy)
 
     def test_ioloop_close_leak(self):
