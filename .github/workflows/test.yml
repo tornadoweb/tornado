@@ -24,7 +24,7 @@ jobs:
           # Lint python version must be synced with tox.ini
           python-version: '3.8'
       - name: Install tox
-        run: python -m pip install tox
+        run: python -m pip install tox -c maint/requirements.txt
 
       - name: Run test suite
         run: python -m tox -e py38,lint
@@ -44,8 +44,10 @@ jobs:
             tox_env: py310-full
           - python: '3.11'
             tox_env: py311-full
-          - python: '3.12.0-alpha - 3.12'
-            tox_env: py312-full
+          # Need more work for python 3.12. See
+          # https://github.com/python/cpython/issues/93453
+          #- python: '3.12.0-alpha - 3.12'
+          #  tox_env: py312-full
           - python: 'pypy-3.8'
             # Pypy is a lot slower due to jit warmup costs, so don't run the
             # "full" test config there.
@@ -63,7 +65,7 @@ jobs:
       - name: Install apt packages
         run: sudo apt-get update && sudo apt-get install libcurl4-openssl-dev
       - name: Install tox
-        run: python -m pip install tox
+        run: python -m pip install tox -c maint/requirements.txt
 
       - name: Run test suite
         run: python -m tox -e ${{ matrix.tox_env }}

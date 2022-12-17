@@ -1,5 +1,6 @@
 import asyncio
 import functools
+import socket
 import traceback
 import typing
 import unittest
@@ -9,6 +10,7 @@ from tornado import gen
 from tornado.httpclient import HTTPError, HTTPRequest
 from tornado.locks import Event
 from tornado.log import gen_log, app_log
+from tornado.netutil import Resolver
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
@@ -538,6 +540,15 @@ class WebSocketTest(WebSocketBaseTestCase):
     @gen_test
     def test_check_origin_invalid_subdomains(self):
         port = self.get_http_port()
+
+        # CaresResolver may return ipv6-only results for localhost, but our
+        # server is only running on ipv4. Test for this edge case and skip
+        # the test if it happens.
+        addrinfo = yield Resolver().resolve("localhost", port)
+        families = set(addr[0] for addr in addrinfo)
+        if socket.AF_INET not in families:
+            self.skipTest("localhost does not resolve to ipv4")
+            return
 
         url = "ws://localhost:%d/echo" % port
         # Subdomains should be disallowed by default.  If we could pass a
