@@ -28,11 +28,15 @@ container.
 """
 
 import sys
+from concurrent import futures
 from io import BytesIO
 import tornado
 
+from tornado import concurrent
 from tornado import escape
+from tornado import gen
 from tornado import httputil
+from tornado import ioloop
 from tornado.log import access_log
 
 from typing import List, Tuple, Optional, Callable, Any, Dict, Text
@@ -89,11 +93,33 @@ class WSGIContainer(object):
     The `tornado.web.FallbackHandler` class is often useful for mixing
     Tornado and WSGI apps in the same server.  See
     https://github.com/bdarnell/django-tornado-demo for a complete example.
+
+    `WSGIContainer` supports executing the WSGI application in custom executors
+    using `IOLoop.run_in_executor`. The default executor uses
+    `tornado.concurrent.dummy_executor` which works synchronously, but other
+    executors subclassing `concurrent.futures.Executor` may be used. To execute
+    WSGI application code in separate threads in an event-loop compatible way
+    use::
+
+        async def main():
+            executor = concurrent.futures.ThreadPoolExecutor()
+            # ^-- Execute requests in separate threads.
+            container = tornado.wsgi.WSGIContainer(simple_app, executor)
+            # Initialize the WSGI container with custom executor --^
+            http_server = tornado.httpserver.HTTPServer(container)
+            http_server.listen(8888)
+            await asyncio.Event().wait()
+
+    Running the WSGI app with a `ThreadPoolExecutor` remains *less scalable*
+    than running the same app in a multi-threaded WSGI server like ``gunicorn``
+    or ``uwsgi``.
     """
 
-    def __init__(self, wsgi_application: "WSGIAppType") -> None:
+    def __init__(self, wsgi_application: "WSGIAppType", executor: futures.Executor = None) -> None:
         self.wsgi_application = wsgi_application
+        self.executor = concurrent.dummy_executor if executor is None else executor
 
+    @gen.coroutine
     def __call__(self, request: httputil.HTTPServerRequest) -> None:
         data = {}  # type: Dict[str, Any]
         response = []  # type: List[bytes]
@@ -113,8 +139,12 @@ class WSGIContainer(object):
             data["headers"] = headers
             return response.append
 
-        app_response = self.wsgi_application(
-            WSGIContainer.environ(request), start_response
+        loop = ioloop.IOLoop.current()
+        app_response = yield loop.run_in_executor(
+            self.executor,
+            self.wsgi_application,
+            self.environ(request),
+            start_response,
         )
         try:
             response.extend(app_response)
