@@ -34,6 +34,7 @@ import tornado
 
 from tornado import concurrent
 from tornado import escape
+from tornado import gen
 from tornado import httputil
 from tornado import ioloop
 from tornado.log import access_log
