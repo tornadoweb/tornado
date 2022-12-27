@@ -40,7 +40,7 @@ General changes
 - The minimum supported Python version is now 3.7.
 - Wheels are now published with the Python stable ABI (``abi3``) for
   compatibility across versions of Python.
-- SSL certificate verfication and hostname checks are now enabled by default in
+- SSL certificate verification and hostname checks are now enabled by default in
   more places (primarily in client-side usage of `.SSLIOStream`).
 - Various improvements to type hints throughout the package.
 - CI has moved from Travis and Appveyor to Github Actions.  
