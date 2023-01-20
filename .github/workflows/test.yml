@@ -24,7 +24,7 @@ jobs:
           # Lint python version must be synced with tox.ini
           python-version: '3.8'
       - name: Install tox
-        run: python -m pip install tox -c maint/requirements.txt
+        run: python -m pip install tox -c requirements.txt
 
       - name: Run test suite
         run: python -m tox -e py38,lint
@@ -65,7 +65,7 @@ jobs:
       - name: Install apt packages
         run: sudo apt-get update && sudo apt-get install libcurl4-openssl-dev
       - name: Install tox
-        run: python -m pip install tox -c maint/requirements.txt
+        run: python -m pip install tox -c requirements.txt
 
       - name: Run test suite
         run: python -m tox -e ${{ matrix.tox_env }}
