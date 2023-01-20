@@ -6,4 +6,4 @@ sphinx<6
 sphinxcontrib-asyncio
 sphinx_rtd_theme
 types-pycurl
-tox<4
+tox
