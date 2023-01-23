@@ -166,7 +166,7 @@ May be overridden by passing a ``version`` keyword argument.
 """
 
 DEFAULT_SIGNED_VALUE_MIN_VERSION = 1
-"""The oldest signed value accepted by `.RequestHandler.get_secure_cookie`.
+"""The oldest signed value accepted by `.RequestHandler.get_signed_cookie`.
 
 May be overridden by passing a ``min_version`` keyword argument.
 
@@ -684,7 +684,7 @@ class RequestHandler(object):
         for name in self.request.cookies:
             self.clear_cookie(name, path=path, domain=domain)
 
-    def set_secure_cookie(
+    def set_signed_cookie(
         self,
         name: str,
         value: Union[str, bytes],
@@ -698,11 +698,11 @@ class RequestHandler(object):
         to use this method. It should be a long, random sequence of bytes
         to be used as the HMAC secret for the signature.
 
-        To read a cookie set with this method, use `get_secure_cookie()`.
+        To read a cookie set with this method, use `get_signed_cookie()`.
 
         Note that the ``expires_days`` parameter sets the lifetime of the
         cookie in the browser, but is independent of the ``max_age_days``
-        parameter to `get_secure_cookie`.
+        parameter to `get_signed_cookie`.
         A value of None limits the lifetime to the current browser session.
 
         Secure cookies may contain arbitrary byte values, not just unicode
@@ -715,6 +715,12 @@ class RequestHandler(object):
 
            Added the ``version`` argument.  Introduced cookie version 2
            and made it the default.
+
+        .. versionchanged:: 6.3
+
+           Renamed from ``set_secure_cookie`` to ``set_signed_cookie`` to
+           avoid confusion with other uses of "secure" in cookie attributes
+           and prefixes. The old name remains as an alias.
         """
         self.set_cookie(
             name,
@@ -723,14 +729,16 @@ class RequestHandler(object):
             **kwargs
         )
 
+    set_secure_cookie = set_signed_cookie
+
     def create_signed_value(
         self, name: str, value: Union[str, bytes], version: Optional[int] = None
     ) -> bytes:
         """Signs and timestamps a string so it cannot be forged.
 
-        Normally used via set_secure_cookie, but provided as a separate
+        Normally used via set_signed_cookie, but provided as a separate
         method for non-cookie uses.  To decode a value not stored
-        as a cookie use the optional value argument to get_secure_cookie.
+        as a cookie use the optional value argument to get_signed_cookie.
 
         .. versionchanged:: 3.2.1
 
@@ -749,7 +757,7 @@ class RequestHandler(object):
             secret, name, value, version=version, key_version=key_version
         )
 
-    def get_secure_cookie(
+    def get_signed_cookie(
         self,
         name: str,
         value: Optional[str] = None,
@@ -763,12 +771,19 @@ class RequestHandler(object):
 
         Similar to `get_cookie`, this method only returns cookies that
         were present in the request. It does not see outgoing cookies set by
-        `set_secure_cookie` in this handler.
+        `set_signed_cookie` in this handler.
 
         .. versionchanged:: 3.2.1
 
            Added the ``min_version`` argument.  Introduced cookie version 2;
            both versions 1 and 2 are accepted by default.
+
+         .. versionchanged:: 6.3
+
+           Renamed from ``get_secure_cookie`` to ``get_signed_cookie`` to
+           avoid confusion with other uses of "secure" in cookie attributes
+           and prefixes. The old name remains as an alias.
+
         """
         self.require_setting("cookie_secret", "secure cookies")
         if value is None:
@@ -781,12 +796,22 @@ class RequestHandler(object):
             min_version=min_version,
         )
 
-    def get_secure_cookie_key_version(
+    get_secure_cookie = get_signed_cookie
+
+    def get_signed_cookie_key_version(
         self, name: str, value: Optional[str] = None
     ) -> Optional[int]:
         """Returns the signing key version of the secure cookie.
 
         The version is returned as int.
+
+        .. versionchanged:: 6.3
+
+           Renamed from ``get_secure_cookie_key_version`` to
+           ``set_signed_cookie_key_version`` to avoid confusion with other
+           uses of "secure" in cookie attributes and prefixes. The old name
+           remains as an alias.
+
         """
         self.require_setting("cookie_secret", "secure cookies")
         if value is None:
@@ -794,6 +819,8 @@ class RequestHandler(object):
         if value is None:
             return None
         return get_signature_key_version(value)
+
+    get_secure_cookie_key_version = get_signed_cookie_key_version
 
     def redirect(
         self, url: str, permanent: bool = False, status: Optional[int] = None
@@ -1321,7 +1348,7 @@ class RequestHandler(object):
           and is cached for future access::
 
               def get_current_user(self):
-                  user_cookie = self.get_secure_cookie("user")
+                  user_cookie = self.get_signed_cookie("user")
                   if user_cookie:
                       return json.loads(user_cookie)
                   return None
@@ -1331,7 +1358,7 @@ class RequestHandler(object):
 
               @gen.coroutine
               def prepare(self):
-                  user_id_cookie = self.get_secure_cookie("user_id")
+                  user_id_cookie = self.get_signed_cookie("user_id")
                   if user_id_cookie:
                       self.current_user = yield load_user(user_id_cookie)
 

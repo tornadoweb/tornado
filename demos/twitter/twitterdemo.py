@@ -53,7 +53,7 @@ class BaseHandler(RequestHandler):
     COOKIE_NAME = "twitterdemo_user"
 
     def get_current_user(self):
-        user_json = self.get_secure_cookie(self.COOKIE_NAME)
+        user_json = self.get_signed_cookie(self.COOKIE_NAME)
         if not user_json:
             return None
         return json_decode(user_json)
@@ -75,7 +75,7 @@ class LoginHandler(BaseHandler, TwitterMixin):
         if self.get_argument("oauth_token", None):
             user = yield self.get_authenticated_user()
             del user["description"]
-            self.set_secure_cookie(self.COOKIE_NAME, json_encode(user))
+            self.set_signed_cookie(self.COOKIE_NAME, json_encode(user))
             self.redirect(self.get_argument("next", "/"))
         else:
             yield self.authorize_redirect(callback_uri=self.request.full_url())
