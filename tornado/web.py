@@ -210,7 +210,7 @@ class RequestHandler(object):
         self,
         application: "Application",
         request: httputil.HTTPServerRequest,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         super().__init__()
 
@@ -660,37 +660,62 @@ class RequestHandler(object):
         if samesite:
             morsel["samesite"] = samesite
 
-    def clear_cookie(
-        self, name: str, path: str = "/", domain: Optional[str] = None
-    ) -> None:
+    def clear_cookie(self, name: str, **kwargs: Any) -> None:
         """Deletes the cookie with the given name.
 
-        Due to limitations of the cookie protocol, you must pass the same
-        path and domain to clear a cookie as were used when that cookie
-        was set (but there is no way to find out on the server side
-        which values were used for a given cookie).
+        This method accepts the same arguments as `set_cookie`, except for
+        ``expires`` and ``max_age``. Clearing a cookie requires the same
+        ``domain`` and ``path`` arguments as when it was set. In some cases the
+        ``samesite`` and ``secure`` arguments are also required to match. Other
+        arguments are ignored.
 
         Similar to `set_cookie`, the effect of this method will not be
         seen until the following request.
+
+        .. versionchanged:: 6.3
+
+           Now accepts all keyword arguments that ``set_cookie`` does.
+           The ``samesite`` and ``secure`` flags have recently become
+           required for clearing ``samesite="none"`` cookies.
         """
+        for excluded_arg in ["expires", "max_age"]:
+            if excluded_arg in kwargs:
+                raise TypeError(
+                    f"clear_cookie() got an unexpected keyword argument '{excluded_arg}'"
+                )
         expires = datetime.datetime.utcnow() - datetime.timedelta(days=365)
-        self.set_cookie(name, value="", path=path, expires=expires, domain=domain)
+        self.set_cookie(name, value="", expires=expires, **kwargs)
 
-    def clear_all_cookies(self, path: str = "/", domain: Optional[str] = None) -> None:
-        """Deletes all the cookies the user sent with this request.
+    def clear_all_cookies(self, **kwargs: Any) -> None:
+        """Attempt to delete all the cookies the user sent with this request.
 
-        See `clear_cookie` for more information on the path and domain
-        parameters.
+        See `clear_cookie` for more information on keyword arguments. Due to
+        limitations of the cookie protocol, it is impossible to determine on the
+        server side which values are necessary for the ``domain``, ``path``,
+        ``samesite``, or ``secure`` arguments, this method can only be
+        successful if you consistently use the same values for these arguments
+        when setting cookies.
 
-        Similar to `set_cookie`, the effect of this method will not be
-        seen until the following request.
+        Similar to `set_cookie`, the effect of this method will not be seen
+        until the following request.
 
         .. versionchanged:: 3.2
 
            Added the ``path`` and ``domain`` parameters.
+
+        .. versionchanged:: 6.3
+
+           Now accepts all keyword arguments that ``set_cookie`` does.
+
+        .. deprecated:: 6.3
+
+           The increasingly complex rules governing cookies have made it
+           impossible for a ``clear_all_cookies`` method to work reliably
+           since all we know about cookies are their names. Applications
+           should generally use ``clear_cookie`` one at a time instead.
         """
         for name in self.request.cookies:
-            self.clear_cookie(name, path=path, domain=domain)
+            self.clear_cookie(name, **kwargs)
 
     def set_signed_cookie(
         self,
@@ -698,7 +723,7 @@ class RequestHandler(object):
         value: Union[str, bytes],
         expires_days: Optional[float] = 30,
         version: Optional[int] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         """Signs and timestamps a cookie so it cannot be forged.
 
@@ -734,7 +759,7 @@ class RequestHandler(object):
             name,
             self.create_signed_value(name, value, version=version),
             expires_days=expires_days,
-            **kwargs
+            **kwargs,
         )
 
     set_secure_cookie = set_signed_cookie
@@ -2077,7 +2102,7 @@ class Application(ReversibleRouter):
         handlers: Optional[_RuleList] = None,
         default_host: Optional[str] = None,
         transforms: Optional[List[Type["OutputTransform"]]] = None,
-        **settings: Any
+        **settings: Any,
     ) -> None:
         if transforms is None:
             self.transforms = []  # type: List[Type[OutputTransform]]
@@ -2137,7 +2162,7 @@ class Application(ReversibleRouter):
         backlog: int = tornado.netutil._DEFAULT_BACKLOG,
         flags: Optional[int] = None,
         reuse_port: bool = False,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> HTTPServer:
         """Starts an HTTP server for this application on the given port.
 
@@ -2424,7 +2449,7 @@ class HTTPError(Exception):
         status_code: int = 500,
         log_message: Optional[str] = None,
         *args: Any,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         self.status_code = status_code
         self.log_message = log_message
