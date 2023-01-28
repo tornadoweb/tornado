@@ -603,21 +603,28 @@ class RequestHandler(object):
         expires: Optional[Union[float, Tuple, datetime.datetime]] = None,
         path: str = "/",
         expires_days: Optional[float] = None,
-        **kwargs: Any
+        # Keyword-only args start here for historical reasons.
+        *,
+        max_age: Optional[int] = None,
+        httponly: bool = False,
+        secure: bool = False,
+        samesite: Optional[str] = None,
     ) -> None:
         """Sets an outgoing cookie name/value with the given options.
 
         Newly-set cookies are not immediately visible via `get_cookie`;
         they are not present until the next request.
 
-        expires may be a numeric timestamp as returned by `time.time`,
-        a time tuple as returned by `time.gmtime`, or a
-        `datetime.datetime` object.
+        Most arguments are passed directly to `http.cookies.Morsel` directly.
+        See https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie
+        for more information.
 
-        Additional keyword arguments are set on the cookies.Morsel
-        directly.
-        See https://docs.python.org/3/library/http.cookies.html#http.cookies.Morsel
-        for available attributes.
+        ``expires`` may be a numeric timestamp as returned by `time.time`,
+        a time tuple as returned by `time.gmtime`, or a
+        `datetime.datetime` object. ``expires_days`` is provided as a convenience
+        to set an expiration time in days from today (if both are set, ``expires``
+        is used).
+
         """
         # The cookie library only accepts type str, in both python 2 and 3
         name = escape.native_str(name)
@@ -641,16 +648,17 @@ class RequestHandler(object):
             morsel["expires"] = httputil.format_timestamp(expires)
         if path:
             morsel["path"] = path
-        for k, v in kwargs.items():
-            if k == "max_age":
-                k = "max-age"
-
-            # skip falsy values for httponly and secure flags because
-            # SimpleCookie sets them regardless
-            if k in ["httponly", "secure"] and not v:
-                continue
-
-            morsel[k] = v
+        if max_age:
+            # Note change from _ to -.
+            morsel["max-age"] = str(max_age)
+        if httponly:
+            # Note that SimpleCookie ignores the value here. The presense of an
+            # httponly (or secure) key is treated as true.
+            morsel["httponly"] = True
+        if secure:
+            morsel["secure"] = True
+        if samesite:
+            morsel["samesite"] = samesite
 
     def clear_cookie(
         self, name: str, path: str = "/", domain: Optional[str] = None
