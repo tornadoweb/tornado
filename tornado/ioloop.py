@@ -33,7 +33,6 @@ import sys
 import time
 import math
 import random
-import warnings
 from inspect import isawaitable
 
 from tornado.concurrent import (
@@ -123,8 +122,7 @@ class IOLoop(Configurable):
     and instead initialize the `asyncio` event loop and use `IOLoop.current()`.
     In some cases, such as in test frameworks when initializing an `IOLoop`
     to be run in a secondary thread, it may be appropriate to construct
-    an `IOLoop` with ``IOLoop(make_current=False)``. Constructing an `IOLoop`
-    without the ``make_current=False`` argument is deprecated since Tornado 6.2.
+    an `IOLoop` with ``IOLoop(make_current=False)``.
 
     In general, an `IOLoop` cannot survive a fork or be shared across processes
     in any way. When multiple processes are being used, each process should
@@ -144,13 +142,6 @@ class IOLoop(Configurable):
        Uses the `asyncio` event loop by default. The ``IOLoop.configure`` method
        cannot be used on Python 3 except to redundantly specify the `asyncio`
        event loop.
-
-    .. deprecated:: 6.2
-       It is deprecated to create an event loop that is "current" but not
-       running. This means it is deprecated to pass
-       ``make_current=True`` to the ``IOLoop`` constructor, or to create
-       an ``IOLoop`` while no asyncio event loop is running unless
-       ``make_current=False`` is used.
     """
 
     # These constants were originally based on constants from the epoll module.
@@ -293,13 +284,6 @@ class IOLoop(Configurable):
 
         .. versionchanged:: 5.0
            This method also sets the current `asyncio` event loop.
-
-        .. deprecated:: 6.2
-           The concept of an event loop that is "current" without
-           currently running is deprecated in asyncio since Python
-           3.10. All related functionality in Tornado is also
-           deprecated. Instead, start the event loop with `asyncio.run`
-           before interacting with it.
         """
         # The asyncio event loops override this method.
         raise NotImplementedError()
@@ -312,13 +296,7 @@ class IOLoop(Configurable):
 
         .. versionchanged:: 5.0
            This method also clears the current `asyncio` event loop.
-        .. deprecated:: 6.2
         """
-        warnings.warn(
-            "clear_current is deprecated",
-            DeprecationWarning,
-            stacklevel=2,
-        )
         IOLoop._clear_current()
 
     @staticmethod
