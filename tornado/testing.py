@@ -162,17 +162,6 @@ class AsyncTestCase(unittest.TestCase):
                 response = self.wait()
                 # Test contents of response
                 self.assertIn("FriendFeed", response.body)
-
-    .. deprecated:: 6.2
-
-       AsyncTestCase and AsyncHTTPTestCase are deprecated due to changes
-       in future versions of Python (after 3.10). The interfaces used
-       in this class are incompatible with the deprecation and intended
-       removal of certain methods related to the idea of a "current"
-       event loop while no event loop is actually running. Use
-       `unittest.IsolatedAsyncioTestCase` instead. Note that this class
-       does not emit DeprecationWarnings until better migration guidance
-       can be provided.
     """
 
     def __init__(self, methodName: str = "runTest") -> None:
@@ -435,10 +424,6 @@ class AsyncHTTPTestCase(AsyncTestCase):
     like ``http_client.fetch()``, into a synchronous operation. If you need
     to do other asynchronous operations in tests, you'll probably need to use
     ``stop()`` and ``wait()`` yourself.
-
-    .. deprecated:: 6.2
-       `AsyncTestCase` and `AsyncHTTPTestCase` are deprecated due to changes
-       in Python 3.10; see comments on `AsyncTestCase` for more details.
     """
 
     def setUp(self) -> None:
