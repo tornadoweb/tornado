@@ -5,7 +5,7 @@ Authentication and security
 
    import tornado
 
-Cookies and secure cookies
+Cookies and signed cookies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 You can set cookies in the user's browser with the ``set_cookie``
@@ -27,8 +27,8 @@ method:
 Cookies are not secure and can easily be modified by clients.  If you
 need to set cookies to, e.g., identify the currently logged in user,
 you need to sign your cookies to prevent forgery. Tornado supports
-signed cookies with the `~.RequestHandler.set_secure_cookie` and
-`~.RequestHandler.get_secure_cookie` methods. To use these methods,
+signed cookies with the `~.RequestHandler.set_signed_cookie` and
+`~.RequestHandler.get_signed_cookie` methods. To use these methods,
 you need to specify a secret key named ``cookie_secret`` when you
 create your application. You can pass in application settings as
 keyword arguments to your application:
@@ -45,15 +45,15 @@ keyword arguments to your application:
 Signed cookies contain the encoded value of the cookie in addition to a
 timestamp and an `HMAC <http://en.wikipedia.org/wiki/HMAC>`_ signature.
 If the cookie is old or if the signature doesn't match,
-``get_secure_cookie`` will return ``None`` just as if the cookie isn't
+``get_signed_cookie`` will return ``None`` just as if the cookie isn't
 set. The secure version of the example above:
 
 .. testcode::
 
     class MainHandler(tornado.web.RequestHandler):
         def get(self):
-            if not self.get_secure_cookie("mycookie"):
-                self.set_secure_cookie("mycookie", "myvalue")
+            if not self.get_signed_cookie("mycookie"):
+                self.set_signed_cookie("mycookie", "myvalue")
                 self.write("Your cookie was not set yet!")
             else:
                 self.write("Your cookie was set!")
@@ -61,15 +61,15 @@ set. The secure version of the example above:
 .. testoutput::
    :hide:
 
-Tornado's secure cookies guarantee integrity but not confidentiality.
+Tornado's signed cookies guarantee integrity but not confidentiality.
 That is, the cookie cannot be modified but its contents can be seen by the
 user.  The ``cookie_secret`` is a symmetric key and must be kept secret --
 anyone who obtains the value of this key could produce their own signed
 cookies.
 
-By default, Tornado's secure cookies expire after 30 days.  To change this,
-use the ``expires_days`` keyword argument to ``set_secure_cookie`` *and* the
-``max_age_days`` argument to ``get_secure_cookie``.  These two values are
+By default, Tornado's signed cookies expire after 30 days.  To change this,
+use the ``expires_days`` keyword argument to ``set_signed_cookie`` *and* the
+``max_age_days`` argument to ``get_signed_cookie``.  These two values are
 passed separately so that you may e.g. have a cookie that is valid for 30 days
 for most purposes, but for certain sensitive actions (such as changing billing
 information) you use a smaller ``max_age_days`` when reading the cookie.
@@ -81,7 +81,7 @@ signing key must then be set as ``key_version`` application setting
 but all other keys in the dict are allowed for cookie signature validation,
 if the correct key version is set in the cookie.
 To implement cookie updates, the current signing key version can be
-queried via `~.RequestHandler.get_secure_cookie_key_version`.
+queried via `~.RequestHandler.get_signed_cookie_key_version`.
 
 .. _user-authentication:
 
@@ -103,7 +103,7 @@ specifying a nickname, which is then saved in a cookie:
 
     class BaseHandler(tornado.web.RequestHandler):
         def get_current_user(self):
-            return self.get_secure_cookie("user")
+            return self.get_signed_cookie("user")
 
     class MainHandler(BaseHandler):
         def get(self):
@@ -121,7 +121,7 @@ specifying a nickname, which is then saved in a cookie:
                        '</form></body></html>')
 
         def post(self):
-            self.set_secure_cookie("user", self.get_argument("name"))
+            self.set_signed_cookie("user", self.get_argument("name"))
             self.redirect("/")
 
     application = tornado.web.Application([
@@ -193,7 +193,7 @@ the Google credentials in a cookie for later access:
                 user = await self.get_authenticated_user(
                     redirect_uri='http://your.site.com/auth/google',
                     code=self.get_argument('code'))
-                # Save the user with e.g. set_secure_cookie
+                # Save the user with e.g. set_signed_cookie
             else:
                 await self.authorize_redirect(
                     redirect_uri='http://your.site.com/auth/google',

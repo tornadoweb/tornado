@@ -97,7 +97,7 @@ class HelloHandler(RequestHandler):
 
 
 class CookieTestRequestHandler(RequestHandler):
-    # stub out enough methods to make the secure_cookie functions work
+    # stub out enough methods to make the signed_cookie functions work
     def __init__(self, cookie_secret="0123456789", key_version=None):
         # don't call super.__init__
         self._cookies = {}  # type: typing.Dict[str, bytes]
@@ -121,13 +121,13 @@ class CookieTestRequestHandler(RequestHandler):
 class SecureCookieV1Test(unittest.TestCase):
     def test_round_trip(self):
         handler = CookieTestRequestHandler()
-        handler.set_secure_cookie("foo", b"bar", version=1)
-        self.assertEqual(handler.get_secure_cookie("foo", min_version=1), b"bar")
+        handler.set_signed_cookie("foo", b"bar", version=1)
+        self.assertEqual(handler.get_signed_cookie("foo", min_version=1), b"bar")
 
     def test_cookie_tampering_future_timestamp(self):
         handler = CookieTestRequestHandler()
         # this string base64-encodes to '12345678'
-        handler.set_secure_cookie("foo", binascii.a2b_hex(b"d76df8e7aefc"), version=1)
+        handler.set_signed_cookie("foo", binascii.a2b_hex(b"d76df8e7aefc"), version=1)
         cookie = handler._cookies["foo"]
         match = re.match(rb"12345678\|([0-9]+)\|([0-9a-f]+)", cookie)
         assert match is not None
@@ -160,14 +160,14 @@ class SecureCookieV1Test(unittest.TestCase):
         )
         # it gets rejected
         with ExpectLog(gen_log, "Cookie timestamp in future"):
-            self.assertTrue(handler.get_secure_cookie("foo", min_version=1) is None)
+            self.assertTrue(handler.get_signed_cookie("foo", min_version=1) is None)
 
     def test_arbitrary_bytes(self):
         # Secure cookies accept arbitrary data (which is base64 encoded).
         # Note that normal cookies accept only a subset of ascii.
         handler = CookieTestRequestHandler()
-        handler.set_secure_cookie("foo", b"\xe9", version=1)
-        self.assertEqual(handler.get_secure_cookie("foo", min_version=1), b"\xe9")
+        handler.set_signed_cookie("foo", b"\xe9", version=1)
+        self.assertEqual(handler.get_signed_cookie("foo", min_version=1), b"\xe9")
 
 
 # See SignedValueTest below for more.
@@ -176,46 +176,46 @@ class SecureCookieV2Test(unittest.TestCase):
 
     def test_round_trip(self):
         handler = CookieTestRequestHandler()
-        handler.set_secure_cookie("foo", b"bar", version=2)
-        self.assertEqual(handler.get_secure_cookie("foo", min_version=2), b"bar")
+        handler.set_signed_cookie("foo", b"bar", version=2)
+        self.assertEqual(handler.get_signed_cookie("foo", min_version=2), b"bar")
 
     def test_key_version_roundtrip(self):
         handler = CookieTestRequestHandler(
             cookie_secret=self.KEY_VERSIONS, key_version=0
         )
-        handler.set_secure_cookie("foo", b"bar")
-        self.assertEqual(handler.get_secure_cookie("foo"), b"bar")
+        handler.set_signed_cookie("foo", b"bar")
+        self.assertEqual(handler.get_signed_cookie("foo"), b"bar")
 
     def test_key_version_roundtrip_differing_version(self):
         handler = CookieTestRequestHandler(
             cookie_secret=self.KEY_VERSIONS, key_version=1
         )
-        handler.set_secure_cookie("foo", b"bar")
-        self.assertEqual(handler.get_secure_cookie("foo"), b"bar")
+        handler.set_signed_cookie("foo", b"bar")
+        self.assertEqual(handler.get_signed_cookie("foo"), b"bar")
 
     def test_key_version_increment_version(self):
         handler = CookieTestRequestHandler(
             cookie_secret=self.KEY_VERSIONS, key_version=0
         )
-        handler.set_secure_cookie("foo", b"bar")
+        handler.set_signed_cookie("foo", b"bar")
         new_handler = CookieTestRequestHandler(
             cookie_secret=self.KEY_VERSIONS, key_version=1
         )
         new_handler._cookies = handler._cookies
-        self.assertEqual(new_handler.get_secure_cookie("foo"), b"bar")
+        self.assertEqual(new_handler.get_signed_cookie("foo"), b"bar")
 
     def test_key_version_invalidate_version(self):
         handler = CookieTestRequestHandler(
             cookie_secret=self.KEY_VERSIONS, key_version=0
         )
-        handler.set_secure_cookie("foo", b"bar")
+        handler.set_signed_cookie("foo", b"bar")
         new_key_versions = self.KEY_VERSIONS.copy()
         new_key_versions.pop(0)
         new_handler = CookieTestRequestHandler(
             cookie_secret=new_key_versions, key_version=1
         )
         new_handler._cookies = handler._cookies
-        self.assertEqual(new_handler.get_secure_cookie("foo"), None)
+        self.assertEqual(new_handler.get_signed_cookie("foo"), None)
 
 
 class FinalReturnTest(WebTestCase):
@@ -585,7 +585,7 @@ class TypeCheckHandler(RequestHandler):
             raise Exception(
                 "unexpected values for cookie keys: %r" % self.cookies.keys()
             )
-        self.check_type("get_secure_cookie", self.get_secure_cookie("asdf"), bytes)
+        self.check_type("get_signed_cookie", self.get_signed_cookie("asdf"), bytes)
         self.check_type("get_cookie", self.get_cookie("asdf"), str)
 
         self.check_type("xsrf_token", self.xsrf_token, bytes)

@@ -166,7 +166,7 @@ May be overridden by passing a ``version`` keyword argument.
 """
 
 DEFAULT_SIGNED_VALUE_MIN_VERSION = 1
-"""The oldest signed value accepted by `.RequestHandler.get_secure_cookie`.
+"""The oldest signed value accepted by `.RequestHandler.get_signed_cookie`.
 
 May be overridden by passing a ``min_version`` keyword argument.
 
@@ -210,7 +210,7 @@ class RequestHandler(object):
         self,
         application: "Application",
         request: httputil.HTTPServerRequest,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         super().__init__()
 
@@ -603,21 +603,28 @@ class RequestHandler(object):
         expires: Optional[Union[float, Tuple, datetime.datetime]] = None,
         path: str = "/",
         expires_days: Optional[float] = None,
-        **kwargs: Any
+        # Keyword-only args start here for historical reasons.
+        *,
+        max_age: Optional[int] = None,
+        httponly: bool = False,
+        secure: bool = False,
+        samesite: Optional[str] = None,
     ) -> None:
         """Sets an outgoing cookie name/value with the given options.
 
         Newly-set cookies are not immediately visible via `get_cookie`;
         they are not present until the next request.
 
-        expires may be a numeric timestamp as returned by `time.time`,
-        a time tuple as returned by `time.gmtime`, or a
-        `datetime.datetime` object.
+        Most arguments are passed directly to `http.cookies.Morsel` directly.
+        See https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie
+        for more information.
 
-        Additional keyword arguments are set on the cookies.Morsel
-        directly.
-        See https://docs.python.org/3/library/http.cookies.html#http.cookies.Morsel
-        for available attributes.
+        ``expires`` may be a numeric timestamp as returned by `time.time`,
+        a time tuple as returned by `time.gmtime`, or a
+        `datetime.datetime` object. ``expires_days`` is provided as a convenience
+        to set an expiration time in days from today (if both are set, ``expires``
+        is used).
+
         """
         # The cookie library only accepts type str, in both python 2 and 3
         name = escape.native_str(name)
@@ -641,56 +648,82 @@ class RequestHandler(object):
             morsel["expires"] = httputil.format_timestamp(expires)
         if path:
             morsel["path"] = path
-        for k, v in kwargs.items():
-            if k == "max_age":
-                k = "max-age"
+        if max_age:
+            # Note change from _ to -.
+            morsel["max-age"] = str(max_age)
+        if httponly:
+            # Note that SimpleCookie ignores the value here. The presense of an
+            # httponly (or secure) key is treated as true.
+            morsel["httponly"] = True
+        if secure:
+            morsel["secure"] = True
+        if samesite:
+            morsel["samesite"] = samesite
 
-            # skip falsy values for httponly and secure flags because
-            # SimpleCookie sets them regardless
-            if k in ["httponly", "secure"] and not v:
-                continue
-
-            morsel[k] = v
-
-    def clear_cookie(
-        self, name: str, path: str = "/", domain: Optional[str] = None
-    ) -> None:
+    def clear_cookie(self, name: str, **kwargs: Any) -> None:
         """Deletes the cookie with the given name.
 
-        Due to limitations of the cookie protocol, you must pass the same
-        path and domain to clear a cookie as were used when that cookie
-        was set (but there is no way to find out on the server side
-        which values were used for a given cookie).
+        This method accepts the same arguments as `set_cookie`, except for
+        ``expires`` and ``max_age``. Clearing a cookie requires the same
+        ``domain`` and ``path`` arguments as when it was set. In some cases the
+        ``samesite`` and ``secure`` arguments are also required to match. Other
+        arguments are ignored.
 
         Similar to `set_cookie`, the effect of this method will not be
         seen until the following request.
+
+        .. versionchanged:: 6.3
+
+           Now accepts all keyword arguments that ``set_cookie`` does.
+           The ``samesite`` and ``secure`` flags have recently become
+           required for clearing ``samesite="none"`` cookies.
         """
+        for excluded_arg in ["expires", "max_age"]:
+            if excluded_arg in kwargs:
+                raise TypeError(
+                    f"clear_cookie() got an unexpected keyword argument '{excluded_arg}'"
+                )
         expires = datetime.datetime.utcnow() - datetime.timedelta(days=365)
-        self.set_cookie(name, value="", path=path, expires=expires, domain=domain)
+        self.set_cookie(name, value="", expires=expires, **kwargs)
 
-    def clear_all_cookies(self, path: str = "/", domain: Optional[str] = None) -> None:
-        """Deletes all the cookies the user sent with this request.
+    def clear_all_cookies(self, **kwargs: Any) -> None:
+        """Attempt to delete all the cookies the user sent with this request.
 
-        See `clear_cookie` for more information on the path and domain
-        parameters.
+        See `clear_cookie` for more information on keyword arguments. Due to
+        limitations of the cookie protocol, it is impossible to determine on the
+        server side which values are necessary for the ``domain``, ``path``,
+        ``samesite``, or ``secure`` arguments, this method can only be
+        successful if you consistently use the same values for these arguments
+        when setting cookies.
 
-        Similar to `set_cookie`, the effect of this method will not be
-        seen until the following request.
+        Similar to `set_cookie`, the effect of this method will not be seen
+        until the following request.
 
         .. versionchanged:: 3.2
 
            Added the ``path`` and ``domain`` parameters.
+
+        .. versionchanged:: 6.3
+
+           Now accepts all keyword arguments that ``set_cookie`` does.
+
+        .. deprecated:: 6.3
+
+           The increasingly complex rules governing cookies have made it
+           impossible for a ``clear_all_cookies`` method to work reliably
+           since all we know about cookies are their names. Applications
+           should generally use ``clear_cookie`` one at a time instead.
         """
         for name in self.request.cookies:
-            self.clear_cookie(name, path=path, domain=domain)
+            self.clear_cookie(name, **kwargs)
 
-    def set_secure_cookie(
+    def set_signed_cookie(
         self,
         name: str,
         value: Union[str, bytes],
         expires_days: Optional[float] = 30,
         version: Optional[int] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         """Signs and timestamps a cookie so it cannot be forged.
 
@@ -698,11 +731,11 @@ class RequestHandler(object):
         to use this method. It should be a long, random sequence of bytes
         to be used as the HMAC secret for the signature.
 
-        To read a cookie set with this method, use `get_secure_cookie()`.
+        To read a cookie set with this method, use `get_signed_cookie()`.
 
         Note that the ``expires_days`` parameter sets the lifetime of the
         cookie in the browser, but is independent of the ``max_age_days``
-        parameter to `get_secure_cookie`.
+        parameter to `get_signed_cookie`.
         A value of None limits the lifetime to the current browser session.
 
         Secure cookies may contain arbitrary byte values, not just unicode
@@ -715,22 +748,30 @@ class RequestHandler(object):
 
            Added the ``version`` argument.  Introduced cookie version 2
            and made it the default.
+
+        .. versionchanged:: 6.3
+
+           Renamed from ``set_secure_cookie`` to ``set_signed_cookie`` to
+           avoid confusion with other uses of "secure" in cookie attributes
+           and prefixes. The old name remains as an alias.
         """
         self.set_cookie(
             name,
             self.create_signed_value(name, value, version=version),
             expires_days=expires_days,
-            **kwargs
+            **kwargs,
         )
+
+    set_secure_cookie = set_signed_cookie
 
     def create_signed_value(
         self, name: str, value: Union[str, bytes], version: Optional[int] = None
     ) -> bytes:
         """Signs and timestamps a string so it cannot be forged.
 
-        Normally used via set_secure_cookie, but provided as a separate
+        Normally used via set_signed_cookie, but provided as a separate
         method for non-cookie uses.  To decode a value not stored
-        as a cookie use the optional value argument to get_secure_cookie.
+        as a cookie use the optional value argument to get_signed_cookie.
 
         .. versionchanged:: 3.2.1
 
@@ -749,7 +790,7 @@ class RequestHandler(object):
             secret, name, value, version=version, key_version=key_version
         )
 
-    def get_secure_cookie(
+    def get_signed_cookie(
         self,
         name: str,
         value: Optional[str] = None,
@@ -763,12 +804,19 @@ class RequestHandler(object):
 
         Similar to `get_cookie`, this method only returns cookies that
         were present in the request. It does not see outgoing cookies set by
-        `set_secure_cookie` in this handler.
+        `set_signed_cookie` in this handler.
 
         .. versionchanged:: 3.2.1
 
            Added the ``min_version`` argument.  Introduced cookie version 2;
            both versions 1 and 2 are accepted by default.
+
+         .. versionchanged:: 6.3
+
+           Renamed from ``get_secure_cookie`` to ``get_signed_cookie`` to
+           avoid confusion with other uses of "secure" in cookie attributes
+           and prefixes. The old name remains as an alias.
+
         """
         self.require_setting("cookie_secret", "secure cookies")
         if value is None:
@@ -781,12 +829,22 @@ class RequestHandler(object):
             min_version=min_version,
         )
 
-    def get_secure_cookie_key_version(
+    get_secure_cookie = get_signed_cookie
+
+    def get_signed_cookie_key_version(
         self, name: str, value: Optional[str] = None
     ) -> Optional[int]:
         """Returns the signing key version of the secure cookie.
 
         The version is returned as int.
+
+        .. versionchanged:: 6.3
+
+           Renamed from ``get_secure_cookie_key_version`` to
+           ``set_signed_cookie_key_version`` to avoid confusion with other
+           uses of "secure" in cookie attributes and prefixes. The old name
+           remains as an alias.
+
         """
         self.require_setting("cookie_secret", "secure cookies")
         if value is None:
@@ -794,6 +852,8 @@ class RequestHandler(object):
         if value is None:
             return None
         return get_signature_key_version(value)
+
+    get_secure_cookie_key_version = get_signed_cookie_key_version
 
     def redirect(
         self, url: str, permanent: bool = False, status: Optional[int] = None
@@ -1321,7 +1381,7 @@ class RequestHandler(object):
           and is cached for future access::
 
               def get_current_user(self):
-                  user_cookie = self.get_secure_cookie("user")
+                  user_cookie = self.get_signed_cookie("user")
                   if user_cookie:
                       return json.loads(user_cookie)
                   return None
@@ -1331,7 +1391,7 @@ class RequestHandler(object):
 
               @gen.coroutine
               def prepare(self):
-                  user_id_cookie = self.get_secure_cookie("user_id")
+                  user_id_cookie = self.get_signed_cookie("user_id")
                   if user_id_cookie:
                       self.current_user = yield load_user(user_id_cookie)
 
@@ -2042,7 +2102,7 @@ class Application(ReversibleRouter):
         handlers: Optional[_RuleList] = None,
         default_host: Optional[str] = None,
         transforms: Optional[List[Type["OutputTransform"]]] = None,
-        **settings: Any
+        **settings: Any,
     ) -> None:
         if transforms is None:
             self.transforms = []  # type: List[Type[OutputTransform]]
@@ -2102,7 +2162,7 @@ class Application(ReversibleRouter):
         backlog: int = tornado.netutil._DEFAULT_BACKLOG,
         flags: Optional[int] = None,
         reuse_port: bool = False,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> HTTPServer:
         """Starts an HTTP server for this application on the given port.
 
@@ -2389,7 +2449,7 @@ class HTTPError(Exception):
         status_code: int = 500,
         log_message: Optional[str] = None,
         *args: Any,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         self.status_code = status_code
         self.log_message = log_message

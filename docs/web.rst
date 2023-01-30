@@ -117,9 +117,27 @@
    .. automethod:: RequestHandler.set_cookie
    .. automethod:: RequestHandler.clear_cookie
    .. automethod:: RequestHandler.clear_all_cookies
-   .. automethod:: RequestHandler.get_secure_cookie
-   .. automethod:: RequestHandler.get_secure_cookie_key_version
-   .. automethod:: RequestHandler.set_secure_cookie
+   .. automethod:: RequestHandler.get_signed_cookie
+   .. automethod:: RequestHandler.get_signed_cookie_key_version
+   .. automethod:: RequestHandler.set_signed_cookie
+   .. method:: RequestHandler.get_secure_cookie
+
+      Deprecated alias for ``get_signed_cookie``.
+
+      .. deprecated:: 6.3
+
+   .. method:: RequestHandler.get_secure_cookie_key_version
+
+      Deprecated alias for ``get_signed_cookie_key_version``.
+
+      .. deprecated:: 6.3
+
+   .. method:: RequestHandler.set_secure_cookie
+
+      Deprecated alias for ``set_signed_cookie``.
+
+      .. deprecated:: 6.3
+
    .. automethod:: RequestHandler.create_signed_value
    .. autodata:: MIN_SUPPORTED_SIGNED_VALUE_VERSION
    .. autodata:: MAX_SUPPORTED_SIGNED_VALUE_VERSION
@@ -217,9 +235,9 @@
 
          Authentication and security settings:
 
-         * ``cookie_secret``: Used by `RequestHandler.get_secure_cookie`
-           and `.set_secure_cookie` to sign cookies.
-         * ``key_version``: Used by requestHandler `.set_secure_cookie`
+         * ``cookie_secret``: Used by `RequestHandler.get_signed_cookie`
+           and `.set_signed_cookie` to sign cookies.
+         * ``key_version``: Used by requestHandler `.set_signed_cookie`
            to sign cookies with a specific key when ``cookie_secret``
            is a key dictionary.
          * ``login_url``: The `authenticated` decorator will redirect

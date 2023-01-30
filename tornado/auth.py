@@ -42,7 +42,7 @@ Example usage for Google OAuth:
                 user = await self.get_authenticated_user(
                     redirect_uri='http://your.site.com/auth/google',
                     code=self.get_argument('code'))
-                # Save the user with e.g. set_secure_cookie
+                # Save the user with e.g. set_signed_cookie
             else:
                 self.authorize_redirect(
                     redirect_uri='http://your.site.com/auth/google',
@@ -694,7 +694,7 @@ class TwitterMixin(OAuthMixin):
             async def get(self):
                 if self.get_argument("oauth_token", None):
                     user = await self.get_authenticated_user()
-                    # Save the user using e.g. set_secure_cookie()
+                    # Save the user using e.g. set_signed_cookie()
                 else:
                     await self.authorize_redirect()
 
@@ -903,7 +903,7 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
                             "https://www.googleapis.com/oauth2/v1/userinfo",
                             access_token=access["access_token"])
                         # Save the user and access token with
-                        # e.g. set_secure_cookie.
+                        # e.g. set_signed_cookie.
                     else:
                         self.authorize_redirect(
                             redirect_uri='http://your.site.com/auth/google',
@@ -977,7 +977,7 @@ class FacebookGraphMixin(OAuth2Mixin):
                           client_id=self.settings["facebook_api_key"],
                           client_secret=self.settings["facebook_secret"],
                           code=self.get_argument("code"))
-                      # Save the user with e.g. set_secure_cookie
+                      # Save the user with e.g. set_signed_cookie
                   else:
                       self.authorize_redirect(
                           redirect_uri='/auth/facebookgraph/',
