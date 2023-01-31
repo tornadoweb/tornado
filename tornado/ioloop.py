@@ -254,10 +254,13 @@ class IOLoop(Configurable):
         """
         try:
             loop = asyncio.get_event_loop()
-        except (RuntimeError, AssertionError):
+        except RuntimeError:
             if not instance:
                 return None
-            raise
+            # Create a new asyncio event loop for this thread.
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
         try:
             return IOLoop._ioloop_for_asyncio[loop]
         except KeyError:
