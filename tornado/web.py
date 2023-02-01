@@ -745,6 +745,16 @@ class RequestHandler(object):
         Similar to `set_cookie`, the effect of this method will not be
         seen until the following request.
 
+        Consider setting additional attributes whenever you set a signed
+        cookie:
+
+        * Use the ``samesite="lax"`` (or ``"strict"``) attribute on any
+          cookie used for authentication to protect against XSRF attacks.
+        * Use the ``secure=True`` attribute if your application is
+          only available over HTTPS.
+        * Use the ``httponly=True`` attribute unless you need this cookie
+          to be readable from javascript.
+
         .. versionchanged:: 3.2.1
 
            Added the ``version`` argument.  Introduced cookie version 2

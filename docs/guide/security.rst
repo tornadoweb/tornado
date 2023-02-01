@@ -338,6 +338,13 @@ for authentication, provides protection against XSRF attacks that is
 equivalent to Tornado's ``xsrf_cookies`` feature, so that feature is now
 deprecated.
 
+You may wish to continue using ``xsrf_cookies`` in some situations:
+
+* If your application may perform side effects in response to HTTP GET
+  requests, but cannot use ``samesite="strict"``.
+* If your authentication is based on something other than cookies, such
+  as TLS certificates or network addresses.
+
 If you have an application that uses Tornado's ``xsrf_cookies`` feature
 and you want to migrate to the ``samesite`` cookie attribute, follow these
 steps:
