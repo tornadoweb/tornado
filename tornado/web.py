@@ -84,6 +84,7 @@ import traceback
 import types
 import urllib.parse
 from urllib.parse import urlencode
+import warnings
 
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado import escape
@@ -1434,7 +1435,7 @@ class RequestHandler(object):
 
     @property
     def xsrf_token(self) -> bytes:
-        """The XSRF-prevention token for the current user/session.
+        """The deprecated XSRF-prevention token for the current user/session.
 
         To prevent cross-site request forgery, we set an '_xsrf' cookie
         and include the same '_xsrf' value as an argument with all POST
@@ -1464,6 +1465,10 @@ class RequestHandler(object):
            ``xsrf_cookie_kwargs=dict(httponly=True, secure=True)``
            will set the ``secure`` and ``httponly`` flags on the
            ``_xsrf`` cookie.
+
+        .. deprecated:: 6.3
+
+           See :ref:`xsrf-deprecation`.
         """
         if not hasattr(self, "_xsrf_token"):
             version, token, timestamp = self._get_raw_xsrf_token()
@@ -1568,6 +1573,10 @@ class RequestHandler(object):
         .. versionchanged:: 3.2.2
            Added support for cookie version 2.  Both versions 1 and 2 are
            supported.
+
+        .. deprecated:: 6.3
+
+           See :ref:`xsrf-deprecation`.
         """
         # Prior to release 1.1.1, this check was ignored if the HTTP header
         # ``X-Requested-With: XMLHTTPRequest`` was present.  This exception
@@ -1601,6 +1610,10 @@ class RequestHandler(object):
         xsrf_form_html() %}``
 
         See `check_xsrf_cookie()` above for more information.
+
+        .. deprecated:: 6.3
+
+           See :ref:`xsrf-deprecation`
         """
         return (
             '<input type="hidden" name="_xsrf" value="'
@@ -2104,6 +2117,8 @@ class Application(ReversibleRouter):
         transforms: Optional[List[Type["OutputTransform"]]] = None,
         **settings: Any,
     ) -> None:
+        if settings.get("xsrf_cookies"):
+            warnings.warn("xsrf_cookies setting is deprecated", DeprecationWarning)
         if transforms is None:
             self.transforms = []  # type: List[Type[OutputTransform]]
             if settings.get("compress_response") or settings.get("gzip"):

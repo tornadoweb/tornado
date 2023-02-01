@@ -68,7 +68,6 @@ class Application(tornado.web.Application):
             template_path=os.path.join(os.path.dirname(__file__), "templates"),
             static_path=os.path.join(os.path.dirname(__file__), "static"),
             ui_modules={"Entry": EntryModule},
-            xsrf_cookies=True,
             cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
             login_url="/auth/login",
             debug=True,
@@ -242,7 +241,7 @@ class AuthCreateHandler(BaseHandler):
             self.get_argument("name"),
             tornado.escape.to_unicode(hashed_password),
         )
-        self.set_signed_cookie("blogdemo_user", str(author.id))
+        self.set_signed_cookie("blogdemo_user", str(author.id), samesite="lax")
         self.redirect(self.get_argument("next", "/"))
 
 
@@ -269,7 +268,7 @@ class AuthLoginHandler(BaseHandler):
             tornado.escape.utf8(author.hashed_password),
         )
         if password_equal:
-            self.set_signed_cookie("blogdemo_user", str(author.id))
+            self.set_signed_cookie("blogdemo_user", str(author.id), samesite="lax")
             self.redirect(self.get_argument("next", "/"))
         else:
             self.render("login.html", error="incorrect password")

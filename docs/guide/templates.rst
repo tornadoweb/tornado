@@ -177,7 +177,6 @@ Here is a properly internationalized template::
            <div>{{ _("Username") }} <input type="text" name="username"/></div>
            <div>{{ _("Password") }} <input type="password" name="password"/></div>
            <div><input type="submit" value="{{ _("Sign in") }}"/></div>
-           {% module xsrf_form_html() %}
          </form>
        </body>
      </html>

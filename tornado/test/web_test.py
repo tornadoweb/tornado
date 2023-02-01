@@ -17,6 +17,7 @@ from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
+from tornado.test.util import ignore_deprecation
 from tornado.util import ObjectDict, unicode_type
 from tornado.web import (
     Application,
@@ -1721,6 +1722,11 @@ class ErrorHandlerXSRFTest(WebTestCase):
         # explicitly defined error handler and an implicit 404.
         return [("/error", ErrorHandler, dict(status_code=417))]
 
+    def get_app(self):
+        # xsrf_cookies is deprecated
+        with ignore_deprecation():
+            return super().get_app()
+
     def get_app_kwargs(self):
         return dict(xsrf_cookies=True)
 
@@ -2728,6 +2734,11 @@ class XSRFTest(SimpleHandlerTestCase):
         def post(self):
             self.write("ok")
 
+    def get_app(self):
+        # xsrf_cookies is deprecated
+        with ignore_deprecation():
+            return super().get_app()
+
     def get_app_kwargs(self):
         return dict(xsrf_cookies=True)
 
@@ -2923,6 +2934,11 @@ class XSRFCookieKwargsTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):
             self.write(self.xsrf_token)
+
+    def get_app(self):
+        # xsrf_cookies is deprecated
+        with ignore_deprecation():
+            return super().get_app()
 
     def get_app_kwargs(self):
         return dict(

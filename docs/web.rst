@@ -243,16 +243,18 @@
          * ``login_url``: The `authenticated` decorator will redirect
            to this url if the user is not logged in.  Can be further
            customized by overriding `RequestHandler.get_login_url`
-         * ``xsrf_cookies``: If ``True``, :ref:`xsrf` will be enabled.
+         * ``xsrf_cookies``: If ``True``, :ref:`legacy-xsrf` will be enabled.
+           This functionality is deprecated as of Tornado 6.3; see
+           :ref:`xsrf-deprecation` for more.
          * ``xsrf_cookie_version``: Controls the version of new XSRF
            cookies produced by this server.  Should generally be left
            at the default (which will always be the highest supported
            version), but may be set to a lower value temporarily
            during version transitions.  New in Tornado 3.2.2, which
-           introduced XSRF cookie version 2.
+           introduced XSRF cookie version 2. Deprecated since Tornado 6.3.
          * ``xsrf_cookie_kwargs``: May be set to a dictionary of
            additional arguments to be passed to `.RequestHandler.set_cookie`
-           for the XSRF cookie.
+           for the XSRF cookie. Deprecated since Tornado 6.3.
          * ``twitter_consumer_key``, ``twitter_consumer_secret``,
            ``friendfeed_consumer_key``, ``friendfeed_consumer_secret``,
            ``google_consumer_key``, ``google_consumer_secret``,

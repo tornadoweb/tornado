@@ -207,23 +207,52 @@ the Google credentials in a cookie for later access:
 
 See the `tornado.auth` module documentation for more details.
 
-.. _xsrf:
-
 Cross-site request forgery protection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 `Cross-site request
 forgery <http://en.wikipedia.org/wiki/Cross-site_request_forgery>`_, or
-XSRF, is a common problem for personalized web applications.
+XSRF or CSRF (Tornado uses the acronym XSRF for historical reasons, although
+CSRF is generally more commonly used today), is a common problem for
+personalized web applications. 
 
-The generally accepted solution to prevent XSRF is to cookie every user
-with an unpredictable value and include that value as an additional
-argument with every form submission on your site. If the cookie and the
-value in the form submission do not match, then the request is likely
-forged.
+The simplest solution to this problem is to set the ``samesite`` attribute to
+either ``lax`` or ``strict`` on all cookies used to authenticate the user.
+(``lax`` is generally fine for this purpose; ``strict`` would be appropriate
+if your application may use the HTTP ``GET`` method for requests that
+have side effects). Note that as of January 2023, ``lax`` mode is the default
+for some browsers, but not all.
 
-Tornado comes with built-in XSRF protection. To include it in your site,
-include the application setting ``xsrf_cookies``:
+In the web security model, a "site" is broader than an "origin" or "host"
+(``example.com`` is a site; ``a.example.com`` and ``b.example.com`` are
+hosts within that site). While not technically "cross-site", attacks from
+one host to another within a site are relevant in many contexts. Such attacks
+may be called 
+`"same-site request forgery" <https://minimalblue.com/data/papers/USENIX21_can_i_take_your_subdomain.pdf>`_
+or "related-domain attacks". Protection against same-site attacks requires
+something stronger than a ``samesite`` cookie, such as the
+`synchronizer token pattern <https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html#synchronizer-token-pattern>`_.
+This pattern is somewhat invasive and cannot be implemented within Tornado
+as it is a fairly low-level framework, but it may be worth considering at
+the application level.
+
+.. _legacy-xsrf:
+
+Legacy XSRF protection
+^^^^^^^^^^^^^^^^^^^^^^
+
+Prior to the introduction of the ``samesite`` cookie attribute, Tornado
+included an implementation of the
+`double-submit cookie <https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html#double-submit-cookie>`_
+pattern, called ``xsrf_cookies``. This feature provided protection against
+XSRF attacks that is equivalent to that provided by the ``samesite`` cookie
+attribute, but required modifications to the application to ensure that the
+XSRF token was passed whenever it was needed. Since the ``samesite`` cookie
+attribute provides equivalent protection with less work, the ``xsrf_cookies``
+feature is deprecated. 
+
+To enable the ``xsrf_cookies`` feature, use the application setting
+``xsrf_cookies=True``:
 
 .. testcode::
 
@@ -287,6 +316,30 @@ disable XSRF protection by making ``check_xsrf_cookie()`` do nothing.
 However, if you support both cookie and non-cookie-based authentication,
 it is important that XSRF protection be used whenever the current
 request is authenticated with a cookie.
+
+.. _xsrf-deprecation:
+
+Migrating from legacy XSRF protection
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``samesite="lax"`` cookie attribute, when applied to *all* cookies used
+for authentication, provides protection against XSRF attacks that is
+equivalent to Tornado's ``xsrf_cookies`` feature, so that feature is now
+deprecated.
+
+If you have an application that uses Tornado's ``xsrf_cookies`` feature
+and you want to migrate to the ``samesite`` cookie attribute, follow these
+steps:
+
+1. Pass ``samesite="lax"`` (or ``samesite="strict"``) to `.set_signed_cookie`
+   (or its deprecated alias ``set_secure_cookie``) every time you set a cookie
+   to be used for user authentication.
+2. Deploy your application. Wait until all cookies that might have been set
+   without the ``samesite`` attribute have expired.
+3. Remove the ``xsrf_cookies=True`` application setting from your code,
+   and all instances of ``xsrf_form_html`` from your templates and code. If
+   you have JavaScript code that touches the ``_xsrf`` cookie or sets an
+   ``_xsrf`` query parameter, it can be removed as well.
 
 .. _dnsrebinding:
 

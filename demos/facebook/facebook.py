@@ -37,7 +37,6 @@ class Application(tornado.web.Application):
             login_url="/auth/login",
             template_path=os.path.join(os.path.dirname(__file__), "templates"),
             static_path=os.path.join(os.path.dirname(__file__), "static"),
-            xsrf_cookies=True,
             facebook_api_key=options.facebook_api_key,
             facebook_secret=options.facebook_secret,
             ui_modules={"Post": PostModule},
@@ -84,7 +83,7 @@ class AuthLoginHandler(BaseHandler, tornado.auth.FacebookGraphMixin):
                 client_secret=self.settings["facebook_secret"],
                 code=self.get_argument("code"),
             )
-            self.set_signed_cookie("fbdemo_user", tornado.escape.json_encode(user))
+            self.set_signed_cookie("fbdemo_user", tornado.escape.json_encode(user), samesite="lax")
             self.redirect(self.get_argument("next", "/"))
             return
         self.authorize_redirect(
