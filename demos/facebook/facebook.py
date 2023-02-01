@@ -83,7 +83,9 @@ class AuthLoginHandler(BaseHandler, tornado.auth.FacebookGraphMixin):
                 client_secret=self.settings["facebook_secret"],
                 code=self.get_argument("code"),
             )
-            self.set_signed_cookie("fbdemo_user", tornado.escape.json_encode(user), samesite="lax")
+            self.set_signed_cookie(
+                "fbdemo_user", tornado.escape.json_encode(user), samesite="lax"
+            )
             self.redirect(self.get_argument("next", "/"))
             return
         self.authorize_redirect(
