@@ -251,6 +251,17 @@ XSRF token was passed whenever it was needed. Since the ``samesite`` cookie
 attribute provides equivalent protection with less work, the ``xsrf_cookies``
 feature is deprecated. 
 
+.. note::
+
+   By default, the ``xsrf_cookies`` feature does not protect against
+   same-site attacks. However, when combined with the use of the
+   `host-only cookie prefix <https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#Cookie_prefixes>`_
+   it becomes stronger and may be better than relying on ``samesite="lax"``.
+   To try this, use the application setting 
+   ``xsrf_cookie_kwargs={"name": "__Host-xsrf"}``. This usage should be
+   considered experimental, but if it works the ``xsrf_cookies`` feature may
+   become un-deprecated.
+
 To enable the ``xsrf_cookies`` feature, use the application setting
 ``xsrf_cookies=True``:
 
