@@ -924,7 +924,6 @@ class StreamingMultipartFormDataParser(object):
         self._boundary = boundary
         self._max_buffer_size = max_header_bytes
         self._name = None
-        self._info = None
 
         # Variables to store the current state of the parser.
         self._state = ParserState.PARSE_BOUNDARY_LINE
@@ -979,7 +978,9 @@ class StreamingMultipartFormDataParser(object):
                     # whole buffer.
                     data = self._buffer
                     self._buffer = bytearray()
-                    await self._delegate.write(self._info, data)
+                    fut = self._delegate.file_data_received(self._name, data)
+                    if fut is not None:
+                        await fut
 
                     # Return because the whole buffer was written out.
                     return
@@ -993,7 +994,9 @@ class StreamingMultipartFormDataParser(object):
                     # the boundary cases.
                     data = self._buffer[:idx]
                     self._buffer = self._buffer[idx:]
-                    await self._delegate.file_data_received(self._info, data)
+                    fut = self._delegate.file_data_received(self._name, data)
+                    if fut is not None:
+                        await fut
 
                 # Not enough data (technically) to check against. Wait for
                 # more data to be certain whether the boundary was parsed.
@@ -1005,7 +1008,9 @@ class StreamingMultipartFormDataParser(object):
                 # handle this case more cleanly.
                 if self._buffer.startswith(self._boundary_next):
                     # Mark the current file as finished.
-                    await self._delegate.finish_file(self._info)
+                    fut = self._delegate.finish_file(self._name)
+                    if fut is not None:
+                        await fut
                     self._change_state(ParserState.PARSE_BOUNDARY_LINE)
                     continue
 
@@ -1017,7 +1022,9 @@ class StreamingMultipartFormDataParser(object):
                     return
 
                 if self._buffer.startswith(self._boundary_end):
-                    await self._delegate.finish_file(self._info)
+                    fut = self._delegate.finish_file(self._name)
+                    if fut is not None:
+                        await fut
                     self._change_state(ParserState.PARSE_BOUNDARY_LINE)
                     continue
 
@@ -1030,7 +1037,9 @@ class StreamingMultipartFormDataParser(object):
                 else:
                     data = self._buffer[:next_idx]
                     self._buffer = self._buffer[next_idx:]
-                await self._delegate.file_data_received(self._info, data)
+                fut = self._delegate.file_data_received(self._name, data)
+                if fut is not None:
+                    await fut
 
                 # Continue and run the check after this update.
                 continue
@@ -1086,16 +1095,17 @@ class StreamingMultipartFormDataParser(object):
                 data = self._buffer[:idx + 4].decode('utf-8')
                 self._buffer = self._buffer[idx + 4:]
                 headers = HTTPHeaders.parse(data)
-                name, plist = _parse_header(
+                _, plist = _parse_header(
                     headers.get('Content-Disposition', ''))
+                name = plist.get('name')
                 # content_disp = headers.get('Content-Disposition', '')
                 # _parse_header(head)
                 # name = parse_content_name(content_disp)
 
                 # Call the delegate with the new file.
-                
-                self._info = await self._delegate.start_file(
-                    name, headers=headers)
+                fut = self._delegate.start_file(name, headers=headers)
+                if fut is not None:
+                    await fut
 
                 # Update the buffer and the state.
                 self._change_state(ParserState.PARSE_BODY, name=name)

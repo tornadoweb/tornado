@@ -289,6 +289,40 @@ class MemoryFileDelegate(AbstractFileDelegate):
     def keys(self):
         return list(self._file_mapping.keys())
 
+    def start_file(self, name: str, headers: HTTPHeaders):
+        self._curr_file = name
+        self._headers = headers
+        self._buffer = bytearray()
+
+    def file_data_received(self, name: str, data: bytes):
+        self._buffer.extend(data)
+
+    def finish_file(self, name: str):
+        content_type = self._headers.get(
+            'Content-Type', 'application/octet-stream')
+        httpfile = HTTPFile(
+            filename=name, body=bytes(self._buffer), content_type=content_type)
+        self._file_mapping[name] = httpfile
+
+    def get_file(self, name) -> Optional[HTTPFile]:
+        return self._file_mapping.get(name)
+
+
+class AsyncMemoryFileDelegate(AbstractFileDelegate):
+    """Basic File Delegate that stores its contents in memory."""
+
+    def __init__(self):
+        super().__init__()
+        self._file_mapping = {}
+
+        self._curr_file = None
+        self._buffer = bytearray()
+        self._headers = None
+
+    @property
+    def keys(self):
+        return list(self._file_mapping.keys())
+
     async def start_file(self, name: str, headers: HTTPHeaders):
         self._curr_file = name
         self._headers = headers
@@ -307,19 +341,10 @@ class MemoryFileDelegate(AbstractFileDelegate):
     def get_file(self, name) -> Optional[HTTPFile]:
         return self._file_mapping.get(name)
 
-
 class StreamingMultipartFormDataTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_multipart_form_data(self):
         boundary = b'--boundarything'
-
-        headers_a_txt = list(HTTPHeaders({
-            'Content-Disposition': 'form-data; name="a.txt"',
-        }).get_all())
-        headers_b_csv = list(HTTPHeaders({
-            'Content-Disposition': 'form-data; name="b.csv"',
-            'Content-Type': 'text/csv'
-        }).get_all())
 
         # Test all possible splits and chunks of the given data. This will
         # verify the parser with all (?) possible corner cases.
@@ -335,28 +360,17 @@ class StreamingMultipartFormDataTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 set(['a.txt', 'b.csv']), set(delegate.keys),
                 "Expected files not found for slicing at: {}".format(i))
-            # Assert the 'headers' match what is expected.
+
+            http_file_a = delegate.get_file('a.txt')
+            self.assertIsNotNone(http_file_a)
             self.assertEqual(
-                headers_a_txt,
-                list(delegate.get_headers('a.txt').get_all()),
-                '"a.txt" header mismatch on slice: {}'.format(i))
-            self.assertEqual(
-                headers_b_csv,
-                list(delegate.get_headers('b.csv').get_all()),
-                '"b.csv" header mismatch on slice: {}'.format(i))
-            # Assert that the file contents match what is expected.
-            a_info = await delegate.get_file_info('a.txt')
-            self.assertIsNotNone(a_info)
-            a_data = await delegate.read_into_bytes(a_info)
-            self.assertEqual(
-                b'a', a_data,
+                b'a', http_file_a.body,
                 '"a.txt" file contents mismatch on slice: {}'.format(i))
-            b_info = await delegate.get_file_info('b.csv')
-            self.assertIsNotNone(b_info)
-            b_data = await delegate.read_into_bytes(b_info)
+            http_file_b = delegate.get_file('b.csv')
+            self.assertIsNotNone(http_file_b)
             self.assertEqual(
                 b'col1,col2\na,b\n--boundarythin,thatwasclose\n',
-                b_data,
+                http_file_b.body,
                 # bytes(delegate.parsed_data['b.csv']),
                 '"b.csv" file contents mismatch on slice: {}'.format(i))
 
@@ -364,18 +378,10 @@ class StreamingMultipartFormDataTest(unittest.IsolatedAsyncioTestCase):
         # Same test as above, but with async methods for the delegate.
         boundary = b'--boundarything'
 
-        headers_a_txt = list(HTTPHeaders({
-            'Content-Disposition': 'form-data; name="a.txt"',
-        }).get_all())
-        headers_b_csv = list(HTTPHeaders({
-            'Content-Disposition': 'form-data; name=b.csv',
-            'Content-Type': 'text/csv;'
-        }))
-
         # Test all possible splits and chunks of the given data. This will
         # verify the parser with all possible corner cases.
         for i in range(len(MULTIPART_DATA)):
-            delegate = MemoryFileDelegate()
+            delegate = AsyncMemoryFileDelegate()
             parser = StreamingMultipartFormDataParser(delegate, boundary)
             chunk1 = MULTIPART_DATA[:i]
             chunk2 = MULTIPART_DATA[i:]
@@ -386,28 +392,18 @@ class StreamingMultipartFormDataTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 set(['a.txt', 'b.csv']), set(delegate.keys),
                 "Expected files not found for slicing at: {}".format(i))
-            # Assert the 'headers' match what is expected.
-            self.assertEqual(
-                headers_a_txt,
-                list(delegate.get_headers('a.txt').get_all()),
-                '"a.txt" header mismatch on slice: {}'.format(i))
-            self.assertEqual(
-                headers_b_csv,
-                list(delegate.get_headers('b.csv')),
-                '"b.csv" header mismatch on slice: {}'.format(i))
             # Assert that the file contents match what is expected.
-            a_info = await delegate.get_file_info('a.txt')
-            self.assertIsNotNone(a_info)
-            a_data = await delegate.read_into_bytes(a_info)
+            http_file_a = delegate.get_file('a.txt')
+            self.assertIsNotNone(http_file_a)
             self.assertEqual(
-                b'a', a_data,
+                b'a', http_file_a.body,
                 '"a.txt" file contents mismatch on slice: {}'.format(i))
-            b_info = await delegate.get_file_info('b.csv')
-            self.assertIsNotNone(b_info)
-            b_data = await delegate.read_into_bytes(b_info)
+            http_file_b = delegate.get_file('b.csv')
+            self.assertIsNotNone(http_file_b)
             self.assertEqual(
                 b'col1,col2\na,b\n--boundarythin,thatwasclose\n',
-                b_data,
+                http_file_b.body,
+                # bytes(delegate.parsed_data['b.csv']),
                 '"b.csv" file contents mismatch on slice: {}'.format(i))
 
 
