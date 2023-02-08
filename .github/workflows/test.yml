@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v4
         name: Install Python
         with:
           # Lint python version must be synced with tox.ini
@@ -44,10 +44,8 @@ jobs:
             tox_env: py310-full
           - python: '3.11'
             tox_env: py311-full
-          # Need more work for python 3.12. See
-          # https://github.com/python/cpython/issues/93453
-          #- python: '3.12.0-alpha - 3.12'
-          #  tox_env: py312-full
+          - python: '3.12.0-alpha - 3.12'
+            tox_env: py312-full
           - python: 'pypy-3.8'
             # Pypy is a lot slower due to jit warmup costs, so don't run the
             # "full" test config there.
@@ -58,7 +56,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v4
         name: Install Python
         with:
           python-version: ${{ matrix.python}}
