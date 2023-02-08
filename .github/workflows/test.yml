@@ -42,7 +42,14 @@ jobs:
             tox_env: py39-full
           - python: '3.10'
             tox_env: py310-full
+          - python: '3.10.8'
+            # Early versions of 3.10 and 3.11 had different deprecation
+            # warnings in asyncio. Test with them too to make sure everything
+            # works the same way.
+            tox_env: py310-full
           - python: '3.11'
+            tox_env: py311-full
+          - python: '3.11.0'
             tox_env: py311-full
           - python: '3.12.0-alpha - 3.12'
             tox_env: py312-full
