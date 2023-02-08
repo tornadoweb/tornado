@@ -857,7 +857,6 @@ _1MB = 1048576
 
 
 class AbstractFileDelegate:
-
     def start_file(self, name: str, headers: HTTPHeaders) -> Optional[Awaitable[None]]:
         pass
 
@@ -869,7 +868,6 @@ class AbstractFileDelegate:
 
 
 class ParserState:
-
     PARSE_BOUNDARY_LINE = 1
     """State that parses the initial boundary."""
 
@@ -895,13 +893,10 @@ class StreamingMultipartFormDataParser(object):
         cls, delegate, header
     ) -> "StreamingMultipartFormDataParser":
         if isinstance(header, bytes):
-            header = header.decode('utf-8')
+            header = header.decode("utf-8")
         boundary = None
         # Make sure the header is the multipart/form-data.
-        parts = [
-            part.strip()
-            for part in header.split(';')
-        ]
+        parts = [part.strip() for part in header.split(";")]
         if parts[0].lower() != "multipart/form-data":
             raise ValueError("Invalid Content-Type: {}".format(parts[0]))
 
@@ -909,16 +904,16 @@ class StreamingMultipartFormDataParser(object):
         for part in parts:
             m = _BOUNDARY_REGEX.match(part)
             if m:
-                boundary = m.group('boundary')
+                boundary = m.group("boundary")
                 return cls(delegate, boundary)
         raise ValueError("Required 'boundary' option not found in header!")
 
-
-    def __init__(self, delegate: AbstractFileDelegate, boundary: str,
-                 max_header_bytes=_1MB):
+    def __init__(
+        self, delegate: AbstractFileDelegate, boundary: str, max_header_bytes=_1MB
+    ):
         # Be nice and decode the boundary if it is a bytes object.
         if isinstance(boundary, bytes):
-            boundary = boundary.decode('utf-8')
+            boundary = boundary.decode("utf-8")
         # Store the delegate to write out the data.
         self._delegate = delegate
         self._boundary = boundary
@@ -930,8 +925,8 @@ class StreamingMultipartFormDataParser(object):
         self._buffer = bytearray()
 
         # Variables to hold the boundary matches.
-        self._boundary_next = '--{}\r\n'.format(self._boundary).encode()
-        self._boundary_end = '--{}--\r\n'.format(self._boundary).encode()
+        self._boundary_next = "--{}\r\n".format(self._boundary).encode()
+        self._boundary_end = "--{}--\r\n".format(self._boundary).encode()
         self._boundary_base = self._boundary_next[:-2]
 
         # Variables for caching boundary matching.
@@ -943,7 +938,7 @@ class StreamingMultipartFormDataParser(object):
         """Return the boundary text that denotes the end of a file."""
         return self._boundary
 
-    def _change_state(self, state: ParserState, name: Optional[str]=None):
+    def _change_state(self, state: ParserState, name: Optional[str] = None):
         """Helper to change the state of the parser.
 
         This also clears some variables used in different states.
@@ -972,7 +967,7 @@ class StreamingMultipartFormDataParser(object):
             # PARSE_BODY state --> Expecting to parse the file contents.
             if self._state == ParserState.PARSE_BODY:
                 # Search for the boundary characters.
-                idx = self._buffer.find(b'-')
+                idx = self._buffer.find(b"-")
                 if idx < 0:
                     # No match against any boundary character. Write out the
                     # whole buffer.
@@ -1030,7 +1025,7 @@ class StreamingMultipartFormDataParser(object):
 
                 # No match so far, so write out the data up to the next
                 # boundary delimiter.
-                next_idx = self._buffer.find(b'-', 1)
+                next_idx = self._buffer.find(b"-", 1)
                 if next_idx < 0:
                     data = self._buffer
                     self._buffer = bytearray()
@@ -1056,7 +1051,7 @@ class StreamingMultipartFormDataParser(object):
                 # the 'PARSE_HEADER' state. Also, continue to run through the
                 # loop again with the new state.
                 if self._buffer.startswith(self._boundary_next):
-                    self._buffer = self._buffer[len(self._boundary_next):]
+                    self._buffer = self._buffer[len(self._boundary_next) :]
                     self._change_state(ParserState.PARSE_FILE_HEADERS)
                     continue
                 # Check against 'self._boundary_end' as well. There is a slim
@@ -1068,7 +1063,7 @@ class StreamingMultipartFormDataParser(object):
                 elif self._buffer.startswith(self._boundary_end):
                     # Done parsing. We should probably sanity-check that all
                     # data was consumed.
-                    self._buffer = self._buffer[len(self._boundary_end):]
+                    self._buffer = self._buffer[len(self._boundary_end) :]
                     self._change_state(ParserState.PARSING_DONE)
                     continue
                 else:
@@ -1076,7 +1071,7 @@ class StreamingMultipartFormDataParser(object):
 
             # PARSE_HEADERS state --> Expecting to parse headers with CRLF.
             if self._state == ParserState.PARSE_FILE_HEADERS:
-                idx = self._buffer.find(b'\r\n\r\n', self._last_idx)
+                idx = self._buffer.find(b"\r\n\r\n", self._last_idx)
                 # Implies no match. Update the next index to search to be:
                 # max(0, len(buffer) - 3)
                 # as an optimization to speed up future comparisons. This
@@ -1092,15 +1087,11 @@ class StreamingMultipartFormDataParser(object):
                     return
                 # Otherwise, we have a match. Parse this into a dictionary of
                 # headers and pass the result to create a new file.
-                data = self._buffer[:idx + 4].decode('utf-8')
-                self._buffer = self._buffer[idx + 4:]
+                data = self._buffer[: idx + 4].decode("utf-8")
+                self._buffer = self._buffer[idx + 4 :]
                 headers = HTTPHeaders.parse(data)
-                _, plist = _parse_header(
-                    headers.get('Content-Disposition', ''))
-                name = plist.get('name')
-                # content_disp = headers.get('Content-Disposition', '')
-                # _parse_header(head)
-                # name = parse_content_name(content_disp)
+                _, plist = _parse_header(headers.get("Content-Disposition", ""))
+                name = plist.get("name")
 
                 # Call the delegate with the new file.
                 fut = self._delegate.start_file(name, headers=headers)
@@ -1118,7 +1109,8 @@ class StreamingMultipartFormDataParser(object):
                     # finished...
                     gen_log.warning(
                         "Finished with non-empty buffer (%s bytes remaining).",
-                        len(self._buffer))
+                        len(self._buffer),
+                    )
 
                 # Even if there is data remaining, we should exit the loop.
                 return
