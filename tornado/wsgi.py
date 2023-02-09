@@ -27,16 +27,15 @@ container.
 
 """
 
-import sys
-from concurrent import futures
+import concurrent.futures
 from io import BytesIO
 import tornado
+import sys
 
-from tornado import concurrent
+from tornado.concurrent import dummy_executor
 from tornado import escape
-from tornado import gen
 from tornado import httputil
-from tornado import ioloop
+from tornado.ioloop import IOLoop
 from tornado.log import access_log
 
 from typing import List, Tuple, Optional, Callable, Any, Dict, Text
@@ -115,12 +114,18 @@ class WSGIContainer(object):
     or ``uwsgi``.
     """
 
-    def __init__(self, wsgi_application: "WSGIAppType", executor: futures.Executor = None) -> None:
+    def __init__(
+        self,
+        wsgi_application: "WSGIAppType",
+        executor: concurrent.futures.Executor = None,
+    ) -> None:
         self.wsgi_application = wsgi_application
-        self.executor = concurrent.dummy_executor if executor is None else executor
+        self.executor = dummy_executor if executor is None else executor
 
-    @gen.coroutine
     def __call__(self, request: httputil.HTTPServerRequest) -> None:
+        IOLoop.current().spawn_callback(self.handle_request, request)
+
+    async def handle_request(self, request: httputil.HTTPServerRequest) -> None:
         data = {}  # type: Dict[str, Any]
         response = []  # type: List[bytes]
 
@@ -139,8 +144,8 @@ class WSGIContainer(object):
             data["headers"] = headers
             return response.append
 
-        loop = ioloop.IOLoop.current()
-        app_response = yield loop.run_in_executor(
+        loop = IOLoop.current()
+        app_response = await loop.run_in_executor(
             self.executor,
             self.wsgi_application,
             self.environ(request),
