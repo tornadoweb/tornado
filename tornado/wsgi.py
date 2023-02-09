@@ -94,8 +94,8 @@ class WSGIContainer(object):
     https://github.com/bdarnell/django-tornado-demo for a complete example.
 
     `WSGIContainer` supports executing the WSGI application in custom executors
-    using `IOLoop.run_in_executor`. The default executor uses
-    `tornado.concurrent.dummy_executor` which works synchronously, but other
+    using `.IOLoop.run_in_executor`. The default executor uses
+    ``tornado.concurrent.dummy_executor`` which works synchronously, but other
     executors subclassing `concurrent.futures.Executor` may be used. To execute
     WSGI application code in separate threads in an event-loop compatible way
     use::
@@ -109,7 +109,7 @@ class WSGIContainer(object):
             http_server.listen(8888)
             await asyncio.Event().wait()
 
-    Running the WSGI app with a `ThreadPoolExecutor` remains *less scalable*
+    Running the WSGI app with a ``ThreadPoolExecutor`` remains *less scalable*
     than running the same app in a multi-threaded WSGI server like ``gunicorn``
     or ``uwsgi``.
     """
@@ -117,7 +117,7 @@ class WSGIContainer(object):
     def __init__(
         self,
         wsgi_application: "WSGIAppType",
-        executor: concurrent.futures.Executor = None,
+        executor: Optional[concurrent.futures.Executor] = None,
     ) -> None:
         self.wsgi_application = wsgi_application
         self.executor = dummy_executor if executor is None else executor
@@ -152,11 +152,25 @@ class WSGIContainer(object):
             start_response,
         )
         try:
-            response.extend(app_response)
-            body = b"".join(response)
+            app_response_iter = iter(app_response)
+
+            def next_chunk() -> Optional[bytes]:
+                try:
+                    return next(app_response_iter)
+                except StopIteration:
+                    # StopIteration is special and is not allowed to pass through
+                    # coroutines normally.
+                    return None
+
+            while True:
+                chunk = await loop.run_in_executor(self.executor, next_chunk)
+                if chunk is None:
+                    break
+                response.append(chunk)
         finally:
             if hasattr(app_response, "close"):
                 app_response.close()  # type: ignore
+        body = b"".join(response)
         if not data:
             raise Exception("WSGI app did not call start_response")
 

@@ -27,6 +27,7 @@ class WSGIAppMixin:
             [
                 ("/simple", make_container(self.simple_wsgi_app)),
                 ("/barrier", make_container(self.barrier_wsgi_app)),
+                ("/streaming_barrier", make_container(self.streaming_barrier_wsgi_app)),
             ]
         )
 
@@ -39,10 +40,6 @@ class WSGIAppMixin:
         self.respond_plain(start_response)
         return [b"Hello world!"]
 
-    def test_simple(self):
-        response = self.fetch("/simple")
-        self.assertEqual(response.body, b"Hello world!")
-
     def barrier_wsgi_app(self, environ, start_response):
         self.respond_plain(start_response)
         try:
@@ -52,10 +49,24 @@ class WSGIAppMixin:
         else:
             return [b"ok %d" % n]
 
+    def streaming_barrier_wsgi_app(self, environ, start_response):
+        self.respond_plain(start_response)
+        yield b"ok "
+        try:
+            n = self.barrier.wait()
+        except threading.BrokenBarrierError:
+            yield b"broken barrier"
+        else:
+            yield b"%d" % n
+
 
 class WSGIContainerDummyExecutorTest(WSGIAppMixin, AsyncHTTPTestCase):
     def get_executor(self):
         return None
+
+    def test_simple(self):
+        response = self.fetch("/simple")
+        self.assertEqual(response.body, b"Hello world!")
 
     @gen_test
     async def test_concurrent_barrier(self):
@@ -67,10 +78,24 @@ class WSGIContainerDummyExecutorTest(WSGIAppMixin, AsyncHTTPTestCase):
         for resp in resps:
             self.assertEqual(resp.body, b"broken barrier")
 
+    @gen_test
+    async def test_concurrent_streaming_barrier(self):
+        self.barrier.reset()
+        resps = await asyncio.gather(
+            self.http_client.fetch(self.get_url("/streaming_barrier")),
+            self.http_client.fetch(self.get_url("/streaming_barrier")),
+        )
+        for resp in resps:
+            self.assertEqual(resp.body, b"ok broken barrier")
+
 
 class WSGIContainerThreadPoolTest(WSGIAppMixin, AsyncHTTPTestCase):
     def get_executor(self):
         return concurrent.futures.ThreadPoolExecutor()
+
+    def test_simple(self):
+        response = self.fetch("/simple")
+        self.assertEqual(response.body, b"Hello world!")
 
     @gen_test
     async def test_concurrent_barrier(self):
@@ -78,5 +103,14 @@ class WSGIContainerThreadPoolTest(WSGIAppMixin, AsyncHTTPTestCase):
         resps = await asyncio.gather(
             self.http_client.fetch(self.get_url("/barrier")),
             self.http_client.fetch(self.get_url("/barrier")),
+        )
+        self.assertEqual([b"ok 0", b"ok 1"], sorted([resp.body for resp in resps]))
+
+    @gen_test
+    async def test_concurrent_streaming_barrier(self):
+        self.barrier.reset()
+        resps = await asyncio.gather(
+            self.http_client.fetch(self.get_url("/streaming_barrier")),
+            self.http_client.fetch(self.get_url("/streaming_barrier")),
         )
         self.assertEqual([b"ok 0", b"ok 1"], sorted([resp.body for resp in resps]))
