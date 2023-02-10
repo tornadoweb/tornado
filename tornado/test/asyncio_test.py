@@ -108,9 +108,6 @@ class AsyncIOLoopTest(AsyncTestCase):
             self.asyncio_loop.run_until_complete(native_coroutine_with_adapter2()),
             42,
         )
-        # I'm not entirely sure why this manual cleanup is necessary but without
-        # it we have at-a-distance failures in ioloop_test.TestIOLoopCurrent.
-        asyncio.set_event_loop(None)
 
 
 class LeakTest(unittest.TestCase):
