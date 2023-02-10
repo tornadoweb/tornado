@@ -30,6 +30,10 @@ class AsyncIOLoopTest(AsyncTestCase):
         io_loop = AsyncIOLoop(make_current=False)
         return io_loop
 
+    @property
+    def asyncio_loop(self):
+        return self.io_loop.asyncio_loop
+
     def test_asyncio_callback(self):
         # Basic test that the asyncio loop is set up correctly.
         async def add_callback():
