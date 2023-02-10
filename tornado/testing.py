@@ -182,6 +182,13 @@ class AsyncTestCase(unittest.TestCase):
         self._test_generator = None  # type: Optional[Union[Generator, Coroutine]]
 
     def setUp(self) -> None:
+        setup_with_context_manager(self, warnings.catch_warnings())
+        warnings.filterwarnings(
+            "ignore",
+            message="There is no current event loop",
+            category=DeprecationWarning,
+            module=r"tornado\..*",
+        )
         super().setUp()
         self.io_loop = self.get_new_ioloop()
         self.io_loop.make_current()
