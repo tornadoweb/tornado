@@ -143,6 +143,11 @@ class IOLoop(Configurable):
        Uses the `asyncio` event loop by default. The ``IOLoop.configure`` method
        cannot be used on Python 3 except to redundantly specify the `asyncio`
        event loop.
+
+    .. versionchanged:: 6.3
+       ``make_current=False`` is now the default when creating an IOLoop -
+       previously the default was to make the event loop current if there wasn't
+       already a current one. Passing ``make_current=True`` is deprecated.
     """
 
     # These constants were originally based on constants from the epoll module.
@@ -268,7 +273,7 @@ class IOLoop(Configurable):
             if instance:
                 from tornado.platform.asyncio import AsyncIOMainLoop
 
-                current = AsyncIOMainLoop(make_current=True)  # type: Optional[IOLoop]
+                current = AsyncIOMainLoop()  # type: Optional[IOLoop]
             else:
                 current = None
         return current
@@ -336,11 +341,13 @@ class IOLoop(Configurable):
 
         return AsyncIOLoop
 
-    def initialize(self, make_current: Optional[bool] = None) -> None:
-        if make_current is None:
-            if IOLoop.current(instance=False) is None:
-                self.make_current()
-        elif make_current:
+    def initialize(self, make_current: bool = False) -> None:
+        if make_current:
+            warnings.warn(
+                "IOLoop(make_current=True) is deprecated",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             current = IOLoop.current(instance=False)
             # AsyncIO loops can already be current by this point.
             if current is not None and current is not self:
