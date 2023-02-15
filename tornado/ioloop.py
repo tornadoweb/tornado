@@ -33,6 +33,7 @@ import sys
 import time
 import math
 import random
+import warnings
 from inspect import isawaitable
 
 from tornado.concurrent import (
@@ -287,6 +288,10 @@ class IOLoop(Configurable):
 
         .. versionchanged:: 5.0
            This method also sets the current `asyncio` event loop.
+
+        .. deprecated:: 6.2
+           Setting and clearing the current event loop through Tornado is
+           deprecated. Use ``asyncio.set_event_loop`` instead if you need this.
         """
         # The asyncio event loops override this method.
         raise NotImplementedError()
@@ -299,7 +304,13 @@ class IOLoop(Configurable):
 
         .. versionchanged:: 5.0
            This method also clears the current `asyncio` event loop.
+        .. deprecated:: 6.2
         """
+        warnings.warn(
+            "clear_current is deprecated",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         IOLoop._clear_current()
 
     @staticmethod
