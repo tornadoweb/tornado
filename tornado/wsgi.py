@@ -204,9 +204,12 @@ class WSGIContainer(object):
         request.connection.finish()
         self._log(status_code, request)
 
-    @staticmethod
-    def environ(request: httputil.HTTPServerRequest) -> Dict[Text, Any]:
-        """Converts a `tornado.httputil.HTTPServerRequest` to a WSGI environment."""
+    def environ(self, request: httputil.HTTPServerRequest) -> Dict[Text, Any]:
+        """Converts a `tornado.httputil.HTTPServerRequest` to a WSGI environment.
+
+        .. versionchanged:: 6.3
+           No longer a static method.
+        """
         hostport = request.host.split(":")
         if len(hostport) == 2:
             host = hostport[0]
@@ -229,7 +232,7 @@ class WSGIContainer(object):
             "wsgi.url_scheme": request.protocol,
             "wsgi.input": BytesIO(escape.utf8(request.body)),
             "wsgi.errors": sys.stderr,
-            "wsgi.multithread": False,
+            "wsgi.multithread": self.executor is not dummy_executor,
             "wsgi.multiprocess": True,
             "wsgi.run_once": False,
         }
