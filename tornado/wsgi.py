@@ -57,20 +57,28 @@ def to_wsgi_str(s: bytes) -> str:
 
 
 class WSGIContainer(object):
-    r"""Makes a WSGI-compatible function runnable on Tornado's HTTP server.
+    r"""Makes a WSGI-compatible application runnable on Tornado's HTTP server.
 
     .. warning::
 
        WSGI is a *synchronous* interface, while Tornado's concurrency model
-       is based on single-threaded asynchronous execution.  This means that
-       running a WSGI app with Tornado's `WSGIContainer` is *less scalable*
-       than running the same app in a multi-threaded WSGI server like
-       ``gunicorn`` or ``uwsgi``.  Use `WSGIContainer` only when there are
-       benefits to combining Tornado and WSGI in the same process that
-       outweigh the reduced scalability.
+       is based on single-threaded *asynchronous* execution.  Many of Tornado's
+       distinguishing features are not available in WSGI mode, including efficient
+       long-polling and websockets. The primary purpose of `WSGIContainer` is
+       to support both WSGI applications and native Tornado ``RequestHandlers`` in
+       a single process. WSGI-only applications are likely to be better off
+       with a dedicated WSGI server such as ``gunicorn`` or ``uwsgi``.
 
-    Wrap a WSGI function in a `WSGIContainer` and pass it to `.HTTPServer` to
-    run it. For example::
+    Wrap a WSGI application in a `WSGIContainer` to make it implement the Tornado
+    `.HTTPServer` ``request_callback`` interface.  The `WSGIContainer` object can
+    then be passed to classes from the `tornado.routing` module,
+    `tornado.web.FallbackHandler`, or to `.HTTPServer` directly.
+
+    This class is intended to let other frameworks (Django, Flask, etc)
+    run on the Tornado HTTP server and I/O loop.
+
+    Realistic usage will be more complicated, but the simplest possible example uses a
+    hand-written WSGI application with `.HTTPServer`::
 
         def simple_app(environ, start_response):
             status = "200 OK"
@@ -86,32 +94,32 @@ class WSGIContainer(object):
 
         asyncio.run(main())
 
-    This class is intended to let other frameworks (Django, web.py, etc)
-    run on the Tornado HTTP server and I/O loop.
+    The recommended pattern is to use the `tornado.routing` module to set up routing
+    rules between your WSGI application and, typically, a `tornado.web.Application`.
+    Alternatively, `tornado.web.Application` can be used as the top-level router
+    and `tornado.web.FallbackHandler` can embed a `WSGIContainer` within it.
 
-    The `tornado.web.FallbackHandler` class is often useful for mixing
-    Tornado and WSGI apps in the same server.  See
-    https://github.com/bdarnell/django-tornado-demo for a complete example.
+    If the ``executor`` argument is provided, the WSGI application will be executed
+    on that executor. This must be an instance of `concurrent.futures.Executor`,
+    typically a ``ThreadPoolExecutor`` (``ProcessPoolExecutor`` is not supported).
+    If no ``executor`` is given, the application will run on the event loop thread in
+    Tornado 6.3; this will change to use an internal thread pool by default in
+    Tornado 7.0.
 
-    `WSGIContainer` supports executing the WSGI application in custom executors
-    using `.IOLoop.run_in_executor`. The default executor uses
-    ``tornado.concurrent.dummy_executor`` which works synchronously, but other
-    executors subclassing `concurrent.futures.Executor` may be used. To execute
-    WSGI application code in separate threads in an event-loop compatible way
-    use::
+    .. warning::
+       By default, the WSGI application is executed on the event loop's thread. This
+       limits the server to one request at a time (per process), making it less scalable
+       than most other WSGI servers. It is therefore highly recommended that you pass
+       a ``ThreadPoolExecutor`` when constructing the `WSGIContainer`, after verifying
+       that your application is thread-safe. The default will change to use a
+       ``ThreadPoolExecutor`` in Tornado 7.0.
 
-        async def main():
-            executor = concurrent.futures.ThreadPoolExecutor()
-            # ^-- Execute requests in separate threads.
-            container = tornado.wsgi.WSGIContainer(simple_app, executor)
-            # Initialize the WSGI container with custom executor --^
-            http_server = tornado.httpserver.HTTPServer(container)
-            http_server.listen(8888)
-            await asyncio.Event().wait()
+    .. versionadded:: 6.3
+       The ``executor`` parameter.
 
-    Running the WSGI app with a ``ThreadPoolExecutor`` remains *less scalable*
-    than running the same app in a multi-threaded WSGI server like ``gunicorn``
-    or ``uwsgi``.
+    .. deprecated:: 6.3
+       The default behavior of running the WSGI application on the event loop thread
+       is deprecated and will change in Tornado 7.0 to use a thread pool by default.
     """
 
     def __init__(
