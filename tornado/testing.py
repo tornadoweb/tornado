@@ -135,7 +135,8 @@ class AsyncTestCase(unittest.TestCase):
 
     By default, a new `.IOLoop` is constructed for each test and is available
     as ``self.io_loop``.  If the code being tested requires a
-    global `.IOLoop`, subclasses should override `get_new_ioloop` to return it.
+    reused global `.IOLoop`, subclasses should override `get_new_ioloop` to return it,
+    although this is deprecated as of Tornado 6.3.
 
     The `.IOLoop`'s ``start`` and ``stop`` methods should not be
     called directly.  Instead, use `self.stop <stop>` and `self.wait
@@ -182,14 +183,20 @@ class AsyncTestCase(unittest.TestCase):
         self._test_generator = None  # type: Optional[Union[Generator, Coroutine]]
 
     def setUp(self) -> None:
-        setup_with_context_manager(self, warnings.catch_warnings())
-        warnings.filterwarnings(
-            "ignore",
-            message="There is no current event loop",
-            category=DeprecationWarning,
-            module=r"tornado\..*",
-        )
+        py_ver = sys.version_info
+        if ((3, 10, 0) <= py_ver < (3, 10, 9)) or ((3, 11, 0) <= py_ver <= (3, 11, 1)):
+            # Early releases in the Python 3.10 and 3.1 series had deprecation
+            # warnings that were later reverted; we must suppress them here.
+            setup_with_context_manager(self, warnings.catch_warnings())
+            warnings.filterwarnings(
+                "ignore",
+                message="There is no current event loop",
+                category=DeprecationWarning,
+                module=r"tornado\..*",
+            )
         super().setUp()
+        if type(self).get_new_ioloop is not AsyncTestCase.get_new_ioloop:
+            warnings.warn("get_new_ioloop is deprecated", DeprecationWarning)
         self.io_loop = self.get_new_ioloop()
         asyncio.set_event_loop(self.io_loop.asyncio_loop)  # type: ignore[attr-defined]
 
@@ -250,6 +257,9 @@ class AsyncTestCase(unittest.TestCase):
         singletons using the default `.IOLoop`) or if a per-test event
         loop is being provided by another system (such as
         ``pytest-asyncio``).
+
+        .. deprecated:: 6.3
+           This method will be removed in Tornado 7.0.
         """
         return IOLoop(make_current=False)
 
