@@ -1,7 +1,6 @@
 from tornado import gen, ioloop
 from tornado.httpserver import HTTPServer
 from tornado.locks import Event
-from tornado.test.util import ignore_deprecation
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, gen_test
 from tornado.web import Application
 import asyncio

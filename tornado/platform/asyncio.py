@@ -327,7 +327,7 @@ class AsyncIOLoop(BaseAsyncIOLoop):
             self._clear_current()
         super().close(all_fds=all_fds)
 
-    def _make_current(self):
+    def _make_current(self) -> None:
         if not self.is_current:
             try:
                 self.old_asyncio = asyncio.get_event_loop()

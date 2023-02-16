@@ -305,7 +305,7 @@ class IOLoop(Configurable):
         )
         self._make_current()
 
-    def _make_current(self):
+    def _make_current(self) -> None:
         # The asyncio event loops override this method.
         raise NotImplementedError()
 
