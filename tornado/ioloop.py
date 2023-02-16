@@ -145,9 +145,9 @@ class IOLoop(Configurable):
        event loop.
 
     .. versionchanged:: 6.3
-       ``make_current=False`` is now the default when creating an IOLoop -
+       ``make_current=True`` is now the default when creating an IOLoop -
        previously the default was to make the event loop current if there wasn't
-       already a current one. Passing ``make_current=True`` is deprecated.
+       already a current one.
     """
 
     # These constants were originally based on constants from the epoll module.
@@ -298,6 +298,14 @@ class IOLoop(Configurable):
            Setting and clearing the current event loop through Tornado is
            deprecated. Use ``asyncio.set_event_loop`` instead if you need this.
         """
+        warnings.warn(
+            "make_current is deprecated; start the event loop first",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self._make_current()
+
+    def _make_current(self):
         # The asyncio event loops override this method.
         raise NotImplementedError()
 
@@ -341,18 +349,9 @@ class IOLoop(Configurable):
 
         return AsyncIOLoop
 
-    def initialize(self, make_current: bool = False) -> None:
+    def initialize(self, make_current: bool = True) -> None:
         if make_current:
-            warnings.warn(
-                "IOLoop(make_current=True) is deprecated",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            current = IOLoop.current(instance=False)
-            # AsyncIO loops can already be current by this point.
-            if current is not None and current is not self:
-                raise RuntimeError("current IOLoop already exists")
-            self.make_current()
+            self._make_current()
 
     def close(self, all_fds: bool = False) -> None:
         """Closes the `IOLoop`, freeing any resources used.

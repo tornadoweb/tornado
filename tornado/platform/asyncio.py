@@ -276,7 +276,7 @@ class AsyncIOMainLoop(BaseAsyncIOLoop):
     def initialize(self, **kwargs: Any) -> None:  # type: ignore
         super().initialize(asyncio.get_event_loop(), **kwargs)
 
-    def make_current(self) -> None:
+    def _make_current(self) -> None:
         # AsyncIOMainLoop already refers to the current asyncio loop so
         # nothing to do here.
         pass
@@ -327,12 +327,7 @@ class AsyncIOLoop(BaseAsyncIOLoop):
             self._clear_current()
         super().close(all_fds=all_fds)
 
-    def make_current(self) -> None:
-        warnings.warn(
-            "make_current is deprecated; start the event loop first",
-            DeprecationWarning,
-            stacklevel=2,
-        )
+    def _make_current(self):
         if not self.is_current:
             try:
                 self.old_asyncio = asyncio.get_event_loop()

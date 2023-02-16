@@ -472,11 +472,6 @@ class TestIOLoopCurrent(unittest.TestCase):
     def test_force_current(self):
         self.io_loop = IOLoop(make_current=True)
         self.assertIs(self.io_loop, IOLoop.current())
-        with self.assertRaises(RuntimeError):
-            # A second make_current=True construction cannot succeed.
-            IOLoop(make_current=True)
-        # current() was not affected by the failed construction.
-        self.assertIs(self.io_loop, IOLoop.current())
 
 
 class TestIOLoopCurrentAsync(AsyncTestCase):
