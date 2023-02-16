@@ -190,10 +190,6 @@ class AsyncTestCase(unittest.TestCase):
             module=r"tornado\..*",
         )
         super().setUp()
-        try:
-            self._prev_aio_loop = asyncio.get_event_loop()
-        except RuntimeError:
-            self._prev_aio_loop = None  # type: ignore[assignment]
         self.io_loop = self.get_new_ioloop()
         asyncio.set_event_loop(self.io_loop.asyncio_loop)  # type: ignore[attr-defined]
 
@@ -230,7 +226,7 @@ class AsyncTestCase(unittest.TestCase):
 
         # Clean up Subprocess, so it can be used again with a new ioloop.
         Subprocess.uninitialize()
-        asyncio.set_event_loop(self._prev_aio_loop)
+        asyncio.set_event_loop(None)
         if not isinstance(self.io_loop, _NON_OWNED_IOLOOPS):
             # Try to clean up any file descriptors left open in the ioloop.
             # This avoids leaks, especially when tests are run repeatedly
