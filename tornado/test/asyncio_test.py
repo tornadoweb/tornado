@@ -26,10 +26,6 @@ from tornado.testing import AsyncTestCase, gen_test
 
 
 class AsyncIOLoopTest(AsyncTestCase):
-    def get_new_ioloop(self):
-        io_loop = AsyncIOLoop(make_current=False)
-        return io_loop
-
     @property
     def asyncio_loop(self):
         return self.io_loop.asyncio_loop  # type: ignore
