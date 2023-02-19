@@ -112,18 +112,19 @@ from tornado.util import ObjectDict, unicode_type, _websocket_mask
 url = URLSpec
 
 from typing import (
-    Dict,
     Any,
-    Union,
-    Optional,
     Awaitable,
-    Tuple,
-    List,
     Callable,
+    Dict,
+    FrozenSet, Generator,
     Iterable,
-    Generator,
+    List,
+    Optional,
+    Set,
+    Tuple,
     Type,
     TypeVar,
+    Union,
     cast,
     overload,
 )
@@ -2105,8 +2106,10 @@ class Application(ReversibleRouter):
         **settings: Any,
     ) -> None:
         if transforms is None:
-            self.transforms = []  # type: List[Type[OutputTransform]]
-            if settings.get("compress_response") or settings.get("gzip"):
+            self.transforms = []  # type: List[Callable[[httputil.HTTPServerRequest], OutputTransform]]
+            if settings.get("compress_response"):
+                self.transforms.append(CompressingOutputTransform)
+            elif settings.get("gzip"):
                 self.transforms.append(GZipContentEncoding)
         else:
             self.transforms = transforms
@@ -3138,34 +3141,19 @@ class OutputTransform(object):
         return chunk
 
 
-class GZipContentEncoding(OutputTransform):
-    """Applies the gzip content encoding to the response.
-
-    See http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.11
-
-    .. versionchanged:: 4.0
-        Now compresses all mime types beginning with ``text/``, instead
-        of just a whitelist. (the whitelist is still used for certain
-        non-text mime types).
-    """
-
+class _CompressingOutputTransformABC(OutputTransform):
+    """ABC for classes that compress outputs."""
     # Whitelist of compressible mime types (in addition to any types
     # beginning with "text/").
-    CONTENT_TYPES = set(
-        [
-            "application/javascript",
-            "application/x-javascript",
-            "application/xml",
-            "application/atom+xml",
-            "application/json",
-            "application/xhtml+xml",
-            "image/svg+xml",
-        ]
-    )
-    # Python's GzipFile defaults to level 9, while most other gzip
-    # tools (including gzip itself) default to 6, which is probably a
-    # better CPU/size tradeoff.
-    GZIP_LEVEL = 6
+    CONTENT_TYPES = {
+        "application/javascript",
+        "application/x-javascript",
+        "application/xml",
+        "application/atom+xml",
+        "application/json",
+        "application/xhtml+xml",
+        "image/svg+xml",
+    }
     # Responses that are too short are unlikely to benefit from gzipping
     # after considering the "Content-Encoding: gzip" header and the header
     # inside the gzip encoding.
@@ -3173,8 +3161,24 @@ class GZipContentEncoding(OutputTransform):
     # regardless of size.
     MIN_LENGTH = 1024
 
+    CONTENT_ENCODING: str = None
+    """The encoding used, in sub-classes it will be equal to CONTENT_ENCODING."""
+
+    _compressing: bool
+    """If this is False the output will not be transformed."""
+
+    @staticmethod
+    def accepted_encodings(request: httputil.HTTPServerRequest) -> "frozenset[str]":
+        return frozenset(
+            map(
+                str.strip,
+                request.headers.get("Accept-Encoding", "").lower().split(",")
+            )
+        )
+
     def __init__(self, request: httputil.HTTPServerRequest) -> None:
-        self._gzipping = "gzip" in request.headers.get("Accept-Encoding", "")
+        super().__init__(request)
+        self._compressing = self.CONTENT_ENCODING in self.accepted_encodings(request)
 
     def _compressible_type(self, ctype: str) -> bool:
         return ctype.startswith("text/") or ctype in self.CONTENT_TYPES
@@ -3186,38 +3190,73 @@ class GZipContentEncoding(OutputTransform):
         chunk: bytes,
         finishing: bool,
     ) -> Tuple[int, httputil.HTTPHeaders, bytes]:
-        # TODO: can/should this type be inherited from the superclass?
         if "Vary" in headers:
             headers["Vary"] += ", Accept-Encoding"
         else:
             headers["Vary"] = "Accept-Encoding"
-        if self._gzipping:
-            ctype = _unicode(headers.get("Content-Type", "")).split(";")[0]
-            self._gzipping = (
-                self._compressible_type(ctype)
-                and (not finishing or len(chunk) >= self.MIN_LENGTH)
-                and ("Content-Encoding" not in headers)
-            )
-        if self._gzipping:
-            headers["Content-Encoding"] = "gzip"
-            self._gzip_value = BytesIO()
-            self._gzip_file = gzip.GzipFile(
-                mode="w", fileobj=self._gzip_value, compresslevel=self.GZIP_LEVEL
-            )
-            chunk = self.transform_chunk(chunk, finishing)
-            if "Content-Length" in headers:
-                # The original content length is no longer correct.
-                # If this is the last (and only) chunk, we can set the new
-                # content-length; otherwise we remove it and fall back to
-                # chunked encoding.
-                if finishing:
-                    headers["Content-Length"] = str(len(chunk))
-                else:
-                    del headers["Content-Length"]
+        if not self._compressing:
+            return status_code, headers, chunk
+        ctype = _unicode(headers.get("Content-Type", "")).split(";")[0]
+        if not (
+            self._compressible_type(ctype)
+            and (not finishing or len(chunk) >= self.MIN_LENGTH)
+            and ("Content-Encoding" not in headers)
+        ):
+            self._compressing = None
+            return status_code, headers, chunk
+
+        headers["Content-Encoding"] = self.CONTENT_ENCODING
+
+        self.prepare_transform()
+
+        chunk = self.transform_chunk(chunk, finishing)
+        if "Content-Length" in headers:
+            # The original content length is no longer correct.
+            # If this is the last (and only) chunk, we can set the new
+            # content-length; otherwise we remove it and fall back to
+            # chunked encoding.
+            if finishing:
+                headers["Content-Length"] = str(len(chunk))
+            else:
+                del headers["Content-Length"]
+
         return status_code, headers, chunk
 
+    def prepare_transform(self) -> None:
+        raise NotImplementedError()
+
     def transform_chunk(self, chunk: bytes, finishing: bool) -> bytes:
-        if self._gzipping:
+        raise NotImplementedError()
+
+
+class GZipContentEncoding(_CompressingOutputTransformABC):
+    """Applies the gzip content encoding to the response.
+
+    See http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.11
+
+    .. versionchanged:: 4.0
+        Now compresses all mime types beginning with ``text/``, instead
+        of just a whitelist. (the whitelist is still used for certain
+        non-text mime types).
+    """
+    # Python's GzipFile defaults to level 9, while most other gzip
+    # tools (including gzip itself) default to 6, which is probably a
+    # better CPU/size tradeoff.
+    GZIP_LEVEL = 6
+
+    CONTENT_ENCODING = "gzip"
+
+    _gzip_value: BytesIO
+    _gzip_file: gzip.GzipFile
+
+    def prepare_transform(self) -> None:
+        self._gzip_value = BytesIO()
+        self._gzip_file = gzip.GzipFile(
+            mode="w", fileobj=self._gzip_value, compresslevel=self.GZIP_LEVEL
+        )
+
+    def transform_chunk(self, chunk: bytes, finishing: bool) -> bytes:
+        if self._compressing:
             self._gzip_file.write(chunk)
             if finishing:
                 self._gzip_file.close()
@@ -3227,6 +3266,68 @@ class GZipContentEncoding(OutputTransform):
             self._gzip_value.truncate(0)
             self._gzip_value.seek(0)
         return chunk
+
+
+class BrotliContentEncoding(_CompressingOutputTransformABC):
+    """Compresses the response with brotli."""
+    CONTENT_ENCODING = "br"
+
+    # Python's Brotli defaults to level 11
+    BROTLI_LEVEL = 8
+
+    def prepare_transform(self) -> None:
+        self._compressor = brotli.Compressor(
+            mode=brotli.MODE_TEXT, quality=self.BROTLI_LEVEL, lgwin=22, lgblock=0
+        )
+
+    def transform_chunk(self, chunk: bytes, finishing: bool) -> bytes:
+        if self._compressing:
+            chunk = self._compressor.process(chunk)
+            if finishing:
+                chunk += self._compressor.finish()
+        return chunk
+
+
+try:
+    try:
+        import brotlicffi as brotli
+    except ImportError:
+        import brotli
+except ImportError:
+    brotli = None
+else:
+    pass
+
+
+COMPRESSION_ALGORITHMS: "List[Tuple[str, Type[_CompressingOutputTransformABC]]]" = [
+    *(
+        [
+            ("br", BrotliContentEncoding)
+        ]
+        if brotli
+        else []
+    ),
+    ("gzip", GZipContentEncoding),
+]
+"""The available compression algorithms sorted by preference."""
+
+
+
+def CompressingOutputTransform(request: httputil.HTTPServerRequest):
+    """Applies the compression to the response."""
+    accepted_encodings = _CompressingOutputTransformABC.accepted_encodings(request)
+    compressing: "Optional[type[_CompressingOutputTransformABC]]" = None
+    content_encoding: str = ""
+    for name, class_ in COMPRESSION_ALGORITHMS:
+        if name in accepted_encodings:
+            compressing = class_
+            content_encoding = name
+            break
+
+    if not compressing or not content_encoding:
+        return OutputTransform(request)
+
+    return compressing(request)
 
 
 def authenticated(
