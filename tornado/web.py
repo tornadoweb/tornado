@@ -116,11 +116,12 @@ from typing import (
     Awaitable,
     Callable,
     Dict,
-    FrozenSet, Generator,
+    FrozenSet,
+    Generator,
     Iterable,
     List,
+    MutableSequence,
     Optional,
-    Set,
     Tuple,
     Type,
     TypeVar,
@@ -2102,15 +2103,19 @@ class Application(ReversibleRouter):
         self,
         handlers: Optional[_RuleList] = None,
         default_host: Optional[str] = None,
-        transforms: Optional[List[Type["OutputTransform"]]] = None,
+        transforms: Optional[
+            MutableSequence[Callable[[httputil.HTTPServerRequest], "OutputTransform"]]
+        ] = None,
         **settings: Any,
     ) -> None:
         if transforms is None:
-            self.transforms = []  # type: List[Callable[[httputil.HTTPServerRequest], OutputTransform]]
+            self.transforms = (
+                []
+            )  # type: MutableSequence[Callable[[httputil.HTTPServerRequest], OutputTransform]]
             if settings.get("compress_response"):
-                self.transforms.append(CompressingOutputTransform)
+                self.transforms = [CompressingOutputTransform]
             elif settings.get("gzip"):
-                self.transforms.append(GZipContentEncoding)
+                self.transforms = [GZipContentEncoding]
         else:
             self.transforms = transforms
         self.default_host = default_host
@@ -3143,6 +3148,7 @@ class OutputTransform(object):
 
 class _CompressingOutputTransformABC(OutputTransform):
     """ABC for classes that compress outputs."""
+
     # Whitelist of compressible mime types (in addition to any types
     # beginning with "text/").
     CONTENT_TYPES = {
@@ -3161,18 +3167,17 @@ class _CompressingOutputTransformABC(OutputTransform):
     # regardless of size.
     MIN_LENGTH = 1024
 
-    CONTENT_ENCODING: str = None
+    CONTENT_ENCODING: str = ""
     """The encoding used, in sub-classes it will be equal to CONTENT_ENCODING."""
 
     _compressing: bool
     """If this is False the output will not be transformed."""
 
     @staticmethod
-    def accepted_encodings(request: httputil.HTTPServerRequest) -> "frozenset[str]":
+    def accepted_encodings(request: httputil.HTTPServerRequest) -> "FrozenSet[str]":
         return frozenset(
             map(
-                str.strip,
-                request.headers.get("Accept-Encoding", "").lower().split(",")
+                str.strip, request.headers.get("Accept-Encoding", "").lower().split(",")
             )
         )
 
@@ -3202,7 +3207,7 @@ class _CompressingOutputTransformABC(OutputTransform):
             and (not finishing or len(chunk) >= self.MIN_LENGTH)
             and ("Content-Encoding" not in headers)
         ):
-            self._compressing = None
+            self._compressing = False
             return status_code, headers, chunk
 
         headers["Content-Encoding"] = self.CONTENT_ENCODING
@@ -3239,6 +3244,7 @@ class GZipContentEncoding(_CompressingOutputTransformABC):
         of just a whitelist. (the whitelist is still used for certain
         non-text mime types).
     """
+
     # Python's GzipFile defaults to level 9, while most other gzip
     # tools (including gzip itself) default to 6, which is probably a
     # better CPU/size tradeoff.
@@ -3270,6 +3276,7 @@ class GZipContentEncoding(_CompressingOutputTransformABC):
 
 class BrotliContentEncoding(_CompressingOutputTransformABC):
     """Compresses the response with brotli."""
+
     CONTENT_ENCODING = "br"
 
     # Python's Brotli defaults to level 11
@@ -3290,9 +3297,9 @@ class BrotliContentEncoding(_CompressingOutputTransformABC):
 
 try:
     try:
-        import brotlicffi as brotli
+        import brotlicffi as brotli  # type: ignore[import]
     except ImportError:
-        import brotli
+        import brotli  # type: ignore[import]
 except ImportError:
     brotli = None
 else:
@@ -3300,23 +3307,16 @@ else:
 
 
 COMPRESSION_ALGORITHMS: "List[Tuple[str, Type[_CompressingOutputTransformABC]]]" = [
-    *(
-        [
-            ("br", BrotliContentEncoding)
-        ]
-        if brotli
-        else []
-    ),
+    *([("br", BrotliContentEncoding)] if brotli else []),
     ("gzip", GZipContentEncoding),
 ]
 """The available compression algorithms sorted by preference."""
 
 
-
-def CompressingOutputTransform(request: httputil.HTTPServerRequest):
+def CompressingOutputTransform(request: httputil.HTTPServerRequest) -> OutputTransform:
     """Applies the compression to the response."""
     accepted_encodings = _CompressingOutputTransformABC.accepted_encodings(request)
-    compressing: "Optional[type[_CompressingOutputTransformABC]]" = None
+    compressing: "Optional[Type[_CompressingOutputTransformABC]]" = None
     content_encoding: str = ""
     for name, class_ in COMPRESSION_ALGORITHMS:
         if name in accepted_encodings:
