@@ -868,6 +868,7 @@ class AbstractFileDelegate:
 
 
 class ParserState:
+
     PARSE_BOUNDARY_LINE = 1
     """State that parses the initial boundary."""
 
@@ -909,15 +910,20 @@ class StreamingMultipartFormDataParser(object):
         raise ValueError("Required 'boundary' option not found in header!")
 
     def __init__(
-        self, delegate: AbstractFileDelegate, boundary: str, max_header_bytes=_1MB
+        self, delegate: AbstractFileDelegate, boundary: str, max_buffer_size=_1MB
     ):
+        """Create a StreamingMultipartFormDataParser.
+
+        This parser (asynchronously) receives data, parses it, and invokes the
+        given delegate appropriately.
+        """
         # Be nice and decode the boundary if it is a bytes object.
         if isinstance(boundary, bytes):
             boundary = boundary.decode("utf-8")
         # Store the delegate to write out the data.
         self._delegate = delegate
         self._boundary = boundary
-        self._max_buffer_size = max_header_bytes
+        self._max_buffer_size = max_buffer_size
         self._name = None
 
         # Variables to store the current state of the parser.
@@ -1116,6 +1122,7 @@ class StreamingMultipartFormDataParser(object):
                         "Finished with non-empty buffer (%s bytes remaining).",
                         len(self._buffer),
                     )
+                    self._buffer.clear()
 
                 # Even if there is data remaining, we should exit the loop.
                 return

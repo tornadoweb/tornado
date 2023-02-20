@@ -343,6 +343,7 @@ class AsyncMemoryFileDelegate(AbstractFileDelegate):
 
 
 class StreamingMultipartFormDataTest(unittest.IsolatedAsyncioTestCase):
+
     async def test_multipart_form_data(self):
         boundary = b"--boundarything"
 
@@ -414,6 +415,33 @@ class StreamingMultipartFormDataTest(unittest.IsolatedAsyncioTestCase):
                 # bytes(delegate.parsed_data['b.csv']),
                 '"b.csv" file contents mismatch on slice: {}'.format(i),
             )
+
+    async def test_runaway_memory_parser(self):
+        # Same test as above, but with async methods for the delegate.
+        boundary = b"--boundarything"
+
+        # Parse the data.
+        BAD_DATA = b"""----boundarything\r
+Content-Disposition: form-data; name="a.txt"\r
+\r
+a----boundarything\r
+Content-Disposition: form-data; name="b.csv"\r
+Content-Type: text/csv\r
+""" + (b'a' * 10000) + b"""
+\r
+col1,col2
+a,b
+--boundarythin,thatwasclose
+----boundarything--\r
+"""
+        delegate = AsyncMemoryFileDelegate()
+        # Configure the parser, but set the header size to something small.
+        # This will check if the parser raises after high memory consumption.
+        parser = StreamingMultipartFormDataParser(
+            delegate, boundary, max_buffer_size=1024)
+        await parser.data_received(BAD_DATA[:5000])
+        with self.assertRaises(Exception):
+            await parser.data_received(BAD_DATA[5000:])
 
 
 class HTTPHeadersTest(unittest.TestCase):
