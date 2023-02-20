@@ -950,20 +950,25 @@ class StreamingMultipartFormDataParser(object):
 
     async def data_received(self, chunk: bytes) -> None:
         # Process the data received, based on the current state.
-        self._buffer.extend(chunk)
+        #
+        # It is possible for 'chunk' here to be larger than the maximum buffer
+        # size. Initially, this is okay because we still need to process the
+        # chunk. However, when the buffer _remains_ this size after going
+        # through the rest of this call, then the input is bad since each state
+        # should incrementally consume data from the buffer contain its size.
+        if len(self._buffer) > self._max_buffer_size:
+            raise ValueError(
+                "Buffer is growing larger than: {} bytes!".format(self._buffer)
+            )
+        # Ignore incrementing the buffer when in the DONE state altogether.
+        if self._state != ParserState.PARSING_DONE:
+            self._buffer.extend(chunk)
 
         # Iterate over and over while there is sufficient data in the buffer.
         # Each loop should either consume data, or move to a state where not
         # enough data is available, in which case this should exit to await
         # more data.
         while True:
-            # NOTE: As a almost useless optimization, we order the states in
-            # the "expected" most common state ordering:
-            # (1) PARSE_BODY is likely the most common state.
-            # (2) PARSE_BOUNDARY_LINE
-            # (3) PARSE_HEADERS
-            # (4) PARSING_DONE
-
             # PARSE_BODY state --> Expecting to parse the file contents.
             if self._state == ParserState.PARSE_BODY:
                 # Search for the boundary characters.
