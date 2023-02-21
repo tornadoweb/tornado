@@ -178,10 +178,10 @@ Demos
 ~~~~~
 
 - A new file upload demo is available in the `file_upload
-  <https://github.com/tornadoweb/tornado/tree/master/demos/file_upload>`_
+  <https://github.com/tornadoweb/tornado/tree/stable/demos/file_upload>`_
   directory.
 - A new `.TCPClient` and `.TCPServer` demo is available in the
-  `tcpecho <https://github.com/tornadoweb/tornado/tree/master/demos/tcpecho>`_ directory.
+  `tcpecho <https://github.com/tornadoweb/tornado/tree/stable/demos/tcpecho>`_ directory.
 - Minor updates have been made to several existing demos, including
   updates to more recent versions of jquery.
 

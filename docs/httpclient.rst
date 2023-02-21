@@ -70,7 +70,7 @@ Implementations
 Example Code
 ~~~~~~~~~~~~
 
-* `A simple webspider <https://github.com/tornadoweb/tornado/blob/master/demos/webspider/webspider.py>`_
+* `A simple webspider <https://github.com/tornadoweb/tornado/blob/stable/demos/webspider/webspider.py>`_
   shows how to fetch URLs concurrently.
-* `The file uploader demo <https://github.com/tornadoweb/tornado/tree/master/demos/file_upload/>`_
+* `The file uploader demo <https://github.com/tornadoweb/tornado/tree/stable/demos/file_upload/>`_
   uses either HTTP POST or HTTP PUT to upload files to a server.

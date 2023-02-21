@@ -1904,7 +1904,7 @@ def stream_request_body(cls: Type[_RequestHandlerType]) -> Type[_RequestHandlerT
     * The regular HTTP method (``post``, ``put``, etc) will be called after
       the entire body has been read.
 
-    See the `file receiver demo <https://github.com/tornadoweb/tornado/tree/master/demos/file_upload/>`_
+    See the `file receiver demo <https://github.com/tornadoweb/tornado/tree/stable/demos/file_upload/>`_
     for example usage.
     """  # noqa: E501
     if not issubclass(cls, RequestHandler):
