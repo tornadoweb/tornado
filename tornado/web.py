@@ -91,6 +91,7 @@ from tornado import gen
 from tornado.httpserver import HTTPServer
 from tornado import httputil
 from tornado import iostream
+from tornado.ioloop import IOLoop
 import tornado.locale
 from tornado import locale
 from tornado.log import access_log, app_log, gen_log
@@ -276,6 +277,17 @@ class RequestHandler(object):
     patch = _unimplemented_method  # type: Callable[..., Optional[Awaitable[None]]]
     put = _unimplemented_method  # type: Callable[..., Optional[Awaitable[None]]]
     options = _unimplemented_method  # type: Callable[..., Optional[Awaitable[None]]]
+
+    def add_background_task(self, background_task: Callable, *args) -> None:
+        """Adds a callback to be run in the background after the current request.
+
+        This method can be called from any thread.  The callback will be
+        run in the main thread after the current request has been
+        completed.  If the request has already completed, the callback
+        will be run immediately.
+        """
+        IOLoop.current().spawn_callback(background_task, *args)
+
 
     def prepare(self) -> Optional[Awaitable[None]]:
         """Called at the beginning of a request before  `get`/`post`/etc.
