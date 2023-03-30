@@ -253,11 +253,20 @@
          * ``xsrf_cookie_kwargs``: May be set to a dictionary of
            additional arguments to be passed to `.RequestHandler.set_cookie`
            for the XSRF cookie.
+         * ``xsrf_cookie_name``: Controls the name used for the XSRF
+           cookie (default ``_xsrf``). The intended use is to take
+           advantage of `cookie prefixes`_. Note that cookie prefixes
+           interact with other cookie flags, so they must be combined
+           with ``xsrf_cookie_kwargs``, such as
+           ``{"xsrf_cookie_name": "__Host-xsrf", "xsrf_cookie_kwargs":
+           {"secure": True}}``
          * ``twitter_consumer_key``, ``twitter_consumer_secret``,
            ``friendfeed_consumer_key``, ``friendfeed_consumer_secret``,
            ``google_consumer_key``, ``google_consumer_secret``,
            ``facebook_api_key``, ``facebook_secret``:  Used in the
            `tornado.auth` module to authenticate to various APIs.
+
+         .. _cookie prefixes: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#cookie_prefixes
 
          Template settings:
 
