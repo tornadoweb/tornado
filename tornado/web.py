@@ -1486,7 +1486,8 @@ class RequestHandler(object):
             if version is None:
                 if self.current_user and "expires_days" not in cookie_kwargs:
                     cookie_kwargs["expires_days"] = 30
-                self.set_cookie("_xsrf", self._xsrf_token, **cookie_kwargs)
+                cookie_name = self.settings.get("xsrf_cookie_name", "_xsrf")
+                self.set_cookie(cookie_name, self._xsrf_token, **cookie_kwargs)
         return self._xsrf_token
 
     def _get_raw_xsrf_token(self) -> Tuple[Optional[int], bytes, float]:
@@ -1501,7 +1502,8 @@ class RequestHandler(object):
           for version 1 cookies)
         """
         if not hasattr(self, "_raw_xsrf_token"):
-            cookie = self.get_cookie("_xsrf")
+            cookie_name = self.settings.get("xsrf_cookie_name", "_xsrf")
+            cookie = self.get_cookie(cookie_name)
             if cookie:
                 version, token, timestamp = self._decode_xsrf_token(cookie)
             else:
