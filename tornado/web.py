@@ -1486,7 +1486,8 @@ class RequestHandler(object):
             if version is None:
                 if self.current_user and "expires_days" not in cookie_kwargs:
                     cookie_kwargs["expires_days"] = 30
-                self.set_cookie("_xsrf", self._xsrf_token, **cookie_kwargs)
+                cookie_name = self.settings.get("xsrf_cookie_name", "_xsrf")
+                self.set_cookie(cookie_name, self._xsrf_token, **cookie_kwargs)
         return self._xsrf_token
 
     def _get_raw_xsrf_token(self) -> Tuple[Optional[int], bytes, float]:
@@ -1501,7 +1502,8 @@ class RequestHandler(object):
           for version 1 cookies)
         """
         if not hasattr(self, "_raw_xsrf_token"):
-            cookie = self.get_cookie("_xsrf")
+            cookie_name = self.settings.get("xsrf_cookie_name", "_xsrf")
+            cookie = self.get_cookie(cookie_name)
             if cookie:
                 version, token, timestamp = self._decode_xsrf_token(cookie)
             else:
@@ -1904,7 +1906,7 @@ def stream_request_body(cls: Type[_RequestHandlerType]) -> Type[_RequestHandlerT
     * The regular HTTP method (``post``, ``put``, etc) will be called after
       the entire body has been read.
 
-    See the `file receiver demo <https://github.com/tornadoweb/tornado/tree/master/demos/file_upload/>`_
+    See the `file receiver demo <https://github.com/tornadoweb/tornado/tree/stable/demos/file_upload/>`_
     for example usage.
     """  # noqa: E501
     if not issubclass(cls, RequestHandler):

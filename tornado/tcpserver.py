@@ -246,9 +246,7 @@ class TCPServer(object):
 
         .. deprecated:: 6.2
            Use either ``listen()`` or ``add_sockets()`` instead of ``bind()``
-           and ``start()``. The ``bind()/start()`` pattern depends on
-           interfaces that have been deprecated in Python 3.10 and will be
-           removed in future versions of Python.
+           and ``start()``.
         """
         sockets = bind_sockets(
             port,
@@ -295,9 +293,7 @@ class TCPServer(object):
 
         .. deprecated:: 6.2
            Use either ``listen()`` or ``add_sockets()`` instead of ``bind()``
-           and ``start()``. The ``bind()/start()`` pattern depends on
-           interfaces that have been deprecated in Python 3.10 and will be
-           removed in future versions of Python.
+           and ``start()``.
         """
         assert not self._started
         self._started = True

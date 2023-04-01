@@ -450,15 +450,6 @@ class TestIOLoopCurrent(unittest.TestCase):
         if self.io_loop is not None:
             self.io_loop.close()
 
-    def test_default_current(self):
-        self.io_loop = IOLoop()
-        # The first IOLoop with default arguments is made current.
-        self.assertIs(self.io_loop, IOLoop.current())
-        # A second IOLoop can be created but is not made current.
-        io_loop2 = IOLoop()
-        self.assertIs(self.io_loop, IOLoop.current())
-        io_loop2.close()
-
     def test_non_current(self):
         self.io_loop = IOLoop(make_current=False)
         # The new IOLoop is not initially made current.
@@ -480,11 +471,6 @@ class TestIOLoopCurrent(unittest.TestCase):
 
     def test_force_current(self):
         self.io_loop = IOLoop(make_current=True)
-        self.assertIs(self.io_loop, IOLoop.current())
-        with self.assertRaises(RuntimeError):
-            # A second make_current=True construction cannot succeed.
-            IOLoop(make_current=True)
-        # current() was not affected by the failed construction.
         self.assertIs(self.io_loop, IOLoop.current())
 
 

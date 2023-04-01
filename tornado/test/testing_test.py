@@ -1,7 +1,6 @@
 from tornado import gen, ioloop
 from tornado.httpserver import HTTPServer
 from tornado.locks import Event
-from tornado.test.util import ignore_deprecation
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, gen_test
 from tornado.web import Application
 import asyncio
@@ -340,34 +339,6 @@ class GenTest(AsyncTestCase):
             self.fail("did not get expected exception")
         except ioloop.TimeoutError:
             self.finished = True
-
-
-class GetNewIOLoopTest(AsyncTestCase):
-    def get_new_ioloop(self):
-        # Use the current loop instead of creating a new one here.
-        return ioloop.IOLoop.current()
-
-    def setUp(self):
-        # This simulates the effect of an asyncio test harness like
-        # pytest-asyncio.
-        with ignore_deprecation():
-            try:
-                self.orig_loop = asyncio.get_event_loop()
-            except RuntimeError:
-                self.orig_loop = None  # type: ignore[assignment]
-        self.new_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.new_loop)
-        super().setUp()
-
-    def tearDown(self):
-        super().tearDown()
-        # AsyncTestCase must not affect the existing asyncio loop.
-        self.assertFalse(asyncio.get_event_loop().is_closed())
-        asyncio.set_event_loop(self.orig_loop)
-        self.new_loop.close()
-
-    def test_loop(self):
-        self.assertIs(self.io_loop.asyncio_loop, self.new_loop)  # type: ignore
 
 
 if __name__ == "__main__":

@@ -74,19 +74,6 @@ def _atexit_callback() -> None:
 
 atexit.register(_atexit_callback)
 
-if sys.version_info >= (3, 10):
-
-    def _get_event_loop() -> asyncio.AbstractEventLoop:
-        try:
-            return asyncio.get_running_loop()
-        except RuntimeError:
-            pass
-
-        return asyncio.get_event_loop_policy().get_event_loop()
-
-else:
-    from asyncio import get_event_loop as _get_event_loop
-
 
 class BaseAsyncIOLoop(IOLoop):
     def initialize(  # type: ignore
@@ -205,15 +192,7 @@ class BaseAsyncIOLoop(IOLoop):
         handler_func(fileobj, events)
 
     def start(self) -> None:
-        try:
-            old_loop = _get_event_loop()
-        except (RuntimeError, AssertionError):
-            old_loop = None  # type: ignore
-        try:
-            asyncio.set_event_loop(self.asyncio_loop)
-            self.asyncio_loop.run_forever()
-        finally:
-            asyncio.set_event_loop(old_loop)
+        self.asyncio_loop.run_forever()
 
     def stop(self) -> None:
         self.asyncio_loop.stop()
@@ -297,7 +276,7 @@ class AsyncIOMainLoop(BaseAsyncIOLoop):
     def initialize(self, **kwargs: Any) -> None:  # type: ignore
         super().initialize(asyncio.get_event_loop(), **kwargs)
 
-    def make_current(self) -> None:
+    def _make_current(self) -> None:
         # AsyncIOMainLoop already refers to the current asyncio loop so
         # nothing to do here.
         pass
@@ -348,12 +327,7 @@ class AsyncIOLoop(BaseAsyncIOLoop):
             self._clear_current()
         super().close(all_fds=all_fds)
 
-    def make_current(self) -> None:
-        warnings.warn(
-            "make_current is deprecated; start the event loop first",
-            DeprecationWarning,
-            stacklevel=2,
-        )
+    def _make_current(self) -> None:
         if not self.is_current:
             try:
                 self.old_asyncio = asyncio.get_event_loop()
