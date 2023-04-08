@@ -91,10 +91,8 @@ from tornado import gen
 from tornado.httpserver import HTTPServer
 from tornado import httputil
 from tornado import iostream
-import tornado.locale
 from tornado import locale
 from tornado.log import access_log, app_log, gen_log
-import tornado.netutil
 from tornado import template
 from tornado.escape import utf8, _unicode
 from tornado.routing import (

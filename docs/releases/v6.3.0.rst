@@ -29,9 +29,7 @@ General changes
   version 3.11.1. 
 - Tornado submodules are now imported automatically on demand. This means it is
   now possible to use a single ``import tornado`` statement and refer to objects
-  in submodules such as `tornado.web.RequestHandler`. Note that this automatic
-  import is not currently compatible with type checkers such as mypy, so users
-  of these tools may still wish to import the submodules explicitly.
+  in submodules such as `tornado.web.RequestHandler`.
 
 Deprecation notices
 ~~~~~~~~~~~~~~~~~~~

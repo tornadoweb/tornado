@@ -18,7 +18,7 @@ import hashlib
 import os
 import sys
 import struct
-import tornado.web
+import tornado
 from urllib.parse import urlparse
 import zlib
 

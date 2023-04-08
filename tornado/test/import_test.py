@@ -57,9 +57,7 @@ class ImportTest(unittest.TestCase):
 
     def test_import_aliases(self):
         # Ensure we don't delete formerly-documented aliases accidentally.
-        import tornado.ioloop
-        import tornado.gen
-        import tornado.util
+        import tornado
         import asyncio
 
         self.assertIs(tornado.ioloop.TimeoutError, tornado.util.TimeoutError)
