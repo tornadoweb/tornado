@@ -94,7 +94,7 @@ Deprecation notices
 
 - It is now much faster (no longer quadratic) to receive large messages that
   have been split into many fragments.
-- `.WebSocketClientConnection` now accepts a ``resolver`` parameter.
+- `.websocket_connect` now accepts a ``resolver`` parameter.
 
 ``tornado.wsgi``
 ~~~~~~~~~~~~~~~~

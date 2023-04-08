@@ -1589,6 +1589,7 @@ def websocket_connect(
     ping_timeout: Optional[float] = None,
     max_message_size: int = _default_max_message_size,
     subprotocols: Optional[List[str]] = None,
+    resolver: Optional[Resolver] = None,
 ) -> "Awaitable[WebSocketClientConnection]":
     """Client-side websocket support.
 
@@ -1632,6 +1633,9 @@ def websocket_connect(
 
     .. versionchanged:: 5.1
        Added the ``subprotocols`` argument.
+
+    .. versionchanged:: 6.3
+       Added the ``resolver`` argument.
     """
     if isinstance(url, httpclient.HTTPRequest):
         assert connect_timeout is None
@@ -1653,6 +1657,7 @@ def websocket_connect(
         ping_timeout=ping_timeout,
         max_message_size=max_message_size,
         subprotocols=subprotocols,
+        resolver=resolver,
     )
     if callback is not None:
         IOLoop.current().add_future(conn.connect_future, callback)
