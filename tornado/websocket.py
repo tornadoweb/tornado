@@ -1,16 +1,11 @@
 """Implementation of the WebSocket protocol.
 
 `WebSockets <http://dev.w3.org/html5/websockets/>`_ allow for bidirectional
-communication between the browser and server.
-
-WebSockets are supported in the current versions of all major browsers,
-although older versions that do not support WebSockets are still in use
-(refer to http://caniuse.com/websockets for details).
+communication between the browser and server. WebSockets are supported in the
+current versions of all major browsers.
 
 This module implements the final version of the WebSocket protocol as
-defined in `RFC 6455 <http://tools.ietf.org/html/rfc6455>`_.  Certain
-browser versions (notably Safari 5.x) implemented an earlier draft of
-the protocol (known as "draft 76") and are not compatible with this module.
+defined in `RFC 6455 <http://tools.ietf.org/html/rfc6455>`_.
 
 .. versionchanged:: 4.0
    Removed support for the draft 76 protocol version.
