@@ -129,6 +129,7 @@ missing_references = {
     "tornado.ioloop._S",
     "tornado.ioloop._T",
     "tornado.ioloop._Selectable",
+    "tornado.iostream._IOStreamType",
     "tornado.locks._ReleasingContextManager",
     "tornado.queues._T",
     "tornado.options._Mockable",
