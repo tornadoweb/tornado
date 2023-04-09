@@ -20,7 +20,7 @@ env:
 jobs:
   build_sdist:
     name: Build sdist
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
@@ -33,7 +33,7 @@ jobs:
       - name: Build sdist
         run: "python setup.py sdist && ls -l dist"
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           path: ./dist/tornado-*.tar.gz
 
@@ -43,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04, windows-2019, macos-10.15]
+        os: [ubuntu-22.04, windows-2022, macos-12]
 
     steps:
       - uses: actions/checkout@v3
@@ -58,19 +58,19 @@ jobs:
           platforms: all
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.6.1
+        uses: pypa/cibuildwheel@v2.12.1
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           path: ./wheelhouse/*.whl
 
   upload_pypi_test:
     name: Upload to PyPI (test)
     needs: [build_wheels, build_sdist]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     if: github.event_name == 'push' && startsWith(github.ref_name, 'build-workflow')
     steps:
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v3
         with:
           name: artifact
           path: dist
@@ -85,10 +85,10 @@ jobs:
   upload_pypi:
     name: Upload to PyPI (prod)
     needs: [build_wheels, build_sdist]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
     steps:
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v3
         with:
           name: artifact
           path: dist
