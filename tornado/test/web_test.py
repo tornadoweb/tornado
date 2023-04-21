@@ -17,6 +17,7 @@ from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
+from tornado.test.util import ignore_deprecation
 from tornado.util import ObjectDict, unicode_type
 from tornado.web import (
     Application,
@@ -318,6 +319,11 @@ class CookieTest(WebTestCase):
                 self.set_cookie("c", "1", httponly=True)
                 self.set_cookie("d", "1", httponly=False)
 
+        class SetCookieDeprecatedArgs(RequestHandler):
+            def get(self):
+                # Mixed case is supported, but deprecated
+                self.set_cookie("a", "b", HttpOnly=True, pATH="/foo")
+
         return [
             ("/set", SetCookieHandler),
             ("/get", GetCookieHandler),
@@ -327,6 +333,7 @@ class CookieTest(WebTestCase):
             ("/set_max_age", SetCookieMaxAgeHandler),
             ("/set_expires_days", SetCookieExpiresDaysHandler),
             ("/set_falsy_flags", SetCookieFalsyFlags),
+            ("/set_deprecated", SetCookieDeprecatedArgs),
         ]
 
     def test_set_cookie(self):
@@ -412,6 +419,12 @@ class CookieTest(WebTestCase):
         self.assertEqual(headers[1].lower(), "b=1; path=/")
         self.assertEqual(headers[2].lower(), "c=1; httponly; path=/")
         self.assertEqual(headers[3].lower(), "d=1; path=/")
+
+    def test_set_cookie_deprecated(self):
+        with ignore_deprecation():
+            response = self.fetch("/set_deprecated")
+        header = response.headers.get("Set-Cookie")
+        self.assertEqual(header, "a=b; HttpOnly; Path=/foo")
 
 
 class AuthRedirectRequestHandler(RequestHandler):

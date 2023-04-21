@@ -1,0 +1,12 @@
+What's new in Tornado 6.3.1
+===========================
+
+Apr 21, 2023
+------------
+
+``tornado.web``
+~~~~~~~~~~~~~~~
+
+- `.RequestHandler.set_cookie` once again accepts capitalized keyword arguments
+  for backwards compatibility. This is deprecated and in Tornado 7.0 only lowercase
+  arguments will be accepted. 
