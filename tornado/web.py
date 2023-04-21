@@ -79,6 +79,7 @@ import socket
 import sys
 import threading
 import time
+import warnings
 import tornado
 import traceback
 import types
@@ -607,6 +608,7 @@ class RequestHandler(object):
         httponly: bool = False,
         secure: bool = False,
         samesite: Optional[str] = None,
+        **kwargs: Any,
     ) -> None:
         """Sets an outgoing cookie name/value with the given options.
 
@@ -623,6 +625,10 @@ class RequestHandler(object):
         to set an expiration time in days from today (if both are set, ``expires``
         is used).
 
+        .. deprecated:: 6.3
+           Keyword arguments are currently accepted case-insensitively.
+           In Tornado 7.0 this will be changed to only accept lowercase
+           arguments.
         """
         # The cookie library only accepts type str, in both python 2 and 3
         name = escape.native_str(name)
@@ -657,6 +663,17 @@ class RequestHandler(object):
             morsel["secure"] = True
         if samesite:
             morsel["samesite"] = samesite
+        if kwargs:
+            # The setitem interface is case-insensitive, so continue to support
+            # kwargs for backwards compatibility until we can remove deprecated
+            # features.
+            for k, v in kwargs.items():
+                morsel[k] = v
+            warnings.warn(
+                f"Deprecated arguments to set_cookie: {set(kwargs.keys())} "
+                "(should be lowercase)",
+                DeprecationWarning,
+            )
 
     def clear_cookie(self, name: str, **kwargs: Any) -> None:
         """Deletes the cookie with the given name.
