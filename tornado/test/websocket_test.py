@@ -807,6 +807,7 @@ class ClientPeriodicPingTest(WebSocketBaseTestCase):
             response = yield ws.read_message()
             self.assertEqual(response, "got ping")
         # TODO: test that the connection gets closed if ping responses stop.
+        ws.close()
 
 
 class ManualPingTest(WebSocketBaseTestCase):
