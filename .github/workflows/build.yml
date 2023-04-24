@@ -68,7 +68,7 @@ jobs:
     name: Upload to PyPI (test)
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-22.04
-    if: github.event_name == 'push' && startsWith(github.ref_name, 'build-workflow')
+    if: github.repository == 'tornadoweb/tornado' && github.event_name == 'push' && startsWith(github.ref_name, 'build-workflow')
     steps:
       - uses: actions/download-artifact@v3
         with:
@@ -86,7 +86,7 @@ jobs:
     name: Upload to PyPI (prod)
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-22.04
-    if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+    if: github.repository == 'tornadoweb/tornado' && github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
     steps:
       - uses: actions/download-artifact@v3
         with:
