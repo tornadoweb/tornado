@@ -1271,7 +1271,7 @@ class StaticFileTest(WebTestCase):
         # to ``Range: bytes=0-`` :(
         self.assertEqual(response.code, 200)
         robots_file_path = os.path.join(self.static_dir, "robots.txt")
-        with open(robots_file_path) as f:
+        with open(robots_file_path, encoding="utf-8") as f:
             self.assertEqual(response.body, utf8(f.read()))
         self.assertEqual(response.headers.get("Content-Length"), "26")
         self.assertEqual(response.headers.get("Content-Range"), None)
@@ -1282,7 +1282,7 @@ class StaticFileTest(WebTestCase):
         )
         self.assertEqual(response.code, 200)
         robots_file_path = os.path.join(self.static_dir, "robots.txt")
-        with open(robots_file_path) as f:
+        with open(robots_file_path, encoding="utf-8") as f:
             self.assertEqual(response.body, utf8(f.read()))
         self.assertEqual(response.headers.get("Content-Length"), "26")
         self.assertEqual(response.headers.get("Content-Range"), None)
@@ -1293,7 +1293,7 @@ class StaticFileTest(WebTestCase):
         )
         self.assertEqual(response.code, 206)
         robots_file_path = os.path.join(self.static_dir, "robots.txt")
-        with open(robots_file_path) as f:
+        with open(robots_file_path, encoding="utf-8") as f:
             self.assertEqual(response.body, utf8(f.read()[1:]))
         self.assertEqual(response.headers.get("Content-Length"), "25")
         self.assertEqual(response.headers.get("Content-Range"), "bytes 1-25/26")
@@ -1320,7 +1320,7 @@ class StaticFileTest(WebTestCase):
         )
         self.assertEqual(response.code, 200)
         robots_file_path = os.path.join(self.static_dir, "robots.txt")
-        with open(robots_file_path) as f:
+        with open(robots_file_path, encoding="utf-8") as f:
             self.assertEqual(response.body, utf8(f.read()))
         self.assertEqual(response.headers.get("Content-Length"), "26")
         self.assertEqual(response.headers.get("Content-Range"), None)

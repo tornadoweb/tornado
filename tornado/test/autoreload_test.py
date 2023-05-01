@@ -43,8 +43,12 @@ if 'TESTAPP_STARTED' not in os.environ:
 
         # Create temporary test application
         os.mkdir(os.path.join(self.path, "testapp"))
-        open(os.path.join(self.path, "testapp/__init__.py"), "w").close()
-        with open(os.path.join(self.path, "testapp/__main__.py"), "w") as f:
+        open(
+            os.path.join(self.path, "testapp/__init__.py"), "w", encoding="utf-8"
+        ).close()
+        with open(
+            os.path.join(self.path, "testapp/__main__.py"), "w", encoding="utf-8"
+        ) as f:
             f.write(main)
 
         # Make sure the tornado module under test is available to the test
@@ -59,6 +63,7 @@ if 'TESTAPP_STARTED' not in os.environ:
             cwd=self.path,
             env=dict(os.environ, PYTHONPATH=pythonpath),
             universal_newlines=True,
+            encoding="utf-8",
         )
         out = p.communicate()[0]
         self.assertEqual(out, "Starting\nStarting\n")
@@ -94,9 +99,9 @@ else:
         # Create temporary test application
         os.mkdir(os.path.join(self.path, "testapp"))
         init_file = os.path.join(self.path, "testapp", "__init__.py")
-        open(init_file, "w").close()
+        open(init_file, "w", encoding="utf-8").close()
         main_file = os.path.join(self.path, "testapp", "__main__.py")
-        with open(main_file, "w") as f:
+        with open(main_file, "w", encoding="utf-8") as f:
             f.write(main)
 
         # Make sure the tornado module under test is available to the test
@@ -111,6 +116,7 @@ else:
             cwd=self.path,
             env=dict(os.environ, PYTHONPATH=pythonpath),
             universal_newlines=True,
+            encoding="utf-8",
         )
 
         # This timeout needs to be fairly generous for pypy due to jit
