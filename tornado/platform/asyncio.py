@@ -239,6 +239,7 @@ class BaseAsyncIOLoop(IOLoop):
     def add_callback_from_signal(
         self, callback: Callable, *args: Any, **kwargs: Any
     ) -> None:
+        warnings.warn("add_callback_from_signal is deprecated", DeprecationWarning)
         try:
             self.asyncio_loop.call_soon_threadsafe(
                 self._run_callback, functools.partial(callback, *args, **kwargs)
