@@ -632,9 +632,6 @@ class IOLoop(Configurable):
         other interaction with the `IOLoop` must be done from that
         `IOLoop`'s thread.  `add_callback()` may be used to transfer
         control from other threads to the `IOLoop`'s thread.
-
-        To add a callback from a signal handler, see
-        `add_callback_from_signal`.
         """
         raise NotImplementedError()
 
@@ -643,8 +640,13 @@ class IOLoop(Configurable):
     ) -> None:
         """Calls the given callback on the next I/O loop iteration.
 
-        Safe for use from a Python signal handler; should not be used
-        otherwise.
+        Intended to be afe for use from a Python signal handler; should not be
+        used otherwise.
+
+        .. deprecated:: 6.4
+           Use ``asyncio.AbstractEventLoop.add_signal_handler`` instead.
+           This method is suspected to have been broken since Tornado 5.0 and
+           will be removed in version 7.0.
         """
         raise NotImplementedError()
 

@@ -14,18 +14,11 @@
 # % sort time
 # % stats 20
 
-from tornado.ioloop import IOLoop
 from tornado.options import define, options, parse_command_line
 from tornado.web import RequestHandler, Application
 
+import asyncio
 import random
-import signal
-import subprocess
-
-try:
-    xrange
-except NameError:
-    xrange = range
 
 # choose a random port to avoid colliding with TIME_WAIT sockets left over
 # from previous runs.
@@ -44,8 +37,6 @@ define("quiet", type=bool, default=False)
 # --n=15000 for its JIT to reach full effectiveness
 define("num_runs", type=int, default=1)
 
-define("ioloop", type=str, default=None)
-
 
 class RootHandler(RequestHandler):
     def get(self):
@@ -55,24 +46,16 @@ class RootHandler(RequestHandler):
         pass
 
 
-def handle_sigchld(sig, frame):
-    IOLoop.current().add_callback_from_signal(IOLoop.current().stop)
-
-
 def main():
     parse_command_line()
-    if options.ioloop:
-        IOLoop.configure(options.ioloop)
-    for i in xrange(options.num_runs):
-        run()
+    for i in range(options.num_runs):
+        asyncio.run(run())
 
 
-def run():
-    io_loop = IOLoop(make_current=True)
+async def run():
     app = Application([("/", RootHandler)])
     port = random.randrange(options.min_port, options.max_port)
-    app.listen(port, address='127.0.0.1')
-    signal.signal(signal.SIGCHLD, handle_sigchld)
+    app.listen(port, address="127.0.0.1")
     args = ["ab"]
     args.extend(["-n", str(options.n)])
     args.extend(["-c", str(options.c)])
@@ -82,11 +65,9 @@ def run():
         # just stops the progress messages printed to stderr
         args.append("-q")
     args.append("http://127.0.0.1:%d/" % port)
-    subprocess.Popen(args)
-    io_loop.start()
-    io_loop.close()
-    io_loop.clear_current()
+    proc = await asyncio.create_subprocess_exec(*args)
+    await proc.wait()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
