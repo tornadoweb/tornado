@@ -7,12 +7,15 @@ name: Build
 on:
   push:
     branches:
-      # Run on release branches.
+      # Run on release branches. This gives us a chance to detect rot in this
+      # configuration before pushing a tag (which we'd rather not have to undo).
       - "branch[0-9]*"
-      # Also run on certain other branches for testing.
-      - "build-workflow*"
     tags:
+      # The main purpose of this workflow is to build wheels for release tags.
+      # It runs automatically on tags matching this pattern and pushes to pypi.
       - "v*"
+  workflow_dispatch:
+    # Allow this workflow to be run manually (pushing to testpypi instead of pypi)
 
 env:
   python-version: '3.9'
@@ -68,7 +71,7 @@ jobs:
     name: Upload to PyPI (test)
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-22.04
-    if: github.repository == 'tornadoweb/tornado' && github.event_name == 'push' && startsWith(github.ref_name, 'build-workflow')
+    if: github.repository == 'tornadoweb/tornado' && github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/download-artifact@v3
         with:
