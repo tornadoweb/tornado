@@ -1,4 +1,3 @@
-recursive-include demos *.py *.yaml *.html *.css *.js *.xml *.sql README
 recursive-include docs *
 prune docs/build
 include tornado/py.typed
@@ -19,4 +18,7 @@ include tornado/test/test.crt
 include tornado/test/test.key
 include LICENSE
 include README.rst
+include requirements.in
+include requirements.txt
 include runtests.sh
+include tox.ini
