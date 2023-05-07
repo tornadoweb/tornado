@@ -20,6 +20,7 @@ import sys
 import struct
 import tornado
 from urllib.parse import urlparse
+import warnings
 import zlib
 
 from tornado.concurrent import Future, future_set_result_unless_cancelled
@@ -1409,6 +1410,15 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             65536,
             104857600,
         )
+
+    def __del__(self) -> None:
+        if self.protocol is not None:
+            # Unclosed client connections can sometimes log "task was destroyed but
+            # was pending" warnings if shutdown strikes at the wrong time (such as
+            # while a ping is being processed due to ping_interval). Log our own
+            # warning to make it a little more deterministic (although it's still
+            # dependent on GC timing).
+            warnings.warn("Unclosed WebSocketClientConnection", ResourceWarning)
 
     def close(self, code: Optional[int] = None, reason: Optional[str] = None) -> None:
         """Closes the websocket connection.
