@@ -1,0 +1,11 @@
+What's new in Tornado 6.3.2
+===========================
+
+May 13, 2023
+------------
+
+Security improvements
+~~~~~~~~~~~~~~~~~~~~~
+
+- Fixed an open redirect vulnerability in StaticFileHandler under certain
+  configurations.
