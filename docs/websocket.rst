@@ -3,7 +3,7 @@
 
 .. testsetup::
 
-   import tornado.websocket
+   import tornado
 
 .. automodule:: tornado.websocket
 

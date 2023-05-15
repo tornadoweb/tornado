@@ -56,7 +56,7 @@ Your ``main()`` method can parse the command line or parse a config file with
 either `parse_command_line` or `parse_config_file`::
 
     import myapp.db, myapp.server
-    import tornado.options
+    import tornado
 
     if __name__ == '__main__':
         tornado.options.parse_command_line()
@@ -85,6 +85,12 @@ instances to define isolated sets of options, such as for subcommands.
        from tornado.options import options, parse_command_line
        options.logging = None
        parse_command_line()
+
+.. note::
+
+   `parse_command_line` or `parse_config_file` function should called after
+   logging configuration and user-defined command line flags using the
+   ``callback`` option definition, or these configurations will not take effect.
 
 .. versionchanged:: 4.3
    Dashes and underscores are fully interchangeable in option names;
@@ -421,7 +427,9 @@ class OptionParser(object):
                             % (option.name, option.type.__name__)
                         )
 
-                if type(config[name]) == str and option.type != str:
+                if type(config[name]) == str and (
+                    option.type != str or option.multiple
+                ):
                     option.parse(config[name])
                 else:
                     option.set(config[name])

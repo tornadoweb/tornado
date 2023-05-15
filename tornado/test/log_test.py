@@ -49,8 +49,8 @@ class LogFormatterTest(unittest.TestCase):
         # variable when the tests are run, so just patch in some values
         # for testing.  (testing with color off fails to expose some potential
         # encoding issues from the control characters)
-        self.formatter._colors = {logging.ERROR: u"\u0001"}
-        self.formatter._normal = u"\u0002"
+        self.formatter._colors = {logging.ERROR: "\u0001"}
+        self.formatter._normal = "\u0002"
         # construct a Logger directly to bypass getLogger's caching
         self.logger = logging.Logger("LogFormatterTest")
         self.logger.propagate = False
@@ -66,11 +66,7 @@ class LogFormatterTest(unittest.TestCase):
         os.rmdir(self.tempdir)
 
     def make_handler(self, filename):
-        # Base case: default setup without explicit encoding.
-        # In python 2, supports arbitrary byte strings and unicode objects
-        # that contain only ascii.  In python 3, supports ascii-only unicode
-        # strings (but byte strings will be repr'd automatically).
-        return logging.FileHandler(filename)
+        return logging.FileHandler(filename, encoding="utf-8")
 
     def get_output(self):
         with open(self.filename, "rb") as f:
@@ -93,16 +89,16 @@ class LogFormatterTest(unittest.TestCase):
 
     def test_utf8_logging(self):
         with ignore_bytes_warning():
-            self.logger.error(u"\u00e9".encode("utf8"))
+            self.logger.error("\u00e9".encode("utf8"))
         if issubclass(bytes, basestring_type):
             # on python 2, utf8 byte strings (and by extension ascii byte
             # strings) are passed through as-is.
-            self.assertEqual(self.get_output(), utf8(u"\u00e9"))
+            self.assertEqual(self.get_output(), utf8("\u00e9"))
         else:
             # on python 3, byte strings always get repr'd even if
             # they're ascii-only, so this degenerates into another
             # copy of test_bytes_logging.
-            self.assertEqual(self.get_output(), utf8(repr(utf8(u"\u00e9"))))
+            self.assertEqual(self.get_output(), utf8(repr(utf8("\u00e9"))))
 
     def test_bytes_exception_logging(self):
         try:
@@ -112,21 +108,13 @@ class LogFormatterTest(unittest.TestCase):
         # This will be "Exception: \xe9" on python 2 or
         # "Exception: b'\xe9'" on python 3.
         output = self.get_output()
-        self.assertRegexpMatches(output, br"Exception.*\\xe9")
+        self.assertRegex(output, rb"Exception.*\\xe9")
         # The traceback contains newlines, which should not have been escaped.
-        self.assertNotIn(br"\n", output)
-
-
-class UnicodeLogFormatterTest(LogFormatterTest):
-    def make_handler(self, filename):
-        # Adding an explicit encoding configuration allows non-ascii unicode
-        # strings in both python 2 and 3, without changing the behavior
-        # for byte strings.
-        return logging.FileHandler(filename, encoding="utf8")
+        self.assertNotIn(rb"\n", output)
 
     def test_unicode_logging(self):
-        self.logger.error(u"\u00e9")
-        self.assertEqual(self.get_output(), utf8(u"\u00e9"))
+        self.logger.error("\u00e9")
+        self.assertEqual(self.get_output(), utf8("\u00e9"))
 
 
 class EnablePrettyLoggingTest(unittest.TestCase):
@@ -147,8 +135,8 @@ class EnablePrettyLoggingTest(unittest.TestCase):
             self.logger.handlers[0].flush()
             filenames = glob.glob(tmpdir + "/test_log*")
             self.assertEqual(1, len(filenames))
-            with open(filenames[0]) as f:
-                self.assertRegexpMatches(f.read(), r"^\[E [^]]*\] hello$")
+            with open(filenames[0], encoding="utf-8") as f:
+                self.assertRegex(f.read(), r"^\[E [^]]*\] hello$")
         finally:
             for handler in self.logger.handlers:
                 handler.flush()
@@ -167,8 +155,8 @@ class EnablePrettyLoggingTest(unittest.TestCase):
             self.logger.handlers[0].flush()
             filenames = glob.glob(tmpdir + "/test_log*")
             self.assertEqual(1, len(filenames))
-            with open(filenames[0]) as f:
-                self.assertRegexpMatches(f.read(), r"^\[E [^]]*\] hello$")
+            with open(filenames[0], encoding="utf-8") as f:
+                self.assertRegex(f.read(), r"^\[E [^]]*\] hello$")
         finally:
             for handler in self.logger.handlers:
                 handler.flush()

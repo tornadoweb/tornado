@@ -139,16 +139,21 @@ class SetHeaderHandler(RequestHandler):
 
 
 class InvalidGzipHandler(RequestHandler):
-    def get(self):
+    def get(self) -> None:
         # set Content-Encoding manually to avoid automatic gzip encoding
         self.set_header("Content-Type", "text/plain")
         self.set_header("Content-Encoding", "gzip")
         # Triggering the potential bug seems to depend on input length.
         # This length is taken from the bad-response example reported in
         # https://github.com/tornadoweb/tornado/pull/2875 (uncompressed).
-        body = "".join("Hello World {}\n".format(i) for i in range(9000))[:149051]
-        body = gzip.compress(body.encode(), compresslevel=6) + b"\00"
+        text = "".join("Hello World {}\n".format(i) for i in range(9000))[:149051]
+        body = gzip.compress(text.encode(), compresslevel=6) + b"\00"
         self.write(body)
+
+
+class HeaderEncodingHandler(RequestHandler):
+    def get(self):
+        self.finish(self.request.headers["Foo"].encode("ISO8859-1"))
 
 
 # These tests end up getting run redundantly: once here with the default
@@ -175,6 +180,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
                 url("/patch", PatchHandler),
                 url("/set_header", SetHeaderHandler),
                 url("/invalid_gzip", InvalidGzipHandler),
+                url("/header-encoding", HeaderEncodingHandler),
             ],
             gzip=True,
         )
@@ -285,7 +291,7 @@ Transfer-Encoding: chunked
 
         # The standard mandates NFC. Give it a decomposed username
         # and ensure it is normalized to composed form.
-        username = unicodedata.normalize("NFD", u"josé")
+        username = unicodedata.normalize("NFD", "josé")
         self.assertEqual(
             self.fetch("/auth", auth_username=username, auth_password="səcrət").body,
             b"Basic am9zw6k6c8mZY3LJmXQ=",
@@ -374,7 +380,7 @@ Transfer-Encoding: chunked
         self.assertEqual(b"Basic " + base64.b64encode(b"me:secret"), response.body)
 
     def test_body_encoding(self):
-        unicode_body = u"\xe9"
+        unicode_body = "\xe9"
         byte_body = binascii.a2b_hex(b"e9")
 
         # unicode string in body gets converted to utf8
@@ -404,7 +410,7 @@ Transfer-Encoding: chunked
             method="POST",
             body=byte_body,
             headers={"Content-Type": "application/blah"},
-            user_agent=u"foo",
+            user_agent="foo",
         )
         self.assertEqual(response.headers["Content-Length"], "1")
         self.assertEqual(response.body, byte_body)
@@ -474,7 +480,7 @@ Transfer-Encoding: chunked
             streaming_callback=streaming_callback,
         )
         self.assertEqual(len(first_line), 1, first_line)
-        self.assertRegexpMatches(first_line[0], "HTTP/[0-9]\\.[0-9] 200.*\r\n")
+        self.assertRegex(first_line[0], "HTTP/[0-9]\\.[0-9] 200.*\r\n")
         self.assertEqual(chunks, [b"asdf", b"qwer"])
 
     @gen_test
@@ -493,7 +499,7 @@ Transfer-Encoding: chunked
         # in a plain dictionary or an HTTPHeaders object.
         # Keys must always be the native str type.
         # All combinations should have the same results on the wire.
-        for value in [u"MyUserAgent", b"MyUserAgent"]:
+        for value in ["MyUserAgent", b"MyUserAgent"]:
             for container in [dict, HTTPHeaders]:
                 headers = container()
                 headers["User-Agent"] = value
@@ -536,6 +542,16 @@ X-XSS-Protection: 1;
                 self.assertEqual(resp.headers["X-XSS-Protection"], "1; mode=block")
             finally:
                 self.io_loop.remove_handler(sock.fileno())
+
+    @gen_test
+    def test_header_encoding(self):
+        response = yield self.http_client.fetch(
+            self.get_url("/header-encoding"),
+            headers={
+                "Foo": "b\xe4r",
+            },
+        )
+        self.assertEqual(response.body, "b\xe4r".encode("ISO8859-1"))
 
     def test_304_with_content_length(self):
         # According to the spec 304 responses SHOULD NOT include
@@ -665,7 +681,7 @@ X-XSS-Protection: 1;
         # Non-ascii headers are sent as latin1.
         response = self.fetch("/set_header?k=foo&v=%E9")
         response.rethrow()
-        self.assertEqual(response.headers["Foo"], native_str(u"\u00e9"))
+        self.assertEqual(response.headers["Foo"], native_str("\u00e9"))
 
     def test_response_times(self):
         # A few simple sanity checks of the response time fields to
@@ -674,6 +690,7 @@ X-XSS-Protection: 1;
         start_time = time.time()
         response = self.fetch("/hello")
         response.rethrow()
+        assert response.request_time is not None
         self.assertGreaterEqual(response.request_time, 0)
         self.assertLess(response.request_time, 1.0)
         # A very crude check to make sure that start_time is based on
@@ -754,7 +771,7 @@ class HTTPResponseTestCase(unittest.TestCase):
 
 class SyncHTTPClientTest(unittest.TestCase):
     def setUp(self):
-        self.server_ioloop = IOLoop()
+        self.server_ioloop = IOLoop(make_current=False)
         event = threading.Event()
 
         @gen.coroutine

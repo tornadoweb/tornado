@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
-from tornado.ioloop import IOLoop
-from tornado import gen
+import asyncio
 from tornado.tcpclient import TCPClient
 from tornado.options import options, define
 
@@ -10,15 +9,14 @@ define("port", default=9888, help="TCP port to connect to")
 define("message", default="ping", help="Message to send")
 
 
-@gen.coroutine
-def send_message():
-    stream = yield TCPClient().connect(options.host, options.port)
-    yield stream.write((options.message + "\n").encode())
+async def send_message():
+    stream = await TCPClient().connect(options.host, options.port)
+    await stream.write((options.message + "\n").encode())
     print("Sent to server:", options.message)
-    reply = yield stream.read_until(b"\n")
+    reply = await stream.read_until(b"\n")
     print("Response from server:", reply.decode().strip())
 
 
 if __name__ == "__main__":
     options.parse_command_line()
-    IOLoop.current().run_sync(send_message)
+    asyncio.run(send_message())

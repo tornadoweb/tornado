@@ -84,6 +84,35 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     supported.  In particular, proxies are not supported, connections
     are not reused, and callers cannot select the network interface to be
     used.
+
+    This implementation supports the following arguments, which can be passed
+    to ``configure()`` to control the global singleton, or to the constructor
+    when ``force_instance=True``.
+
+    ``max_clients`` is the number of concurrent requests that can be
+    in progress; when this limit is reached additional requests will be
+    queued. Note that time spent waiting in this queue still counts
+    against the ``request_timeout``.
+
+    ``defaults`` is a dict of parameters that will be used as defaults on all
+    `.HTTPRequest` objects submitted to this client.
+
+    ``hostname_mapping`` is a dictionary mapping hostnames to IP addresses.
+    It can be used to make local DNS changes when modifying system-wide
+    settings like ``/etc/hosts`` is not possible or desirable (e.g. in
+    unittests). ``resolver`` is similar, but using the `.Resolver` interface
+    instead of a simple mapping.
+
+    ``max_buffer_size`` (default 100MB) is the number of bytes
+    that can be read into memory at once. ``max_body_size``
+    (defaults to ``max_buffer_size``) is the largest response body
+    that the client will accept.  Without a
+    ``streaming_callback``, the smaller of these two limits
+    applies; with a ``streaming_callback`` only ``max_body_size``
+    does.
+
+    .. versionchanged:: 4.2
+        Added the ``max_body_size`` argument.
     """
 
     def initialize(  # type: ignore
@@ -96,38 +125,6 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         max_header_size: Optional[int] = None,
         max_body_size: Optional[int] = None,
     ) -> None:
-        """Creates a AsyncHTTPClient.
-
-        Only a single AsyncHTTPClient instance exists per IOLoop
-        in order to provide limitations on the number of pending connections.
-        ``force_instance=True`` may be used to suppress this behavior.
-
-        Note that because of this implicit reuse, unless ``force_instance``
-        is used, only the first call to the constructor actually uses
-        its arguments. It is recommended to use the ``configure`` method
-        instead of the constructor to ensure that arguments take effect.
-
-        ``max_clients`` is the number of concurrent requests that can be
-        in progress; when this limit is reached additional requests will be
-        queued. Note that time spent waiting in this queue still counts
-        against the ``request_timeout``.
-
-        ``hostname_mapping`` is a dictionary mapping hostnames to IP addresses.
-        It can be used to make local DNS changes when modifying system-wide
-        settings like ``/etc/hosts`` is not possible or desirable (e.g. in
-        unittests).
-
-        ``max_buffer_size`` (default 100MB) is the number of bytes
-        that can be read into memory at once. ``max_body_size``
-        (defaults to ``max_buffer_size``) is the largest response body
-        that the client will accept.  Without a
-        ``streaming_callback``, the smaller of these two limits
-        applies; with a ``streaming_callback`` only ``max_body_size``
-        does.
-
-        .. versionchanged:: 4.2
-           Added the ``max_body_size`` argument.
-        """
         super().initialize(defaults=defaults)
         self.max_clients = max_clients
         self.queue = (
@@ -550,7 +547,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         value: Optional[BaseException],
         tb: Optional[TracebackType],
     ) -> bool:
-        if self.final_callback:
+        if self.final_callback is not None:
             self._remove_timeout()
             if isinstance(value, StreamClosedError):
                 if value.real_error is None:

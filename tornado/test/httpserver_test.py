@@ -181,7 +181,9 @@ class TLSv1Test(BaseSSLTest, SSLTestMixin):
 
 class SSLContextTest(BaseSSLTest, SSLTestMixin):
     def get_ssl_options(self):
-        context = ssl_options_to_context(AsyncHTTPSTestCase.get_ssl_options(self))
+        context = ssl_options_to_context(
+            AsyncHTTPSTestCase.get_ssl_options(self), server_side=True
+        )
         assert isinstance(context, ssl.SSLContext)
         return context
 
@@ -279,23 +281,23 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
                 [
                     b"Content-Disposition: form-data; name=argument",
                     b"",
-                    u"\u00e1".encode("utf-8"),
+                    "\u00e1".encode("utf-8"),
                     b"--1234567890",
-                    u'Content-Disposition: form-data; name="files"; filename="\u00f3"'.encode(
+                    'Content-Disposition: form-data; name="files"; filename="\u00f3"'.encode(
                         "utf8"
                     ),
                     b"",
-                    u"\u00fa".encode("utf-8"),
+                    "\u00fa".encode("utf-8"),
                     b"--1234567890--",
                     b"",
                 ]
             ),
         )
         data = json_decode(response)
-        self.assertEqual(u"\u00e9", data["header"])
-        self.assertEqual(u"\u00e1", data["argument"])
-        self.assertEqual(u"\u00f3", data["filename"])
-        self.assertEqual(u"\u00fa", data["filebody"])
+        self.assertEqual("\u00e9", data["header"])
+        self.assertEqual("\u00e1", data["argument"])
+        self.assertEqual("\u00f3", data["filename"])
+        self.assertEqual("\u00fa", data["filebody"])
 
     def test_newlines(self):
         # We support both CRLF and bare LF as line separators.
@@ -410,17 +412,17 @@ class HTTPServerTest(AsyncHTTPTestCase):
     def test_query_string_encoding(self):
         response = self.fetch("/echo?foo=%C3%A9")
         data = json_decode(response.body)
-        self.assertEqual(data, {u"foo": [u"\u00e9"]})
+        self.assertEqual(data, {"foo": ["\u00e9"]})
 
     def test_empty_query_string(self):
         response = self.fetch("/echo?foo=&foo=")
         data = json_decode(response.body)
-        self.assertEqual(data, {u"foo": [u"", u""]})
+        self.assertEqual(data, {"foo": ["", ""]})
 
     def test_empty_post_parameters(self):
         response = self.fetch("/echo", method="POST", body="foo=&bar=")
         data = json_decode(response.body)
-        self.assertEqual(data, {u"foo": [u""], u"bar": [u""]})
+        self.assertEqual(data, {"foo": [""], "bar": [""]})
 
     def test_types(self):
         headers = {"Cookie": "foo=bar"}
@@ -530,7 +532,7 @@ bar
         start_line, headers, response = self.io_loop.run_sync(
             lambda: read_stream_body(self.stream)
         )
-        self.assertEqual(json_decode(response), {u"foo": [u"bar"]})
+        self.assertEqual(json_decode(response), {"foo": ["bar"]})
 
     def test_chunked_request_uppercase(self):
         # As per RFC 2616 section 3.6, "Transfer-Encoding" header's value is
@@ -554,7 +556,7 @@ bar
         start_line, headers, response = self.io_loop.run_sync(
             lambda: read_stream_body(self.stream)
         )
-        self.assertEqual(json_decode(response), {u"foo": [u"bar"]})
+        self.assertEqual(json_decode(response), {"foo": ["bar"]})
 
     @gen_test
     def test_invalid_content_length(self):
@@ -752,7 +754,7 @@ class UnixSocketTest(AsyncTestCase):
     def test_unix_socket_bad_request(self):
         # Unix sockets don't have remote addresses so they just return an
         # empty string.
-        with ExpectLog(gen_log, "Malformed HTTP message from"):
+        with ExpectLog(gen_log, "Malformed HTTP message from", level=logging.INFO):
             self.stream.write(b"garbage\r\n\r\n")
             response = yield self.stream.read_until_close()
         self.assertEqual(response, b"HTTP/1.1 400 Bad Request\r\n\r\n")
@@ -989,7 +991,7 @@ class GzipBaseTest(AsyncHTTPTestCase):
 
     def test_uncompressed(self):
         response = self.fetch("/", method="POST", body="foo=bar")
-        self.assertEqual(json_decode(response.body), {u"foo": [u"bar"]})
+        self.assertEqual(json_decode(response.body), {"foo": ["bar"]})
 
 
 class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
@@ -998,7 +1000,22 @@ class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
 
     def test_gzip(self):
         response = self.post_gzip("foo=bar")
-        self.assertEqual(json_decode(response.body), {u"foo": [u"bar"]})
+        self.assertEqual(json_decode(response.body), {"foo": ["bar"]})
+
+    def test_gzip_case_insensitive(self):
+        # https://datatracker.ietf.org/doc/html/rfc7231#section-3.1.2.1
+        bytesio = BytesIO()
+        gzip_file = gzip.GzipFile(mode="w", fileobj=bytesio)
+        gzip_file.write(utf8("foo=bar"))
+        gzip_file.close()
+        compressed_body = bytesio.getvalue()
+        response = self.fetch(
+            "/",
+            method="POST",
+            body=compressed_body,
+            headers={"Content-Encoding": "GZIP"},
+        )
+        self.assertEqual(json_decode(response.body), {"foo": ["bar"]})
 
 
 class GzipUnsupportedTest(GzipBaseTest, AsyncHTTPTestCase):

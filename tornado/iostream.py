@@ -195,11 +195,9 @@ class _StreamBuffer(object):
                 pos += size
                 size = 0
             else:
-                # Amortized O(1) shrink for Python 2
                 pos += size
-                if len(b) <= 2 * pos:
-                    del typing.cast(bytearray, b)[:pos]
-                    pos = 0
+                del typing.cast(bytearray, b)[:pos]
+                pos = 0
                 size = 0
 
         assert size == 0
@@ -254,7 +252,6 @@ class BaseIOStream(object):
         self.max_write_buffer_size = max_write_buffer_size
         self.error = None  # type: Optional[BaseException]
         self._read_buffer = bytearray()
-        self._read_buffer_pos = 0
         self._read_buffer_size = 0
         self._user_read_buffer = False
         self._after_user_read_buffer = None  # type: Optional[bytearray]
@@ -451,21 +448,17 @@ class BaseIOStream(object):
         available_bytes = self._read_buffer_size
         n = len(buf)
         if available_bytes >= n:
-            end = self._read_buffer_pos + n
-            buf[:] = memoryview(self._read_buffer)[self._read_buffer_pos : end]
-            del self._read_buffer[:end]
+            buf[:] = memoryview(self._read_buffer)[:n]
+            del self._read_buffer[:n]
             self._after_user_read_buffer = self._read_buffer
         elif available_bytes > 0:
-            buf[:available_bytes] = memoryview(self._read_buffer)[
-                self._read_buffer_pos :
-            ]
+            buf[:available_bytes] = memoryview(self._read_buffer)[:]
 
         # Set up the supplied buffer as our temporary read buffer.
         # The original (if it had any data remaining) has been
         # saved for later.
         self._user_read_buffer = True
         self._read_buffer = buf
-        self._read_buffer_pos = 0
         self._read_buffer_size = available_bytes
         self._read_bytes = n
         self._read_partial = partial
@@ -497,7 +490,7 @@ class BaseIOStream(object):
         """
         future = self._start_read()
         if self.closed():
-            self._finish_read(self._read_buffer_size, False)
+            self._finish_read(self._read_buffer_size)
             return future
         self._read_until_close = True
         try:
@@ -595,7 +588,7 @@ class BaseIOStream(object):
                         self.error = exc_info[1]
             if self._read_until_close:
                 self._read_until_close = False
-                self._finish_read(self._read_buffer_size, False)
+                self._finish_read(self._read_buffer_size)
             elif self._read_future is not None:
                 # resolve reads that are pending and ready to complete
                 try:
@@ -812,11 +805,10 @@ class BaseIOStream(object):
         self._read_future = Future()
         return self._read_future
 
-    def _finish_read(self, size: int, streaming: bool) -> None:
+    def _finish_read(self, size: int) -> None:
         if self._user_read_buffer:
             self._read_buffer = self._after_user_read_buffer or bytearray()
             self._after_user_read_buffer = None
-            self._read_buffer_pos = 0
             self._read_buffer_size = len(self._read_buffer)
             self._user_read_buffer = False
             result = size  # type: Union[int, bytes]
@@ -904,7 +896,7 @@ class BaseIOStream(object):
         """
         self._read_bytes = self._read_delimiter = self._read_regex = None
         self._read_partial = False
-        self._finish_read(pos, False)
+        self._finish_read(pos)
 
     def _find_read_pos(self) -> Optional[int]:
         """Attempts to find a position in the read buffer that satisfies
@@ -929,20 +921,17 @@ class BaseIOStream(object):
             # since large merges are relatively expensive and get undone in
             # _consume().
             if self._read_buffer:
-                loc = self._read_buffer.find(
-                    self._read_delimiter, self._read_buffer_pos
-                )
+                loc = self._read_buffer.find(self._read_delimiter)
                 if loc != -1:
-                    loc -= self._read_buffer_pos
                     delimiter_len = len(self._read_delimiter)
                     self._check_max_bytes(self._read_delimiter, loc + delimiter_len)
                     return loc + delimiter_len
                 self._check_max_bytes(self._read_delimiter, self._read_buffer_size)
         elif self._read_regex is not None:
             if self._read_buffer:
-                m = self._read_regex.search(self._read_buffer, self._read_buffer_pos)
+                m = self._read_regex.search(self._read_buffer)
                 if m is not None:
-                    loc = m.end() - self._read_buffer_pos
+                    loc = m.end()
                     self._check_max_bytes(self._read_regex, loc)
                     return loc
                 self._check_max_bytes(self._read_regex, self._read_buffer_size)
@@ -999,19 +988,9 @@ class BaseIOStream(object):
             return b""
         assert loc <= self._read_buffer_size
         # Slice the bytearray buffer into bytes, without intermediate copying
-        b = (
-            memoryview(self._read_buffer)[
-                self._read_buffer_pos : self._read_buffer_pos + loc
-            ]
-        ).tobytes()
-        self._read_buffer_pos += loc
+        b = (memoryview(self._read_buffer)[:loc]).tobytes()
         self._read_buffer_size -= loc
-        # Amortized O(1) shrink
-        # (this heuristic is implemented natively in Python 3.4+
-        #  but is replicated here for Python 2)
-        if self._read_buffer_pos > self._read_buffer_size:
-            del self._read_buffer[: self._read_buffer_pos]
-            self._read_buffer_pos = 0
+        del self._read_buffer[:loc]
         return b
 
     def _check_closed(self) -> None:
@@ -1090,9 +1069,8 @@ class IOStream(BaseIOStream):
 
     .. testcode::
 
-        import tornado.ioloop
-        import tornado.iostream
         import socket
+        import tornado
 
         async def main():
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
@@ -1110,11 +1088,7 @@ class IOStream(BaseIOStream):
             stream.close()
 
         if __name__ == '__main__':
-            tornado.ioloop.IOLoop.current().run_sync(main)
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-            stream = tornado.iostream.IOStream(s)
-            stream.connect(("friendfeed.com", 80), send_request)
-            tornado.ioloop.IOLoop.current().start()
+            asyncio.run(main())
 
     .. testoutput::
        :hide:
@@ -1530,6 +1504,7 @@ class SSLIOStream(IOStream):
             self._ssl_options,
             server_hostname=self._server_hostname,
             do_handshake_on_connect=False,
+            server_side=False,
         )
         self._add_io_state(old_state)
 
@@ -1566,6 +1541,11 @@ class SSLIOStream(IOStream):
         return future
 
     def write_to_fd(self, data: memoryview) -> int:
+        # clip buffer size at 1GB since SSL sockets only support upto 2GB
+        # this change in behaviour is transparent, since the function is
+        # already expected to (possibly) write less than the provided buffer
+        if len(data) >> 30:
+            data = memoryview(data)[: 1 << 30]
         try:
             return self.socket.send(data)  # type: ignore
         except ssl.SSLError as e:

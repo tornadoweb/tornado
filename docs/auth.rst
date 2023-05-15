@@ -3,7 +3,7 @@
 
 .. testsetup::
 
-   import tornado.auth, tornado.gen, tornado.web
+   import tornado
 
 .. automodule:: tornado.auth
 

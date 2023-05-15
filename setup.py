@@ -17,98 +17,12 @@
 
 import os
 import platform
-import sys
-import warnings
+import setuptools
 
 try:
-    # Use setuptools if available, for install_requires (among other things).
-    import setuptools
-    from setuptools import setup
+    import wheel.bdist_wheel
 except ImportError:
-    setuptools = None
-    from distutils.core import setup
-
-from distutils.core import Extension
-
-# The following code is copied from
-# https://github.com/mongodb/mongo-python-driver/blob/master/setup.py
-# to support installing without the extension on platforms where
-# no compiler is available.
-from distutils.command.build_ext import build_ext
-
-
-class custom_build_ext(build_ext):
-    """Allow C extension building to fail.
-
-    The C extension speeds up websocket masking, but is not essential.
-    """
-
-    warning_message = """
-********************************************************************
-WARNING: %s could not
-be compiled. No C extensions are essential for Tornado to run,
-although they do result in significant speed improvements for
-websockets.
-%s
-
-Here are some hints for popular operating systems:
-
-If you are seeing this message on Linux you probably need to
-install GCC and/or the Python development package for your
-version of Python.
-
-Debian and Ubuntu users should issue the following command:
-
-    $ sudo apt-get install build-essential python-dev
-
-RedHat and CentOS users should issue the following command:
-
-    $ sudo yum install gcc python-devel
-
-Fedora users should issue the following command:
-
-    $ sudo dnf install gcc python-devel
-
-MacOS users should run:
-
-    $ xcode-select --install
-
-********************************************************************
-"""
-
-    def run(self):
-        try:
-            build_ext.run(self)
-        except Exception:
-            e = sys.exc_info()[1]
-            sys.stdout.write("%s\n" % str(e))
-            warnings.warn(
-                self.warning_message
-                % (
-                    "Extension modules",
-                    "There was an issue with "
-                    "your platform configuration"
-                    " - see above.",
-                )
-            )
-
-    def build_extension(self, ext):
-        name = ext.name
-        try:
-            build_ext.build_extension(self, ext)
-        except Exception:
-            e = sys.exc_info()[1]
-            sys.stdout.write("%s\n" % str(e))
-            warnings.warn(
-                self.warning_message
-                % (
-                    "The %s extension " "module" % (name,),
-                    "The output above "
-                    "this warning shows how "
-                    "the compilation "
-                    "failed.",
-                )
-            )
+    wheel = None
 
 
 kwargs = {}
@@ -120,6 +34,7 @@ with open("tornado/__init__.py") as f:
 
 with open("README.rst") as f:
     kwargs["long_description"] = f.read()
+    kwargs["long_description_content_type"] = "text/x-rst"
 
 if (
     platform.python_implementation() == "CPython"
@@ -128,22 +43,36 @@ if (
     # This extension builds and works on pypy as well, although pypy's jit
     # produces equivalent performance.
     kwargs["ext_modules"] = [
-        Extension("tornado.speedups", sources=["tornado/speedups.c"])
+        setuptools.Extension(
+            "tornado.speedups",
+            sources=["tornado/speedups.c"],
+            # Unless the user has specified that the extension is mandatory,
+            # fall back to the pure-python implementation on any build failure.
+            optional=os.environ.get("TORNADO_EXTENSION") != "1",
+            # Use the stable ABI so our wheels are compatible across python
+            # versions.
+            py_limited_api=True,
+            define_macros=[("Py_LIMITED_API", "0x03080000")],
+        )
     ]
 
-    if os.environ.get("TORNADO_EXTENSION") != "1":
-        # Unless the user has specified that the extension is mandatory,
-        # fall back to the pure-python implementation on any build failure.
-        kwargs["cmdclass"] = {"build_ext": custom_build_ext}
+if wheel is not None:
+    # From https://github.com/joerick/python-abi3-package-sample/blob/main/setup.py
+    class bdist_wheel_abi3(wheel.bdist_wheel.bdist_wheel):
+        def get_tag(self):
+            python, abi, plat = super().get_tag()
+
+            if python.startswith("cp"):
+                return "cp38", "abi3", plat
+            return python, abi, plat
+
+    kwargs["cmdclass"] = {"bdist_wheel": bdist_wheel_abi3}
 
 
-if setuptools is not None:
-    python_requires = ">= 3.6"
-    kwargs["python_requires"] = python_requires
-
-setup(
+setuptools.setup(
     name="tornado",
     version=version,
+    python_requires=">= 3.8",
     packages=["tornado", "tornado.test", "tornado.platform"],
     package_data={
         # data files need to be listed both here (which determines what gets
@@ -172,7 +101,10 @@ setup(
     author="Facebook",
     author_email="python-tornado@googlegroups.com",
     url="http://www.tornadoweb.org/",
-    license="http://www.apache.org/licenses/LICENSE-2.0",
+    project_urls={
+        "Source": "https://github.com/tornadoweb/tornado",
+    },
+    license="Apache-2.0",
     description=(
         "Tornado is a Python web framework and asynchronous networking library,"
         " originally developed at FriendFeed."
@@ -180,10 +112,10 @@ setup(
     classifiers=[
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python :: Implementation :: PyPy",
     ],

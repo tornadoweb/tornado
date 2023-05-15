@@ -15,6 +15,7 @@
 
 """Miscellaneous network utility code."""
 
+import asyncio
 import concurrent.futures
 import errno
 import os
@@ -43,10 +44,10 @@ if hasattr(ssl, "OP_NO_COMPRESSION"):
 # module-import time, the import lock is already held by the main thread,
 # leading to deadlock. Avoid it by caching the idna encoder on the main
 # thread now.
-u"foo".encode("idna")
+"foo".encode("idna")
 
 # For undiagnosed reasons, 'latin1' codec may also need to be preloaded.
-u"foo".encode("latin1")
+"foo".encode("latin1")
 
 # Default backlog used when calling sock.listen()
 _DEFAULT_BACKLOG = 128
@@ -114,7 +115,7 @@ def bind_sockets(
             sys.platform == "darwin"
             and address == "localhost"
             and af == socket.AF_INET6
-            and sockaddr[3] != 0
+            and sockaddr[3] != 0  # type: ignore
         ):
             # Mac OS X includes a link-local address fe80::1%lo0 in the
             # getaddrinfo results for 'localhost'.  However, the firewall
@@ -301,6 +302,12 @@ def is_valid_ip(ip: str) -> bool:
         if e.args[0] == socket.EAI_NONAME:
             return False
         raise
+    except UnicodeError:
+        # `socket.getaddrinfo` will raise a UnicodeError from the
+        # `idna` decoder if the input is longer than 63 characters,
+        # even for socket.AI_NUMERICHOST.  See
+        # https://bugs.python.org/issue32958 for discussion
+        return False
     return True
 
 
@@ -316,16 +323,21 @@ class Resolver(Configurable):
 
     The implementations of this interface included with Tornado are
 
-    * `tornado.netutil.DefaultExecutorResolver`
+    * `tornado.netutil.DefaultLoopResolver`
+    * `tornado.netutil.DefaultExecutorResolver` (deprecated)
     * `tornado.netutil.BlockingResolver` (deprecated)
     * `tornado.netutil.ThreadedResolver` (deprecated)
     * `tornado.netutil.OverrideResolver`
-    * `tornado.platform.twisted.TwistedResolver`
-    * `tornado.platform.caresresolver.CaresResolver`
+    * `tornado.platform.twisted.TwistedResolver` (deprecated)
+    * `tornado.platform.caresresolver.CaresResolver` (deprecated)
 
     .. versionchanged:: 5.0
        The default implementation has changed from `BlockingResolver` to
        `DefaultExecutorResolver`.
+
+    .. versionchanged:: 6.2
+       The default implementation has changed from `DefaultExecutorResolver` to
+       `DefaultLoopResolver`.
     """
 
     @classmethod
@@ -334,7 +346,7 @@ class Resolver(Configurable):
 
     @classmethod
     def configurable_default(cls) -> Type["Resolver"]:
-        return DefaultExecutorResolver
+        return DefaultLoopResolver
 
     def resolve(
         self, host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
@@ -390,6 +402,10 @@ class DefaultExecutorResolver(Resolver):
     """Resolver implementation using `.IOLoop.run_in_executor`.
 
     .. versionadded:: 5.0
+
+    .. deprecated:: 6.2
+
+       Use `DefaultLoopResolver` instead.
     """
 
     async def resolve(
@@ -399,6 +415,25 @@ class DefaultExecutorResolver(Resolver):
             None, _resolve_addr, host, port, family
         )
         return result
+
+
+class DefaultLoopResolver(Resolver):
+    """Resolver implementation using `asyncio.loop.getaddrinfo`."""
+
+    async def resolve(
+        self, host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
+    ) -> List[Tuple[int, Any]]:
+        # On Solaris, getaddrinfo fails if the given port is not found
+        # in /etc/services and no socket type is given, so we must pass
+        # one here.  The socket type used here doesn't seem to actually
+        # matter (we discard the one we get back in the results),
+        # so the addresses we return should still be usable with SOCK_DGRAM.
+        return [
+            (fam, address)
+            for fam, _, _, _, address in await asyncio.get_running_loop().getaddrinfo(
+                host, port, family=family, type=socket.SOCK_STREAM
+            )
+        ]
 
 
 class ExecutorResolver(Resolver):
@@ -415,8 +450,8 @@ class ExecutorResolver(Resolver):
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
 
     .. deprecated:: 5.0
-       The default `Resolver` now uses `.IOLoop.run_in_executor`; use that instead
-       of this class.
+       The default `Resolver` now uses `asyncio.loop.getaddrinfo`;
+       use that instead of this class.
     """
 
     def initialize(
@@ -424,7 +459,6 @@ class ExecutorResolver(Resolver):
         executor: Optional[concurrent.futures.Executor] = None,
         close_executor: bool = True,
     ) -> None:
-        self.io_loop = IOLoop.current()
         if executor is not None:
             self.executor = executor
             self.close_executor = close_executor
@@ -553,7 +587,8 @@ _SSL_CONTEXT_KEYWORDS = frozenset(
 
 
 def ssl_options_to_context(
-    ssl_options: Union[Dict[str, Any], ssl.SSLContext]
+    ssl_options: Union[Dict[str, Any], ssl.SSLContext],
+    server_side: Optional[bool] = None,
 ) -> ssl.SSLContext:
     """Try to convert an ``ssl_options`` dictionary to an
     `~ssl.SSLContext` object.
@@ -564,19 +599,34 @@ def ssl_options_to_context(
     `~ssl.SSLContext` equivalent, and may be used when a component which
     accepts both forms needs to upgrade to the `~ssl.SSLContext` version
     to use features like SNI or NPN.
+
+    .. versionchanged:: 6.2
+
+       Added server_side argument. Omitting this argument will
+       result in a DeprecationWarning on Python 3.10.
+
     """
     if isinstance(ssl_options, ssl.SSLContext):
         return ssl_options
     assert isinstance(ssl_options, dict)
     assert all(k in _SSL_CONTEXT_KEYWORDS for k in ssl_options), ssl_options
-    # Can't use create_default_context since this interface doesn't
-    # tell us client vs server.
-    context = ssl.SSLContext(ssl_options.get("ssl_version", ssl.PROTOCOL_SSLv23))
+    # TODO: Now that we have the server_side argument, can we switch to
+    # create_default_context or would that change behavior?
+    default_version = ssl.PROTOCOL_TLS
+    if server_side:
+        default_version = ssl.PROTOCOL_TLS_SERVER
+    elif server_side is not None:
+        default_version = ssl.PROTOCOL_TLS_CLIENT
+    context = ssl.SSLContext(ssl_options.get("ssl_version", default_version))
     if "certfile" in ssl_options:
         context.load_cert_chain(
             ssl_options["certfile"], ssl_options.get("keyfile", None)
         )
     if "cert_reqs" in ssl_options:
+        if ssl_options["cert_reqs"] == ssl.CERT_NONE:
+            # This may have been set automatically by PROTOCOL_TLS_CLIENT but is
+            # incompatible with CERT_NONE so we must manually clear it.
+            context.check_hostname = False
         context.verify_mode = ssl_options["cert_reqs"]
     if "ca_certs" in ssl_options:
         context.load_verify_locations(ssl_options["ca_certs"])
@@ -595,6 +645,7 @@ def ssl_wrap_socket(
     socket: socket.socket,
     ssl_options: Union[Dict[str, Any], ssl.SSLContext],
     server_hostname: Optional[str] = None,
+    server_side: Optional[bool] = None,
     **kwargs: Any
 ) -> ssl.SSLSocket:
     """Returns an ``ssl.SSLSocket`` wrapping the given socket.
@@ -604,14 +655,23 @@ def ssl_wrap_socket(
     keyword arguments are passed to ``wrap_socket`` (either the
     `~ssl.SSLContext` method or the `ssl` module function as
     appropriate).
+
+    .. versionchanged:: 6.2
+
+       Added server_side argument. Omitting this argument will
+       result in a DeprecationWarning on Python 3.10.
     """
-    context = ssl_options_to_context(ssl_options)
+    context = ssl_options_to_context(ssl_options, server_side=server_side)
+    if server_side is None:
+        server_side = False
     if ssl.HAS_SNI:
         # In python 3.4, wrap_socket only accepts the server_hostname
         # argument if HAS_SNI is true.
         # TODO: add a unittest (python added server-side SNI support in 3.4)
         # In the meantime it can be manually tested with
         # python3 -m tornado.httpclient https://sni.velox.ch
-        return context.wrap_socket(socket, server_hostname=server_hostname, **kwargs)
+        return context.wrap_socket(
+            socket, server_hostname=server_hostname, server_side=server_side, **kwargs
+        )
     else:
-        return context.wrap_socket(socket, **kwargs)
+        return context.wrap_socket(socket, server_side=server_side, **kwargs)

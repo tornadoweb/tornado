@@ -8,16 +8,11 @@ HTTP POST, or streams in the raw data of a single file in an HTTP PUT.
 See file_uploader.py in this directory for code that uploads files in this format.
 """
 
+import asyncio
 import logging
+from urllib.parse import unquote
 
-try:
-    from urllib.parse import unquote
-except ImportError:
-    # Python 2.
-    from urllib import unquote
-
-import tornado.ioloop
-import tornado.web
+import tornado
 from tornado import options
 
 
@@ -53,9 +48,12 @@ def make_app():
     return tornado.web.Application([(r"/post", POSTHandler), (r"/(.*)", PUTHandler)])
 
 
-if __name__ == "__main__":
-    # Tornado configures logging.
+async def main():
     options.parse_command_line()
     app = make_app()
     app.listen(8888)
-    tornado.ioloop.IOLoop.current().start()
+    await asyncio.Event().wait()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

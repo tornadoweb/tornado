@@ -30,6 +30,7 @@ S3 client with this module:
 
 """
 
+import asyncio
 import bisect
 import datetime
 import hashlib
@@ -39,7 +40,6 @@ import urllib
 
 from tornado import escape
 from tornado import httpserver
-from tornado import ioloop
 from tornado import web
 from tornado.util import unicode_type
 from tornado.options import options, define
@@ -54,12 +54,12 @@ define("root_directory", default="/tmp/s3", help="Root storage directory")
 define("bucket_depth", default=0, help="Bucket file system depth limit")
 
 
-def start(port, root_directory, bucket_depth):
+async def start(port, root_directory, bucket_depth):
     """Starts the mock S3 server on the given port at the given path."""
     application = S3Application(root_directory, bucket_depth)
     http_server = httpserver.HTTPServer(application)
     http_server.listen(port)
-    ioloop.IOLoop.current().start()
+    await asyncio.Event().wait()
 
 
 class S3Application(web.Application):
@@ -146,8 +146,8 @@ class RootHandler(BaseRequestHandler):
 
 class BucketHandler(BaseRequestHandler):
     def get(self, bucket_name):
-        prefix = self.get_argument("prefix", u"")
-        marker = self.get_argument("marker", u"")
+        prefix = self.get_argument("prefix", "")
+        marker = self.get_argument("marker", "")
         max_keys = int(self.get_argument("max-keys", 50000))
         path = os.path.abspath(os.path.join(self.application.directory, bucket_name))
         terse = int(self.get_argument("terse", 0))
@@ -265,4 +265,4 @@ class ObjectHandler(BaseRequestHandler):
 
 if __name__ == "__main__":
     options.parse_command_line()
-    start(options.port, options.root_directory, options.bucket_depth)
+    asyncio.run(start(options.port, options.root_directory, options.bucket_depth))

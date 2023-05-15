@@ -5,9 +5,11 @@ from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, 
 from tornado.web import Application
 import asyncio
 import contextlib
+import inspect
 import gc
 import os
 import platform
+import sys
 import traceback
 import unittest
 import warnings
@@ -106,7 +108,7 @@ class AsyncHTTPTestCaseTest(AsyncHTTPTestCase):
     def test_fetch_full_http_url(self):
         # Ensure that self.fetch() recognizes absolute urls and does
         # not transform them into references to our main test server.
-        path = "http://localhost:%d/path" % self.second_port
+        path = "http://127.0.0.1:%d/path" % self.second_port
 
         response = self.fetch(path)
         self.assertEqual(response.request.url, path)
@@ -131,6 +133,9 @@ class AsyncTestCaseWrapperTest(unittest.TestCase):
     @unittest.skipIf(
         platform.python_implementation() == "PyPy",
         "pypy destructor warnings cannot be silenced",
+    )
+    @unittest.skipIf(
+        sys.version_info >= (3, 12), "py312 has its own check for test case returns"
     )
     def test_undecorated_coroutine(self):
         class Test(AsyncTestCase):
@@ -170,6 +175,17 @@ class AsyncTestCaseWrapperTest(unittest.TestCase):
         test.run(result)
         self.assertEqual(len(result.errors), 1)
         self.assertIn("Return value from test method ignored", result.errors[0][1])
+
+    def test_unwrap(self):
+        class Test(AsyncTestCase):
+            def test_foo(self):
+                pass
+
+        test = Test("test_foo")
+        self.assertIs(
+            inspect.unwrap(test.test_foo),
+            test.test_foo.orig_method,  # type: ignore[attr-defined]
+        )
 
 
 class SetUpTearDownTest(unittest.TestCase):
@@ -323,30 +339,6 @@ class GenTest(AsyncTestCase):
             self.fail("did not get expected exception")
         except ioloop.TimeoutError:
             self.finished = True
-
-
-class GetNewIOLoopTest(AsyncTestCase):
-    def get_new_ioloop(self):
-        # Use the current loop instead of creating a new one here.
-        return ioloop.IOLoop.current()
-
-    def setUp(self):
-        # This simulates the effect of an asyncio test harness like
-        # pytest-asyncio.
-        self.orig_loop = asyncio.get_event_loop()
-        self.new_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.new_loop)
-        super().setUp()
-
-    def tearDown(self):
-        super().tearDown()
-        # AsyncTestCase must not affect the existing asyncio loop.
-        self.assertFalse(asyncio.get_event_loop().is_closed())
-        asyncio.set_event_loop(self.orig_loop)
-        self.new_loop.close()
-
-    def test_loop(self):
-        self.assertIs(self.io_loop.asyncio_loop, self.new_loop)  # type: ignore
 
 
 if __name__ == "__main__":

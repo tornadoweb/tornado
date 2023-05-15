@@ -537,11 +537,14 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
         )
 
     def test_ssl_options(self):
-        resp = self.fetch("/hello", ssl_options={})
+        resp = self.fetch("/hello", ssl_options={"cert_reqs": ssl.CERT_NONE})
         self.assertEqual(resp.body, b"Hello world!")
 
     def test_ssl_context(self):
-        resp = self.fetch("/hello", ssl_options=ssl.SSLContext(ssl.PROTOCOL_SSLv23))
+        ssl_ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
+        resp = self.fetch("/hello", ssl_options=ssl_ctx)
         self.assertEqual(resp.body, b"Hello world!")
 
     def test_ssl_options_handshake_fail(self):
@@ -555,8 +558,8 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
 
     def test_ssl_context_handshake_fail(self):
         with ExpectLog(gen_log, "SSL Error|Uncaught exception"):
-            ctx = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
-            ctx.verify_mode = ssl.CERT_REQUIRED
+            # CERT_REQUIRED is set by default.
+            ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
             with self.assertRaises(ssl.SSLError):
                 self.fetch("/hello", ssl_options=ctx, raise_error=True)
 

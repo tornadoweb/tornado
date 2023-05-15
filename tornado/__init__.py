@@ -22,5 +22,46 @@
 # is zero for an official release, positive for a development branch,
 # or negative for a release candidate or beta (after the base version
 # number has been incremented)
-version = "6.2.dev1"
-version_info = (6, 2, 0, -100)
+version = "6.4.dev1"
+version_info = (6, 4, 0, -100)
+
+import importlib
+import typing
+
+__all__ = [
+    "auth",
+    "autoreload",
+    "concurrent",
+    "curl_httpclient",
+    "escape",
+    "gen",
+    "http1connection",
+    "httpclient",
+    "httpserver",
+    "httputil",
+    "ioloop",
+    "iostream",
+    "locale",
+    "locks",
+    "log",
+    "netutil",
+    "options",
+    "platform",
+    "process",
+    "queues",
+    "routing",
+    "simple_httpclient",
+    "tcpclient",
+    "tcpserver",
+    "template",
+    "testing",
+    "util",
+    "web",
+]
+
+
+# Copied from https://peps.python.org/pep-0562/
+def __getattr__(name: str) -> typing.Any:
+    if name in __all__:
+        return importlib.import_module("." + name, __name__)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

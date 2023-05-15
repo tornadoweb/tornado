@@ -9,19 +9,15 @@ single file without encoding.
 See also file_receiver.py in this directory, a server that receives uploads.
 """
 
+import asyncio
 import mimetypes
 import os
 import sys
 from functools import partial
+from urllib.parse import quote
 from uuid import uuid4
 
-try:
-    from urllib.parse import quote
-except ImportError:
-    # Python 2.
-    from urllib import quote
-
-from tornado import gen, httpclient, ioloop
+from tornado import gen, httpclient
 from tornado.options import define, options
 
 
@@ -115,4 +111,4 @@ if __name__ == "__main__":
         sys.exit(1)
 
     method = put if options.put else post
-    ioloop.IOLoop.current().run_sync(lambda: method(filenames))
+    asyncio.run(method(filenames))

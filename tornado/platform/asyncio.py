@@ -32,13 +32,14 @@ import socket
 import sys
 import threading
 import typing
+import warnings
 from tornado.gen import convert_yielded
 from tornado.ioloop import IOLoop, _Selectable
 
-from typing import Any, TypeVar, Awaitable, Callable, Union, Optional, List, Tuple, Dict
+from typing import Any, TypeVar, Awaitable, Callable, Union, Optional, List, Dict
 
 if typing.TYPE_CHECKING:
-    from typing import Set  # noqa: F401
+    from typing import Set, Tuple  # noqa: F401
     from typing_extensions import Protocol
 
     class _HasFileno(Protocol):
@@ -108,19 +109,21 @@ class BaseAsyncIOLoop(IOLoop):
         # TODO(bdarnell): consider making self.asyncio_loop a weakref
         # for AsyncIOMainLoop and make _ioloop_for_asyncio a
         # WeakKeyDictionary.
-        for loop in list(IOLoop._ioloop_for_asyncio):
+        for loop in IOLoop._ioloop_for_asyncio.copy():
             if loop.is_closed():
-                del IOLoop._ioloop_for_asyncio[loop]
-        IOLoop._ioloop_for_asyncio[asyncio_loop] = self
+                try:
+                    del IOLoop._ioloop_for_asyncio[loop]
+                except KeyError:
+                    pass
 
-        self._thread_identity = 0
+        # Make sure we don't already have an IOLoop for this asyncio loop
+        existing_loop = IOLoop._ioloop_for_asyncio.setdefault(asyncio_loop, self)
+        if existing_loop is not self:
+            raise RuntimeError(
+                f"IOLoop {existing_loop} already associated with asyncio loop {asyncio_loop}"
+            )
 
         super().initialize(**kwargs)
-
-        def assign_thread_identity() -> None:
-            self._thread_identity = threading.get_ident()
-
-        self.add_callback(assign_thread_identity)
 
     def close(self, all_fds: bool = False) -> None:
         self.closing = True
@@ -189,22 +192,13 @@ class BaseAsyncIOLoop(IOLoop):
         handler_func(fileobj, events)
 
     def start(self) -> None:
-        try:
-            old_loop = asyncio.get_event_loop()
-        except (RuntimeError, AssertionError):
-            old_loop = None  # type: ignore
-        try:
-            self._setup_logging()
-            asyncio.set_event_loop(self.asyncio_loop)
-            self.asyncio_loop.run_forever()
-        finally:
-            asyncio.set_event_loop(old_loop)
+        self.asyncio_loop.run_forever()
 
     def stop(self) -> None:
         self.asyncio_loop.stop()
 
     def call_at(
-        self, when: float, callback: Callable[..., None], *args: Any, **kwargs: Any
+        self, when: float, callback: Callable, *args: Any, **kwargs: Any
     ) -> object:
         # asyncio.call_at supports *args but not **kwargs, so bind them here.
         # We do not synchronize self.time and asyncio_loop.time, so
@@ -219,10 +213,14 @@ class BaseAsyncIOLoop(IOLoop):
         timeout.cancel()  # type: ignore
 
     def add_callback(self, callback: Callable, *args: Any, **kwargs: Any) -> None:
-        if threading.get_ident() == self._thread_identity:
-            call_soon = self.asyncio_loop.call_soon
-        else:
+        try:
+            if asyncio.get_running_loop() is self.asyncio_loop:
+                call_soon = self.asyncio_loop.call_soon
+            else:
+                call_soon = self.asyncio_loop.call_soon_threadsafe
+        except RuntimeError:
             call_soon = self.asyncio_loop.call_soon_threadsafe
+
         try:
             call_soon(self._run_callback, functools.partial(callback, *args, **kwargs))
         except RuntimeError:
@@ -241,6 +239,7 @@ class BaseAsyncIOLoop(IOLoop):
     def add_callback_from_signal(
         self, callback: Callable, *args: Any, **kwargs: Any
     ) -> None:
+        warnings.warn("add_callback_from_signal is deprecated", DeprecationWarning)
         try:
             self.asyncio_loop.call_soon_threadsafe(
                 self._run_callback, functools.partial(callback, *args, **kwargs)
@@ -252,7 +251,7 @@ class BaseAsyncIOLoop(IOLoop):
         self,
         executor: Optional[concurrent.futures.Executor],
         func: Callable[..., _T],
-        *args: Any
+        *args: Any,
     ) -> Awaitable[_T]:
         return self.asyncio_loop.run_in_executor(executor, func, *args)
 
@@ -278,7 +277,7 @@ class AsyncIOMainLoop(BaseAsyncIOLoop):
     def initialize(self, **kwargs: Any) -> None:  # type: ignore
         super().initialize(asyncio.get_event_loop(), **kwargs)
 
-    def make_current(self) -> None:
+    def _make_current(self) -> None:
         # AsyncIOMainLoop already refers to the current asyncio loop so
         # nothing to do here.
         pass
@@ -293,6 +292,12 @@ class AsyncIOLoop(BaseAsyncIOLoop):
     Each ``AsyncIOLoop`` creates a new ``asyncio.EventLoop``; this object
     can be accessed with the ``asyncio_loop`` attribute.
 
+    .. versionchanged:: 6.2
+
+       Support explicit ``asyncio_loop`` argument
+       for specifying the asyncio loop to attach to,
+       rather than always creating a new one with the default policy.
+
     .. versionchanged:: 5.0
 
        When an ``AsyncIOLoop`` becomes the current `.IOLoop`, it also sets
@@ -306,21 +311,24 @@ class AsyncIOLoop(BaseAsyncIOLoop):
 
     def initialize(self, **kwargs: Any) -> None:  # type: ignore
         self.is_current = False
-        loop = asyncio.new_event_loop()
+        loop = None
+        if "asyncio_loop" not in kwargs:
+            kwargs["asyncio_loop"] = loop = asyncio.new_event_loop()
         try:
-            super().initialize(loop, **kwargs)
+            super().initialize(**kwargs)
         except Exception:
             # If initialize() does not succeed (taking ownership of the loop),
             # we have to close it.
-            loop.close()
+            if loop is not None:
+                loop.close()
             raise
 
     def close(self, all_fds: bool = False) -> None:
         if self.is_current:
-            self.clear_current()
+            self._clear_current()
         super().close(all_fds=all_fds)
 
-    def make_current(self) -> None:
+    def _make_current(self) -> None:
         if not self.is_current:
             try:
                 self.old_asyncio = asyncio.get_event_loop()
@@ -387,7 +395,25 @@ class AnyThreadEventLoopPolicy(_BasePolicy):  # type: ignore
 
     .. versionadded:: 5.0
 
+    .. deprecated:: 6.2
+
+        ``AnyThreadEventLoopPolicy`` affects the implicit creation
+        of an event loop, which is deprecated in Python 3.10 and
+        will be removed in a future version of Python. At that time
+        ``AnyThreadEventLoopPolicy`` will no longer be useful.
+        If you are relying on it, use `asyncio.new_event_loop`
+        or `asyncio.run` explicitly in any non-main threads that
+        need event loops.
     """
+
+    def __init__(self) -> None:
+        super().__init__()
+        warnings.warn(
+            "AnyThreadEventLoopPolicy is deprecated, use asyncio.run "
+            "or asyncio.new_event_loop instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
     def get_event_loop(self) -> asyncio.AbstractEventLoop:
         try:
@@ -539,7 +565,21 @@ class SelectorThread:
                         raise
                 else:
                     raise
-            self._real_loop.call_soon_threadsafe(self._handle_select, rs, ws)
+
+            try:
+                self._real_loop.call_soon_threadsafe(self._handle_select, rs, ws)
+            except RuntimeError:
+                # "Event loop is closed". Swallow the exception for
+                # consistency with PollIOLoop (and logical consistency
+                # with the fact that we can't guarantee that an
+                # add_callback that completes without error will
+                # eventually execute).
+                pass
+            except AttributeError:
+                # ProactorEventLoop may raise this instead of RuntimeError
+                # if call_soon_threadsafe races with a call to close().
+                # Swallow it too for consistency.
+                pass
 
     def _handle_select(
         self, rs: List["_FileDescriptorLike"], ws: List["_FileDescriptorLike"]
@@ -573,13 +613,21 @@ class SelectorThread:
         self._writers[fd] = functools.partial(callback, *args)
         self._wake_selector()
 
-    def remove_reader(self, fd: "_FileDescriptorLike") -> None:
-        del self._readers[fd]
+    def remove_reader(self, fd: "_FileDescriptorLike") -> bool:
+        try:
+            del self._readers[fd]
+        except KeyError:
+            return False
         self._wake_selector()
+        return True
 
-    def remove_writer(self, fd: "_FileDescriptorLike") -> None:
-        del self._writers[fd]
+    def remove_writer(self, fd: "_FileDescriptorLike") -> bool:
+        try:
+            del self._writers[fd]
+        except KeyError:
+            return False
         self._wake_selector()
+        return True
 
 
 class AddThreadSelectorEventLoop(asyncio.AbstractEventLoop):
@@ -635,8 +683,8 @@ class AddThreadSelectorEventLoop(asyncio.AbstractEventLoop):
     ) -> None:
         return self._selector.add_writer(fd, callback, *args)
 
-    def remove_reader(self, fd: "_FileDescriptorLike") -> None:
+    def remove_reader(self, fd: "_FileDescriptorLike") -> bool:
         return self._selector.remove_reader(fd)
 
-    def remove_writer(self, fd: "_FileDescriptorLike") -> None:
+    def remove_writer(self, fd: "_FileDescriptorLike") -> bool:
         return self._selector.remove_writer(fd)

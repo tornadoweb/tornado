@@ -76,15 +76,15 @@ class ProcessTest(unittest.TestCase):
                 sock.close()
                 return
             try:
-                if asyncio is not None:
-                    # Reset the global asyncio event loop, which was put into
-                    # a broken state by the fork.
-                    asyncio.set_event_loop(asyncio.new_event_loop())
                 if id in (0, 1):
                     self.assertEqual(id, task_id())
-                    server = HTTPServer(self.get_app())
-                    server.add_sockets([sock])
-                    IOLoop.current().start()
+
+                    async def f():
+                        server = HTTPServer(self.get_app())
+                        server.add_sockets([sock])
+                        await asyncio.Event().wait()
+
+                    asyncio.run(f())
                 elif id == 2:
                     self.assertEqual(id, task_id())
                     sock.close()

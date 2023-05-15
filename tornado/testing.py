@@ -20,6 +20,7 @@ import signal
 import socket
 import sys
 import unittest
+import warnings
 
 from tornado import gen
 from tornado.httpclient import AsyncHTTPClient, HTTPResponse
@@ -95,6 +96,7 @@ class _TestMethodWrapper(object):
 
     def __init__(self, orig_method: Callable) -> None:
         self.orig_method = orig_method
+        self.__wrapped__ = orig_method
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
         result = self.orig_method(*args, **kwargs)
@@ -133,7 +135,8 @@ class AsyncTestCase(unittest.TestCase):
 
     By default, a new `.IOLoop` is constructed for each test and is available
     as ``self.io_loop``.  If the code being tested requires a
-    global `.IOLoop`, subclasses should override `get_new_ioloop` to return it.
+    reused global `.IOLoop`, subclasses should override `get_new_ioloop` to return it,
+    although this is deprecated as of Tornado 6.3.
 
     The `.IOLoop`'s ``start`` and ``stop`` methods should not be
     called directly.  Instead, use `self.stop <stop>` and `self.wait
@@ -180,9 +183,22 @@ class AsyncTestCase(unittest.TestCase):
         self._test_generator = None  # type: Optional[Union[Generator, Coroutine]]
 
     def setUp(self) -> None:
+        py_ver = sys.version_info
+        if ((3, 10, 0) <= py_ver < (3, 10, 9)) or ((3, 11, 0) <= py_ver <= (3, 11, 1)):
+            # Early releases in the Python 3.10 and 3.1 series had deprecation
+            # warnings that were later reverted; we must suppress them here.
+            setup_with_context_manager(self, warnings.catch_warnings())
+            warnings.filterwarnings(
+                "ignore",
+                message="There is no current event loop",
+                category=DeprecationWarning,
+                module=r"tornado\..*",
+            )
         super().setUp()
+        if type(self).get_new_ioloop is not AsyncTestCase.get_new_ioloop:
+            warnings.warn("get_new_ioloop is deprecated", DeprecationWarning)
         self.io_loop = self.get_new_ioloop()
-        self.io_loop.make_current()
+        asyncio.set_event_loop(self.io_loop.asyncio_loop)  # type: ignore[attr-defined]
 
     def tearDown(self) -> None:
         # Native coroutines tend to produce warnings if they're not
@@ -196,7 +212,7 @@ class AsyncTestCase(unittest.TestCase):
             tasks = asyncio.Task.all_tasks(asyncio_loop)
         # Tasks that are done may still appear here and may contain
         # non-cancellation exceptions, so filter them out.
-        tasks = [t for t in tasks if not t.done()]
+        tasks = [t for t in tasks if not t.done()]  # type: ignore
         for t in tasks:
             t.cancel()
         # Allow the tasks to run and finalize themselves (which means
@@ -217,7 +233,7 @@ class AsyncTestCase(unittest.TestCase):
 
         # Clean up Subprocess, so it can be used again with a new ioloop.
         Subprocess.uninitialize()
-        self.io_loop.clear_current()
+        asyncio.set_event_loop(None)
         if not isinstance(self.io_loop, _NON_OWNED_IOLOOPS):
             # Try to clean up any file descriptors left open in the ioloop.
             # This avoids leaks, especially when tests are run repeatedly
@@ -241,8 +257,11 @@ class AsyncTestCase(unittest.TestCase):
         singletons using the default `.IOLoop`) or if a per-test event
         loop is being provided by another system (such as
         ``pytest-asyncio``).
+
+        .. deprecated:: 6.3
+           This method will be removed in Tornado 7.0.
         """
-        return IOLoop()
+        return IOLoop(make_current=False)
 
     def _handle_exception(
         self, typ: Type[Exception], value: Exception, tb: TracebackType
@@ -592,7 +611,7 @@ def gen_test(  # noqa: F811
         if inspect.iscoroutinefunction(f):
             coro = pre_coroutine
         else:
-            coro = gen.coroutine(pre_coroutine)
+            coro = gen.coroutine(pre_coroutine)  # type: ignore[assignment]
 
         @functools.wraps(coro)
         def post_coroutine(self, *args, **kwargs):
@@ -611,7 +630,7 @@ def gen_test(  # noqa: F811
                 if self._test_generator is not None and getattr(
                     self._test_generator, "cr_running", True
                 ):
-                    self._test_generator.throw(type(e), e)
+                    self._test_generator.throw(e)
                     # In case the test contains an overly broad except
                     # clause, we may get back here.
                 # Coroutine was stopped or didn't raise a useful stack trace,
@@ -663,28 +682,37 @@ class ExpectLog(logging.Filter):
     ) -> None:
         """Constructs an ExpectLog context manager.
 
-        :param logger: Logger object (or name of logger) to watch.  Pass
-            an empty string to watch the root logger.
-        :param regex: Regular expression to match.  Any log entries on
-            the specified logger that match this regex will be suppressed.
-        :param required: If true, an exception will be raised if the end of
-            the ``with`` statement is reached without matching any log entries.
+        :param logger: Logger object (or name of logger) to watch.  Pass an
+            empty string to watch the root logger.
+        :param regex: Regular expression to match.  Any log entries on the
+            specified logger that match this regex will be suppressed.
+        :param required: If true, an exception will be raised if the end of the
+            ``with`` statement is reached without matching any log entries.
         :param level: A constant from the ``logging`` module indicating the
             expected log level. If this parameter is provided, only log messages
             at this level will be considered to match. Additionally, the
-            supplied ``logger`` will have its level adjusted if necessary
-            (for the duration of the ``ExpectLog`` to enable the expected
-            message.
+            supplied ``logger`` will have its level adjusted if necessary (for
+            the duration of the ``ExpectLog`` to enable the expected message.
 
         .. versionchanged:: 6.1
            Added the ``level`` parameter.
+
+        .. deprecated:: 6.3
+           In Tornado 7.0, only ``WARNING`` and higher logging levels will be
+           matched by default. To match ``INFO`` and lower levels, the ``level``
+           argument must be used. This is changing to minimize differences
+           between ``tornado.testing.main`` (which enables ``INFO`` logs by
+           default) and most other test runners (including those in IDEs)
+           which have ``INFO`` logs disabled by default.
         """
         if isinstance(logger, basestring_type):
             logger = logging.getLogger(logger)
         self.logger = logger
         self.regex = re.compile(regex)
         self.required = required
-        self.matched = False
+        # matched and deprecated_level_matched are a counter for the respective event.
+        self.matched = 0
+        self.deprecated_level_matched = 0
         self.logged_stack = False
         self.level = level
         self.orig_level = None  # type: Optional[int]
@@ -694,13 +722,20 @@ class ExpectLog(logging.Filter):
             self.logged_stack = True
         message = record.getMessage()
         if self.regex.match(message):
+            if self.level is None and record.levelno < logging.WARNING:
+                # We're inside the logging machinery here so generating a DeprecationWarning
+                # here won't be reported cleanly (if warnings-as-errors is enabled, the error
+                # just gets swallowed by the logging module), and even if it were it would
+                # have the wrong stack trace. Just remember this fact and report it in
+                # __exit__ instead.
+                self.deprecated_level_matched += 1
             if self.level is not None and record.levelno != self.level:
                 app_log.warning(
                     "Got expected log message %r at unexpected level (%s vs %s)"
                     % (message, logging.getLevelName(self.level), record.levelname)
                 )
                 return True
-            self.matched = True
+            self.matched += 1
             return False
         return True
 
@@ -722,6 +757,23 @@ class ExpectLog(logging.Filter):
         self.logger.removeFilter(self)
         if not typ and self.required and not self.matched:
             raise Exception("did not get expected log message")
+        if (
+            not typ
+            and self.required
+            and (self.deprecated_level_matched >= self.matched)
+        ):
+            warnings.warn(
+                "ExpectLog matched at INFO or below without level argument",
+                DeprecationWarning,
+            )
+
+
+# From https://nedbatchelder.com/blog/201508/using_context_managers_in_test_setup.html
+def setup_with_context_manager(testcase: unittest.TestCase, cm: Any) -> Any:
+    """Use a contextmanager to setUp a test case."""
+    val = cm.__enter__()
+    testcase.addCleanup(cm.__exit__, None, None, None)
+    return val
 
 
 def main(**kwargs: Any) -> None:

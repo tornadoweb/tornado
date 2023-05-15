@@ -3,7 +3,7 @@ Templates and UI
 
 .. testsetup::
 
-   import tornado.web
+   import tornado
 
 Tornado includes a simple, fast, and flexible templating language.
 This section describes that language as well as related issues
@@ -192,7 +192,7 @@ by overriding `.RequestHandler.get_user_locale`:
 
     class BaseHandler(tornado.web.RequestHandler):
         def get_current_user(self):
-            user_id = self.get_secure_cookie("user")
+            user_id = self.get_signed_cookie("user")
             if not user_id: return None
             return self.backend.get_user_by_id(user_id)
 

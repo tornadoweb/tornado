@@ -606,6 +606,9 @@ def with_timeout(
     .. versionchanged:: 6.0.3
        ``asyncio.CancelledError`` is now always considered "quiet".
 
+    .. versionchanged:: 6.2
+       ``tornado.util.TimeoutError`` is now an alias to ``asyncio.TimeoutError``.
+
     """
     # It's tempting to optimize this by cancelling the input future on timeout
     # instead of creating a new one, but A) we can't know if we are the only
@@ -740,7 +743,7 @@ class Runner(object):
         self.running = False
         self.finished = False
         self.io_loop = IOLoop.current()
-        if self.handle_yield(first_yielded):
+        if self.ctx_run(self.handle_yield, first_yielded):
             gen = result_future = first_yielded = None  # type: ignore
             self.ctx_run(self.run)
 
@@ -760,21 +763,25 @@ class Runner(object):
                     return
                 self.future = None
                 try:
-                    exc_info = None
-
                     try:
                         value = future.result()
-                    except Exception:
-                        exc_info = sys.exc_info()
-                    future = None
+                    except Exception as e:
+                        # Save the exception for later. It's important that
+                        # gen.throw() not be called inside this try/except block
+                        # because that makes sys.exc_info behave unexpectedly.
+                        exc: Optional[Exception] = e
+                    else:
+                        exc = None
+                    finally:
+                        future = None
 
-                    if exc_info is not None:
+                    if exc is not None:
                         try:
-                            yielded = self.gen.throw(*exc_info)  # type: ignore
+                            yielded = self.gen.throw(exc)
                         finally:
-                            # Break up a reference to itself
-                            # for faster GC on CPython.
-                            exc_info = None
+                            # Break up a circular reference for faster GC on
+                            # CPython.
+                            del exc
                     else:
                         yielded = self.gen.send(value)
 
@@ -833,13 +840,17 @@ class Runner(object):
             return False
 
 
-# Convert Awaitables into Futures.
-try:
-    _wrap_awaitable = asyncio.ensure_future
-except AttributeError:
-    # asyncio.ensure_future was introduced in Python 3.4.4, but
-    # Debian jessie still ships with 3.4.2 so try the old name.
-    _wrap_awaitable = getattr(asyncio, "async")
+def _wrap_awaitable(awaitable: Awaitable) -> Future:
+    # Convert Awaitables into Futures.
+    # Note that we use ensure_future, which handles both awaitables
+    # and coroutines, rather than create_task, which only accepts
+    # coroutines. (ensure_future calls create_task if given a coroutine)
+    fut = asyncio.ensure_future(awaitable)
+    # See comments on IOLoop._pending_tasks.
+    loop = IOLoop.current()
+    loop._register_task(fut)
+    fut.add_done_callback(lambda f: loop._unregister_task(f))
+    return fut
 
 
 def convert_yielded(yielded: _Yieldable) -> Future:

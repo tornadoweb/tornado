@@ -122,7 +122,7 @@ class ClientTestMixin(object):
         future = self.client.capitalize("HELLO")
         self.io_loop.add_future(future, self.stop)
         self.wait()
-        self.assertRaisesRegexp(CapError, "already capitalized", future.result)  # type: ignore
+        self.assertRaisesRegex(CapError, "already capitalized", future.result)  # type: ignore
 
     def test_generator(self: typing.Any):
         @gen.coroutine
@@ -135,7 +135,7 @@ class ClientTestMixin(object):
     def test_generator_error(self: typing.Any):
         @gen.coroutine
         def f():
-            with self.assertRaisesRegexp(CapError, "already capitalized"):
+            with self.assertRaisesRegex(CapError, "already capitalized"):
                 yield self.client.capitalize("HELLO")
 
         self.io_loop.run_sync(f)

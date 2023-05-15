@@ -268,7 +268,7 @@ class Locale(object):
 
     def __init__(self, code: str) -> None:
         self.code = code
-        self.name = LOCALE_NAMES.get(code, {}).get("name", u"Unknown")
+        self.name = LOCALE_NAMES.get(code, {}).get("name", "Unknown")
         self.rtl = False
         for prefix in ["fa", "ar", "he"]:
             if self.code.startswith(prefix):
@@ -406,7 +406,7 @@ class Locale(object):
             str_time = "%d:%02d" % (local_date.hour, local_date.minute)
         elif self.code == "zh_CN":
             str_time = "%s%d:%02d" % (
-                (u"\u4e0a\u5348", u"\u4e0b\u5348")[local_date.hour >= 12],
+                ("\u4e0a\u5348", "\u4e0b\u5348")[local_date.hour >= 12],
                 local_date.hour % 12 or 12,
                 local_date.minute,
             )
@@ -458,7 +458,7 @@ class Locale(object):
             return ""
         if len(parts) == 1:
             return parts[0]
-        comma = u" \u0648 " if self.code.startswith("fa") else u", "
+        comma = " \u0648 " if self.code.startswith("fa") else ", "
         return _("%(commas)s and %(last)s") % {
             "commas": comma.join(parts[:-1]),
             "last": parts[len(parts) - 1],

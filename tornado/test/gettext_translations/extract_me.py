@@ -8,8 +8,8 @@
 # 3) msgfmt tornado_test.po -o tornado_test.mo
 # 4) Put the file in the proper location: $LANG/LC_MESSAGES
 
-_("school")
-pgettext("law", "right")
-pgettext("good", "right")
-pgettext("organization", "club", "clubs", 1)
-pgettext("stick", "club", "clubs", 1)
+_("school")  # type: ignore[name-defined]
+pgettext("law", "right")  # type: ignore[name-defined]
+pgettext("good", "right")  # type: ignore[name-defined]
+pgettext("organization", "club", "clubs", 1)  # type: ignore[name-defined]
+pgettext("stick", "club", "clubs", 1)  # type: ignore[name-defined]

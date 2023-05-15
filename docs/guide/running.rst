@@ -8,13 +8,15 @@ configuring a WSGI container to find your application, you write a
 
 .. testcode::
 
-    def main():
+    import asyncio
+
+    async def main():
         app = make_app()
         app.listen(8888)
-        IOLoop.current().start()
+        await asyncio.Event().wait()
 
     if __name__ == '__main__':
-        main()
+        asyncio.run(main())
 
 .. testoutput::
    :hide:
@@ -33,24 +35,28 @@ Due to the Python GIL (Global Interpreter Lock), it is necessary to run
 multiple Python processes to take full advantage of multi-CPU machines.
 Typically it is best to run one process per CPU.
 
-Tornado includes a built-in multi-process mode to start several
-processes at once (note that multi-process mode does not work on
-Windows). This requires a slight alteration to the standard main
-function:
+The simplest way to do this is to add ``reuse_port=True`` to your ``listen()``
+calls and then simply run multiple copies of your application.
+
+Tornado also has the ability to start multiple processes from a single parent
+process (note that this does not work on Windows). This requires some
+alterations to application startup.
 
 .. testcode::
 
     def main():
-        app = make_app()
-        server = tornado.httpserver.HTTPServer(app)
-        server.bind(8888)
-        server.start(0)  # forks one process per cpu
-        IOLoop.current().start()
+        sockets = bind_sockets(8888)
+        tornado.process.fork_processes(0)
+        async def post_fork_main():
+            server = TCPServer()
+            server.add_sockets(sockets)
+            await asyncio.Event().wait()
+        asyncio.run(post_fork_main())
 
 .. testoutput::
    :hide:
 
-This is the easiest way to start multiple processes and have them all
+This is another way to start multiple processes and have them all
 share the same port, although it has some limitations.  First, each
 child process will have its own ``IOLoop``, so it is important that
 nothing touches the global ``IOLoop`` instance (even indirectly) before the

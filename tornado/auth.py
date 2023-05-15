@@ -42,7 +42,7 @@ Example usage for Google OAuth:
                 user = await self.get_authenticated_user(
                     redirect_uri='http://your.site.com/auth/google',
                     code=self.get_argument('code'))
-                # Save the user with e.g. set_secure_cookie
+                # Save the user with e.g. set_signed_cookie
             else:
                 self.authorize_redirect(
                     redirect_uri='http://your.site.com/auth/google',
@@ -136,7 +136,7 @@ class OpenIdMixin(object):
         args = dict(
             (k, v[-1]) for k, v in handler.request.arguments.items()
         )  # type: Dict[str, Union[str, bytes]]
-        args["openid.mode"] = u"check_authentication"
+        args["openid.mode"] = "check_authentication"
         url = self._OPENID_ENDPOINT  # type: ignore
         if http_client is None:
             http_client = self.get_auth_http_client()
@@ -211,14 +211,14 @@ class OpenIdMixin(object):
         for key in handler.request.arguments:
             if (
                 key.startswith("openid.ns.")
-                and handler.get_argument(key) == u"http://openid.net/srv/ax/1.0"
+                and handler.get_argument(key) == "http://openid.net/srv/ax/1.0"
             ):
                 ax_ns = key[10:]
                 break
 
         def get_ax_arg(uri: str) -> str:
             if not ax_ns:
-                return u""
+                return ""
             prefix = "openid." + ax_ns + ".type."
             ax_name = None
             for name in handler.request.arguments.keys():
@@ -227,8 +227,8 @@ class OpenIdMixin(object):
                     ax_name = "openid." + ax_ns + ".value." + part
                     break
             if not ax_name:
-                return u""
-            return handler.get_argument(ax_name, u"")
+                return ""
+            return handler.get_argument(ax_name, "")
 
         email = get_ax_arg("http://axschema.org/contact/email")
         name = get_ax_arg("http://axschema.org/namePerson")
@@ -247,7 +247,7 @@ class OpenIdMixin(object):
         if name:
             user["name"] = name
         elif name_parts:
-            user["name"] = u" ".join(name_parts)
+            user["name"] = " ".join(name_parts)
         elif email:
             user["name"] = email.split("@")[0]
         if email:
@@ -694,7 +694,7 @@ class TwitterMixin(OAuthMixin):
             async def get(self):
                 if self.get_argument("oauth_token", None):
                     user = await self.get_authenticated_user()
-                    # Save the user using e.g. set_secure_cookie()
+                    # Save the user using e.g. set_signed_cookie()
                 else:
                     await self.authorize_redirect()
 
@@ -855,8 +855,28 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
     _OAUTH_NO_CALLBACKS = False
     _OAUTH_SETTINGS_KEY = "google_oauth"
 
+    def get_google_oauth_settings(self) -> Dict[str, str]:
+        """Return the Google OAuth 2.0 credentials that you created with
+        [Google Cloud
+        Platform](https://console.cloud.google.com/apis/credentials). The dict
+        format is::
+
+            {
+                "key": "your_client_id", "secret": "your_client_secret"
+            }
+
+        If your credentials are stored differently (e.g. in a db) you can
+        override this method for custom provision.
+        """
+        handler = cast(RequestHandler, self)
+        return handler.settings[self._OAUTH_SETTINGS_KEY]
+
     async def get_authenticated_user(
-        self, redirect_uri: str, code: str
+        self,
+        redirect_uri: str,
+        code: str,
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Handles the login for the Google user, returning an access token.
 
@@ -883,11 +903,11 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
                             "https://www.googleapis.com/oauth2/v1/userinfo",
                             access_token=access["access_token"])
                         # Save the user and access token with
-                        # e.g. set_secure_cookie.
+                        # e.g. set_signed_cookie.
                     else:
                         self.authorize_redirect(
                             redirect_uri='http://your.site.com/auth/google',
-                            client_id=self.settings['google_oauth']['key'],
+                            client_id=self.get_google_oauth_settings()['key'],
                             scope=['profile', 'email'],
                             response_type='code',
                             extra_params={'approval_prompt': 'auto'})
@@ -899,14 +919,20 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
 
            The ``callback`` argument was removed. Use the returned awaitable object instead.
         """  # noqa: E501
-        handler = cast(RequestHandler, self)
+
+        if client_id is None or client_secret is None:
+            settings = self.get_google_oauth_settings()
+            if client_id is None:
+                client_id = settings["key"]
+            if client_secret is None:
+                client_secret = settings["secret"]
         http = self.get_auth_http_client()
         body = urllib.parse.urlencode(
             {
                 "redirect_uri": redirect_uri,
                 "code": code,
-                "client_id": handler.settings[self._OAUTH_SETTINGS_KEY]["key"],
-                "client_secret": handler.settings[self._OAUTH_SETTINGS_KEY]["secret"],
+                "client_id": client_id,
+                "client_secret": client_secret,
                 "grant_type": "authorization_code",
             }
         )
@@ -951,7 +977,7 @@ class FacebookGraphMixin(OAuth2Mixin):
                           client_id=self.settings["facebook_api_key"],
                           client_secret=self.settings["facebook_secret"],
                           code=self.get_argument("code"))
-                      # Save the user with e.g. set_secure_cookie
+                      # Save the user with e.g. set_signed_cookie
                   else:
                       self.authorize_redirect(
                           redirect_uri='/auth/facebookgraph/',

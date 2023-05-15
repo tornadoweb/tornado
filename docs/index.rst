@@ -31,8 +31,8 @@ Hello, world
 
 Here is a simple "Hello, world" example web app for Tornado::
 
-    import tornado.ioloop
-    import tornado.web
+    import asyncio
+    import tornado
 
     class MainHandler(tornado.web.RequestHandler):
         def get(self):
@@ -43,10 +43,13 @@ Here is a simple "Hello, world" example web app for Tornado::
             (r"/", MainHandler),
         ])
 
-    if __name__ == "__main__":
+    async def main():
         app = make_app()
         app.listen(8888)
-        tornado.ioloop.IOLoop.current().start()
+        await asyncio.Event().wait()
+
+    if __name__ == "__main__":
+        asyncio.run(main())
 
 This example does not use any of Tornado's asynchronous features; for
 that see this `simple chat room
@@ -96,15 +99,11 @@ installed in this way, so you may wish to download a copy of the
 source tarball or clone the `git repository
 <https://github.com/tornadoweb/tornado>`_ as well.
 
-**Prerequisites**: Tornado 6.0 requires Python 3.6 or newer (See
-`Tornado 5.1 <https://www.tornadoweb.org/en/branch5.1/>`_ if
-compatibility with Python 2.7 is required). The following optional
-packages may be useful:
+**Prerequisites**: Tornado 6.3 requires Python 3.8 or newer. The following
+optional packages may be useful:
 
 * `pycurl <http://pycurl.io/>`_ is used by the optional
   ``tornado.curl_httpclient``.  Libcurl version 7.22 or higher is required.
-* `Twisted <https://www.twistedmatrix.com/>`_ may be used with the classes in
-  `tornado.platform.twisted`.
 * `pycares <https://pypi.org/project/pycares/>`_ is an alternative
   non-blocking DNS resolver that can be used when threads are not
   appropriate.

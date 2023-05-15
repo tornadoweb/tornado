@@ -14,13 +14,9 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import asyncio
 import os.path
-import tornado.auth
-import tornado.escape
-import tornado.httpserver
-import tornado.ioloop
-import tornado.options
-import tornado.web
+import tornado
 
 from tornado.options import define, options
 
@@ -53,7 +49,7 @@ class Application(tornado.web.Application):
 
 class BaseHandler(tornado.web.RequestHandler):
     def get_current_user(self):
-        user_json = self.get_secure_cookie("fbdemo_user")
+        user_json = self.get_signed_cookie("fbdemo_user")
         if not user_json:
             return None
         return tornado.escape.json_decode(user_json)
@@ -88,7 +84,7 @@ class AuthLoginHandler(BaseHandler, tornado.auth.FacebookGraphMixin):
                 client_secret=self.settings["facebook_secret"],
                 code=self.get_argument("code"),
             )
-            self.set_secure_cookie("fbdemo_user", tornado.escape.json_encode(user))
+            self.set_signed_cookie("fbdemo_user", tornado.escape.json_encode(user))
             self.redirect(self.get_argument("next", "/"))
             return
         self.authorize_redirect(
@@ -109,15 +105,15 @@ class PostModule(tornado.web.UIModule):
         return self.render_string("modules/post.html", post=post)
 
 
-def main():
+async def main():
     tornado.options.parse_command_line()
     if not (options.facebook_api_key and options.facebook_secret):
         print("--facebook_api_key and --facebook_secret must be set")
         return
     http_server = tornado.httpserver.HTTPServer(Application())
     http_server.listen(options.port)
-    tornado.ioloop.IOLoop.current().start()
+    await asyncio.Event().wait()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

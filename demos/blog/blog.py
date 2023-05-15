@@ -15,17 +15,13 @@
 # under the License.
 
 import aiopg
+import asyncio
 import bcrypt
 import markdown
 import os.path
 import psycopg2
 import re
-import tornado.escape
-import tornado.httpserver
-import tornado.ioloop
-import tornado.locks
-import tornado.options
-import tornado.web
+import tornado
 import unicodedata
 
 from tornado.options import define, options
@@ -127,7 +123,7 @@ class BaseHandler(tornado.web.RequestHandler):
     async def prepare(self):
         # get_current_user cannot be a coroutine, so set
         # self.current_user in prepare instead.
-        user_id = self.get_secure_cookie("blogdemo_user")
+        user_id = self.get_signed_cookie("blogdemo_user")
         if user_id:
             self.current_user = await self.queryone(
                 "SELECT * FROM authors WHERE id = %s", int(user_id)
@@ -246,7 +242,7 @@ class AuthCreateHandler(BaseHandler):
             self.get_argument("name"),
             tornado.escape.to_unicode(hashed_password),
         )
-        self.set_secure_cookie("blogdemo_user", str(author.id))
+        self.set_signed_cookie("blogdemo_user", str(author.id))
         self.redirect(self.get_argument("next", "/"))
 
 
@@ -273,7 +269,7 @@ class AuthLoginHandler(BaseHandler):
             tornado.escape.utf8(author.hashed_password),
         )
         if password_equal:
-            self.set_secure_cookie("blogdemo_user", str(author.id))
+            self.set_signed_cookie("blogdemo_user", str(author.id))
             self.redirect(self.get_argument("next", "/"))
         else:
             self.render("login.html", error="incorrect password")
@@ -313,4 +309,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    tornado.ioloop.IOLoop.current().run_sync(main)
+    asyncio.run(main())

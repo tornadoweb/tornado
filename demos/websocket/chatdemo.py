@@ -18,12 +18,9 @@
 Authentication, error handling, etc are left as an exercise for the reader :)
 """
 
+import asyncio
 import logging
-import tornado.escape
-import tornado.ioloop
-import tornado.options
-import tornado.web
-import tornado.websocket
+import tornado
 import os.path
 import uuid
 
@@ -91,12 +88,12 @@ class ChatSocketHandler(tornado.websocket.WebSocketHandler):
         ChatSocketHandler.send_updates(chat)
 
 
-def main():
+async def main():
     tornado.options.parse_command_line()
     app = Application()
     app.listen(options.port)
-    tornado.ioloop.IOLoop.current().start()
+    await asyncio.Event().wait()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

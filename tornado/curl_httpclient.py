@@ -36,11 +36,11 @@ from tornado.httpclient import (
 )
 from tornado.log import app_log
 
-from typing import Dict, Any, Callable, Union, Tuple, Optional
+from typing import Dict, Any, Callable, Union, Optional
 import typing
 
 if typing.TYPE_CHECKING:
-    from typing import Deque  # noqa: F401
+    from typing import Deque, Tuple  # noqa: F401
 
 curl_log = logging.getLogger("tornado.curl_httpclient")
 
@@ -350,7 +350,8 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         curl.setopt(
             pycurl.HTTPHEADER,
             [
-                "%s: %s" % (native_str(k), native_str(v))
+                b"%s: %s"
+                % (native_str(k).encode("ASCII"), native_str(v).encode("ISO8859-1"))
                 for k, v in request.headers.get_all()
             ],
         )

@@ -12,7 +12,7 @@ from tornado.iostream import (
 from tornado.httputil import HTTPHeaders
 from tornado.locks import Condition, Event
 from tornado.log import gen_log
-from tornado.netutil import ssl_wrap_socket
+from tornado.netutil import ssl_options_to_context, ssl_wrap_socket
 from tornado.platform.asyncio import AddThreadSelectorEventLoop
 from tornado.tcpserver import TCPServer
 from tornado.testing import (
@@ -23,7 +23,12 @@ from tornado.testing import (
     ExpectLog,
     gen_test,
 )
-from tornado.test.util import skipIfNonUnix, refusing_port, skipPypy3V58
+from tornado.test.util import (
+    skipIfNonUnix,
+    refusing_port,
+    skipPypy3V58,
+    ignore_deprecation,
+)
 from tornado.web import RequestHandler, Application
 import asyncio
 import errno
@@ -784,7 +789,7 @@ class TestIOStreamMixin(TestReadWriteMixin):
                 "tornado.iostream.BaseIOStream._try_inline_read",
                 side_effect=IOError("boom"),
             ):
-                with self.assertRaisesRegexp(IOError, "boom"):
+                with self.assertRaisesRegex(IOError, "boom"):
                     client.read_until_close()
         finally:
             server.close()
@@ -811,7 +816,10 @@ class TestIOStreamMixin(TestReadWriteMixin):
         # windows, making this check redundant with skipIfNonUnix, but
         # we sometimes enable it on other platforms for testing.
         io_loop = IOLoop.current()
-        if isinstance(io_loop.selector_loop, AddThreadSelectorEventLoop):
+        if isinstance(
+            io_loop.selector_loop,  # type: ignore[attr-defined]
+            AddThreadSelectorEventLoop,
+        ):
             self.skipTest("AddThreadSelectorEventLoop not supported")
         server, client = yield self.make_iostream_pair()
         try:
@@ -900,11 +908,11 @@ class TestIOStream(TestIOStreamMixin, AsyncTestCase):
 
 class TestIOStreamSSL(TestIOStreamMixin, AsyncTestCase):
     def _make_server_iostream(self, connection, **kwargs):
-        connection = ssl.wrap_socket(
+        ssl_ctx = ssl_options_to_context(_server_ssl_options(), server_side=True)
+        connection = ssl_ctx.wrap_socket(
             connection,
             server_side=True,
             do_handshake_on_connect=False,
-            **_server_ssl_options()
         )
         return SSLIOStream(connection, **kwargs)
 
@@ -919,7 +927,7 @@ class TestIOStreamSSL(TestIOStreamMixin, AsyncTestCase):
 # instead of an ssl_options dict to the SSLIOStream constructor.
 class TestIOStreamSSLContext(TestIOStreamMixin, AsyncTestCase):
     def _make_server_iostream(self, connection, **kwargs):
-        context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+        context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         context.load_cert_chain(
             os.path.join(os.path.dirname(__file__), "test.crt"),
             os.path.join(os.path.dirname(__file__), "test.key"),
@@ -930,7 +938,9 @@ class TestIOStreamSSLContext(TestIOStreamMixin, AsyncTestCase):
         return SSLIOStream(connection, **kwargs)
 
     def _make_client_iostream(self, connection, **kwargs):
-        context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+        context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
         return SSLIOStream(connection, ssl_options=context, **kwargs)
 
 
@@ -1076,8 +1086,11 @@ class WaitForHandshakeTest(AsyncTestCase):
             # to openssl 1.1.c. Other platforms might be affected with
             # newer openssl too). Disable it until we figure out
             # what's up.
-            ssl_ctx.options |= getattr(ssl, "OP_NO_TLSv1_3", 0)
-            client = SSLIOStream(socket.socket(), ssl_options=ssl_ctx)
+            # Update 2021-12-28: Still happening with Python 3.10 on
+            # Windows. OP_NO_TLSv1_3 now raises a DeprecationWarning.
+            with ignore_deprecation():
+                ssl_ctx.options |= getattr(ssl, "OP_NO_TLSv1_3", 0)
+                client = SSLIOStream(socket.socket(), ssl_options=ssl_ctx)
             yield client.connect(("127.0.0.1", port))
             self.assertIsNotNone(client.socket.cipher())
         finally:

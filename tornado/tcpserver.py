@@ -24,7 +24,12 @@ from tornado import gen
 from tornado.log import app_log
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
-from tornado.netutil import bind_sockets, add_accept_handler, ssl_wrap_socket
+from tornado.netutil import (
+    bind_sockets,
+    add_accept_handler,
+    ssl_wrap_socket,
+    _DEFAULT_BACKLOG,
+)
 from tornado import process
 from tornado.util import errno_from_exception
 
@@ -43,14 +48,13 @@ class TCPServer(object):
 
       from tornado.tcpserver import TCPServer
       from tornado.iostream import StreamClosedError
-      from tornado import gen
 
       class EchoServer(TCPServer):
           async def handle_stream(self, stream, address):
               while True:
                   try:
-                      data = await stream.read_until(b"\n")
-                      await stream.write(data)
+                      data = await stream.read_until(b"\n") await
+                      stream.write(data)
                   except StreamClosedError:
                       break
 
@@ -66,37 +70,49 @@ class TCPServer(object):
 
     `TCPServer` initialization follows one of three patterns:
 
-    1. `listen`: simple single-process::
+    1. `listen`: single-process::
 
-            server = TCPServer()
-            server.listen(8888)
-            IOLoop.current().start()
+            async def main():
+                server = TCPServer()
+                server.listen(8888)
+                await asyncio.Event.wait()
 
-    2. `bind`/`start`: simple multi-process::
+            asyncio.run(main())
+
+       While this example does not create multiple processes on its own, when
+       the ``reuse_port=True`` argument is passed to ``listen()`` you can run
+       the program multiple times to create a multi-process service.
+
+    2. `add_sockets`: multi-process::
+
+            sockets = bind_sockets(8888)
+            tornado.process.fork_processes(0)
+            async def post_fork_main():
+                server = TCPServer()
+                server.add_sockets(sockets)
+                await asyncio.Event().wait()
+            asyncio.run(post_fork_main())
+
+       The `add_sockets` interface is more complicated, but it can be used with
+       `tornado.process.fork_processes` to run a multi-process service with all
+       worker processes forked from a single parent.  `add_sockets` can also be
+       used in single-process servers if you want to create your listening
+       sockets in some way other than `~tornado.netutil.bind_sockets`.
+
+       Note that when using this pattern, nothing that touches the event loop
+       can be run before ``fork_processes``.
+
+    3. `bind`/`start`: simple **deprecated** multi-process::
 
             server = TCPServer()
             server.bind(8888)
             server.start(0)  # Forks multiple sub-processes
             IOLoop.current().start()
 
-       When using this interface, an `.IOLoop` must *not* be passed
-       to the `TCPServer` constructor.  `start` will always start
-       the server on the default singleton `.IOLoop`.
-
-    3. `add_sockets`: advanced multi-process::
-
-            sockets = bind_sockets(8888)
-            tornado.process.fork_processes(0)
-            server = TCPServer()
-            server.add_sockets(sockets)
-            IOLoop.current().start()
-
-       The `add_sockets` interface is more complicated, but it can be
-       used with `tornado.process.fork_processes` to give you more
-       flexibility in when the fork happens.  `add_sockets` can
-       also be used in single-process servers if you want to create
-       your listening sockets in some way other than
-       `~tornado.netutil.bind_sockets`.
+       This pattern is deprecated because it requires interfaces in the
+       `asyncio` module that have been deprecated since Python 3.10. Support for
+       creating multiple processes in the ``start`` method will be removed in a
+       future version of Tornado.
 
     .. versionadded:: 3.1
        The ``max_buffer_size`` argument.
@@ -140,15 +156,38 @@ class TCPServer(object):
                     'keyfile "%s" does not exist' % self.ssl_options["keyfile"]
                 )
 
-    def listen(self, port: int, address: str = "") -> None:
+    def listen(
+        self,
+        port: int,
+        address: Optional[str] = None,
+        family: socket.AddressFamily = socket.AF_UNSPEC,
+        backlog: int = _DEFAULT_BACKLOG,
+        flags: Optional[int] = None,
+        reuse_port: bool = False,
+    ) -> None:
         """Starts accepting connections on the given port.
 
         This method may be called more than once to listen on multiple ports.
         `listen` takes effect immediately; it is not necessary to call
-        `TCPServer.start` afterwards.  It is, however, necessary to start
-        the `.IOLoop`.
+        `TCPServer.start` afterwards.  It is, however, necessary to start the
+        event loop if it is not already running.
+
+        All arguments have the same meaning as in
+        `tornado.netutil.bind_sockets`.
+
+        .. versionchanged:: 6.2
+
+           Added ``family``, ``backlog``, ``flags``, and ``reuse_port``
+           arguments to match `tornado.netutil.bind_sockets`.
         """
-        sockets = bind_sockets(port, address=address)
+        sockets = bind_sockets(
+            port,
+            address=address,
+            family=family,
+            backlog=backlog,
+            flags=flags,
+            reuse_port=reuse_port,
+        )
         self.add_sockets(sockets)
 
     def add_sockets(self, sockets: Iterable[socket.socket]) -> None:
@@ -175,34 +214,47 @@ class TCPServer(object):
         port: int,
         address: Optional[str] = None,
         family: socket.AddressFamily = socket.AF_UNSPEC,
-        backlog: int = 128,
+        backlog: int = _DEFAULT_BACKLOG,
+        flags: Optional[int] = None,
         reuse_port: bool = False,
     ) -> None:
         """Binds this server to the given port on the given address.
 
-        To start the server, call `start`. If you want to run this server
-        in a single process, you can call `listen` as a shortcut to the
-        sequence of `bind` and `start` calls.
+        To start the server, call `start`. If you want to run this server in a
+        single process, you can call `listen` as a shortcut to the sequence of
+        `bind` and `start` calls.
 
         Address may be either an IP address or hostname.  If it's a hostname,
-        the server will listen on all IP addresses associated with the
-        name.  Address may be an empty string or None to listen on all
-        available interfaces.  Family may be set to either `socket.AF_INET`
-        or `socket.AF_INET6` to restrict to IPv4 or IPv6 addresses, otherwise
-        both will be used if available.
+        the server will listen on all IP addresses associated with the name.
+        Address may be an empty string or None to listen on all available
+        interfaces.  Family may be set to either `socket.AF_INET` or
+        `socket.AF_INET6` to restrict to IPv4 or IPv6 addresses, otherwise both
+        will be used if available.
 
-        The ``backlog`` argument has the same meaning as for
-        `socket.listen <socket.socket.listen>`. The ``reuse_port`` argument
-        has the same meaning as for `.bind_sockets`.
+        The ``backlog`` argument has the same meaning as for `socket.listen
+        <socket.socket.listen>`. The ``reuse_port`` argument has the same
+        meaning as for `.bind_sockets`.
 
-        This method may be called multiple times prior to `start` to listen
-        on multiple ports or interfaces.
+        This method may be called multiple times prior to `start` to listen on
+        multiple ports or interfaces.
 
         .. versionchanged:: 4.4
            Added the ``reuse_port`` argument.
+
+        .. versionchanged:: 6.2
+           Added the ``flags`` argument to match `.bind_sockets`.
+
+        .. deprecated:: 6.2
+           Use either ``listen()`` or ``add_sockets()`` instead of ``bind()``
+           and ``start()``.
         """
         sockets = bind_sockets(
-            port, address=address, family=family, backlog=backlog, reuse_port=reuse_port
+            port,
+            address=address,
+            family=family,
+            backlog=backlog,
+            flags=flags,
+            reuse_port=reuse_port,
         )
         if self._started:
             self.add_sockets(sockets)
@@ -238,6 +290,10 @@ class TCPServer(object):
         .. versionchanged:: 6.0
 
            Added ``max_restarts`` argument.
+
+        .. deprecated:: 6.2
+           Use either ``listen()`` or ``add_sockets()`` instead of ``bind()``
+           and ``start()``.
         """
         assert not self._started
         self._started = True

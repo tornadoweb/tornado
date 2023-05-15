@@ -4,7 +4,7 @@ import socket
 
 from tornado import gen
 from tornado.ioloop import IOLoop
-from tornado.netutil import Resolver, ThreadedResolver
+from tornado.netutil import Resolver, ThreadedResolver, DefaultExecutorResolver
 from tornado.options import parse_command_line, define, options
 
 try:
@@ -29,7 +29,7 @@ def main():
         args = ['localhost', 'www.google.com',
                 'www.facebook.com', 'www.dropbox.com']
 
-    resolvers = [Resolver(), ThreadedResolver()]
+    resolvers = [Resolver(), ThreadedResolver(), DefaultExecutorResolver()]
 
     if twisted is not None:
         from tornado.platform.twisted import TwistedResolver

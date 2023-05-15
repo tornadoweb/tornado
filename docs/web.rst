@@ -117,9 +117,27 @@
    .. automethod:: RequestHandler.set_cookie
    .. automethod:: RequestHandler.clear_cookie
    .. automethod:: RequestHandler.clear_all_cookies
-   .. automethod:: RequestHandler.get_secure_cookie
-   .. automethod:: RequestHandler.get_secure_cookie_key_version
-   .. automethod:: RequestHandler.set_secure_cookie
+   .. automethod:: RequestHandler.get_signed_cookie
+   .. automethod:: RequestHandler.get_signed_cookie_key_version
+   .. automethod:: RequestHandler.set_signed_cookie
+   .. method:: RequestHandler.get_secure_cookie
+
+      Deprecated alias for ``get_signed_cookie``.
+
+      .. deprecated:: 6.3
+
+   .. method:: RequestHandler.get_secure_cookie_key_version
+
+      Deprecated alias for ``get_signed_cookie_key_version``.
+
+      .. deprecated:: 6.3
+
+   .. method:: RequestHandler.set_secure_cookie
+
+      Deprecated alias for ``set_signed_cookie``.
+
+      .. deprecated:: 6.3
+
    .. automethod:: RequestHandler.create_signed_value
    .. autodata:: MIN_SUPPORTED_SIGNED_VALUE_VERSION
    .. autodata:: MAX_SUPPORTED_SIGNED_VALUE_VERSION
@@ -217,9 +235,9 @@
 
          Authentication and security settings:
 
-         * ``cookie_secret``: Used by `RequestHandler.get_secure_cookie`
-           and `.set_secure_cookie` to sign cookies.
-         * ``key_version``: Used by requestHandler `.set_secure_cookie`
+         * ``cookie_secret``: Used by `RequestHandler.get_signed_cookie`
+           and `.set_signed_cookie` to sign cookies.
+         * ``key_version``: Used by requestHandler `.set_signed_cookie`
            to sign cookies with a specific key when ``cookie_secret``
            is a key dictionary.
          * ``login_url``: The `authenticated` decorator will redirect
@@ -235,11 +253,20 @@
          * ``xsrf_cookie_kwargs``: May be set to a dictionary of
            additional arguments to be passed to `.RequestHandler.set_cookie`
            for the XSRF cookie.
+         * ``xsrf_cookie_name``: Controls the name used for the XSRF
+           cookie (default ``_xsrf``). The intended use is to take
+           advantage of `cookie prefixes`_. Note that cookie prefixes
+           interact with other cookie flags, so they must be combined
+           with ``xsrf_cookie_kwargs``, such as
+           ``{"xsrf_cookie_name": "__Host-xsrf", "xsrf_cookie_kwargs":
+           {"secure": True}}``
          * ``twitter_consumer_key``, ``twitter_consumer_secret``,
            ``friendfeed_consumer_key``, ``friendfeed_consumer_secret``,
            ``google_consumer_key``, ``google_consumer_secret``,
            ``facebook_api_key``, ``facebook_secret``:  Used in the
            `tornado.auth` module to authenticate to various APIs.
+
+         .. _cookie prefixes: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#cookie_prefixes
 
          Template settings:
 
