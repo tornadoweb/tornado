@@ -50,7 +50,7 @@ import typing
 from typing import Union, Any, Type, Optional, Callable, TypeVar, Tuple, Awaitable
 
 if typing.TYPE_CHECKING:
-    from typing import Dict, List  # noqa: F401
+    from typing import Dict, List, Set  # noqa: F401
 
     from typing_extensions import Protocol
 else:
@@ -158,6 +158,18 @@ class IOLoop(Configurable):
 
     # In Python 3, _ioloop_for_asyncio maps from asyncio loops to IOLoops.
     _ioloop_for_asyncio = dict()  # type: Dict[asyncio.AbstractEventLoop, IOLoop]
+
+    # Maintain a set of all pending tasks to follow the warning in the docs
+    # of asyncio.create_tasks:
+    # https://docs.python.org/3.11/library/asyncio-task.html#asyncio.create_task
+    # This ensures that all pending tasks have a strong reference so they
+    # will not be garbage collected before they are finished.
+    # (Thus avoiding "task was destroyed but it is pending" warnings)
+    # An analogous change has been proposed in cpython for 3.13:
+    # https://github.com/python/cpython/issues/91887
+    # If that change is accepted, this can eventually be removed.
+    # If it is not, we will consider the rationale and may remove this.
+    _pending_tasks = set()  # type: Set[Future]
 
     @classmethod
     def configure(
@@ -804,6 +816,12 @@ class IOLoop(Configurable):
                 fd.close()
         except OSError:
             pass
+
+    def _register_task(self, f: Future) -> None:
+        self._pending_tasks.add(f)
+
+    def _unregister_task(self, f: Future) -> None:
+        self._pending_tasks.discard(f)
 
 
 class _Timeout(object):
