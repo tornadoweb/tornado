@@ -83,7 +83,7 @@ pyproject-hooks==1.0.0
     # via build
 pytz==2022.7.1
     # via babel
-requests==2.28.2
+requests==2.31.0
     # via sphinx
 snowballstemmer==2.2.0
     # via sphinx
@@ -108,13 +108,6 @@ sphinxcontrib-qthelp==1.0.3
     # via sphinx
 sphinxcontrib-serializinghtml==1.1.5
     # via sphinx
-tomli==2.0.1
-    # via
-    #   black
-    #   build
-    #   mypy
-    #   pyproject-api
-    #   tox
 tox==4.3.5
     # via -r requirements.in
 types-pycurl==7.45.2.0
