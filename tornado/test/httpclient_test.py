@@ -570,12 +570,11 @@ X-XSS-Protection: 1;
     @gen_test
     def test_future_http_error(self):
         with self.assertRaises(HTTPError) as context:
-            result_future = self.http_client.fetch(self.get_url("/notfound"))
-            yield result_future
+            yield self.http_client.fetch(self.get_url("/notfound"))
         assert context.exception is not None
         assert context.exception.response is not None
-        self.assertEqual(result_future.exception().code, 404)
-        self.assertEqual(result_future.exception().response.code, 404)
+        self.assertEqual(context.exception.code, 404)
+        self.assertEqual(context.exception.response.code, 404)
 
     @gen_test
     def test_future_http_error_no_raise(self):

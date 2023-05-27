@@ -299,8 +299,6 @@ class AsyncHTTPClient(Configurable):
         def handle_response(response: "HTTPResponse") -> None:
             if response.error:
                 if raise_error or not response._error_is_response_code:
-                    if isinstance(response.error, HTTPError):
-                        response.error.response = response
                     future_set_exception_unless_cancelled(future, response.error)
                     return
             future_set_result_unless_cancelled(future, response)

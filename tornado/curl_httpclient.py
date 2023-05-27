@@ -265,19 +265,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         self._multi.remove_handle(curl)
         self._free_list.append(curl)
         buffer = info["buffer"]
-        if curl_error:
-            assert curl_message is not None
-            error = CurlError(curl_error, curl_message)  # type: Optional[CurlError]
-            assert error is not None
-            code = error.code
-            effective_url = None
-            buffer.close()
-            buffer = None
-        else:
-            error = None
-            code = curl.getinfo(pycurl.HTTP_CODE)
-            effective_url = curl.getinfo(pycurl.EFFECTIVE_URL)
-            buffer.seek(0)
+
         # the various curl timings are documented at
         # http://curl.haxx.se/libcurl/c/curl_easy_getinfo.html
         time_info = dict(
@@ -290,6 +278,20 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             total=curl.getinfo(pycurl.TOTAL_TIME),
             redirect=curl.getinfo(pycurl.REDIRECT_TIME),
         )
+
+        if curl_error:
+            assert curl_message is not None
+            error = CurlError(curl_error, curl_message, time_info)  # type: Optional[CurlError]
+            assert error is not None
+            code = error.code
+            effective_url = None
+            buffer.close()
+            buffer = None
+        else:
+            error = None
+            code = curl.getinfo(pycurl.HTTP_CODE)
+            effective_url = curl.getinfo(pycurl.EFFECTIVE_URL)
+            buffer.seek(0)
         try:
             info["callback"](
                 HTTPResponse(
@@ -574,9 +576,10 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
 
 
 class CurlError(HTTPError):
-    def __init__(self, errno: int, message: str) -> None:
+    def __init__(self, errno: int, message: str, time_info: dict) -> None:
         HTTPError.__init__(self, 599, message)
         self.errno = errno
+        self.time_info = time_info
 
 
 if __name__ == "__main__":
