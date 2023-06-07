@@ -41,13 +41,16 @@ if PY3:
     import http.cookies as Cookie
     from http.client import responses
     from urllib.parse import urlencode, urlparse, urlunparse, parse_qsl
-    if sys.version_info.minor >= 10:
-        from collections.abc import MutableMapping
 else:
     import Cookie
     from httplib import responses
     from urllib import urlencode
     from urlparse import urlparse, urlunparse, parse_qsl
+
+
+if sys.version_info.major == 3 and sys.version_info.minor >= 10:
+    from collections.abc import MutableMapping
+else:
     from collections import MutableMapping
 
 
