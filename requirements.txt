@@ -12,7 +12,7 @@ black==22.12.0
     # via -r requirements.in
 build==0.10.0
     # via pip-tools
-cachetools==5.2.1
+cachetools==5.3.1
     # via tox
 certifi==2022.12.7
     # via requests
@@ -32,7 +32,7 @@ docutils==0.17.1
     # via
     #   sphinx
     #   sphinx-rtd-theme
-filelock==3.9.0
+filelock==3.12.0
     # via
     #   tox
     #   virtualenv
@@ -54,7 +54,7 @@ mypy-extensions==0.4.3
     # via
     #   black
     #   mypy
-packaging==23.0
+packaging==23.1
     # via
     #   build
     #   pyproject-api
@@ -64,7 +64,7 @@ pathspec==0.10.3
     # via black
 pip-tools==6.12.1
     # via -r requirements.in
-platformdirs==2.6.2
+platformdirs==3.5.1
     # via
     #   black
     #   tox
@@ -77,7 +77,7 @@ pyflakes==3.0.1
     # via flake8
 pygments==2.14.0
     # via sphinx
-pyproject-api==1.5.0
+pyproject-api==1.5.1
     # via tox
 pyproject-hooks==1.0.0
     # via build
@@ -108,7 +108,14 @@ sphinxcontrib-qthelp==1.0.3
     # via sphinx
 sphinxcontrib-serializinghtml==1.1.5
     # via sphinx
-tox==4.3.5
+tomli==2.0.1
+    # via
+    #   black
+    #   build
+    #   mypy
+    #   pyproject-api
+    #   tox
+tox==4.6.0
     # via -r requirements.in
 types-pycurl==7.45.2.0
     # via -r requirements.in
@@ -116,7 +123,7 @@ typing-extensions==4.4.0
     # via mypy
 urllib3==1.26.14
     # via requests
-virtualenv==20.17.1
+virtualenv==20.23.0
     # via tox
 wheel==0.38.4
     # via pip-tools
