@@ -28,6 +28,7 @@ import datetime
 import email.utils
 import numbers
 import re
+import sys
 import time
 import unicodedata
 import warnings
@@ -40,11 +41,14 @@ if PY3:
     import http.cookies as Cookie
     from http.client import responses
     from urllib.parse import urlencode, urlparse, urlunparse, parse_qsl
+    if sys.version_info.minor >= 10:
+        from collections.abc import MutableMapping
 else:
     import Cookie
     from httplib import responses
     from urllib import urlencode
     from urlparse import urlparse, urlunparse, parse_qsl
+    from collections import MutableMapping
 
 
 # responses is unused in this file, but we re-export it to other files.
@@ -104,7 +108,7 @@ class _NormalizedHeaderCache(dict):
 _normalized_headers = _NormalizedHeaderCache(1000)
 
 
-class HTTPHeaders(collections.MutableMapping):
+class HTTPHeaders(MutableMapping):
     """A dictionary that maintains ``Http-Header-Case`` for all keys.
 
     Supports multiple values per key via a pair of new methods,
