@@ -63,6 +63,7 @@ import hmac
 import time
 import urllib.parse
 import uuid
+import warnings
 
 from tornado import httpclient
 from tornado import escape
@@ -571,7 +572,13 @@ class OAuth2Mixin(object):
 
            The ``callback`` argument and returned awaitable were removed;
            this is now an ordinary synchronous function.
+
+        .. deprecated:: 6.4
+           The ``client_secret`` argument (which has never had any effect)
+           is deprecated and will be removed in Tornado 7.0.
         """
+        if client_secret is not None:
+            warnings.warn("client_secret argument is deprecated", DeprecationWarning)
         handler = cast(RequestHandler, self)
         args = {"response_type": response_type}
         if redirect_uri is not None:
