@@ -712,6 +712,12 @@ class TwitterMixin(OAuthMixin):
     includes the attributes ``username``, ``name``, ``access_token``,
     and all of the custom Twitter user attributes described at
     https://dev.twitter.com/docs/api/1.1/get/users/show
+
+    .. deprecated:: 6.3
+       This class refers to version 1.1 of the Twitter API, which has been
+       deprecated by Twitter. Since Twitter has begun to limit access to its
+       API, this class will no longer be updated and will be removed in the
+       future.
     """
 
     _OAUTH_REQUEST_TOKEN_URL = "https://api.twitter.com/oauth/request_token"
