@@ -64,11 +64,12 @@ def _atexit_callback() -> None:
             loop._waker_w.send(b"a")
         except BlockingIOError:
             pass
-        # If we don't join our (daemon) thread here, we may get a deadlock
-        # during interpreter shutdown. I don't really understand why. This
-        # deadlock happens every time in CI (both travis and appveyor) but
-        # I've never been able to reproduce locally.
-        loop._thread.join()
+        if loop._thread is not None:
+            # If we don't join our (daemon) thread here, we may get a deadlock
+            # during interpreter shutdown. I don't really understand why. This
+            # deadlock happens every time in CI (both travis and appveyor) but
+            # I've never been able to reproduce locally.
+            loop._thread.join()
     _selector_loops.clear()
 
 
@@ -443,24 +444,25 @@ class SelectorThread:
     def __init__(self, real_loop: asyncio.AbstractEventLoop) -> None:
         self._real_loop = real_loop
 
-        # Create a thread to run the select system call. We manage this thread
-        # manually so we can trigger a clean shutdown from an atexit hook. Note
-        # that due to the order of operations at shutdown, only daemon threads
-        # can be shut down in this way (non-daemon threads would require the
-        # introduction of a new hook: https://bugs.python.org/issue41962)
         self._select_cond = threading.Condition()
         self._select_args = (
             None
         )  # type: Optional[Tuple[List[_FileDescriptorLike], List[_FileDescriptorLike]]]
         self._closing_selector = False
-        self._thread = threading.Thread(
-            name="Tornado selector",
-            daemon=True,
-            target=self._run_select,
+        self._thread = None  # type: Optional[threading.Thread]
+        self._thread_manager_handle = self._thread_manager()
+
+        async def thread_manager_anext() -> None:
+            # the anext builtin wasn't added until 3.10. We just need to iterate
+            # this generator one step.
+            await self._thread_manager_handle.__anext__()
+
+        # When the loop starts, start the thread. Not too soon because we can't
+        # clean up if we get to this point but the event loop is closed without
+        # starting.
+        self._real_loop.call_soon(
+            lambda: self._real_loop.create_task(thread_manager_anext())
         )
-        self._thread.start()
-        # Start the select loop once the loop is started.
-        self._real_loop.call_soon(self._start_select)
 
         self._readers = {}  # type: Dict[_FileDescriptorLike, Callable]
         self._writers = {}  # type: Dict[_FileDescriptorLike, Callable]
@@ -473,16 +475,6 @@ class SelectorThread:
         _selector_loops.add(self)
         self.add_reader(self._waker_r, self._consume_waker)
 
-    def __del__(self) -> None:
-        # If the top-level application code uses asyncio interfaces to
-        # start and stop the event loop, no objects created in Tornado
-        # can get a clean shutdown notification. If we're just left to
-        # be GC'd, we must explicitly close our sockets to avoid
-        # logging warnings.
-        _selector_loops.discard(self)
-        self._waker_r.close()
-        self._waker_w.close()
-
     def close(self) -> None:
         if self._closed:
             return
@@ -490,13 +482,42 @@ class SelectorThread:
             self._closing_selector = True
             self._select_cond.notify()
         self._wake_selector()
-        self._thread.join()
+        if self._thread is not None:
+            self._thread.join()
         _selector_loops.discard(self)
+        self.remove_reader(self._waker_r)
         self._waker_r.close()
         self._waker_w.close()
         self._closed = True
 
+    async def _thread_manager(self) -> typing.AsyncGenerator[None, None]:
+        # Create a thread to run the select system call. We manage this thread
+        # manually so we can trigger a clean shutdown from an atexit hook. Note
+        # that due to the order of operations at shutdown, only daemon threads
+        # can be shut down in this way (non-daemon threads would require the
+        # introduction of a new hook: https://bugs.python.org/issue41962)
+        self._thread = threading.Thread(
+            name="Tornado selector",
+            daemon=True,
+            target=self._run_select,
+        )
+        self._thread.start()
+        self._start_select()
+        try:
+            # The presense of this yield statement means that this coroutine
+            # is actually an asynchronous generator, which has a special
+            # shutdown protocol. We wait at this yield point until the
+            # event loop's shutdown_asyncgens method is called, at which point
+            # we will get a GeneratorExit exception and can shut down the
+            # selector thread.
+            yield
+        except GeneratorExit:
+            self.close()
+            raise
+
     def _wake_selector(self) -> None:
+        if self._closed:
+            return
         try:
             self._waker_w.send(b"a")
         except BlockingIOError:
