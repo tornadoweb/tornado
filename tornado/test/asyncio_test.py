@@ -171,13 +171,15 @@ class SelectorThreadLeakTest(unittest.TestCase):
         # For some reason we see transient failures here, but I haven't been able
         # to catch it to identify which thread is causing it. Whatever thread it
         # is, it appears to quickly clean up on its own, so just retry a few times.
+        # At least some of the time the errant thread was running at the time we
+        # captured self.orig_thread_count, so use inequalities.
         deadline = time.time() + 1
         while time.time() < deadline:
             threads = list(threading.enumerate())
-            if len(threads) == self.orig_thread_count:
+            if len(threads) <= self.orig_thread_count:
                 break
             time.sleep(0.1)
-        self.assertEqual(self.orig_thread_count, len(threads), threads)
+        self.assertLessEqual(len(threads), self.orig_thread_count, threads)
 
     async def dummy_tornado_coroutine(self):
         # Just access the IOLoop to initialize the selector thread.
