@@ -44,15 +44,8 @@ class AsyncIOLoopTest(AsyncTestCase):
     @gen_test
     def test_asyncio_future(self):
         # Test that we can yield an asyncio future from a tornado coroutine.
-        # Without 'yield from', we must wrap coroutines in ensure_future,
-        # which was introduced during Python 3.4, deprecating the prior "async".
-        if hasattr(asyncio, "ensure_future"):
-            ensure_future = asyncio.ensure_future
-        else:
-            # async is a reserved word in Python 3.7
-            ensure_future = getattr(asyncio, "async")
-
-        x = yield ensure_future(
+        # Without 'yield from', we must wrap coroutines in ensure_future.
+        x = yield asyncio.ensure_future(
             asyncio.get_event_loop().run_in_executor(None, lambda: 42)
         )
         self.assertEqual(x, 42)
@@ -171,13 +164,15 @@ class SelectorThreadLeakTest(unittest.TestCase):
         # For some reason we see transient failures here, but I haven't been able
         # to catch it to identify which thread is causing it. Whatever thread it
         # is, it appears to quickly clean up on its own, so just retry a few times.
+        # At least some of the time the errant thread was running at the time we
+        # captured self.orig_thread_count, so use inequalities.
         deadline = time.time() + 1
         while time.time() < deadline:
             threads = list(threading.enumerate())
-            if len(threads) == self.orig_thread_count:
+            if len(threads) <= self.orig_thread_count:
                 break
             time.sleep(0.1)
-        self.assertEqual(self.orig_thread_count, len(threads), threads)
+        self.assertLessEqual(len(threads), self.orig_thread_count, threads)
 
     async def dummy_tornado_coroutine(self):
         # Just access the IOLoop to initialize the selector thread.
