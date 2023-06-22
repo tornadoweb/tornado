@@ -1437,6 +1437,35 @@ class StaticDefaultFilenameTest(WebTestCase):
         self.assertTrue(response.headers["Location"].endswith("/static/dir/"))
 
 
+class StaticDefaultFilenameRootTest(WebTestCase):
+    def get_app_kwargs(self):
+        return dict(
+            static_path=os.path.abspath(relpath("static")),
+            static_handler_args=dict(default_filename="index.html"),
+            static_url_prefix="/",
+        )
+
+    def get_handlers(self):
+        return []
+
+    def get_http_client(self):
+        # simple_httpclient only: curl doesn't let you send a request starting
+        # with two slashes.
+        return SimpleAsyncHTTPClient()
+
+    def test_no_open_redirect(self):
+        # This test verifies that the open redirect that affected some configurations
+        # prior to Tornado 6.3.2 is no longer possible. The vulnerability required
+        # a static_url_prefix of "/" and a default_filename (any value) to be set.
+        # The absolute server-side path to the static directory must also be known.
+        with ExpectLog(gen_log, ".*cannot redirect path with two initial slashes"):
+            response = self.fetch(
+                f"//evil.com/../{os.path.dirname(__file__)}/static/dir",
+                follow_redirects=False,
+            )
+        self.assertEqual(response.code, 403)
+
+
 class StaticFileWithPathTest(WebTestCase):
     def get_app_kwargs(self):
         return dict(
@@ -2847,7 +2876,7 @@ class XSRFTest(SimpleHandlerTestCase):
             body=b"",
             headers=dict(
                 {"X-Xsrftoken": self.xsrf_token},  # type: ignore
-                **self.cookie_headers()
+                **self.cookie_headers(),
             ),
         )
         self.assertEqual(response.code, 200)
