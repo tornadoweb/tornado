@@ -404,10 +404,10 @@ class CookieTest(WebTestCase):
         match = re.match("foo=bar; expires=(?P<expires>.+); Path=/", header)
         assert match is not None
 
-        expires = datetime.datetime.utcnow() + datetime.timedelta(days=10)
-        parsed = email.utils.parsedate(match.groupdict()["expires"])
-        assert parsed is not None
-        header_expires = datetime.datetime(*parsed[:6])
+        expires = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+            days=10
+        )
+        header_expires = email.utils.parsedate_to_datetime(match.groupdict()["expires"])
         self.assertTrue(abs((expires - header_expires).total_seconds()) < 10)
 
     def test_set_cookie_false_flags(self):
@@ -1697,11 +1697,10 @@ class DateHeaderTest(SimpleHandlerTestCase):
 
     def test_date_header(self):
         response = self.fetch("/")
-        parsed = email.utils.parsedate(response.headers["Date"])
-        assert parsed is not None
-        header_date = datetime.datetime(*parsed[:6])
+        header_date = email.utils.parsedate_to_datetime(response.headers["Date"])
         self.assertTrue(
-            header_date - datetime.datetime.utcnow() < datetime.timedelta(seconds=2)
+            header_date - datetime.datetime.now(datetime.timezone.utc)
+            < datetime.timedelta(seconds=2)
         )
 
 
@@ -3010,10 +3009,12 @@ class XSRFCookieKwargsTest(SimpleHandlerTestCase):
         match = re.match(".*; expires=(?P<expires>.+);.*", header)
         assert match is not None
 
-        expires = datetime.datetime.utcnow() + datetime.timedelta(days=2)
-        parsed = email.utils.parsedate(match.groupdict()["expires"])
-        assert parsed is not None
-        header_expires = datetime.datetime(*parsed[:6])
+        expires = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+            days=2
+        )
+        header_expires = email.utils.parsedate_to_datetime(match.groupdict()["expires"])
+        if header_expires.tzinfo is None:
+            header_expires = header_expires.replace(tzinfo=datetime.timezone.utc)
         self.assertTrue(abs((expires - header_expires).total_seconds()) < 10)
 
 
