@@ -852,12 +852,18 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
 
     * Go to the Google Dev Console at http://console.developers.google.com
     * Select a project, or create a new one.
+    * Depending on permissions required, you may need to set your app to
+      "testing" mode and add your account as a test user, or go through
+      a verfication process. You may also need to use the "Enable
+      APIs and Services" command to enable specific services.
     * In the sidebar on the left, select Credentials.
     * Click CREATE CREDENTIALS and click OAuth client ID.
     * Under Application type, select Web application.
     * Name OAuth 2.0 client and click Create.
     * Copy the "Client secret" and "Client ID" to the application settings as
       ``{"google_oauth": {"key": CLIENT_ID, "secret": CLIENT_SECRET}}``
+    * You must register the ``redirect_uri`` you plan to use with this class
+      on the Credentials page.
 
     .. versionadded:: 3.2
     """
@@ -907,19 +913,26 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
 
             class GoogleOAuth2LoginHandler(tornado.web.RequestHandler,
                                            tornado.auth.GoogleOAuth2Mixin):
+                # Google requires an exact match for redirect_uri, so it's
+                # best to get it from your app configuration instead of from
+                # self.request.full_uri().
+                redirect_uri = urllib.parse.urljoin(self.application.settings['redirect_base_uri'],
+                    self.reverse_url('google_oauth'))
                 async def get(self):
                     if self.get_argument('code', False):
                         access = await self.get_authenticated_user(
-                            redirect_uri='http://your.site.com/auth/google',
+                            redirect_uri=redirect_uri,
                             code=self.get_argument('code'))
                         user = await self.oauth2_request(
                             "https://www.googleapis.com/oauth2/v1/userinfo",
                             access_token=access["access_token"])
-                        # Save the user and access token with
-                        # e.g. set_signed_cookie.
+                        # Save the user and access token. For example:
+                        user_cookie = dict(id=user["id"], access_token=access["access_token"])
+                        self.set_signed_cookie("user", json.dumps(user_cookie))
+                        self.redirect("/")
                     else:
                         self.authorize_redirect(
-                            redirect_uri='http://your.site.com/auth/google',
+                            redirect_uri=redirect_uri,
                             client_id=self.get_google_oauth_settings()['key'],
                             scope=['profile', 'email'],
                             response_type='code',
