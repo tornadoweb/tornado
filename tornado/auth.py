@@ -36,17 +36,28 @@ Example usage for Google OAuth:
 .. testcode::
 
     class GoogleOAuth2LoginHandler(tornado.web.RequestHandler,
-                                   tornado.auth.GoogleOAuth2Mixin):
+                                    tornado.auth.GoogleOAuth2Mixin):
+        # Google requires an exact match for redirect_uri, so it's
+        # best to get it from your app configuration instead of from
+        # self.request.full_uri().
+        redirect_uri = urllib.parse.urljoin(self.application.settings['redirect_base_uri'],
+            self.reverse_url('google_oauth'))
         async def get(self):
             if self.get_argument('code', False):
-                user = await self.get_authenticated_user(
-                    redirect_uri='http://your.site.com/auth/google',
+                access = await self.get_authenticated_user(
+                    redirect_uri=redirect_uri,
                     code=self.get_argument('code'))
-                # Save the user with e.g. set_signed_cookie
+                user = await self.oauth2_request(
+                    "https://www.googleapis.com/oauth2/v1/userinfo",
+                    access_token=access["access_token"])
+                # Save the user and access token. For example:
+                user_cookie = dict(id=user["id"], access_token=access["access_token"])
+                self.set_signed_cookie("user", json.dumps(user_cookie))
+                self.redirect("/")
             else:
                 self.authorize_redirect(
-                    redirect_uri='http://your.site.com/auth/google',
-                    client_id=self.settings['google_oauth']['key'],
+                    redirect_uri=redirect_uri,
+                    client_id=self.get_google_oauth_settings()['key'],
                     scope=['profile', 'email'],
                     response_type='code',
                     extra_params={'approval_prompt': 'auto'})
