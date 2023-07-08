@@ -30,7 +30,6 @@ Feature demos
 ~~~~~~~~~~~~~
 
 - ``facebook``: Authentication with the Facebook Graph API.
-- ``twitter``: Authentication with the Twitter API.
 - ``file_upload``: Client and server support for streaming HTTP request 
   payloads.
 - ``tcpecho``: Using the lower-level ``IOStream`` interfaces for non-HTTP
