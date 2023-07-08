@@ -997,16 +997,19 @@ class FacebookGraphMixin(OAuth2Mixin):
             class FacebookGraphLoginHandler(tornado.web.RequestHandler,
                                             tornado.auth.FacebookGraphMixin):
               async def get(self):
+                    redirect_uri = urllib.parse.urljoin(
+                        self.application.settings['redirect_base_uri'],
+                        self.reverse_url('facebook_oauth'))
                   if self.get_argument("code", False):
                       user = await self.get_authenticated_user(
-                          redirect_uri='/auth/facebookgraph/',
+                          redirect_uri=redirect_uri,
                           client_id=self.settings["facebook_api_key"],
                           client_secret=self.settings["facebook_secret"],
                           code=self.get_argument("code"))
                       # Save the user with e.g. set_signed_cookie
                   else:
                       self.authorize_redirect(
-                          redirect_uri='/auth/facebookgraph/',
+                          redirect_uri=redirect_uri,
                           client_id=self.settings["facebook_api_key"],
                           extra_params={"scope": "user_posts"})
 
