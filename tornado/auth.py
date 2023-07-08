@@ -1008,7 +1008,7 @@ class FacebookGraphMixin(OAuth2Mixin):
                       self.authorize_redirect(
                           redirect_uri='/auth/facebookgraph/',
                           client_id=self.settings["facebook_api_key"],
-                          extra_params={"scope": "read_stream,offline_access"})
+                          extra_params={"scope": "user_posts"})
 
         .. testoutput::
            :hide:
