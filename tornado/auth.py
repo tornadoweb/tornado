@@ -33,34 +33,39 @@ See the individual service classes below for complete documentation.
 
 Example usage for Google OAuth:
 
+.. testsetup::
+
+    import urllib
+
 .. testcode::
 
     class GoogleOAuth2LoginHandler(tornado.web.RequestHandler,
                                     tornado.auth.GoogleOAuth2Mixin):
-        # Google requires an exact match for redirect_uri, so it's
-        # best to get it from your app configuration instead of from
-        # self.request.full_uri().
-        redirect_uri = urllib.parse.urljoin(self.application.settings['redirect_base_uri'],
-            self.reverse_url('google_oauth'))
         async def get(self):
-            if self.get_argument('code', False):
-                access = await self.get_authenticated_user(
-                    redirect_uri=redirect_uri,
-                    code=self.get_argument('code'))
-                user = await self.oauth2_request(
-                    "https://www.googleapis.com/oauth2/v1/userinfo",
-                    access_token=access["access_token"])
-                # Save the user and access token. For example:
-                user_cookie = dict(id=user["id"], access_token=access["access_token"])
-                self.set_signed_cookie("user", json.dumps(user_cookie))
-                self.redirect("/")
-            else:
-                self.authorize_redirect(
-                    redirect_uri=redirect_uri,
-                    client_id=self.get_google_oauth_settings()['key'],
-                    scope=['profile', 'email'],
-                    response_type='code',
-                    extra_params={'approval_prompt': 'auto'})
+            # Google requires an exact match for redirect_uri, so it's
+            # best to get it from your app configuration instead of from
+            # self.request.full_uri().
+            redirect_uri = urllib.parse.urljoin(self.application.settings['redirect_base_uri'],
+                self.reverse_url('google_oauth'))
+            async def get(self):
+                if self.get_argument('code', False):
+                    access = await self.get_authenticated_user(
+                        redirect_uri=redirect_uri,
+                        code=self.get_argument('code'))
+                    user = await self.oauth2_request(
+                        "https://www.googleapis.com/oauth2/v1/userinfo",
+                        access_token=access["access_token"])
+                    # Save the user and access token. For example:
+                    user_cookie = dict(id=user["id"], access_token=access["access_token"])
+                    self.set_signed_cookie("user", json.dumps(user_cookie))
+                    self.redirect("/")
+                else:
+                    self.authorize_redirect(
+                        redirect_uri=redirect_uri,
+                        client_id=self.get_google_oauth_settings()['key'],
+                        scope=['profile', 'email'],
+                        response_type='code',
+                        extra_params={'approval_prompt': 'auto'})
 
 .. testoutput::
    :hide:
@@ -920,34 +925,39 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
 
         Example usage:
 
+        .. testsetup::
+
+            import urllib
+
         .. testcode::
 
             class GoogleOAuth2LoginHandler(tornado.web.RequestHandler,
                                            tornado.auth.GoogleOAuth2Mixin):
-                # Google requires an exact match for redirect_uri, so it's
-                # best to get it from your app configuration instead of from
-                # self.request.full_uri().
-                redirect_uri = urllib.parse.urljoin(self.application.settings['redirect_base_uri'],
-                    self.reverse_url('google_oauth'))
                 async def get(self):
-                    if self.get_argument('code', False):
-                        access = await self.get_authenticated_user(
-                            redirect_uri=redirect_uri,
-                            code=self.get_argument('code'))
-                        user = await self.oauth2_request(
-                            "https://www.googleapis.com/oauth2/v1/userinfo",
-                            access_token=access["access_token"])
-                        # Save the user and access token. For example:
-                        user_cookie = dict(id=user["id"], access_token=access["access_token"])
-                        self.set_signed_cookie("user", json.dumps(user_cookie))
-                        self.redirect("/")
-                    else:
-                        self.authorize_redirect(
-                            redirect_uri=redirect_uri,
-                            client_id=self.get_google_oauth_settings()['key'],
-                            scope=['profile', 'email'],
-                            response_type='code',
-                            extra_params={'approval_prompt': 'auto'})
+                    # Google requires an exact match for redirect_uri, so it's
+                    # best to get it from your app configuration instead of from
+                    # self.request.full_uri().
+                    redirect_uri = urllib.parse.urljoin(self.application.settings['redirect_base_uri'],
+                        self.reverse_url('google_oauth'))
+                    async def get(self):
+                        if self.get_argument('code', False):
+                            access = await self.get_authenticated_user(
+                                redirect_uri=redirect_uri,
+                                code=self.get_argument('code'))
+                            user = await self.oauth2_request(
+                                "https://www.googleapis.com/oauth2/v1/userinfo",
+                                access_token=access["access_token"])
+                            # Save the user and access token. For example:
+                            user_cookie = dict(id=user["id"], access_token=access["access_token"])
+                            self.set_signed_cookie("user", json.dumps(user_cookie))
+                            self.redirect("/")
+                        else:
+                            self.authorize_redirect(
+                                redirect_uri=redirect_uri,
+                                client_id=self.get_google_oauth_settings()['key'],
+                                scope=['profile', 'email'],
+                                response_type='code',
+                                extra_params={'approval_prompt': 'auto'})
 
         .. testoutput::
            :hide:
@@ -1008,21 +1018,21 @@ class FacebookGraphMixin(OAuth2Mixin):
             class FacebookGraphLoginHandler(tornado.web.RequestHandler,
                                             tornado.auth.FacebookGraphMixin):
               async def get(self):
-                    redirect_uri = urllib.parse.urljoin(
-                        self.application.settings['redirect_base_uri'],
-                        self.reverse_url('facebook_oauth'))
-                  if self.get_argument("code", False):
-                      user = await self.get_authenticated_user(
-                          redirect_uri=redirect_uri,
-                          client_id=self.settings["facebook_api_key"],
-                          client_secret=self.settings["facebook_secret"],
-                          code=self.get_argument("code"))
-                      # Save the user with e.g. set_signed_cookie
-                  else:
-                      self.authorize_redirect(
-                          redirect_uri=redirect_uri,
-                          client_id=self.settings["facebook_api_key"],
-                          extra_params={"scope": "user_posts"})
+                redirect_uri = urllib.parse.urljoin(
+                    self.application.settings['redirect_base_uri'],
+                    self.reverse_url('facebook_oauth'))
+                if self.get_argument("code", False):
+                    user = await self.get_authenticated_user(
+                        redirect_uri=redirect_uri,
+                        client_id=self.settings["facebook_api_key"],
+                        client_secret=self.settings["facebook_secret"],
+                        code=self.get_argument("code"))
+                    # Save the user with e.g. set_signed_cookie
+                else:
+                    self.authorize_redirect(
+                        redirect_uri=redirect_uri,
+                        client_id=self.settings["facebook_api_key"],
+                        extra_params={"scope": "user_posts"})
 
         .. testoutput::
            :hide:
