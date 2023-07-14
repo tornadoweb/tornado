@@ -225,7 +225,15 @@ def _reload() -> None:
     else:
         spec = getattr(sys.modules["__main__"], "__spec__", None)
         argv = sys.argv
-    if spec:
+    if spec and spec.name != "__main__":
+        # __spec__ is set in two cases: when running a module, and when running a directory. (when
+        # running a file, there is no spec). In the former case, we must pass -m to maintain the
+        # module-style behavior (setting sys.path), even though python stripped -m from its argv at
+        # startup. If sys.path is exactly __main__, we're running a directory and should fall
+        # through to the non-module behavior.
+        #
+        # Some of this, including the use of exactly __main__ as a spec for directory mode,
+        # is documented at https://docs.python.org/3/library/runpy.html#runpy.run_path
         argv = ["-m", spec.name] + argv[1:]
     else:
         path_prefix = "." + os.pathsep
@@ -331,7 +339,7 @@ def main() -> None:
         # never made it into sys.modules and so we won't know to watch it.
         # Just to make sure we've covered everything, walk the stack trace
         # from the exception and watch every file.
-        for (filename, lineno, name, line) in traceback.extract_tb(sys.exc_info()[2]):
+        for filename, lineno, name, line in traceback.extract_tb(sys.exc_info()[2]):
             watch(filename)
         if isinstance(e, SyntaxError):
             # SyntaxErrors are special:  their innermost stack frame is fake

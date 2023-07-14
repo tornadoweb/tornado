@@ -24,17 +24,23 @@ class AutoreloadTest(unittest.TestCase):
             time.sleep(1)
             shutil.rmtree(self.path)
 
-    def test_reload_module(self):
+    def test_reload(self):
         main = """\
 import os
 import sys
 
 from tornado import autoreload
 
-# This import will fail if path is not set up correctly
-import testapp
+# In module mode, the path is set to the parent directory and we can import testapp.
+try:
+    import testapp
+except ImportError:
+    print("import testapp failed")
+else:
+    print("import testapp succeeded")
 
-print('Starting')
+spec = getattr(sys.modules[__name__], '__spec__', None)
+print(f"Starting {__name__=}, __spec__.name={getattr(spec, 'name', None)}")
 if 'TESTAPP_STARTED' not in os.environ:
     os.environ['TESTAPP_STARTED'] = '1'
     sys.stdout.flush()
@@ -57,16 +63,62 @@ if 'TESTAPP_STARTED' not in os.environ:
         if "PYTHONPATH" in os.environ:
             pythonpath += os.pathsep + os.environ["PYTHONPATH"]
 
-        p = Popen(
-            [sys.executable, "-m", "testapp"],
-            stdout=subprocess.PIPE,
-            cwd=self.path,
-            env=dict(os.environ, PYTHONPATH=pythonpath),
-            universal_newlines=True,
-            encoding="utf-8",
-        )
-        out = p.communicate()[0]
-        self.assertEqual(out, "Starting\nStarting\n")
+        with self.subTest(mode="module"):
+            # In module mode, the path is set to the parent directory and we can import testapp.
+            # Also, the __spec__.name is set to the fully qualified module name.
+            p = Popen(
+                [sys.executable, "-m", "testapp"],
+                stdout=subprocess.PIPE,
+                cwd=self.path,
+                env=dict(os.environ, PYTHONPATH=pythonpath),
+                universal_newlines=True,
+                encoding="utf-8",
+            )
+            out = p.communicate()[0]
+            self.assertEqual(
+                out,
+                (
+                    "import testapp succeeded\n"
+                    + "Starting __name__='__main__', __spec__.name=testapp.__main__\n"
+                )
+                * 2,
+            )
+
+        with self.subTest(mode="file"):
+            # When the __main__.py file is run directly, there is no qualified module spec and we
+            # cannot import testapp.
+            p = Popen(
+                [sys.executable, "testapp/__main__.py"],
+                stdout=subprocess.PIPE,
+                cwd=self.path,
+                env=dict(os.environ, PYTHONPATH=pythonpath),
+                universal_newlines=True,
+                encoding="utf-8",
+            )
+            out = p.communicate()[0]
+            self.assertEqual(
+                out,
+                "import testapp failed\nStarting __name__='__main__', __spec__.name=None\n"
+                * 2,
+            )
+
+        with self.subTest(mode="directory"):
+            # Running as a directory finds __main__.py like a module. It does not manipulate
+            # sys.path but it does set a spec with a name of exactly __main__.
+            p = Popen(
+                [sys.executable, "testapp"],
+                stdout=subprocess.PIPE,
+                cwd=self.path,
+                env=dict(os.environ, PYTHONPATH=pythonpath),
+                universal_newlines=True,
+                encoding="utf-8",
+            )
+            out = p.communicate()[0]
+            self.assertEqual(
+                out,
+                "import testapp failed\nStarting __name__='__main__', __spec__.name=__main__\n"
+                * 2,
+            )
 
     def test_reload_wrapper_preservation(self):
         # This test verifies that when `python -m tornado.autoreload`
