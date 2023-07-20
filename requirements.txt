@@ -75,7 +75,7 @@ pycodestyle==2.10.0
     # via flake8
 pyflakes==3.0.1
     # via flake8
-pygments==2.14.0
+pygments==2.15.0
     # via sphinx
 pyproject-api==1.5.1
     # via tox
@@ -108,13 +108,6 @@ sphinxcontrib-qthelp==1.0.3
     # via sphinx
 sphinxcontrib-serializinghtml==1.1.5
     # via sphinx
-tomli==2.0.1
-    # via
-    #   black
-    #   build
-    #   mypy
-    #   pyproject-api
-    #   tox
 tox==4.6.0
     # via -r requirements.in
 types-pycurl==7.45.2.0
