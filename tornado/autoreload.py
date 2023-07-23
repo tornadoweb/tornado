@@ -325,24 +325,13 @@ def main() -> None:
         sys.argv = [sys.argv[0]] + rest
 
     try:
-        if opts.module is not None:
-            import runpy
+        import runpy
 
+        if opts.module is not None:
             runpy.run_module(opts.module, run_name="__main__", alter_sys=True)
         else:
             assert path is not None
-            with open(path) as f:
-                # Execute the script in our namespace instead of creating
-                # a new one so that something that tries to import __main__
-                # (e.g. the unittest module) will see names defined in the
-                # script instead of just those defined in this module.
-                global __file__
-                __file__ = path
-                # If __package__ is defined, imports may be incorrectly
-                # interpreted as relative to this module.
-                global __package__
-                del __package__
-                exec_in(f.read(), globals(), globals())
+            runpy.run_path(path, run_name="__main__")
     except SystemExit as e:
         gen_log.info("Script exited with status %s", e.code)
     except Exception as e:
