@@ -183,3 +183,47 @@ else:
 
         out = autoreload_proc.communicate()[0]
         self.assertEqual(out, "Starting\n" * 2)
+
+    def test_reload_wrapper_args(self):
+        main = """\
+import os
+import sys
+
+print(os.path.basename(sys.argv[0]))
+print(f'argv={sys.argv[1:]}')
+sys.stdout.flush()
+os._exit(0)
+"""
+        # Create temporary test application
+        main_file = os.path.join(self.path, "main.py")
+        with open(main_file, "w", encoding="utf-8") as f:
+            f.write(main)
+
+        # Make sure the tornado module under test is available to the test
+        # application
+        pythonpath = os.getcwd()
+        if "PYTHONPATH" in os.environ:
+            pythonpath += os.pathsep + os.environ["PYTHONPATH"]
+
+        autoreload_proc = Popen(
+            [
+                sys.executable,
+                "-m",
+                "tornado.autoreload",
+                "main.py",
+                "arg1",
+                "--arg2",
+                "-m",
+                "arg3",
+            ],
+            stdout=subprocess.PIPE,
+            cwd=self.path,
+            env=dict(os.environ, PYTHONPATH=pythonpath),
+            universal_newlines=True,
+            encoding="utf-8",
+        )
+
+        out, err = autoreload_proc.communicate()
+        if err:
+            print("subprocess stderr:", err)
+        self.assertEqual(out, "main.py\nargv=['arg1', '--arg2', '-m', 'arg3']\n")

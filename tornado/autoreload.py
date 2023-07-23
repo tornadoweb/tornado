@@ -268,8 +268,7 @@ def _reload() -> None:
             os._exit(0)
 
 
-_USAGE = """\
-Usage:
+_USAGE = """
   python -m tornado.autoreload -m module.to.run [args...]
   python -m tornado.autoreload path/to/script.py [args...]
 """
@@ -291,6 +290,12 @@ def main() -> None:
     # Remember that we were launched with autoreload as main.
     # The main module can be tricky; set the variables both in our globals
     # (which may be __main__) and the real importable version.
+    #
+    # We use optparse instead of the newer argparse because we want to
+    # mimic the python command-line interface which requires stopping
+    # parsing at the first positional argument. optparse supports
+    # this but as far as I can tell argparse does not.
+    import optparse
     import tornado.autoreload
 
     global _autoreload_is_main
@@ -300,32 +305,39 @@ def main() -> None:
     tornado.autoreload._original_argv = _original_argv = original_argv
     original_spec = getattr(sys.modules["__main__"], "__spec__", None)
     tornado.autoreload._original_spec = _original_spec = original_spec
-    sys.argv = sys.argv[:]
-    if len(sys.argv) >= 3 and sys.argv[1] == "-m":
-        mode = "module"
-        module = sys.argv[2]
-        del sys.argv[1:3]
-    elif len(sys.argv) >= 2:
-        mode = "script"
-        script = sys.argv[1]
-        sys.argv = sys.argv[1:]
+
+    parser = optparse.OptionParser(
+        prog="python -m tornado.autoreload",
+        usage=_USAGE,
+        epilog="Either -m or a path must be specified, but not both",
+    )
+    parser.disable_interspersed_args()
+    parser.add_option("-m", dest="module", metavar="module", help="module to run")
+    opts, rest = parser.parse_args()
+    if opts.module is None:
+        if not rest:
+            print("Either -m or a path must be specified", file=sys.stderr)
+            sys.exit(1)
+        path = rest[0]
+        sys.argv = rest[:]
     else:
-        print(_USAGE, file=sys.stderr)
-        sys.exit(1)
+        path = None
+        sys.argv = [sys.argv[0]] + rest
 
     try:
-        if mode == "module":
+        if opts.module is not None:
             import runpy
 
-            runpy.run_module(module, run_name="__main__", alter_sys=True)
-        elif mode == "script":
-            with open(script) as f:
+            runpy.run_module(opts.module, run_name="__main__", alter_sys=True)
+        else:
+            assert path is not None
+            with open(path) as f:
                 # Execute the script in our namespace instead of creating
                 # a new one so that something that tries to import __main__
                 # (e.g. the unittest module) will see names defined in the
                 # script instead of just those defined in this module.
                 global __file__
-                __file__ = script
+                __file__ = path
                 # If __package__ is defined, imports may be incorrectly
                 # interpreted as relative to this module.
                 global __package__
@@ -352,10 +364,11 @@ def main() -> None:
     # restore sys.argv so subsequent executions will include autoreload
     sys.argv = original_argv
 
-    if mode == "module":
+    if opts.module is not None:
+        assert opts.module is not None
         # runpy did a fake import of the module as __main__, but now it's
         # no longer in sys.modules.  Figure out where it is and watch it.
-        loader = pkgutil.get_loader(module)
+        loader = pkgutil.get_loader(opts.module)
         if loader is not None:
             watch(loader.get_filename())  # type: ignore
 
