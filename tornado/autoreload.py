@@ -60,8 +60,7 @@ import sys
 # may become relative in spite of the future import.
 #
 # We address the former problem by reconstructing the original command
-# line (Python >= 3.4) or by setting the $PYTHONPATH environment
-# variable (Python < 3.4) before re-execution so the new process will
+# line before re-execution so the new process will
 # see the correct path.  We attempt to address the latter problem when
 # tornado.autoreload is run as __main__.
 
@@ -214,10 +213,7 @@ def _reload() -> None:
     # sys.path fixes: see comments at top of file.  If __main__.__spec__
     # exists, we were invoked with -m and the effective path is about to
     # change on re-exec.  Reconstruct the original command line to
-    # ensure that the new process sees the same path we did.  If
-    # __spec__ is not available (Python < 3.4), check instead if
-    # sys.path[0] is an empty string and add the current directory to
-    # $PYTHONPATH.
+    # ensure that the new process sees the same path we did.
     if _autoreload_is_main:
         assert _original_argv is not None
         spec = _original_spec
@@ -235,12 +231,7 @@ def _reload() -> None:
         # Some of this, including the use of exactly __main__ as a spec for directory mode,
         # is documented at https://docs.python.org/3/library/runpy.html#runpy.run_path
         argv = ["-m", spec.name] + argv[1:]
-    else:
-        path_prefix = "." + os.pathsep
-        if sys.path[0] == "" and not os.environ.get("PYTHONPATH", "").startswith(
-            path_prefix
-        ):
-            os.environ["PYTHONPATH"] = path_prefix + os.environ.get("PYTHONPATH", "")
+
     if not _has_execv:
         subprocess.Popen([sys.executable] + argv)
         os._exit(0)
