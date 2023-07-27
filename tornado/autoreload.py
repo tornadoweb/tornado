@@ -75,8 +75,9 @@ if __name__ == "__main__":
         del sys.path[0]
 
 import functools
+import importlib.abc
 import os
-import pkgutil  # type: ignore
+import pkgutil
 import sys
 import traceback
 import types
@@ -86,18 +87,13 @@ import weakref
 from tornado import ioloop
 from tornado.log import gen_log
 from tornado import process
-from tornado.util import exec_in
 
 try:
     import signal
 except ImportError:
     signal = None  # type: ignore
 
-import typing
-from typing import Callable, Dict
-
-if typing.TYPE_CHECKING:
-    from typing import List, Optional, Union  # noqa: F401
+from typing import Callable, Dict, Optional, List, Union
 
 # os.execv is broken on Windows and can't properly parse command line
 # arguments and executable name if they contain whitespaces. subprocess
@@ -107,9 +103,11 @@ _has_execv = sys.platform != "win32"
 _watched_files = set()
 _reload_hooks = []
 _reload_attempted = False
-_io_loops = weakref.WeakKeyDictionary()  # type: ignore
+_io_loops: "weakref.WeakKeyDictionary[ioloop.IOLoop, bool]" = (
+    weakref.WeakKeyDictionary()
+)
 _autoreload_is_main = False
-_original_argv = None  # type: Optional[List[str]]
+_original_argv: Optional[List[str]] = None
 _original_spec = None
 
 
@@ -125,7 +123,7 @@ def start(check_time: int = 500) -> None:
     _io_loops[io_loop] = True
     if len(_io_loops) > 1:
         gen_log.warning("tornado.autoreload started more than once in the same process")
-    modify_times = {}  # type: Dict[str, float]
+    modify_times: Dict[str, float] = {}
     callback = functools.partial(_reload_on_update, modify_times)
     scheduler = ioloop.PeriodicCallback(callback, check_time)
     scheduler.start()
@@ -300,7 +298,9 @@ def main() -> None:
         path = None
         sys.argv = [sys.argv[0]] + rest
 
-    exit_status = 1
+    # SystemExit.code is typed funny: https://github.com/python/typeshed/issues/8513
+    # All we care about is truthiness
+    exit_status: Union[int, str, None] = 1
     try:
         import runpy
 
@@ -337,10 +337,11 @@ def main() -> None:
         # runpy did a fake import of the module as __main__, but now it's
         # no longer in sys.modules.  Figure out where it is and watch it.
         loader = pkgutil.get_loader(opts.module)
-        if loader is not None:
+        if loader is not None and isinstance(loader, importlib.abc.FileLoader):
+            # TODO: fix when we update typeshed
             watch(loader.get_filename())  # type: ignore
 
-    if opts.until_success and exit_status == 0:
+    if opts.until_success and not exit_status:
         return
     wait()
 
