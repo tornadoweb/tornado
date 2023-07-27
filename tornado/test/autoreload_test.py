@@ -16,12 +16,12 @@ class AutoreloadTest(unittest.TestCase):
 
         self.path = mkdtemp()
 
-        # Each test app runs itself twice via autoreload. The first time it manually triggers
+        # Most test apps run themselves twice via autoreload. The first time it manually triggers
         # a reload (could also do this by touching a file but this is faster since filesystem
         # timestamps are not necessarily high resolution). The second time it exits directly
         # so that the autoreload wrapper (if it is used) doesn't catch it.
         #
-        # The last line of each test's "main" program should be
+        # The last line of each such test's "main" program should be
         #     exec(open("run_twice_magic.py").read())
         self.write_files(
             {
@@ -240,3 +240,25 @@ exec(open("run_twice_magic.py").read())
         )
 
         self.assertEqual(out, "main.py\nargv=['arg1', '--arg2', '-m', 'arg3']\n" * 2)
+
+    def test_reload_wrapper_until_success(self):
+        main = """\
+import os
+import sys
+
+if "TESTAPP_STARTED" in os.environ:
+    print("exiting cleanly")
+    sys.exit(0)
+else:
+    print("reloading")
+    exec(open("run_twice_magic.py").read())
+"""
+
+        # Create temporary test application
+        self.write_files({"main.py": main})
+
+        out = self.run_subprocess(
+            [sys.executable, "-m", "tornado.autoreload", "--until-success", "main.py"]
+        )
+
+        self.assertEqual(out, "reloading\nexiting cleanly\n")

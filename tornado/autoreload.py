@@ -313,6 +313,11 @@ def main() -> None:
     )
     parser.disable_interspersed_args()
     parser.add_option("-m", dest="module", metavar="module", help="module to run")
+    parser.add_option(
+        "--until-success",
+        action="store_true",
+        help="stop reloading after the program exist successfully (status code 0)",
+    )
     opts, rest = parser.parse_args()
     if opts.module is None:
         if not rest:
@@ -324,6 +329,7 @@ def main() -> None:
         path = None
         sys.argv = [sys.argv[0]] + rest
 
+    exit_status = 1
     try:
         import runpy
 
@@ -333,6 +339,7 @@ def main() -> None:
             assert path is not None
             runpy.run_path(path, run_name="__main__")
     except SystemExit as e:
+        exit_status = e.code
         gen_log.info("Script exited with status %s", e.code)
     except Exception as e:
         gen_log.warning("Script exited with uncaught exception", exc_info=True)
@@ -349,6 +356,7 @@ def main() -> None:
             if e.filename is not None:
                 watch(e.filename)
     else:
+        exit_status = 0
         gen_log.info("Script exited normally")
     # restore sys.argv so subsequent executions will include autoreload
     sys.argv = original_argv
@@ -361,6 +369,8 @@ def main() -> None:
         if loader is not None:
             watch(loader.get_filename())  # type: ignore
 
+    if opts.until_success and exit_status == 0:
+        return
     wait()
 
 
