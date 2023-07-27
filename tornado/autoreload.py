@@ -236,27 +236,7 @@ def _reload() -> None:
         subprocess.Popen([sys.executable] + argv)
         os._exit(0)
     else:
-        try:
-            os.execv(sys.executable, [sys.executable] + argv)
-        except OSError:
-            # Mac OS X versions prior to 10.6 do not support execv in
-            # a process that contains multiple threads.  Instead of
-            # re-executing in the current process, start a new one
-            # and cause the current process to exit.  This isn't
-            # ideal since the new process is detached from the parent
-            # terminal and thus cannot easily be killed with ctrl-C,
-            # but it's better than not being able to autoreload at
-            # all.
-            # Unfortunately the errno returned in this case does not
-            # appear to be consistent, so we can't easily check for
-            # this error specifically.
-            os.spawnv(
-                os.P_NOWAIT, sys.executable, [sys.executable] + argv  # type: ignore
-            )
-            # At this point the IOLoop has been closed and finally
-            # blocks will experience errors if we allow the stack to
-            # unwind, so just exit uncleanly.
-            os._exit(0)
+        os.execv(sys.executable, [sys.executable] + argv)
 
 
 _USAGE = """
