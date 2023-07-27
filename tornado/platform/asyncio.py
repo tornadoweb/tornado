@@ -37,7 +37,6 @@ from tornado.ioloop import IOLoop, _Selectable
 
 from typing import (
     Any,
-    Awaitable,
     Callable,
     Dict,
     List,
@@ -237,7 +236,7 @@ class BaseAsyncIOLoop(IOLoop):
         executor: Optional[concurrent.futures.Executor],
         func: Callable[..., _T],
         *args: Any,
-    ) -> Awaitable[_T]:
+    ) -> "asyncio.Future[_T]":
         return self.asyncio_loop.run_in_executor(executor, func, *args)
 
     def set_default_executor(self, executor: concurrent.futures.Executor) -> None:

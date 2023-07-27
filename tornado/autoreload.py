@@ -338,9 +338,7 @@ def main() -> None:
         # no longer in sys.modules.  Figure out where it is and watch it.
         loader = pkgutil.get_loader(opts.module)
         if loader is not None and isinstance(loader, importlib.abc.FileLoader):
-            # TODO: fix when we update typeshed
-            watch(loader.get_filename())  # type: ignore
-
+            watch(loader.get_filename())
     if opts.until_success and not exit_status:
         return
     wait()

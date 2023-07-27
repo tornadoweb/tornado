@@ -711,7 +711,7 @@ class IOLoop(Configurable):
         executor: Optional[concurrent.futures.Executor],
         func: Callable[..., _T],
         *args: Any
-    ) -> Awaitable[_T]:
+    ) -> "Future[_T]":
         """Runs a function in a ``concurrent.futures.Executor``. If
         ``executor`` is ``None``, the IO loop's default executor will be used.
 
