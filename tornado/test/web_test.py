@@ -1457,10 +1457,18 @@ class StaticDefaultFilenameRootTest(WebTestCase):
         # This test verifies that the open redirect that affected some configurations
         # prior to Tornado 6.3.2 is no longer possible. The vulnerability required
         # a static_url_prefix of "/" and a default_filename (any value) to be set.
-        # The absolute server-side path to the static directory must also be known.
+        # The absolute* server-side path to the static directory must also be known.
+        #
+        # * Almost absolute: On windows, the drive letter is stripped from the path.
+        test_dir = os.path.dirname(__file__)
+        drive, tail = os.path.splitdrive(test_dir)
+        if os.name == "posix":
+            self.assertEqual(tail, test_dir)
+        else:
+            test_dir = tail
         with ExpectLog(gen_log, ".*cannot redirect path with two initial slashes"):
             response = self.fetch(
-                f"//evil.com/../{os.path.dirname(__file__)}/static/dir",
+                f"//evil.com/../{test_dir}/static/dir",
                 follow_redirects=False,
             )
         self.assertEqual(response.code, 403)
