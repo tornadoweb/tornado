@@ -575,9 +575,10 @@ Transfer-Encoding: chunked
                 b"\n", b"\r\n"
             )
         )
-        start_line, headers, response = self.io_loop.run_sync(
-            lambda: read_stream_body(self.stream)
-        )
+        with ExpectLog(gen_log, ".*invalid chunk size", level=logging.INFO):
+            start_line, headers, response = self.io_loop.run_sync(
+                lambda: read_stream_body(self.stream)
+            )
         self.assertEqual(400, start_line.code)
 
     @gen_test
