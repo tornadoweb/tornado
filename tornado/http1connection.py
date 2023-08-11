@@ -442,7 +442,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         ):
             self._expected_content_remaining = 0
         elif "Content-Length" in headers:
-            self._expected_content_remaining = int(headers["Content-Length"])
+            self._expected_content_remaining = parse_int(headers["Content-Length"])
         else:
             self._expected_content_remaining = None
         # TODO: headers are supposed to be of type str, but we still have some
@@ -618,7 +618,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                 headers["Content-Length"] = pieces[0]
 
             try:
-                content_length = int(headers["Content-Length"])  # type: Optional[int]
+                content_length: Optional[int] = parse_int(headers["Content-Length"])
             except ValueError:
                 # Handles non-integer Content-Length value.
                 raise httputil.HTTPInputError(
@@ -668,7 +668,10 @@ class HTTP1Connection(httputil.HTTPConnection):
         total_size = 0
         while True:
             chunk_len_str = await self.stream.read_until(b"\r\n", max_bytes=64)
-            chunk_len = int(chunk_len_str.strip(), 16)
+            try:
+                chunk_len = parse_hex_int(native_str(chunk_len_str[:-2]))
+            except ValueError:
+                raise httputil.HTTPInputError("invalid chunk size")
             if chunk_len == 0:
                 crlf = await self.stream.read_bytes(2)
                 if crlf != b"\r\n":
@@ -842,3 +845,21 @@ class HTTP1ServerConnection(object):
                 await asyncio.sleep(0)
         finally:
             delegate.on_close(self)
+
+
+DIGITS = re.compile(r"[0-9]+")
+HEXDIGITS = re.compile(r"[0-9a-fA-F]+")
+
+
+def parse_int(s: str) -> int:
+    """Parse a non-negative integer from a string."""
+    if DIGITS.fullmatch(s) is None:
+        raise ValueError("not an integer: %r" % s)
+    return int(s)
+
+
+def parse_hex_int(s: str) -> int:
+    """Parse a non-negative hexadecimal integer from a string."""
+    if HEXDIGITS.fullmatch(s) is None:
+        raise ValueError("not a hexadecimal integer: %r" % s)
+    return int(s, 16)

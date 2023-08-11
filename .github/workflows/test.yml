@@ -51,8 +51,9 @@ jobs:
             tox_env: py311-full
           - python: '3.11.0'
             tox_env: py311-full
-          - python: '3.12.0-alpha - 3.12'
-            tox_env: py312-full
+          # py312 testing is disabled in branch6.3; full support is coming in tornado 6.4
+          #- python: '3.12.0-alpha - 3.12'
+          #  tox_env: py312-full
           - python: 'pypy-3.8'
             # Pypy is a lot slower due to jit warmup costs, so don't run the
             # "full" test config there.
