@@ -1357,7 +1357,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         ping_interval: Optional[float] = None,
         ping_timeout: Optional[float] = None,
         max_message_size: int = _default_max_message_size,
-        subprotocols: Optional[List[str]] = [],
+        subprotocols: Optional[List[str]] = None,
         resolver: Optional[Resolver] = None,
     ) -> None:
         self.connect_future = Future()  # type: Future[WebSocketClientConnection]
