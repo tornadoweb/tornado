@@ -150,8 +150,7 @@ def chain_future(a: "Future[_T]", b: "Future[_T]") -> None:
 
     """
 
-    def copy(future: "Future[_T]") -> None:
-        assert future is a
+    def copy(a: "Future[_T]") -> None:
         if b.done():
             return
         if hasattr(a, "exc_info") and a.exc_info() is not None:  # type: ignore
