@@ -125,9 +125,14 @@ class CircleRefsTest(unittest.TestCase):
                 b.c = c
                 del a, b
         self.assertIn("Circular", str(cm.exception))
-        self.assertIn("name=a", str(cm.exception))
-        self.assertIn("name=b", str(cm.exception))
-        self.assertNotIn("name=c", str(cm.exception))
+        # Leading spaces ensure we only catch these at the beginning of a line, meaning they are a
+        # cycle participant and not simply the contents of a locals dict or similar container. (This
+        # depends on the formatting above which isn't ideal but this test evolved from a
+        # command-line script) Note that the behavior here changed in python 3.11; in newer pythons
+        # locals are handled a bit differently and the test passes without the spaces.
+        self.assertIn("    name=a", str(cm.exception))
+        self.assertIn("    name=b", str(cm.exception))
+        self.assertNotIn("    name=c", str(cm.exception))
 
     async def run_handler(self, handler_class):
         app = web.Application(
