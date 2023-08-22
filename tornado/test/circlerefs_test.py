@@ -181,3 +181,29 @@ class CircleRefsTest(unittest.TestCase):
                 self.write("ok\n")
 
         asyncio.run(self.run_handler(Handler))
+
+    def test_run_on_executor(self):
+        # From https://github.com/tornadoweb/tornado/issues/2620
+        #
+        # When this test was introduced it found cycles in IOLoop.add_future
+        # and tornado.concurrent.chain_future.
+        import concurrent.futures
+
+        thread_pool = concurrent.futures.ThreadPoolExecutor(1)
+
+        class Factory(object):
+            executor = thread_pool
+
+            @tornado.concurrent.run_on_executor
+            def run(self):
+                return None
+
+        factory = Factory()
+
+        async def main():
+            # The cycle is not reported on the first call. It's not clear why.
+            for i in range(2):
+                await factory.run()
+
+        with assert_no_cycle_garbage():
+            asyncio.run(main())
