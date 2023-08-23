@@ -61,7 +61,7 @@ def xhtml_escape(value: Union[str, bytes]) -> str:
 
 def xhtml_unescape(value: Union[str, bytes]) -> str:
     """Un-escapes an XML-escaped string.
-    
+
     Equivalent to `html.unescape` except that this function always returns
     type `str` while `html.unescape` returns `bytes` if its input is `bytes`.
 
@@ -82,7 +82,7 @@ def xhtml_unescape(value: Union[str, bytes]) -> str:
 # before sending a pull request that adds **kwargs to this function.
 def json_encode(value: Any) -> str:
     """JSON-encodes the given Python object.
-    
+
     Equivalent to `json.dumps` with the additional guarantee that the output
     will never contain the character sequence ``</`` which can be problematic
     when JSON is embedded in an HTML ``<script>`` tag.
@@ -113,8 +113,8 @@ def url_escape(value: Union[str, bytes], plus: bool = True) -> str:
     """Returns a URL-encoded version of the given value.
 
     Equivalent to either `urllib.parse.quote_plus` or `urllib.parse.quote` depending on the ``plus``
-    argument. 
-    
+    argument.
+
     If ``plus`` is true (the default), spaces will be represented as ``+`` and slashes will be
     represented as ``%2F``.  This is appropriate for query strings. If ``plus`` is false, spaces
     will be represented as ``%20`` and slashes are left as-is. This is appropriate for the path
@@ -133,14 +133,14 @@ def url_unescape(value: Union[str, bytes], encoding: None, plus: bool = True) ->
     pass
 
 
-@typing.overload  # noqa: F811
+@typing.overload
 def url_unescape(
     value: Union[str, bytes], encoding: str = "utf-8", plus: bool = True
 ) -> str:
     pass
 
 
-def url_unescape(  # noqa: F811
+def url_unescape(
     value: Union[str, bytes], encoding: Optional[str] = "utf-8", plus: bool = True
 ) -> Union[str, bytes]:
     """Decodes the given value from a URL.
@@ -201,17 +201,17 @@ def utf8(value: bytes) -> bytes:
     pass
 
 
-@typing.overload  # noqa: F811
+@typing.overload
 def utf8(value: str) -> bytes:
     pass
 
 
-@typing.overload  # noqa: F811
+@typing.overload
 def utf8(value: None) -> None:
     pass
 
 
-def utf8(value: Union[None, str, bytes]) -> Optional[bytes]:  # noqa: F811
+def utf8(value: Union[None, str, bytes]) -> Optional[bytes]:
     """Converts a string argument to a byte string.
 
     If the argument is already a byte string or None, it is returned unchanged.
@@ -232,17 +232,17 @@ def to_unicode(value: str) -> str:
     pass
 
 
-@typing.overload  # noqa: F811
+@typing.overload
 def to_unicode(value: bytes) -> str:
     pass
 
 
-@typing.overload  # noqa: F811
+@typing.overload
 def to_unicode(value: None) -> None:
     pass
 
 
-def to_unicode(value: Union[None, str, bytes]) -> Optional[str]:  # noqa: F811
+def to_unicode(value: Union[None, str, bytes]) -> Optional[str]:
     """Converts a string argument to a unicode string.
 
     If the argument is already a unicode string or None, it is returned
