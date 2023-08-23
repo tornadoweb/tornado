@@ -2427,11 +2427,15 @@ class _HandlerDelegate(httputil.HTTPMessageDelegate):
         # However, that shouldn't happen because _execute has a blanket
         # except handler, and we cannot easily access the IOLoop here to
         # call add_future (because of the requirement to remain compatible
-        # with WSGI)
-        fut = gen.convert_yielded(
+        # with WSGI). We also store the Future itself to ensure the task
+        # has an explicit GC root.
+        self._fut = gen.convert_yielded(
             self.handler._execute(transforms, *self.path_args, **self.path_kwargs)
         )
-        fut.add_done_callback(lambda f: f.result())
+        self._fut.add_done_callback(lambda f: f.result())
+        # However, once it is completed, we can let go of it.
+        # This is not strictly necessary, but reduces object cycles.
+        self._fut.add_done_callback(lambda _: delattr(self, "_fut"))
         # If we are streaming the request body, then execute() is finished
         # when the handler has prepared to receive the body.  If not,
         # it doesn't matter when execute() finishes (so we return None)
