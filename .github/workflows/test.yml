@@ -74,4 +74,22 @@ jobs:
 
       - name: Run test suite
         run: python -m tox -e ${{ matrix.tox_env }}
-  
+
+  test_win:
+    # Windows tests are fairly slow, so only run one configuration here.
+    # We test on windows but not mac because even though mac is a more
+    # fully-supported platform, it's similar enough to linux that we
+    # don't generally need to test it separately. Windows is different
+    # enough that we'll break it if we don't test it in CI.
+    name: Run windows tests
+    needs: test_quick
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        name: Install Python
+        with:
+          python-version: '3.11'
+      - name: Run test suite
+        # TODO: figure out what's up with these log messages
+        run: py -m tornado.test --fail-if-logs=false
