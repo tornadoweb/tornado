@@ -138,7 +138,9 @@ class RootHandler(BaseRequestHandler):
             buckets.append(
                 {
                     "Name": name,
-                    "CreationDate": datetime.datetime.utcfromtimestamp(info.st_ctime),
+                    "CreationDate": datetime.datetime.fromtimestamp(
+                        info.st_ctime, datetime.timezone.utc
+                    ).replace(tzinfo=None),
                 }
             )
         self.render_xml({"ListAllMyBucketsResult": {"Buckets": {"Bucket": buckets}}})
@@ -183,9 +185,10 @@ class BucketHandler(BaseRequestHandler):
                 info = os.stat(object_path)
                 c.update(
                     {
-                        "LastModified": datetime.datetime.utcfromtimestamp(
-                            info.st_mtime
-                        ),
+                        "LastModified": datetime.datetime.fromtimestamp(
+                            info.st_mtime,
+                            datetime.timezone.utc,
+                        ).replace(tzinfo=None),
                         "Size": info.st_size,
                     }
                 )
@@ -231,7 +234,10 @@ class ObjectHandler(BaseRequestHandler):
         info = os.stat(path)
         self.set_header("Content-Type", "application/unknown")
         self.set_header(
-            "Last-Modified", datetime.datetime.utcfromtimestamp(info.st_mtime)
+            "Last-Modified",
+            datetime.datetime.fromtimestamp(
+                info.st_mtime, datetime.timezone.utc
+            ).replace(tzinfo=None),
         )
         with open(path, "rb") as object_file:
             self.finish(object_file.read())
