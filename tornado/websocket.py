@@ -1360,7 +1360,9 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         subprotocols: Optional[List[str]] = None,
         resolver: Optional[Resolver] = None,
     ) -> None:
-        self.connect_future = Future()  # type: Future[WebSocketClientConnection]
+        self.connect_future = (
+            Future()
+        )  # type: Union[Future[WebSocketClientConnection], None]
         self.read_queue = Queue(1)  # type: Queue[Union[None, str, bytes]]
         self.key = base64.b64encode(os.urandom(16))
         self._on_message_callback = on_message_callback
@@ -1437,7 +1439,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             self.protocol = None  # type: ignore
 
     def on_connection_close(self) -> None:
-        if not self.connect_future.done():
+        if self.connect_future and not self.connect_future.done():
             self.connect_future.set_exception(StreamClosedError())
         self._on_message(None)
         self.tcp_client.close()
@@ -1452,7 +1454,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         self.on_connection_close()
 
     def _on_http_response(self, response: httpclient.HTTPResponse) -> None:
-        if not self.connect_future.done():
+        if self.connect_future and not self.connect_future.done():
             if response.error:
                 self.connect_future.set_exception(response.error)
             else:
@@ -1488,7 +1490,8 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         # ability to see exceptions.
         self.final_callback = None  # type: ignore
 
-        future_set_result_unless_cancelled(self.connect_future, self)
+        if self.connect_future:
+            future_set_result_unless_cancelled(self.connect_future, self)
 
     def write_message(
         self, message: Union[str, bytes, Dict[str, Any]], binary: bool = False
@@ -1665,6 +1668,8 @@ def websocket_connect(
         subprotocols=subprotocols,
         resolver=resolver,
     )
-    if callback is not None:
-        IOLoop.current().add_future(conn.connect_future, callback)
-    return conn.connect_future
+    if conn.connect_future:
+        if callback is not None:
+            IOLoop.current().add_future(conn.connect_future, callback)
+        return conn.connect_future
+    raise WebSocketError("Initialize websocket client")
