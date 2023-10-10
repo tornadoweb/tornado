@@ -486,7 +486,8 @@ class WebSocketTest(WebSocketBaseTestCase):
     @gen_test
     def test_reference_self_after_been_closed(self):
         ws = yield websocket_connect(
-            "ws://127.0.0.1:%d/close_reason" % self.get_http_port())
+            "ws://127.0.0.1:%d/close_reason" % self.get_http_port()
+        )
         msg = yield ws.read_message()
         self.assertIs(msg, None)
         self.assertIs(ws.connect_future, None)
