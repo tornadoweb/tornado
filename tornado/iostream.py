@@ -1217,7 +1217,7 @@ class IOStream(BaseIOStream):
 
         The ``ssl_options`` argument may be either an `ssl.SSLContext`
         object or a dictionary of keyword arguments for the
-        `ssl.wrap_socket` function.  The ``server_hostname`` argument
+        `ssl.SSLContext.wrap_socket` function.  The ``server_hostname`` argument
         will be used for certificate validation unless disabled
         in the ``ssl_options``.
 
@@ -1322,7 +1322,7 @@ class SSLIOStream(IOStream):
     If the socket passed to the constructor is already connected,
     it should be wrapped with::
 
-        ssl.wrap_socket(sock, do_handshake_on_connect=False, **kwargs)
+        ssl.SSLContext(...).wrap_socket(sock, do_handshake_on_connect=False, **kwargs)
 
     before constructing the `SSLIOStream`.  Unconnected sockets will be
     wrapped when `IOStream.connect` is finished.
@@ -1333,7 +1333,7 @@ class SSLIOStream(IOStream):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """The ``ssl_options`` keyword argument may either be an
         `ssl.SSLContext` object or a dictionary of keywords arguments
-        for `ssl.wrap_socket`
+        for `ssl.SSLContext.wrap_socket`
         """
         self._ssl_options = kwargs.pop("ssl_options", _client_ssl_defaults)
         super().__init__(*args, **kwargs)
