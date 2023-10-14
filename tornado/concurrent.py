@@ -54,7 +54,7 @@ def is_future(x: Any) -> bool:
 
 
 class DummyExecutor(futures.Executor):
-    def submit(
+    def submit(  # type: ignore[override]
         self, fn: Callable[..., _T], *args: Any, **kwargs: Any
     ) -> "futures.Future[_T]":
         future = futures.Future()  # type: futures.Future[_T]
@@ -64,8 +64,15 @@ class DummyExecutor(futures.Executor):
             future_set_exc_info(future, sys.exc_info())
         return future
 
-    def shutdown(self, wait: bool = True) -> None:
-        pass
+    if sys.version_info >= (3, 9):
+
+        def shutdown(self, wait: bool = True, cancel_futures: bool = False) -> None:
+            pass
+
+    else:
+
+        def shutdown(self, wait: bool = True) -> None:
+            pass
 
 
 dummy_executor = DummyExecutor()

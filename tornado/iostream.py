@@ -1411,9 +1411,9 @@ class SSLIOStream(IOStream):
             return self.close(exc_info=err)
         else:
             self._ssl_accepting = False
-            if not self._verify_cert(self.socket.getpeercert()):
-                self.close()
-                return
+            # Prior to the introduction of SNI, this is where we would check
+            # the server's claimed hostname.
+            assert ssl.HAS_SNI
             self._finish_ssl_connect()
 
     def _finish_ssl_connect(self) -> None:
@@ -1421,33 +1421,6 @@ class SSLIOStream(IOStream):
             future = self._ssl_connect_future
             self._ssl_connect_future = None
             future_set_result_unless_cancelled(future, self)
-
-    def _verify_cert(self, peercert: Any) -> bool:
-        """Returns ``True`` if peercert is valid according to the configured
-        validation mode and hostname.
-
-        The ssl handshake already tested the certificate for a valid
-        CA signature; the only thing that remains is to check
-        the hostname.
-        """
-        if isinstance(self._ssl_options, dict):
-            verify_mode = self._ssl_options.get("cert_reqs", ssl.CERT_NONE)
-        elif isinstance(self._ssl_options, ssl.SSLContext):
-            verify_mode = self._ssl_options.verify_mode
-        assert verify_mode in (ssl.CERT_NONE, ssl.CERT_REQUIRED, ssl.CERT_OPTIONAL)
-        if verify_mode == ssl.CERT_NONE or self._server_hostname is None:
-            return True
-        cert = self.socket.getpeercert()
-        if cert is None and verify_mode == ssl.CERT_REQUIRED:
-            gen_log.warning("No SSL certificate given")
-            return False
-        try:
-            ssl.match_hostname(peercert, self._server_hostname)
-        except ssl.CertificateError as e:
-            gen_log.warning("Invalid SSL certificate: %s" % e)
-            return False
-        else:
-            return True
 
     def _handle_read(self) -> None:
         if self._ssl_accepting:

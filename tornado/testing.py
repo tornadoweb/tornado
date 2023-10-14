@@ -206,10 +206,7 @@ class AsyncTestCase(unittest.TestCase):
         # this always happens in tests, so cancel any tasks that are
         # still pending by the time we get here.
         asyncio_loop = self.io_loop.asyncio_loop  # type: ignore
-        if hasattr(asyncio, "all_tasks"):  # py37
-            tasks = asyncio.all_tasks(asyncio_loop)  # type: ignore
-        else:
-            tasks = asyncio.Task.all_tasks(asyncio_loop)
+        tasks = asyncio.all_tasks(asyncio_loop)
         # Tasks that are done may still appear here and may contain
         # non-cancellation exceptions, so filter them out.
         tasks = [t for t in tasks if not t.done()]  # type: ignore
