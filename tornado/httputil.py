@@ -879,6 +879,7 @@ RequestStartLine = collections.namedtuple(
 
 
 _http_version_re = re.compile(r"^HTTP/1\.[0-9]$")
+_http_method_re = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
 
 
 def parse_request_start_line(line: str) -> RequestStartLine:
@@ -898,6 +899,10 @@ def parse_request_start_line(line: str) -> RequestStartLine:
     if not _http_version_re.match(version):
         raise HTTPInputError(
             "Malformed HTTP version in HTTP Request-Line: %r" % version
+        )
+    if not _http_method_re.match(method):
+        raise HTTPInputError(
+            "Malformed method in HTTP Request-line: %r" % method
         )
     return RequestStartLine(method, path, version)
 
