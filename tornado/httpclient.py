@@ -36,6 +36,7 @@ To select ``curl_httpclient``, call `AsyncHTTPClient.configure` at startup::
     AsyncHTTPClient.configure("tornado.curl_httpclient.CurlAsyncHTTPClient")
 """
 
+import contextvars
 import datetime
 import functools
 from io import BytesIO
@@ -303,7 +304,12 @@ class AsyncHTTPClient(Configurable):
                     return
             future_set_result_unless_cancelled(future, response)
 
-        self.fetch_impl(cast(HTTPRequest, request_proxy), handle_response)
+        context = contextvars.copy_context()
+
+        self.fetch_impl(
+            cast(HTTPRequest, request_proxy),
+            lambda response: context.run(handle_response, response),
+        )
         return future
 
     def fetch_impl(
