@@ -5,7 +5,7 @@
   {% if len(entries) > 0 %}
     <updated>{{ max(e.updated for e in entries).strftime(date_format) }}</updated>
   {% else %}
-    <updated>{{ datetime.datetime.utcnow().strftime(date_format) }}</updated>
+    <updated>{{ datetime.datetime.now(datetime.timezone.utc).strftime(date_format) }}</updated>
   {% end %}
   <id>http://{{ request.host }}/</id>
   <link rel="alternate" href="http://{{ request.host }}/" title="{{ handler.settings["blog_title"] }}" type="text/html"/>
