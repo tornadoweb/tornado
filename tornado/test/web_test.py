@@ -1128,6 +1128,15 @@ class StaticFileTest(WebTestCase):
         self.assertTrue(b"Disallow: /" in response.body)
         self.assertEqual(response.headers.get("Content-Type"), "text/plain")
 
+    def test_static_files_cacheable(self):
+        # Test that the version parameter triggers cache-control headers. This
+        # test is pretty weak but it gives us coverage of the code path which
+        # was important for detecting the deprecation of datetime.utcnow.
+        response = self.fetch("/robots.txt?v=12345")
+        self.assertTrue(b"Disallow: /" in response.body)
+        self.assertIn("Cache-Control", response.headers)
+        self.assertIn("Expires", response.headers)
+
     def test_static_compressed_files(self):
         response = self.fetch("/static/sample.xml.gz")
         self.assertEqual(response.headers.get("Content-Type"), "application/gzip")

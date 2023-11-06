@@ -197,21 +197,21 @@ class CircleRefsTest(unittest.TestCase):
         # and tornado.concurrent.chain_future.
         import concurrent.futures
 
-        thread_pool = concurrent.futures.ThreadPoolExecutor(1)
+        with concurrent.futures.ThreadPoolExecutor(1) as thread_pool:
 
-        class Factory(object):
-            executor = thread_pool
+            class Factory(object):
+                executor = thread_pool
 
-            @tornado.concurrent.run_on_executor
-            def run(self):
-                return None
+                @tornado.concurrent.run_on_executor
+                def run(self):
+                    return None
 
-        factory = Factory()
+            factory = Factory()
 
-        async def main():
-            # The cycle is not reported on the first call. It's not clear why.
-            for i in range(2):
-                await factory.run()
+            async def main():
+                # The cycle is not reported on the first call. It's not clear why.
+                for i in range(2):
+                    await factory.run()
 
-        with assert_no_cycle_garbage():
-            asyncio.run(main())
+            with assert_no_cycle_garbage():
+                asyncio.run(main())
