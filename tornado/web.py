@@ -59,7 +59,7 @@ request, or to limit your use of other threads to
 the executor do not refer to Tornado objects.
 
 """
-
+import asyncio
 import base64
 import binascii
 import datetime
@@ -1708,9 +1708,13 @@ class RequestHandler(object):
                     return
 
             method = getattr(self, self.request.method.lower())
-            result = method(*self.path_args, **self.path_kwargs)
-            if result is not None:
-                result = await result
+            if asyncio.iscoroutinefunction(method):
+                await method(*self.path_args, **self.path_kwargs)
+            else:
+                executor = getattr(self, "executor")
+                method = functools.partial(method, **self.path_kwargs)
+                await asyncio.get_running_loop().run_in_executor(executor, method, *self.path_args)
+
             if self._auto_finish and not self._finished:
                 self.finish()
         except Exception as e:
