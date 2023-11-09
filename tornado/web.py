@@ -93,6 +93,7 @@ from tornado.httpserver import HTTPServer
 from tornado import httputil
 from tornado import iostream
 from tornado import locale
+from tornado.ioloop import IOLoop
 from tornado.log import access_log, app_log, gen_log
 from tornado import template
 from tornado.escape import utf8, _unicode
@@ -1790,7 +1791,7 @@ class RequestHandler(object):
             else:
                 executor = getattr(self, "executor")
                 method = functools.partial(method, **self.path_kwargs)
-                await asyncio.get_running_loop().run_in_executor(executor, method, *self.path_args)
+                await IOLoop.current().run_in_executor(executor, method, *self.path_args)
 
             if self._auto_finish and not self._finished:
                 self.finish()
