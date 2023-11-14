@@ -517,7 +517,9 @@ class AsyncHTTPSTestCase(AsyncHTTPTestCase):
     def default_ssl_options() -> Dict[str, Any]:
         # Testing keys were generated with:
         # openssl req -new -keyout tornado/test/test.key \
-        #                     -out tornado/test/test.crt -nodes -days 3650 -x509
+        #     -out tornado/test/test.crt \
+        #     -nodes -days 3650 -x509 \
+        #     -subj "/CN=foo.example.com" -addext "subjectAltName = DNS:foo.example.com"
         module_dir = os.path.dirname(__file__)
         return dict(
             certfile=os.path.join(module_dir, "test", "test.crt"),
