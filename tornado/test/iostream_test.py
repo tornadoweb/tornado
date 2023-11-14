@@ -1197,7 +1197,12 @@ class TestIOStreamCheckHostname(AsyncTestCase):
     @gen_test
     async def test_no_match(self):
         stream = SSLIOStream(socket.socket(), ssl_options=self.client_ssl_ctx)
-        with ExpectLog(gen_log, ".*alert bad certificate", level=logging.WARNING):
+        with ExpectLog(
+            gen_log,
+            ".*alert bad certificate",
+            level=logging.WARNING,
+            required=platform.system() != "Windows",
+        ):
             with self.assertRaises(ssl.SSLCertVerificationError):
                 with ExpectLog(
                     gen_log,
@@ -1210,7 +1215,9 @@ class TestIOStreamCheckHostname(AsyncTestCase):
                     )
             # The server logs a warning while cleaning up the failed connection.
             # Unfortunately there's no good hook to wait for this logging.
-            await asyncio.sleep(0.1)
+            # It doesn't seem to happen on windows; I'm not sure why.
+            if platform.system() != "Windows":
+                await asyncio.sleep(0.1)
 
     @gen_test
     async def test_check_disabled(self):
