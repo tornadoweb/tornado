@@ -1,0 +1,12 @@
+What's new in Tornado 6.3.3
+===========================
+
+Aug 11, 2023
+------------
+
+Security improvements
+~~~~~~~~~~~~~~~~~~~~~
+
+- The ``Content-Length`` header and ``chunked`` ``Transfer-Encoding`` sizes are now parsed
+  more strictly (according to the relevant RFCs) to avoid potential request-smuggling
+  vulnerabilities when deployed behind certain proxies.

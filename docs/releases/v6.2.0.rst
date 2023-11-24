@@ -7,6 +7,10 @@ Jul 3, 2022
 Deprecation notice
 ~~~~~~~~~~~~~~~~~~
 
+- April 2023 update: Python 3.12 reversed some of the changes described below.
+  In Tornado 6.3, `.AsyncTestCase`, `.AsyncHTTPTestCase`, and the behavior
+  of the `.IOLoop` constructor related to the ``make_current`` parameter
+  are no longer deprecated. 
 - Python 3.10 has begun the process of significant changes to the APIs for
   managing the event loop. Calls to methods such as `asyncio.get_event_loop` may
   now raise `DeprecationWarning` if no event loop is running. This has

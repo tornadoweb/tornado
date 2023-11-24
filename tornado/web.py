@@ -79,6 +79,7 @@ import socket
 import sys
 import threading
 import time
+import warnings
 import tornado
 import traceback
 import types
@@ -91,10 +92,8 @@ from tornado import gen
 from tornado.httpserver import HTTPServer
 from tornado import httputil
 from tornado import iostream
-import tornado.locale
 from tornado import locale
 from tornado.log import access_log, app_log, gen_log
-import tornado.netutil
 from tornado import template
 from tornado.escape import utf8, _unicode
 from tornado.routing import (
@@ -609,6 +608,7 @@ class RequestHandler(object):
         httponly: bool = False,
         secure: bool = False,
         samesite: Optional[str] = None,
+        **kwargs: Any,
     ) -> None:
         """Sets an outgoing cookie name/value with the given options.
 
@@ -625,6 +625,10 @@ class RequestHandler(object):
         to set an expiration time in days from today (if both are set, ``expires``
         is used).
 
+        .. deprecated:: 6.3
+           Keyword arguments are currently accepted case-insensitively.
+           In Tornado 7.0 this will be changed to only accept lowercase
+           arguments.
         """
         # The cookie library only accepts type str, in both python 2 and 3
         name = escape.native_str(name)
@@ -643,7 +647,9 @@ class RequestHandler(object):
         if domain:
             morsel["domain"] = domain
         if expires_days is not None and not expires:
-            expires = datetime.datetime.utcnow() + datetime.timedelta(days=expires_days)
+            expires = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+                days=expires_days
+            )
         if expires:
             morsel["expires"] = httputil.format_timestamp(expires)
         if path:
@@ -659,6 +665,17 @@ class RequestHandler(object):
             morsel["secure"] = True
         if samesite:
             morsel["samesite"] = samesite
+        if kwargs:
+            # The setitem interface is case-insensitive, so continue to support
+            # kwargs for backwards compatibility until we can remove deprecated
+            # features.
+            for k, v in kwargs.items():
+                morsel[k] = v
+            warnings.warn(
+                f"Deprecated arguments to set_cookie: {set(kwargs.keys())} "
+                "(should be lowercase)",
+                DeprecationWarning,
+            )
 
     def clear_cookie(self, name: str, **kwargs: Any) -> None:
         """Deletes the cookie with the given name.
@@ -683,7 +700,9 @@ class RequestHandler(object):
                 raise TypeError(
                     f"clear_cookie() got an unexpected keyword argument '{excluded_arg}'"
                 )
-        expires = datetime.datetime.utcnow() - datetime.timedelta(days=365)
+        expires = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+            days=365
+        )
         self.set_cookie(name, value="", expires=expires, **kwargs)
 
     def clear_all_cookies(self, **kwargs: Any) -> None:
@@ -2778,7 +2797,8 @@ class StaticFileHandler(RequestHandler):
         if cache_time > 0:
             self.set_header(
                 "Expires",
-                datetime.datetime.utcnow() + datetime.timedelta(seconds=cache_time),
+                datetime.datetime.now(datetime.timezone.utc)
+                + datetime.timedelta(seconds=cache_time),
             )
             self.set_header("Cache-Control", "max-age=" + str(cache_time))
 
@@ -2797,12 +2817,12 @@ class StaticFileHandler(RequestHandler):
         # content has not been modified
         ims_value = self.request.headers.get("If-Modified-Since")
         if ims_value is not None:
-            date_tuple = email.utils.parsedate(ims_value)
-            if date_tuple is not None:
-                if_since = datetime.datetime(*date_tuple[:6])
-                assert self.modified is not None
-                if if_since >= self.modified:
-                    return True
+            if_since = email.utils.parsedate_to_datetime(ims_value)
+            if if_since.tzinfo is None:
+                if_since = if_since.replace(tzinfo=datetime.timezone.utc)
+            assert self.modified is not None
+            if if_since >= self.modified:
+                return True
 
         return False
 
@@ -2864,6 +2884,15 @@ class StaticFileHandler(RequestHandler):
             # but there is some prefix to the path that was already
             # trimmed by the routing
             if not self.request.path.endswith("/"):
+                if self.request.path.startswith("//"):
+                    # A redirect with two initial slashes is a "protocol-relative" URL.
+                    # This means the next path segment is treated as a hostname instead
+                    # of a part of the path, making this effectively an open redirect.
+                    # Reject paths starting with two slashes to prevent this.
+                    # This is only reachable under certain configurations.
+                    raise HTTPError(
+                        403, "cannot redirect path with two initial slashes"
+                    )
                 self.redirect(self.request.path + "/", permanent=True)
                 return None
             absolute_path = os.path.join(absolute_path, self.default_filename)
@@ -2957,6 +2986,10 @@ class StaticFileHandler(RequestHandler):
         object or None.
 
         .. versionadded:: 3.1
+
+        .. versionchanged:: 6.4
+           Now returns an aware datetime object instead of a naive one.
+           Subclasses that override this method may return either kind.
         """
         stat_result = self._stat()
         # NOTE: Historically, this used stat_result[stat.ST_MTIME],
@@ -2967,7 +3000,9 @@ class StaticFileHandler(RequestHandler):
         # consistency with the past (and because we have a unit test
         # that relies on this), we truncate the float here, although
         # I'm not sure that's the right thing to do.
-        modified = datetime.datetime.utcfromtimestamp(int(stat_result.st_mtime))
+        modified = datetime.datetime.fromtimestamp(
+            int(stat_result.st_mtime), datetime.timezone.utc
+        )
         return modified
 
     def get_content_type(self) -> str:
@@ -3101,7 +3136,7 @@ class FallbackHandler(RequestHandler):
             django.core.handlers.wsgi.WSGIHandler())
         application = tornado.web.Application([
             (r"/foo", FooHandler),
-            (r".*", FallbackHandler, dict(fallback=wsgi_app),
+            (r".*", FallbackHandler, dict(fallback=wsgi_app)),
         ])
     """
 

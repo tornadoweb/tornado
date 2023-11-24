@@ -27,7 +27,7 @@ Backwards-compatibility notes
   longer supported. (The `ssl` module was updated in version 2.7.9,
   although in some distributions the updates are present in builds
   with a lower version number. Tornado requires `ssl.SSLContext`,
-  `ssl.create_default_context`, and `ssl.match_hostname`)
+  `ssl.create_default_context`, and ``ssl.match_hostname``)
 - Versions of Python 3.5 prior to 3.5.2 are no longer supported due to
   a change in the async iterator protocol in that version.
 - The ``trollius`` project (`asyncio` backported to Python 2) is no

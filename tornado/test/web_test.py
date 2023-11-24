@@ -17,6 +17,7 @@ from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
+from tornado.test.util import ignore_deprecation
 from tornado.util import ObjectDict, unicode_type
 from tornado.web import (
     Application,
@@ -318,6 +319,11 @@ class CookieTest(WebTestCase):
                 self.set_cookie("c", "1", httponly=True)
                 self.set_cookie("d", "1", httponly=False)
 
+        class SetCookieDeprecatedArgs(RequestHandler):
+            def get(self):
+                # Mixed case is supported, but deprecated
+                self.set_cookie("a", "b", HttpOnly=True, pATH="/foo")
+
         return [
             ("/set", SetCookieHandler),
             ("/get", GetCookieHandler),
@@ -327,6 +333,7 @@ class CookieTest(WebTestCase):
             ("/set_max_age", SetCookieMaxAgeHandler),
             ("/set_expires_days", SetCookieExpiresDaysHandler),
             ("/set_falsy_flags", SetCookieFalsyFlags),
+            ("/set_deprecated", SetCookieDeprecatedArgs),
         ]
 
     def test_set_cookie(self):
@@ -397,10 +404,10 @@ class CookieTest(WebTestCase):
         match = re.match("foo=bar; expires=(?P<expires>.+); Path=/", header)
         assert match is not None
 
-        expires = datetime.datetime.utcnow() + datetime.timedelta(days=10)
-        parsed = email.utils.parsedate(match.groupdict()["expires"])
-        assert parsed is not None
-        header_expires = datetime.datetime(*parsed[:6])
+        expires = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+            days=10
+        )
+        header_expires = email.utils.parsedate_to_datetime(match.groupdict()["expires"])
         self.assertTrue(abs((expires - header_expires).total_seconds()) < 10)
 
     def test_set_cookie_false_flags(self):
@@ -412,6 +419,12 @@ class CookieTest(WebTestCase):
         self.assertEqual(headers[1].lower(), "b=1; path=/")
         self.assertEqual(headers[2].lower(), "c=1; httponly; path=/")
         self.assertEqual(headers[3].lower(), "d=1; path=/")
+
+    def test_set_cookie_deprecated(self):
+        with ignore_deprecation():
+            response = self.fetch("/set_deprecated")
+        header = response.headers.get("Set-Cookie")
+        self.assertEqual(header, "a=b; HttpOnly; Path=/foo")
 
 
 class AuthRedirectRequestHandler(RequestHandler):
@@ -1115,6 +1128,15 @@ class StaticFileTest(WebTestCase):
         self.assertTrue(b"Disallow: /" in response.body)
         self.assertEqual(response.headers.get("Content-Type"), "text/plain")
 
+    def test_static_files_cacheable(self):
+        # Test that the version parameter triggers cache-control headers. This
+        # test is pretty weak but it gives us coverage of the code path which
+        # was important for detecting the deprecation of datetime.utcnow.
+        response = self.fetch("/robots.txt?v=12345")
+        self.assertTrue(b"Disallow: /" in response.body)
+        self.assertIn("Cache-Control", response.headers)
+        self.assertIn("Expires", response.headers)
+
     def test_static_compressed_files(self):
         response = self.fetch("/static/sample.xml.gz")
         self.assertEqual(response.headers.get("Content-Type"), "application/gzip")
@@ -1258,7 +1280,7 @@ class StaticFileTest(WebTestCase):
         # to ``Range: bytes=0-`` :(
         self.assertEqual(response.code, 200)
         robots_file_path = os.path.join(self.static_dir, "robots.txt")
-        with open(robots_file_path) as f:
+        with open(robots_file_path, encoding="utf-8") as f:
             self.assertEqual(response.body, utf8(f.read()))
         self.assertEqual(response.headers.get("Content-Length"), "26")
         self.assertEqual(response.headers.get("Content-Range"), None)
@@ -1269,7 +1291,7 @@ class StaticFileTest(WebTestCase):
         )
         self.assertEqual(response.code, 200)
         robots_file_path = os.path.join(self.static_dir, "robots.txt")
-        with open(robots_file_path) as f:
+        with open(robots_file_path, encoding="utf-8") as f:
             self.assertEqual(response.body, utf8(f.read()))
         self.assertEqual(response.headers.get("Content-Length"), "26")
         self.assertEqual(response.headers.get("Content-Range"), None)
@@ -1280,7 +1302,7 @@ class StaticFileTest(WebTestCase):
         )
         self.assertEqual(response.code, 206)
         robots_file_path = os.path.join(self.static_dir, "robots.txt")
-        with open(robots_file_path) as f:
+        with open(robots_file_path, encoding="utf-8") as f:
             self.assertEqual(response.body, utf8(f.read()[1:]))
         self.assertEqual(response.headers.get("Content-Length"), "25")
         self.assertEqual(response.headers.get("Content-Range"), "bytes 1-25/26")
@@ -1307,7 +1329,7 @@ class StaticFileTest(WebTestCase):
         )
         self.assertEqual(response.code, 200)
         robots_file_path = os.path.join(self.static_dir, "robots.txt")
-        with open(robots_file_path) as f:
+        with open(robots_file_path, encoding="utf-8") as f:
             self.assertEqual(response.body, utf8(f.read()))
         self.assertEqual(response.headers.get("Content-Length"), "26")
         self.assertEqual(response.headers.get("Content-Range"), None)
@@ -1422,6 +1444,43 @@ class StaticDefaultFilenameTest(WebTestCase):
         response = self.fetch("/static/dir", follow_redirects=False)
         self.assertEqual(response.code, 301)
         self.assertTrue(response.headers["Location"].endswith("/static/dir/"))
+
+
+class StaticDefaultFilenameRootTest(WebTestCase):
+    def get_app_kwargs(self):
+        return dict(
+            static_path=os.path.abspath(relpath("static")),
+            static_handler_args=dict(default_filename="index.html"),
+            static_url_prefix="/",
+        )
+
+    def get_handlers(self):
+        return []
+
+    def get_http_client(self):
+        # simple_httpclient only: curl doesn't let you send a request starting
+        # with two slashes.
+        return SimpleAsyncHTTPClient()
+
+    def test_no_open_redirect(self):
+        # This test verifies that the open redirect that affected some configurations
+        # prior to Tornado 6.3.2 is no longer possible. The vulnerability required
+        # a static_url_prefix of "/" and a default_filename (any value) to be set.
+        # The absolute* server-side path to the static directory must also be known.
+        #
+        # * Almost absolute: On windows, the drive letter is stripped from the path.
+        test_dir = os.path.dirname(__file__)
+        drive, tail = os.path.splitdrive(test_dir)
+        if os.name == "posix":
+            self.assertEqual(tail, test_dir)
+        else:
+            test_dir = tail
+        with ExpectLog(gen_log, ".*cannot redirect path with two initial slashes"):
+            response = self.fetch(
+                f"//evil.com/../{test_dir}/static/dir",
+                follow_redirects=False,
+            )
+        self.assertEqual(response.code, 403)
 
 
 class StaticFileWithPathTest(WebTestCase):
@@ -1684,11 +1743,10 @@ class DateHeaderTest(SimpleHandlerTestCase):
 
     def test_date_header(self):
         response = self.fetch("/")
-        parsed = email.utils.parsedate(response.headers["Date"])
-        assert parsed is not None
-        header_date = datetime.datetime(*parsed[:6])
+        header_date = email.utils.parsedate_to_datetime(response.headers["Date"])
         self.assertTrue(
-            header_date - datetime.datetime.utcnow() < datetime.timedelta(seconds=2)
+            header_date - datetime.datetime.now(datetime.timezone.utc)
+            < datetime.timedelta(seconds=2)
         )
 
 
@@ -2835,7 +2893,7 @@ class XSRFTest(SimpleHandlerTestCase):
             body=b"",
             headers=dict(
                 {"X-Xsrftoken": self.xsrf_token},  # type: ignore
-                **self.cookie_headers()
+                **self.cookie_headers(),
             ),
         )
         self.assertEqual(response.code, 200)
@@ -2997,10 +3055,12 @@ class XSRFCookieKwargsTest(SimpleHandlerTestCase):
         match = re.match(".*; expires=(?P<expires>.+);.*", header)
         assert match is not None
 
-        expires = datetime.datetime.utcnow() + datetime.timedelta(days=2)
-        parsed = email.utils.parsedate(match.groupdict()["expires"])
-        assert parsed is not None
-        header_expires = datetime.datetime(*parsed[:6])
+        expires = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+            days=2
+        )
+        header_expires = email.utils.parsedate_to_datetime(match.groupdict()["expires"])
+        if header_expires.tzinfo is None:
+            header_expires = header_expires.replace(tzinfo=datetime.timezone.utc)
         self.assertTrue(abs((expires - header_expires).total_seconds()) < 10)
 
 

@@ -1,0 +1,101 @@
+What's new in Tornado 6.3.0
+===========================
+
+Apr 17, 2023
+------------
+
+Highlights
+~~~~~~~~~~
+
+- The new `.Application` setting ``xsrf_cookie_name`` can now be used to
+  take advantage of the ``__Host`` cookie prefix for improved security.
+  To use it, add ``{"xsrf_cookie_name": "__Host-xsrf", "xsrf_cookie_kwargs": 
+  {"secure": True}}`` to your `.Application` settings. Note that this feature
+  currently only works when HTTPS is used.
+- `.WSGIContainer` now supports running the application in a ``ThreadPoolExecutor`` so
+  the event loop is no longer blocked.
+- `.AsyncTestCase` and `.AsyncHTTPTestCase`, which were deprecated in Tornado 6.2,
+  are no longer deprecated.
+- WebSockets are now much faster at receiving large messages split into many
+  fragments.
+
+General changes
+~~~~~~~~~~~~~~~
+
+- Python 3.7 is no longer supported; the minimum supported Python version is 3.8.
+  Python 3.12 is now supported.
+- To avoid spurious deprecation warnings, users of Python 3.10 should upgrade
+  to at least version 3.10.9, and users of Python 3.11 should upgrade to at least
+  version 3.11.1. 
+- Tornado submodules are now imported automatically on demand. This means it is
+  now possible to use a single ``import tornado`` statement and refer to objects
+  in submodules such as `tornado.web.RequestHandler`.
+
+Deprecation notices
+~~~~~~~~~~~~~~~~~~~
+
+- In Tornado 7.0, `tornado.testing.ExpectLog` will match ``WARNING``
+  and above regardless of the current logging configuration, unless the
+  ``level`` argument is used.
+- `.RequestHandler.get_secure_cookie` is now a deprecated alias for
+  `.RequestHandler.get_signed_cookie`. `.RequestHandler.set_secure_cookie`
+  is now a deprecated alias for `.RequestHandler.set_signed_cookie`.
+- `.RequestHandler.clear_all_cookies` is deprecated. No direct replacement
+  is provided; `.RequestHandler.clear_cookie` should be used on individual
+  cookies.
+- Calling the `.IOLoop` constructor without a ``make_current`` argument, which was
+  deprecated in Tornado 6.2, is no longer deprecated.
+- `.AsyncTestCase` and `.AsyncHTTPTestCase`, which were deprecated in Tornado 6.2,
+  are no longer deprecated.
+- `.AsyncTestCase.get_new_ioloop` is deprecated. 
+
+``tornado.auth``
+~~~~~~~~~~~~~~~~
+
+- New method `.GoogleOAuth2Mixin.get_google_oauth_settings` can now be overridden
+  to get credentials from a source other than the `.Application` settings.
+
+``tornado.gen``
+~~~~~~~~~~~~~~~
+
+- `contextvars` now work properly when a ``@gen.coroutine`` calls a native coroutine.
+
+``tornado.options``
+~~~~~~~~~~~~~~~~~~~
+
+- `~.OptionParser.parse_config_file` now recognizes single comma-separated strings (in addition to
+  lists of strings) for options with ``multiple=True``.
+
+``tornado.web``
+~~~~~~~~~~~~~~~
+
+- New `.Application` setting ``xsrf_cookie_name`` can be used to change the
+  name of the XSRF cookie. This is most useful to take advantage of the
+  ``__Host-`` cookie prefix. 
+- `.RequestHandler.get_secure_cookie` and `.RequestHandler.set_secure_cookie`
+  (and related methods and attributes) have been renamed to
+  `~.RequestHandler.get_signed_cookie` and `~.RequestHandler.set_signed_cookie`.
+  This makes it more explicit what kind of security is provided, and avoids
+  confusion with the ``Secure`` cookie attribute and ``__Secure-`` cookie prefix.
+  The old names remain supported as deprecated aliases.
+- `.RequestHandler.clear_cookie` now accepts all keyword arguments accepted by
+  `~.RequestHandler.set_cookie`. In some cases clearing a cookie requires certain
+  arguments to be passed the same way in which it was set. 
+- `.RequestHandler.clear_all_cookies` now accepts additional keyword arguments
+  for the same reason as ``clear_cookie``. However, since the requirements
+  for additional arguments mean that it cannot reliably clear all cookies,
+  this method is now deprecated.
+
+
+``tornado.websocket``
+~~~~~~~~~~~~~~~~~~~~~
+
+- It is now much faster (no longer quadratic) to receive large messages that
+  have been split into many fragments.
+- `.websocket_connect` now accepts a ``resolver`` parameter.
+
+``tornado.wsgi``
+~~~~~~~~~~~~~~~~
+
+- `.WSGIContainer` now accepts an ``executor`` parameter which can be used
+  to run the WSGI application on a thread pool. 

@@ -1,16 +1,11 @@
 """Implementation of the WebSocket protocol.
 
 `WebSockets <http://dev.w3.org/html5/websockets/>`_ allow for bidirectional
-communication between the browser and server.
-
-WebSockets are supported in the current versions of all major browsers,
-although older versions that do not support WebSockets are still in use
-(refer to http://caniuse.com/websockets for details).
+communication between the browser and server. WebSockets are supported in the
+current versions of all major browsers.
 
 This module implements the final version of the WebSocket protocol as
-defined in `RFC 6455 <http://tools.ietf.org/html/rfc6455>`_.  Certain
-browser versions (notably Safari 5.x) implemented an earlier draft of
-the protocol (known as "draft 76") and are not compatible with this module.
+defined in `RFC 6455 <http://tools.ietf.org/html/rfc6455>`_.
 
 .. versionchanged:: 4.0
    Removed support for the draft 76 protocol version.
@@ -23,8 +18,9 @@ import hashlib
 import os
 import sys
 import struct
-import tornado.web
+import tornado
 from urllib.parse import urlparse
+import warnings
 import zlib
 
 from tornado.concurrent import Future, future_set_result_unless_cancelled
@@ -1361,7 +1357,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         ping_interval: Optional[float] = None,
         ping_timeout: Optional[float] = None,
         max_message_size: int = _default_max_message_size,
-        subprotocols: Optional[List[str]] = [],
+        subprotocols: Optional[List[str]] = None,
         resolver: Optional[Resolver] = None,
     ) -> None:
         self.connect_future = Future()  # type: Future[WebSocketClientConnection]
@@ -1414,6 +1410,15 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             65536,
             104857600,
         )
+
+    def __del__(self) -> None:
+        if self.protocol is not None:
+            # Unclosed client connections can sometimes log "task was destroyed but
+            # was pending" warnings if shutdown strikes at the wrong time (such as
+            # while a ping is being processed due to ping_interval). Log our own
+            # warning to make it a little more deterministic (although it's still
+            # dependent on GC timing).
+            warnings.warn("Unclosed WebSocketClientConnection", ResourceWarning)
 
     def close(self, code: Optional[int] = None, reason: Optional[str] = None) -> None:
         """Closes the websocket connection.
@@ -1589,6 +1594,7 @@ def websocket_connect(
     ping_timeout: Optional[float] = None,
     max_message_size: int = _default_max_message_size,
     subprotocols: Optional[List[str]] = None,
+    resolver: Optional[Resolver] = None,
 ) -> "Awaitable[WebSocketClientConnection]":
     """Client-side websocket support.
 
@@ -1632,6 +1638,9 @@ def websocket_connect(
 
     .. versionchanged:: 5.1
        Added the ``subprotocols`` argument.
+
+    .. versionchanged:: 6.3
+       Added the ``resolver`` argument.
     """
     if isinstance(url, httpclient.HTTPRequest):
         assert connect_timeout is None
@@ -1653,6 +1662,7 @@ def websocket_connect(
         ping_timeout=ping_timeout,
         max_message_size=max_message_size,
         subprotocols=subprotocols,
+        resolver=resolver,
     )
     if callback is not None:
         IOLoop.current().add_future(conn.connect_future, callback)
