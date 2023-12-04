@@ -1117,7 +1117,9 @@ class WebSocketProtocol13(WebSocketProtocol):
         reserved_bits = header & self.RSV_MASK
         opcode = header & self.OPCODE_MASK
         opcode_is_control = opcode & 0x8
-        if self._decompressor is not None and opcode != 0:
+        # Control frames are never compressed, but can also be interleaved with a series
+        # of fragmented data frames. Don't let them affect _frame_compressed
+        if self._decompressor is not None and opcode != 0 and not opcode_is_control:
             # Compression flag is present in the first frame's header,
             # but we can't decompress until we have all the frames of
             # the message.
@@ -1197,7 +1199,10 @@ class WebSocketProtocol13(WebSocketProtocol):
         if self.client_terminated:
             return None
 
-        if self._frame_compressed:
+        opcode_is_control = opcode & 0x8
+        # _frame_compressed does not apply to control frames.
+        # Control frames are never compressed.
+        if self._frame_compressed and not opcode_is_control:
             assert self._decompressor is not None
             try:
                 data = self._decompressor.decompress(data)
