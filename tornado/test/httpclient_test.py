@@ -121,7 +121,7 @@ class PatchHandler(RequestHandler):
 
 
 class AllMethodsHandler(RequestHandler):
-    SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ("OTHER",)  # type: ignore
+    SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ("OTHER",)
 
     def method(self):
         assert self.request.method is not None
