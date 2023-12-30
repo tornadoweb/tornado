@@ -1,8 +1,8 @@
 What's new in Tornado 6.4.0
 ===========================
 
-In Progress
------------
+Nov 28, 2023
+------------
 
 General Changes
 ~~~~~~~~~~~~~~~
