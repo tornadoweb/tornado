@@ -184,7 +184,18 @@ from tornado.escape import url_escape, url_unescape, utf8
 from tornado.log import app_log
 from tornado.util import basestring_type, import_object, re_unescape, unicode_type
 
-from typing import Any, Union, Optional, Awaitable, List, Dict, Pattern, Tuple, overload
+from typing import (
+    Any,
+    Sequence,
+    Union,
+    Optional,
+    Awaitable,
+    List,
+    Dict,
+    Pattern,
+    Tuple,
+    overload,
+)
 
 
 class Router(httputil.HTTPServerConnectionDelegate):
@@ -286,10 +297,10 @@ class _DefaultMessageDelegate(httputil.HTTPMessageDelegate):
 
 # _RuleList can either contain pre-constructed Rules or a sequence of
 # arguments to be passed to the Rule constructor.
-_RuleList = List[
+_RuleList = Sequence[
     Union[
         "Rule",
-        List[Any],  # Can't do detailed typechecking of lists.
+        Sequence[Any],  # Can't do detailed typechecking of lists.
         Tuple[Union[str, "Matcher"], Any],
         Tuple[Union[str, "Matcher"], Any, Dict[str, Any]],
         Tuple[Union[str, "Matcher"], Any, Dict[str, Any], str],
@@ -338,7 +349,7 @@ class RuleRouter(Router):
             passed to Rule constructor).
         """
         for rule in rules:
-            if isinstance(rule, (tuple, list)):
+            if isinstance(rule, (tuple, list, Sequence)):
                 assert len(rule) in (2, 3, 4)
                 if isinstance(rule[0], basestring_type):
                     rule = Rule(PathMatches(rule[0]), *rule[1:])
