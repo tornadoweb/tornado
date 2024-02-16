@@ -1222,6 +1222,10 @@ class RequestHandler(object):
                 future.set_result(None)
                 return future
 
+    def _should_not_send_content(self, status_code: int) -> bool:
+        """Check if we should not send body content for given `status_code`"""
+        return status_code in (204, 304) or (100 <= status_code < 200)
+
     def finish(self, chunk: Optional[Union[str, bytes, dict]] = None) -> "Future[None]":
         """Finishes this response, ending the HTTP request.
 
@@ -1255,10 +1259,9 @@ class RequestHandler(object):
                 if self.check_etag_header():
                     self._write_buffer = []
                     self.set_status(304)
-            if self._status_code in (204, 304) or (100 <= self._status_code < 200):
-                assert not self._write_buffer, (
-                    "Cannot send body with %s" % self._status_code
-                )
+            if self._should_not_send_content(self._status_code):
+                if self._write_buffer:
+                    raise RuntimeError(f"Cannot send body with status code HTTP{self._status_code}")
                 self._clear_representation_headers()
             elif "Content-Length" not in self._headers:
                 content_length = sum(len(part) for part in self._write_buffer)
@@ -1349,7 +1352,9 @@ class RequestHandler(object):
         the "current" exception for purposes of methods like
         ``sys.exc_info()`` or ``traceback.format_exc``.
         """
-        if self.settings.get("serve_traceback") and "exc_info" in kwargs:
+        if self._should_not_send_content(status_code):
+            self.finish()
+        elif self.settings.get("serve_traceback") and "exc_info" in kwargs:
             # in debug mode, try to send a traceback
             self.set_header("Content-Type", "text/plain")
             for line in traceback.format_exception(*kwargs["exc_info"]):
