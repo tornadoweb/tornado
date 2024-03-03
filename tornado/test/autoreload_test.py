@@ -73,9 +73,13 @@ class AutoreloadTest(unittest.TestCase):
     def run_subprocess(self, args):
         # Make sure the tornado module under test is available to the test
         # application
-        pythonpath = os.getcwd()
+        parts = [os.getcwd()]
         if "PYTHONPATH" in os.environ:
-            pythonpath += os.pathsep + os.environ["PYTHONPATH"]
+            parts += [
+                os.path.join(os.getcwd(), part)
+                for part in os.environ["PYTHONPATH"].split(os.pathsep)
+            ]
+        pythonpath = os.pathsep.join(parts)
 
         p = Popen(
             args,
