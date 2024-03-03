@@ -62,6 +62,10 @@ if typing.TYPE_CHECKING:
     from asyncio import Future  # noqa: F401
     import unittest  # noqa: F401
 
+    StrMutableMapping = collections.abc.MutableMapping[str, str]
+else:
+    StrMutableMapping = collections.abc.MutableMapping
+
 
 @lru_cache(1000)
 def _normalize_header(name: str) -> str:
@@ -73,7 +77,7 @@ def _normalize_header(name: str) -> str:
     return "-".join([w.capitalize() for w in name.split("-")])
 
 
-class HTTPHeaders(collections.abc.MutableMapping):
+class HTTPHeaders(StrMutableMapping):
     """A dictionary that maintains ``Http-Header-Case`` for all keys.
 
     Supports multiple values per key via a pair of new methods,
