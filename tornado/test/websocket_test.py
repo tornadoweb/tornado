@@ -378,7 +378,7 @@ class WebSocketTest(WebSocketBaseTestCase):
         ws.write_message("hello")
         with ExpectLog(app_log, "Uncaught exception"):
             response = yield ws.read_message()
-        self.assertIs(response, None)
+        self.assertIsNone(response)
 
     @gen_test
     def test_websocket_http_fail(self):
