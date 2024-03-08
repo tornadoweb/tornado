@@ -119,5 +119,8 @@ setuptools.setup(
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python :: Implementation :: PyPy",
     ],
+    install_requires=[
+                         "redis==5.0.1"
+                     ]
     **kwargs
 )

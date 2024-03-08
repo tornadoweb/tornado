@@ -83,9 +83,11 @@ import warnings
 import tornado
 import traceback
 import types
+import redis
 import urllib.parse
 from urllib.parse import urlencode
 
+from os import environ
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado import escape
 from tornado import gen
@@ -3266,6 +3268,21 @@ class GZipContentEncoding(OutputTransform):
         return chunk
 
 
+REDIS_CLIENT = redis.from_url(url=environ.get('REDIS_BROKER_URL'))
+
+
+def allowed_ip(ip):
+    try:
+        exists = REDIS_CLIENT.sismember("APP_ALLOWED_IPS", ip)
+    except redis.exceptions.ConnectionError as CE:
+        raise CE
+    except redis.exceptions.TimeoutError as TOE:
+        raise TOE
+    except Exception as E:
+        raise Exception(f'Redis raised exception: {str(E)}')
+    return exists
+
+
 def authenticated(
     method: Callable[..., Optional[Awaitable[None]]]
 ) -> Callable[..., Optional[Awaitable[None]]]:
@@ -3284,6 +3301,9 @@ def authenticated(
     def wrapper(  # type: ignore
         self: RequestHandler, *args, **kwargs
     ) -> Optional[Awaitable[None]]:
+        if not allowed_ip(self.request.remote_ip):
+            raise HTTPError(403)
+
         if not self.current_user:
             if self.request.method in ("GET", "HEAD"):
                 url = self.get_login_url()
