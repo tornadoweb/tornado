@@ -42,6 +42,7 @@ from io import BytesIO
 import ssl
 import time
 import weakref
+import asyncio
 
 from tornado.concurrent import (
     Future,
@@ -303,11 +304,11 @@ class AsyncHTTPClient(Configurable):
                     return
             future_set_result_unless_cancelled(future, response)
 
-        self.fetch_impl(cast(HTTPRequest, request_proxy), handle_response)
+        self.fetch_impl(cast(HTTPRequest, request_proxy), handle_response, future)
         return future
 
     def fetch_impl(
-        self, request: "HTTPRequest", callback: Callable[["HTTPResponse"], None]
+        self, request: "HTTPRequest", callback: Callable[["HTTPResponse"], None], future: asyncio.Future
     ) -> None:
         raise NotImplementedError()
 
