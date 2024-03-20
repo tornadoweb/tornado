@@ -8,7 +8,7 @@ alabaster==0.7.13
     # via sphinx
 babel==2.11.0
     # via sphinx
-black==22.12.0
+black==24.3.0
     # via -r requirements.in
 build==0.10.0
     # via pip-tools
@@ -56,6 +56,7 @@ mypy-extensions==0.4.3
     #   mypy
 packaging==23.1
     # via
+    #   black
     #   build
     #   pyproject-api
     #   sphinx
