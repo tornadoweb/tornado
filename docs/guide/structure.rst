@@ -81,6 +81,8 @@ are mapped to ``StoryHandler``.  That number is passed (as a string) to
 ``StoryHandler.get``.
 
 ::
+import tornado.ioloop
+from tornado.web import Application, RequestHandler, url
 
     class MainHandler(RequestHandler):
         def get(self):
@@ -98,6 +100,10 @@ are mapped to ``StoryHandler``.  That number is passed (as a string) to
         url(r"/", MainHandler),
         url(r"/story/([0-9]+)", StoryHandler, dict(db=db), name="story")
         ])
+
+if __name__ == "__main__":
+    app.listen(8888)
+    tornado.ioloop.IOLoop.current().start()
 
 The `.Application` constructor takes many keyword arguments that
 can be used to customize the behavior of the application and enable
