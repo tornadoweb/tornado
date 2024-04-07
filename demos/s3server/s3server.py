@@ -138,7 +138,9 @@ class RootHandler(BaseRequestHandler):
             buckets.append(
                 {
                     "Name": name,
-                    "CreationDate": datetime.datetime.utcfromtimestamp(info.st_ctime),
+                    "CreationDate": datetime.datetime.fromtimestamp(
+                        info.st_ctime, datetime.timezone.utc
+                    ),
                 }
             )
         self.render_xml({"ListAllMyBucketsResult": {"Buckets": {"Bucket": buckets}}})

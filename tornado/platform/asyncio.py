@@ -23,6 +23,7 @@ the same event loop.
 """
 
 import asyncio
+import atexit
 import concurrent.futures
 import errno
 import functools
@@ -37,7 +38,6 @@ from tornado.ioloop import IOLoop, _Selectable
 
 from typing import (
     Any,
-    Awaitable,
     Callable,
     Dict,
     List,
@@ -58,6 +58,31 @@ class _HasFileno(Protocol):
 _FileDescriptorLike = Union[int, _HasFileno]
 
 _T = TypeVar("_T")
+
+
+# Collection of selector thread event loops to shut down on exit.
+_selector_loops: Set["SelectorThread"] = set()
+
+
+def _atexit_callback() -> None:
+    for loop in _selector_loops:
+        with loop._select_cond:
+            loop._closing_selector = True
+            loop._select_cond.notify()
+        try:
+            loop._waker_w.send(b"a")
+        except BlockingIOError:
+            pass
+        if loop._thread is not None:
+            # If we don't join our (daemon) thread here, we may get a deadlock
+            # during interpreter shutdown. I don't really understand why. This
+            # deadlock happens every time in CI (both travis and appveyor) but
+            # I've never been able to reproduce locally.
+            loop._thread.join()
+    _selector_loops.clear()
+
+
+atexit.register(_atexit_callback)
 
 
 class BaseAsyncIOLoop(IOLoop):
@@ -237,7 +262,7 @@ class BaseAsyncIOLoop(IOLoop):
         executor: Optional[concurrent.futures.Executor],
         func: Callable[..., _T],
         *args: Any,
-    ) -> Awaitable[_T]:
+    ) -> "asyncio.Future[_T]":
         return self.asyncio_loop.run_in_executor(executor, func, *args)
 
     def set_default_executor(self, executor: concurrent.futures.Executor) -> None:
@@ -454,6 +479,7 @@ class SelectorThread:
         self._waker_r, self._waker_w = socket.socketpair()
         self._waker_r.setblocking(False)
         self._waker_w.setblocking(False)
+        _selector_loops.add(self)
         self.add_reader(self._waker_r, self._consume_waker)
 
     def close(self) -> None:
@@ -465,6 +491,7 @@ class SelectorThread:
         self._wake_selector()
         if self._thread is not None:
             self._thread.join()
+        _selector_loops.discard(self)
         self.remove_reader(self._waker_r)
         self._waker_r.close()
         self._waker_w.close()

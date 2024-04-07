@@ -1,0 +1,91 @@
+What's new in Tornado 6.4.0
+===========================
+
+Nov 28, 2023
+------------
+
+General Changes
+~~~~~~~~~~~~~~~
+
+- Python 3.12 is now supported. Older versions of Tornado will work on Python 3.12 but may log
+  deprecation warnings.
+
+Deprecation Notices
+~~~~~~~~~~~~~~~~~~~
+
+- `.IOLoop.add_callback_from_signal` is suspected to have been broken since Tornado 5.0 and will be
+  removed in version 7.0.  Use `asyncio.loop.add_signal_handler` instead.
+- The ``client_secret`` argument to `.OAuth2Mixin.authorize_redirect` is deprecated and will be
+  removed in Tornado 7.0. This argument has never been used and other similar methods in this module
+  don't have it.
+- `.TwitterMixin` is deprecated and will be removed in the future.
+
+``tornado.auth``
+~~~~~~~~~~~~~~~~
+
+- The ``client_secret`` argument to `.OAuth2Mixin.authorize_redirect` is deprecated and will be
+  removed in Tornado 7.0. This argument has never been used and other similar methods in this module
+  don't have it.
+- `.TwitterMixin` is deprecated and will be removed in the future.
+
+``tornado.autoreload``
+~~~~~~~~~~~~~~~~~~~~~~
+
+- Autoreload can now be used when the program is run as a directory rather than a file or module.
+- New CLI flag ``--until-success`` re-runs the program on any failure but stops after the first
+  successful run.
+
+``tornado.concurrent``
+~~~~~~~~~~~~~~~~~~~~~~
+
+- Fixed reference cycles that could lead to increased memory usage.
+
+``tornado.escape``
+~~~~~~~~~~~~~~~~~~
+
+- Several methods in this module now simply pass through to their equivalents in the standard
+  library.
+
+``tornado.gen``
+~~~~~~~~~~~~~~~
+
+- This module now holds a strong reference to all running `asyncio.Task` objects it creates. This
+  prevents premature garbage collection which could cause warnings like "Task was destroyed but it
+  is pending!".
+
+``tornado.ioloop``
+~~~~~~~~~~~~~~~~~~
+
+- `.IOLoop.add_callback_from_signal` is suspected to have been broken since Tornado 5.0 and will be
+  removed in version 7.0.  Use `asyncio.loop.add_signal_handler` instead.
+- The type annotation for `.IOLoop.run_in_executor` has been updated to match the updated signature
+  of `asyncio.loop.run_in_executor`.
+- Fixed reference cycles that could lead to increased memory usage.
+
+``tornado.locale``
+~~~~~~~~~~~~~~~~~~
+
+- `.format_timestamp` now supports "aware" datetime objects.
+
+``tornado.platform.asyncio``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- The shutdown protocol for `.AddThreadSelectorEventLoop` now requires the use of `asyncio.run` or
+  `asyncio.loop.shutdown_asyncgens` to avoid leaking the thread.
+- Introduced `.SelectorThread` class containing the core functionality of
+  `.AddThreadSelectorEventLoop`.
+- The ``close()`` method of `.AddThreadSelectorEventLoop` is now idempotent.
+
+``tornado.web``
+~~~~~~~~~~~~~~~
+
+- `.StaticFileHandler.get_modified_time` now supports "aware" datetime objects and the default
+  implementation now returns aware objects.
+
+``tornado.websocket``
+~~~~~~~~~~~~~~~~~~~~~
+
+- Unclosed client connections now reliably log a warning. Previously the warning was dependent on
+  garbage collection and whether the ``ping_interval`` option was used.
+- The ``subprotocols`` argument to `.WebSocketClientConnection` now defaults to None instead of an
+  empty list (which was mutable and reused)

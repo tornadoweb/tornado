@@ -696,22 +696,20 @@ class IOLoop(Configurable):
             # the error logging (i.e. it goes to tornado.log.app_log
             # instead of asyncio's log).
             future.add_done_callback(
-                lambda f: self._run_callback(functools.partial(callback, future))
+                lambda f: self._run_callback(functools.partial(callback, f))
             )
         else:
             assert is_future(future)
             # For concurrent futures, we use self.add_callback, so
             # it's fine if future_add_done_callback inlines that call.
-            future_add_done_callback(
-                future, lambda f: self.add_callback(callback, future)
-            )
+            future_add_done_callback(future, lambda f: self.add_callback(callback, f))
 
     def run_in_executor(
         self,
         executor: Optional[concurrent.futures.Executor],
         func: Callable[..., _T],
         *args: Any
-    ) -> Awaitable[_T]:
+    ) -> "Future[_T]":
         """Runs a function in a ``concurrent.futures.Executor``. If
         ``executor`` is ``None``, the IO loop's default executor will be used.
 

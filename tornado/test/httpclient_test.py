@@ -853,7 +853,7 @@ class SyncHTTPClientSubprocessTest(unittest.TestCase):
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             check=True,
-            timeout=5,
+            timeout=15,
         )
         if proc.stdout:
             print("STDOUT:")

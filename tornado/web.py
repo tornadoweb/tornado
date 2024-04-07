@@ -2797,7 +2797,8 @@ class StaticFileHandler(RequestHandler):
         if cache_time > 0:
             self.set_header(
                 "Expires",
-                datetime.datetime.utcnow() + datetime.timedelta(seconds=cache_time),
+                datetime.datetime.now(datetime.timezone.utc)
+                + datetime.timedelta(seconds=cache_time),
             )
             self.set_header("Cache-Control", "max-age=" + str(cache_time))
 
@@ -3135,7 +3136,7 @@ class FallbackHandler(RequestHandler):
             django.core.handlers.wsgi.WSGIHandler())
         application = tornado.web.Application([
             (r"/foo", FooHandler),
-            (r".*", FallbackHandler, dict(fallback=wsgi_app),
+            (r".*", FallbackHandler, dict(fallback=wsgi_app)),
         ])
     """
 
