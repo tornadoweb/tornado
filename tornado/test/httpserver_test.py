@@ -919,8 +919,8 @@ class KeepAliveTest(AsyncHTTPTestCase):
         self.stream.write(b"GET / HTTP/1.0\r\n\r\n")
         yield self.read_response()
         data = yield self.stream.read_until_close()
-        self.assertTrue(not data)
-        self.assertTrue("Connection" not in self.headers)
+        self.assertFalse(data)
+        self.assertNotIn("Connection", self.headers)
         self.close()
 
     @gen_test

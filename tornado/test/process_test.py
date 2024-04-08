@@ -66,13 +66,13 @@ class ProcessTest(unittest.TestCase):
             signal.alarm(5)  # master process
             try:
                 id = fork_processes(3, max_restarts=3)
-                self.assertTrue(id is not None)
+                self.assertIsNotNone(id)
                 signal.alarm(5)  # child processes
             except SystemExit as e:
                 # if we exit cleanly from fork_processes, all the child processes
                 # finished with status 0
                 self.assertEqual(e.code, 0)
-                self.assertTrue(task_id() is None)
+                self.assertIsNone(task_id())
                 sock.close()
                 return
             try:

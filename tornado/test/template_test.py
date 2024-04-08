@@ -267,7 +267,7 @@ three{%end%}
             self.fail("did not get expected exception")
         except ZeroDivisionError:
             exc_stack = traceback.format_exc()
-        self.assertTrue("# base.html:1" in exc_stack)
+        self.assertIn("# base.html:1", exc_stack)
 
     def test_error_line_number_extends_sub_error(self):
         loader = DictLoader(
@@ -285,7 +285,7 @@ three{%end%}
             loader.load("sub.html").generate()
             self.fail("did not get expected exception")
         except ZeroDivisionError:
-            self.assertTrue("# sub.html:4 (via base.html:1)" in traceback.format_exc())
+            self.assertIn("# sub.html:4 (via base.html:1)", traceback.format_exc())
 
     def test_multi_includes(self):
         loader = DictLoader(
@@ -299,8 +299,8 @@ three{%end%}
             loader.load("a.html").generate()
             self.fail("did not get expected exception")
         except ZeroDivisionError:
-            self.assertTrue(
-                "# c.html:1 (via b.html:1, a.html:1)" in traceback.format_exc()
+            self.assertIn(
+                "# c.html:1 (via b.html:1, a.html:1)", traceback.format_exc()
             )
 
 

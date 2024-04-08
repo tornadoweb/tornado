@@ -455,7 +455,7 @@ class HTTPServerRequestTest(unittest.TestCase):
         request = HTTPServerRequest(
             uri="/", headers=HTTPHeaders({"Canary": ["Coal Mine"]})
         )
-        self.assertTrue("Canary" not in repr(request))
+        self.assertNotIn("Canary", repr(request))
 
 
 class ParseRequestStartLineTest(unittest.TestCase):

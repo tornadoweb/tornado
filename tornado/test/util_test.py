@@ -114,7 +114,7 @@ class ConfigurableTest(unittest.TestCase):
         # let us access attributes of the base class.
         obj = cast(TestConfig1, TestConfigurable())
         self.assertIsInstance(obj, TestConfig1)
-        self.assertIs(obj.a, None)
+        self.assertIsNone(obj.a)
 
         obj = cast(TestConfig1, TestConfigurable(a=1))
         self.assertIsInstance(obj, TestConfig1)
@@ -126,7 +126,7 @@ class ConfigurableTest(unittest.TestCase):
         TestConfigurable.configure(TestConfig2)
         obj = cast(TestConfig2, TestConfigurable())
         self.assertIsInstance(obj, TestConfig2)
-        self.assertIs(obj.b, None)
+        self.assertIsNone(obj.b)
 
         obj = cast(TestConfig2, TestConfigurable(b=2))
         self.assertIsInstance(obj, TestConfig2)
@@ -138,7 +138,7 @@ class ConfigurableTest(unittest.TestCase):
         TestConfigurable.configure("tornado.test.util_test.TestConfig2")
         obj = cast(TestConfig2, TestConfigurable())
         self.assertIsInstance(obj, TestConfig2)
-        self.assertIs(obj.b, None)
+        self.assertIsNone(obj.b)
 
         obj = cast(TestConfig2, TestConfigurable(b=2))
         self.assertIsInstance(obj, TestConfig2)
@@ -160,7 +160,7 @@ class ConfigurableTest(unittest.TestCase):
         self.checkSubclasses()
         # args bound in configure don't apply when using the subclass directly
         obj = TestConfig1()
-        self.assertIs(obj.a, None)
+        self.assertIsNone(obj.a)
 
     def test_config_class_args(self):
         TestConfigurable.configure(TestConfig2, b=5)
@@ -176,7 +176,7 @@ class ConfigurableTest(unittest.TestCase):
         self.checkSubclasses()
         # args bound in configure don't apply when using the subclass directly
         obj = TestConfig2()
-        self.assertIs(obj.b, None)
+        self.assertIsNone(obj.b)
 
     def test_config_multi_level(self):
         TestConfigurable.configure(TestConfig3, a=1)
@@ -240,7 +240,7 @@ class ArgReplacerTest(unittest.TestCase):
     def test_omitted(self):
         args = (1, 2)
         kwargs = dict()  # type: Dict[str, Any]
-        self.assertIs(self.replacer.get_old_value(args, kwargs), None)
+        self.assertIsNone(self.replacer.get_old_value(args, kwargs))
         self.assertEqual(
             self.replacer.replace("new", args, kwargs),
             (None, (1, 2), dict(callback="new")),
