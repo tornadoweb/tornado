@@ -164,22 +164,14 @@ try{% set y = 1/x %}
         self.assertEqual(result, b"013456")
 
     def test_break_outside_loop(self):
-        try:
+        with self.assertRaises(ParseError, msg="Did not get expected exception"):
             Template(utf8("{% break %}"))
-            raise Exception("Did not get expected exception")
-        except ParseError:
-            pass
 
     def test_break_in_apply(self):
         # This test verifies current behavior, although of course it would
         # be nice if apply didn't cause seemingly unrelated breakage
-        try:
-            Template(
-                utf8("{% for i in [] %}{% apply foo %}{% break %}{% end %}{% end %}")
-            )
-            raise Exception("Did not get expected exception")
-        except ParseError:
-            pass
+        with self.assertRaises(ParseError, msg="Did not get expected exception"):
+            Template(utf8("{% for i in [] %}{% apply foo %}{% break %}{% end %}{% end %}"))
 
     @unittest.skip("no testable future imports")
     def test_no_inherit_future(self):
