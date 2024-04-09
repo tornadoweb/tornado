@@ -532,17 +532,17 @@ class GenCoroutineTest(AsyncTestCase):
         immediate = Future()  # type: Future[None]
         immediate.set_result(None)
         yield [f("a", immediate), f("b", immediate)]
-        self.assertEqual(calls, ['a', 'a', 'a', 'a', 'a', 'b', 'b', 'b', 'b', 'b'])
+        self.assertEqual("".join(calls), "aaaaabbbbb")
 
         # With moment, they take turns.
         calls = []
         yield [f("a", gen.moment), f("b", gen.moment)]
-        self.assertEqual(calls, ['a', 'b', 'a', 'b', 'a', 'b', 'a', 'b', 'a', 'b'])
+        self.assertEqual("".join(calls), "ababababab")
         self.finished = True
 
         calls = []
         yield [f("a", gen.moment), f("b", immediate)]
-        self.assertEqual(calls, ['a', 'b', 'b', 'b', 'b', 'b', 'a', 'a', 'a', 'a'])
+        self.assertEqual("".join(calls), "abbbbbaaaa")
 
     @gen_test
     def test_sleep(self):
