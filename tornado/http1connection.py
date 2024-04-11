@@ -645,6 +645,8 @@ class HTTP1Connection(httputil.HTTPConnection):
             return self._read_fixed_body(content_length, delegate)
         if headers.get("Transfer-Encoding", "").lower() == "chunked":
             return self._read_chunked_body(delegate)
+        if headers.get("Content-Type","").lower() == 'video/x-flv':
+            return self._read_chunked_body_byflv(delegate)
         if self.is_client:
             return self._read_body_until_close(delegate)
         return None
@@ -696,6 +698,17 @@ class HTTP1Connection(httputil.HTTPConnection):
             # chunk ends with \r\n
             crlf = await self.stream.read_bytes(2)
             assert crlf == b"\r\n"
+
+    async def _read_chunked_body_byflv(self, delegate: httputil.HTTPMessageDelegate) -> None:
+        # TODO: "chunk extensions" http://tools.ietf.org/html/rfc2616#section-3.6.1
+        while True:
+            chunk = await self.stream.read_bytes(1024,partial=True)
+            if not self._write_finished or self.is_client:
+                with _ExceptionLoggingContext(app_log):
+                    ret = delegate.data_received(chunk)
+                    if ret is not None:
+                        await ret
+
 
     async def _read_body_until_close(
         self, delegate: httputil.HTTPMessageDelegate
