@@ -702,7 +702,7 @@ class HTTP1Connection(httputil.HTTPConnection):
     async def _read_chunked_body_byflv(self, delegate: httputil.HTTPMessageDelegate) -> None:
         # TODO: "chunk extensions" http://tools.ietf.org/html/rfc2616#section-3.6.1
         while True:
-            chunk = await self.stream.read_bytes(1024,partial=True)
+            chunk = await self.stream.read_bytes(self.params.chunk_size,partial=True)
             if not self._write_finished or self.is_client:
                 with _ExceptionLoggingContext(app_log):
                     ret = delegate.data_received(chunk)
