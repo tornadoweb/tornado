@@ -364,7 +364,8 @@ class AuthTest(AsyncHTTPTestCase):
         )
         # the cookie is base64('zxcv')|base64('1234')
         self.assertIn(
-            '_oauth_request_token="enhjdg==|MTIzNA=="', response.headers["Set-Cookie"],
+            '_oauth_request_token="enhjdg==|MTIzNA=="',
+            response.headers["Set-Cookie"],
             response.headers["Set-Cookie"],
         )
 
@@ -464,7 +465,8 @@ class AuthTest(AsyncHTTPTestCase):
         )
         # the cookie is base64('zxcv')|base64('1234')
         self.assertIn(
-            '_oauth_request_token="enhjdg==|MTIzNA=="', response.headers["Set-Cookie"],
+            '_oauth_request_token="enhjdg==|MTIzNA=="',
+            response.headers["Set-Cookie"],
             response.headers["Set-Cookie"],
         )
 
@@ -485,7 +487,8 @@ class AuthTest(AsyncHTTPTestCase):
         )
         # the cookie is base64('zxcv')|base64('1234')
         self.assertIn(
-            '_oauth_request_token="enhjdg==|MTIzNA=="', response.headers["Set-Cookie"],
+            '_oauth_request_token="enhjdg==|MTIzNA=="',
+            response.headers["Set-Cookie"],
             response.headers["Set-Cookie"],
         )
 

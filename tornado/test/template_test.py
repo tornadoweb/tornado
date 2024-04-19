@@ -171,7 +171,9 @@ try{% set y = 1/x %}
         # This test verifies current behavior, although of course it would
         # be nice if apply didn't cause seemingly unrelated breakage
         with self.assertRaises(ParseError, msg="Did not get expected exception"):
-            Template(utf8("{% for i in [] %}{% apply foo %}{% break %}{% end %}{% end %}"))
+            Template(
+                utf8("{% for i in [] %}{% apply foo %}{% break %}{% end %}{% end %}")
+            )
 
     @unittest.skip("no testable future imports")
     def test_no_inherit_future(self):
@@ -291,9 +293,7 @@ three{%end%}
             loader.load("a.html").generate()
             self.fail("did not get expected exception")
         except ZeroDivisionError:
-            self.assertIn(
-                "# c.html:1 (via b.html:1, a.html:1)", traceback.format_exc()
-            )
+            self.assertIn("# c.html:1 (via b.html:1, a.html:1)", traceback.format_exc())
 
 
 class ParseErrorDetailTest(unittest.TestCase):

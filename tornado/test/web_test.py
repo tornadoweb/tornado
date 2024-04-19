@@ -368,7 +368,8 @@ class CookieTest(WebTestCase):
         self.assertEqual(headers[1], 'quote="a\\"b"; Path=/')
         # python 2.7 octal-escapes the semicolon; older versions leave it alone
         self.assertIn(
-            headers[2], ('semicolon="a;b"; Path=/', 'semicolon="a\\073b"; Path=/'),
+            headers[2],
+            ('semicolon="a;b"; Path=/', 'semicolon="a\\073b"; Path=/'),
             headers[2],
         )
 
@@ -1746,7 +1747,7 @@ class DateHeaderTest(SimpleHandlerTestCase):
         header_date = email.utils.parsedate_to_datetime(response.headers["Date"])
         self.assertLess(
             header_date - datetime.datetime.now(datetime.timezone.utc),
-            datetime.timedelta(seconds=2)
+            datetime.timedelta(seconds=2),
         )
 
 
