@@ -177,7 +177,17 @@ class AsyncTestCase(unittest.TestCase):
         # the test will silently be ignored because nothing will consume
         # the generator.  Replace the test method with a wrapper that will
         # make sure it's not an undecorated generator.
-        setattr(self, methodName, _TestMethodWrapper(getattr(self, methodName)))
+        try:
+            test_method = getattr(self, methodName)
+        except AttributeError:
+            if methodName != "runTest":
+                # We allow instantiation with no explicit method name
+                # but not an *incorrect* or missing method name.
+                raise ValueError(
+                    "no such test method in %s: %s" % (self.__class__, methodName)
+                )
+        else:
+            setattr(self, methodName, _TestMethodWrapper(test_method))
 
         # Not used in this class itself, but used by @gen_test
         self._test_generator = None  # type: Optional[Union[Generator, Coroutine]]

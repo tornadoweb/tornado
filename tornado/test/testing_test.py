@@ -61,6 +61,15 @@ class AsyncTestCaseTest(AsyncTestCase):
         self.io_loop.add_timeout(self.io_loop.time() + 0.2, self.stop)
         self.wait(timeout=0.4)
 
+    def test_empty_instantation_is_allowed(self):
+        """
+        Test that empty instatiation of an AsyncTestCase is allowed.
+
+        unittest.TestCase docs guarantee this working, and pytest's unittest
+        support relies on it.
+        """
+        AsyncTestCaseTest()
+
 
 class LeakTest(AsyncTestCase):
     def tearDown(self):
