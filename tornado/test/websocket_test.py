@@ -810,7 +810,11 @@ class ServerPeriodicPingTest(WebSocketBaseTestCase):
             def on_pong(self, data):
                 self.write_message("got pong")
 
-        return Application([("/", PingHandler)], websocket_ping_interval=0.01)
+        return Application(
+            [("/", PingHandler)],
+            websocket_ping_interval=0.01,
+            websocket_ping_timeout=0,
+        )
 
     @gen_test
     def test_server_ping(self):
@@ -831,12 +835,75 @@ class ClientPeriodicPingTest(WebSocketBaseTestCase):
 
     @gen_test
     def test_client_ping(self):
-        ws = yield self.ws_connect("/", ping_interval=0.01)
+        ws = yield self.ws_connect("/", ping_interval=0.01, ping_timeout=0)
         for i in range(3):
             response = yield ws.read_message()
             self.assertEqual(response, "got ping")
-        # TODO: test that the connection gets closed if ping responses stop.
         ws.close()
+
+
+class ServerPingTimeoutTest(WebSocketBaseTestCase):
+    def get_app(self):
+        handlers = []
+
+        class PingHandler(TestWebSocketHandler):
+            def initialize(self, close_future=None, compression_options=None):
+                # capture the handler instance so we can interrogate it later
+                handlers.append(self)
+                return super().initialize(
+                    close_future=close_future,
+                    compression_options=compression_options,
+                )
+
+        app = Application([("/", PingHandler)])
+        app._handlers = handlers
+        return app
+
+    @staticmethod
+    def suppress_pong(ws):
+        """Suppress the client's "pong" response."""
+        def wrapper(fcn):
+            def _inner(oppcode: int, data: bytes):
+                if oppcode == 0xA:  # NOTE: 0x9=ping, 0xA=pong
+                    # prevent pong responses
+                    return
+                # leave all other responses unchanged
+                return fcn(oppcode, data)
+            return _inner
+
+        ws.protocol._handle_message = wrapper(ws.protocol._handle_message)
+
+    @gen_test
+    def test_client_ping_timeout(self):
+        # websocket client
+        ws = yield self.ws_connect("/", ping_interval=0.2, ping_timeout=0.05)
+
+        # websocket handler (server side)
+        handler = self._app._handlers[0]
+
+        for _ in range(5):
+            # wait for the ping period
+            yield gen.sleep(0.2)
+
+            # connection should still be open from the server end
+            assert handler.close_code is None
+            assert handler.close_reason is None
+
+            # connection should still be open from the client end
+            assert ws.protocol.close_code is None
+
+        # delay the pong message by 0.10 seconds (timeout=0.05)
+        self.suppress_pong(ws)
+
+        # give the server time to register this
+        yield gen.sleep(0.2)
+
+        # connection should be closed from the server side
+        assert handler.close_code == 1000
+        assert handler.close_reason == 'ping timed out'
+
+        # client should have received a close operation
+        assert ws.protocol.close_code == 1000
 
 
 class ManualPingTest(WebSocketBaseTestCase):
