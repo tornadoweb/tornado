@@ -25,8 +25,8 @@ jobs:
     name: Build sdist
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         name: Install Python
         with:
           python-version: ${{ env.python-version }}
@@ -36,7 +36,7 @@ jobs:
       - name: Build sdist
         run: "python setup.py sdist && ls -l dist"
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           path: ./dist/tornado-*.tar.gz
 
@@ -49,8 +49,8 @@ jobs:
         os: [ubuntu-22.04, windows-2022, macos-12]
 
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         name: Install Python
         with:
           python-version: ${{ env.python-version }}
@@ -63,7 +63,7 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.12.1
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           path: ./wheelhouse/*.whl
 
@@ -73,7 +73,7 @@ jobs:
     runs-on: ubuntu-22.04
     if: github.repository == 'tornadoweb/tornado' && github.event_name == 'workflow_dispatch'
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: artifact
           path: dist
@@ -91,7 +91,7 @@ jobs:
     runs-on: ubuntu-22.04
     if: github.repository == 'tornadoweb/tornado' && github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: artifact
           path: dist
