@@ -83,7 +83,7 @@ pyproject-hooks==1.0.0
     # via build
 pytz==2022.7.1
     # via babel
-requests==2.31.0
+requests==2.32.2
     # via sphinx
 snowballstemmer==2.2.0
     # via sphinx
