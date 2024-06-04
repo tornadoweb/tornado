@@ -429,9 +429,9 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 self.request.method == "POST"
                 and "Content-Type" not in self.request.headers
             ):
-                self.request.headers[
-                    "Content-Type"
-                ] = "application/x-www-form-urlencoded"
+                self.request.headers["Content-Type"] = (
+                    "application/x-www-form-urlencoded"
+                )
             if self.request.decompress_response:
                 self.request.headers["Accept-Encoding"] = "gzip"
             req_path = (self.parsed.path or "/") + (

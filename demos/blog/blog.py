@@ -40,13 +40,13 @@ class NoResultError(Exception):
 
 async def maybe_create_tables(db):
     try:
-        with (await db.cursor()) as cur:
+        with await db.cursor() as cur:
             await cur.execute("SELECT COUNT(*) FROM entries LIMIT 1")
             await cur.fetchone()
     except psycopg2.ProgrammingError:
         with open("schema.sql") as f:
             schema = f.read()
-        with (await db.cursor()) as cur:
+        with await db.cursor() as cur:
             await cur.execute(schema)
 
 
@@ -89,7 +89,7 @@ class BaseHandler(tornado.web.RequestHandler):
 
         Must be called with ``await self.execute(...)``
         """
-        with (await self.application.db.cursor()) as cur:
+        with await self.application.db.cursor() as cur:
             await cur.execute(stmt, args)
 
     async def query(self, stmt, *args):
@@ -103,7 +103,7 @@ class BaseHandler(tornado.web.RequestHandler):
 
             for row in await self.query(...)
         """
-        with (await self.application.db.cursor()) as cur:
+        with await self.application.db.cursor() as cur:
             await cur.execute(stmt, args)
             return [self.row_to_obj(row, cur) for row in await cur.fetchall()]
 
