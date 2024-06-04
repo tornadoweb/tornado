@@ -261,6 +261,7 @@ class TestIOLoop(AsyncTestCase):
         the object should be closed (by IOLoop.close(all_fds=True),
         not just the fd.
         """
+
         # Use a socket since they are supported by IOLoop on all platforms.
         # Unfortunately, sockets don't support the .closed attribute for
         # inspecting their close status, so we must use a wrapper.

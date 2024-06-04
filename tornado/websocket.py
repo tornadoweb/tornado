@@ -1392,9 +1392,9 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             # from the server).
             # TODO: set server parameters for deflate extension
             # if requested in self.compression_options.
-            request.headers[
-                "Sec-WebSocket-Extensions"
-            ] = "permessage-deflate; client_max_window_bits"
+            request.headers["Sec-WebSocket-Extensions"] = (
+                "permessage-deflate; client_max_window_bits"
+            )
 
         # Websocket connection is currently unable to follow redirects
         request.follow_redirects = False
