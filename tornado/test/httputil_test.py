@@ -334,6 +334,25 @@ Foo: even
                     gen_log.warning("failed while trying %r in %s", newline, encoding)
                     raise
 
+    def test_unicode_whitespace(self):
+        # Only tabs and spaces are to be stripped according to the HTTP standard.
+        # Other unicode whitespace is to be left as-is. In the context of headers,
+        # this specifically means the whitespace characters falling within the
+        # latin1 charset.
+        whitespace = [
+            (" ", True),  # SPACE
+            ("\t", True),  # TAB
+            ("\u00a0", False),  # NON-BREAKING SPACE
+            ("\u0085", False),  # NEXT LINE
+        ]
+        for c, stripped in whitespace:
+            headers = HTTPHeaders.parse("Transfer-Encoding: %schunked" % c)
+            if stripped:
+                expected = [("Transfer-Encoding", "chunked")]
+            else:
+                expected = [("Transfer-Encoding", "%schunked" % c)]
+            self.assertEqual(expected, list(headers.get_all()))
+
     def test_optional_cr(self):
         # Both CRLF and LF should be accepted as separators. CR should not be
         # part of the data when followed by LF, but it is a normal char
