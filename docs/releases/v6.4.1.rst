@@ -1,0 +1,41 @@
+What's new in Tornado 6.4.1
+===========================
+
+Jun 6, 2024
+-----------
+
+Security Improvements
+~~~~~~~~~~~~~~~~~~~~~
+
+- Parsing of the ``Transfer-Encoding`` header is now stricter. Unexpected transfer-encoding values
+  were previously ignored and treated as the HTTP/1.0 default of read-until-close. This can lead to
+  framing issues with certain proxies. We now treat any unexpected value as an error.
+- Handling of whitespace in headers now matches the RFC more closely. Only space and tab characters
+  are treated as whitespace and stripped from the beginning and end of header values. Other unicode
+  whitespace characters are now left alone. This could also lead to framing issues with certain
+  proxies. 
+- ``tornado.curl_httpclient`` now prohibits carriage return and linefeed headers in HTTP headers
+  (matching the behavior of ``simple_httpclient``). These characters could be used for header
+  injection or request smuggling if untrusted data were used in headers.
+
+General Changes
+~~~~~~~~~~~~~~~
+
+`tornado.iostream`
+~~~~~~~~~~~~~~~~~~
+
+- `.SSLIOStream` now understands changes to error codes from OpenSSL 3.2. The main result of this
+  change is to reduce the noise in the logs for certain errors.
+
+``tornado.simple_httpclient``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- ``simple_httpclient`` now prohibits carriage return characters in HTTP headers. It had previously
+  prohibited only linefeed characters.
+
+`tornado.testing`
+~~~~~~~~~~~~~~~~~
+
+- `.AsyncTestCase` subclasses can now be instantiated without being associated with a test
+  method. This improves compatibility with test discovery in Pytest 8.2.
+
