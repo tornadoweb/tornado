@@ -62,6 +62,9 @@ if typing.TYPE_CHECKING:
     from asyncio import Future  # noqa: F401
     import unittest  # noqa: F401
 
+# To be used with str.strip() and related methods.
+HTTP_WHITESPACE = " \t"
+
 
 @lru_cache(1000)
 def _normalize_header(name: str) -> str:
@@ -171,7 +174,7 @@ class HTTPHeaders(collections.abc.MutableMapping):
             # continuation of a multi-line header
             if self._last_key is None:
                 raise HTTPInputError("first header line cannot start with whitespace")
-            new_part = " " + line.lstrip()
+            new_part = " " + line.lstrip(HTTP_WHITESPACE)
             self._as_list[self._last_key][-1] += new_part
             self._dict[self._last_key] += new_part
         else:
@@ -179,7 +182,7 @@ class HTTPHeaders(collections.abc.MutableMapping):
                 name, value = line.split(":", 1)
             except ValueError:
                 raise HTTPInputError("no colon in header line")
-            self.add(name, value.strip())
+            self.add(name, value.strip(HTTP_WHITESPACE))
 
     @classmethod
     def parse(cls, headers: str) -> "HTTPHeaders":
