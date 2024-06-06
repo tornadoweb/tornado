@@ -241,13 +241,13 @@ class HTTPHeaders(collections.abc.MutableMapping):
     def __str__(self) -> str:
         lines = []
         for name, value in self.get_all():
-            lines.append("%s: %s\n" % (name, value))
+            lines.append("{}: {}\n".format(name, value))
         return "".join(lines)
 
     __unicode__ = __str__
 
 
-class HTTPServerRequest(object):
+class HTTPServerRequest:
     """A single HTTP request.
 
     All attributes are type `str` unless otherwise noted.
@@ -465,8 +465,8 @@ class HTTPServerRequest(object):
 
     def __repr__(self) -> str:
         attrs = ("protocol", "host", "method", "uri", "version", "remote_ip")
-        args = ", ".join(["%s=%r" % (n, getattr(self, n)) for n in attrs])
-        return "%s(%s)" % (self.__class__.__name__, args)
+        args = ", ".join(["{}={!r}".format(n, getattr(self, n)) for n in attrs])
+        return "{}({})".format(self.__class__.__name__, args)
 
 
 class HTTPInputError(Exception):
@@ -488,7 +488,7 @@ class HTTPOutputError(Exception):
     pass
 
 
-class HTTPServerConnectionDelegate(object):
+class HTTPServerConnectionDelegate:
     """Implement this interface to handle requests from `.HTTPServer`.
 
     .. versionadded:: 4.0
@@ -517,7 +517,7 @@ class HTTPServerConnectionDelegate(object):
         pass
 
 
-class HTTPMessageDelegate(object):
+class HTTPMessageDelegate:
     """Implement this interface to handle an HTTP request or response.
 
     .. versionadded:: 4.0
@@ -563,7 +563,7 @@ class HTTPMessageDelegate(object):
         pass
 
 
-class HTTPConnection(object):
+class HTTPConnection:
     """Applications use this interface to write their responses.
 
     .. versionadded:: 4.0
@@ -638,7 +638,7 @@ def url_concat(
         parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
         parsed_query.extend(args)
     else:
-        err = "'args' parameter should be dict, list or tuple. Not {0}".format(
+        err = "'args' parameter should be dict, list or tuple. Not {}".format(
             type(args)
         )
         raise TypeError(err)
@@ -735,7 +735,7 @@ def _get_content_range(start: Optional[int], end: Optional[int], total: int) -> 
     """
     start = start or 0
     end = (end or total) - 1
-    return "bytes %s-%s/%s" % (start, end, total)
+    return "bytes {}-{}/{}".format(start, end, total)
 
 
 def _int_or_none(val: str) -> Optional[int]:
@@ -1000,7 +1000,7 @@ def _encode_header(key: str, pdict: Dict[str, str]) -> str:
             out.append(k)
         else:
             # TODO: quote if necessary.
-            out.append("%s=%s" % (k, v))
+            out.append("{}={}".format(k, v))
     return "; ".join(out)
 
 
@@ -1124,13 +1124,13 @@ def parse_cookie(cookie: str) -> Dict[str, str]:
     .. versionadded:: 4.4.2
     """
     cookiedict = {}
-    for chunk in cookie.split(str(";")):
-        if str("=") in chunk:
-            key, val = chunk.split(str("="), 1)
+    for chunk in cookie.split(";"):
+        if "=" in chunk:
+            key, val = chunk.split("=", 1)
         else:
             # Assume an empty name per
             # https://bugzilla.mozilla.org/show_bug.cgi?id=169091
-            key, val = str(""), chunk
+            key, val = "", chunk
         key, val = key.strip(), val.strip()
         if key or val:
             # unquote using Python's algorithm.

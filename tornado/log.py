@@ -187,7 +187,7 @@ class LogFormatter(logging.Formatter):
             # byte strings wherever possible).
             record.message = _safe_unicode(message)
         except Exception as e:
-            record.message = "Bad message (%r): %r" % (e, record.__dict__)
+            record.message = "Bad message ({!r}): {!r}".format(e, record.__dict__)
 
         record.asctime = self.formatTime(record, cast(str, self.datefmt))
 

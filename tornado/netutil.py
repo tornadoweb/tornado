@@ -47,7 +47,7 @@ if hasattr(ssl, "OP_NO_COMPRESSION"):
 "foo".encode("idna")
 
 # For undiagnosed reasons, 'latin1' codec may also need to be preloaded.
-"foo".encode("latin1")
+b"foo"
 
 # Default backlog used when calling sock.listen()
 _DEFAULT_BACKLOG = 128
@@ -126,14 +126,14 @@ def bind_sockets(
             continue
         try:
             sock = socket.socket(af, socktype, proto)
-        except socket.error as e:
+        except OSError as e:
             if errno_from_exception(e) == errno.EAFNOSUPPORT:
                 continue
             raise
         if os.name != "nt":
             try:
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            except socket.error as e:
+            except OSError as e:
                 if errno_from_exception(e) != errno.ENOPROTOOPT:
                     # Hurd doesn't support SO_REUSEADDR.
                     raise
@@ -204,7 +204,7 @@ if hasattr(socket, "AF_UNIX"):
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        except socket.error as e:
+        except OSError as e:
             if errno_from_exception(e) != errno.ENOPROTOOPT:
                 # Hurd doesn't support SO_REUSEADDR
                 raise

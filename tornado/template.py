@@ -249,7 +249,7 @@ def filter_whitespace(mode: str, text: str) -> str:
         raise Exception("invalid whitespace mode %s" % mode)
 
 
-class Template(object):
+class Template:
     """A compiled template.
 
     We compile into Python from the given template_string. You can generate
@@ -389,7 +389,7 @@ class Template(object):
         return ancestors
 
 
-class BaseLoader(object):
+class BaseLoader:
     """Base class for template loaders.
 
     You must use a template loader to use template constructs like
@@ -500,7 +500,7 @@ class DictLoader(BaseLoader):
         return Template(self.dict[name], name=name, loader=self)
 
 
-class _Node(object):
+class _Node:
     def each_child(self) -> Iterable["_Node"]:
         return ()
 
@@ -610,7 +610,7 @@ class _ApplyBlock(_Node):
             self.body.generate(writer)
             writer.write_line("return _tt_utf8('').join(_tt_buffer)", self.line)
         writer.write_line(
-            "_tt_append(_tt_utf8(%s(%s())))" % (self.method, method_name), self.line
+            "_tt_append(_tt_utf8({}({}())))".format(self.method, method_name), self.line
         )
 
 
@@ -720,7 +720,7 @@ class ParseError(Exception):
         return "%s at %s:%d" % (self.message, self.filename, self.lineno)
 
 
-class _CodeWriter(object):
+class _CodeWriter:
     def __init__(
         self,
         file: TextIO,
@@ -740,7 +740,7 @@ class _CodeWriter(object):
         return self._indent
 
     def indent(self) -> "ContextManager":
-        class Indenter(object):
+        class Indenter:
             def __enter__(_) -> "_CodeWriter":
                 self._indent += 1
                 return self
@@ -755,7 +755,7 @@ class _CodeWriter(object):
         self.include_stack.append((self.current_template, line))
         self.current_template = template
 
-        class IncludeTemplate(object):
+        class IncludeTemplate:
             def __enter__(_) -> "_CodeWriter":
                 return self
 
@@ -778,7 +778,7 @@ class _CodeWriter(object):
         print("    " * indent + line + line_comment, file=self.file)
 
 
-class _TemplateReader(object):
+class _TemplateReader:
     def __init__(self, name: str, text: str, whitespace: str) -> None:
         self.name = name
         self.text = text
@@ -936,20 +936,20 @@ def _parse(
 
         # Intermediate ("else", "elif", etc) blocks
         intermediate_blocks = {
-            "else": set(["if", "for", "while", "try"]),
-            "elif": set(["if"]),
-            "except": set(["try"]),
-            "finally": set(["try"]),
+            "else": {"if", "for", "while", "try"},
+            "elif": {"if"},
+            "except": {"try"},
+            "finally": {"try"},
         }
         allowed_parents = intermediate_blocks.get(operator)
         if allowed_parents is not None:
             if not in_block:
                 reader.raise_parse_error(
-                    "%s outside %s block" % (operator, allowed_parents)
+                    "{} outside {} block".format(operator, allowed_parents)
                 )
             if in_block not in allowed_parents:
                 reader.raise_parse_error(
-                    "%s block cannot be attached to %s block" % (operator, in_block)
+                    "{} block cannot be attached to {} block".format(operator, in_block)
                 )
             body.chunks.append(_IntermediateControlBlock(contents, line))
             continue
@@ -1038,7 +1038,7 @@ def _parse(
         elif operator in ("break", "continue"):
             if not in_loop:
                 reader.raise_parse_error(
-                    "%s outside %s block" % (operator, set(["for", "while"]))
+                    "{} outside {} block".format(operator, {"for", "while"})
                 )
             body.chunks.append(_Statement(contents, line))
             continue

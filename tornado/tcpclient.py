@@ -38,7 +38,7 @@ if typing.TYPE_CHECKING:
 _INITIAL_CONNECT_TIMEOUT = 0.3
 
 
-class _Connector(object):
+class _Connector:
     """A stateless implementation of the "Happy Eyeballs" algorithm.
 
     "Happy Eyeballs" is documented in RFC6555 as the recommended practice
@@ -199,7 +199,7 @@ class _Connector(object):
             stream.close()
 
 
-class TCPClient(object):
+class TCPClient:
     """A non-blocking TCP connection factory.
 
     .. versionchanged:: 5.0
@@ -318,13 +318,13 @@ class TCPClient(object):
             # If the user requires binding also to a specific IP/port.
             try:
                 socket_obj.bind((source_ip_bind, source_port_bind))
-            except socket.error:
+            except OSError:
                 socket_obj.close()
                 # Fail loudly if unable to use the IP/port.
                 raise
         try:
             stream = IOStream(socket_obj, max_buffer_size=max_buffer_size)
-        except socket.error as e:
+        except OSError as e:
             fu = Future()  # type: Future[IOStream]
             fu.set_exception(e)
             return stream, fu

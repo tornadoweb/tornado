@@ -48,7 +48,7 @@ def _detect_ipv6():
     try:
         sock = socket.socket(socket.AF_INET6)
         sock.bind(("::1", 0))
-    except socket.error:
+    except OSError:
         return False
     finally:
         if sock is not None:

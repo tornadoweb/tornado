@@ -247,7 +247,7 @@ class EscapeTestCase(unittest.TestCase):
     def test_url_escape_unicode(self):
         tests = [
             # byte strings are passed through as-is
-            ("\u00e9".encode("utf8"), "%C3%A9"),
+            ("\u00e9".encode(), "%C3%A9"),
             ("\u00e9".encode("latin1"), "%E9"),
             # unicode strings become utf8
             ("\u00e9", "%C3%A9"),

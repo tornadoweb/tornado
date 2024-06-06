@@ -47,7 +47,7 @@ class CacheHandler(RequestHandler):
         return self._write_buffer[0]
 
 
-class TestMixin(object):
+class TestMixin:
     def get_handlers(self):
         return [
             ('/hello', HelloHandler),

@@ -93,7 +93,7 @@ class TwistedResolver(Resolver):
                 try:
                     resolved.raiseException()
                 except twisted.names.error.DomainError as e:
-                    raise IOError(e)
+                    raise OSError(e)
             elif twisted.internet.abstract.isIPAddress(resolved):
                 resolved_family = socket.AF_INET
             elif twisted.internet.abstract.isIPv6Address(resolved):

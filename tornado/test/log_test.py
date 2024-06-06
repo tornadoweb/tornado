@@ -89,7 +89,7 @@ class LogFormatterTest(unittest.TestCase):
 
     def test_utf8_logging(self):
         with ignore_bytes_warning():
-            self.logger.error("\u00e9".encode("utf8"))
+            self.logger.error("\u00e9".encode())
         if issubclass(bytes, basestring_type):
             # on python 2, utf8 byte strings (and by extension ascii byte
             # strings) are passed through as-is.

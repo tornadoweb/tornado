@@ -306,7 +306,7 @@ class Return(Exception):
         self.args = (value,)
 
 
-class WaitIterator(object):
+class WaitIterator:
     """Provides an iterator to yield the results of awaitables as they finish.
 
     Yielding a set of awaitables like this:
@@ -368,10 +368,10 @@ class WaitIterator(object):
             raise ValueError("You must provide args or kwargs, not both")
 
         if kwargs:
-            self._unfinished = dict((f, k) for (k, f) in kwargs.items())
+            self._unfinished = {f: k for (k, f) in kwargs.items()}
             futures = list(kwargs.values())  # type: Sequence[Future]
         else:
-            self._unfinished = dict((f, i) for (i, f) in enumerate(args))
+            self._unfinished = {f: i for (i, f) in enumerate(args)}
             futures = args
 
         self._finished = collections.deque()  # type: Deque[Future]
@@ -674,7 +674,7 @@ def sleep(duration: float) -> "Future[None]":
     return f
 
 
-class _NullFuture(object):
+class _NullFuture:
     """_NullFuture resembles a Future that finished with a result of None.
 
     It's not actually a `Future` to avoid depending on a particular event loop.
@@ -719,7 +719,7 @@ In native coroutines, the equivalent of ``yield gen.moment`` is
 """
 
 
-class Runner(object):
+class Runner:
     """Internal implementation of `tornado.gen.coroutine`.
 
     Maintains information about pending callbacks and their results.
@@ -880,7 +880,7 @@ def convert_yielded(yielded: _Yieldable) -> Future:
     elif isawaitable(yielded):
         return _wrap_awaitable(yielded)  # type: ignore
     else:
-        raise BadYieldError("yielded unknown object %r" % (yielded,))
+        raise BadYieldError("yielded unknown object {!r}".format(yielded))
 
 
 convert_yielded = singledispatch(convert_yielded)

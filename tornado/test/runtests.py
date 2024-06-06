@@ -68,7 +68,7 @@ def test_runner_factory(stderr):
         def run(self, test):
             result = super().run(test)
             if result.skipped:
-                skip_reasons = set(reason for (test, reason) in result.skipped)
+                skip_reasons = {reason for (test, reason) in result.skipped}
                 self.stream.write(  # type: ignore
                     textwrap.fill(
                         "Some tests were skipped because: %s"

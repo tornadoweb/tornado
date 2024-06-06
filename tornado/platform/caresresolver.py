@@ -73,7 +73,7 @@ class CaresResolver(Resolver):
             )
             result, error = yield fut
             if error:
-                raise IOError(
+                raise OSError(
                     "C-Ares returned error %s: %s while resolving %s"
                     % (error, pycares.errno.strerror(error), host)
                 )
@@ -87,7 +87,7 @@ class CaresResolver(Resolver):
             else:
                 address_family = socket.AF_UNSPEC
             if family != socket.AF_UNSPEC and family != address_family:
-                raise IOError(
+                raise OSError(
                     "Requested socket family %d but got %d" % (family, address_family)
                 )
             addrinfo.append((typing.cast(int, address_family), (address, port)))

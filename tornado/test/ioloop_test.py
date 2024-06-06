@@ -265,7 +265,7 @@ class TestIOLoop(AsyncTestCase):
         # Use a socket since they are supported by IOLoop on all platforms.
         # Unfortunately, sockets don't support the .closed attribute for
         # inspecting their close status, so we must use a wrapper.
-        class SocketWrapper(object):
+        class SocketWrapper:
             def __init__(self, sockobj):
                 self.sockobj = sockobj
                 self.closed = False

@@ -74,7 +74,7 @@ async def main():
             try:
                 await fetch_url(url)
             except Exception as e:
-                print("Exception: %s %s" % (e, url))
+                print("Exception: {} {}".format(e, url))
                 dead.add(url)
             finally:
                 q.task_done()

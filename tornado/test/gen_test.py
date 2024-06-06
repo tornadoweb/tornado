@@ -581,7 +581,7 @@ class GenCoroutineTest(AsyncTestCase):
         # without waiting for garbage collection.
         @gen.coroutine
         def inner():
-            class Foo(object):
+            class Foo:
                 pass
 
             local_var = Foo()
@@ -853,7 +853,7 @@ class WaitIteratorTest(AsyncTestCase):
                     "WaitIterator dict status incorrect",
                 )
             else:
-                self.fail("got bad WaitIterator index {}".format(dg.current_index))
+                self.fail(f"got bad WaitIterator index {dg.current_index}")
 
             i += 1
 

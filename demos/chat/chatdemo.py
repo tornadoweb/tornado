@@ -25,7 +25,7 @@ define("port", default=8888, help="run on the given port", type=int)
 define("debug", default=True, help="run in debug mode")
 
 
-class MessageBuffer(object):
+class MessageBuffer:
     def __init__(self):
         # cond is notified whenever the message cache is updated
         self.cond = tornado.locks.Condition()

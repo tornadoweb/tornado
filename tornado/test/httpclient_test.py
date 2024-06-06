@@ -146,7 +146,7 @@ class InvalidGzipHandler(RequestHandler):
         # Triggering the potential bug seems to depend on input length.
         # This length is taken from the bad-response example reported in
         # https://github.com/tornadoweb/tornado/pull/2875 (uncompressed).
-        text = "".join("Hello World {}\n".format(i) for i in range(9000))[:149051]
+        text = "".join(f"Hello World {i}\n" for i in range(9000))[:149051]
         body = gzip.compress(text.encode(), compresslevel=6) + b"\00"
         self.write(body)
 
@@ -551,7 +551,7 @@ X-XSS-Protection: 1;
                 "Foo": "b\xe4r",
             },
         )
-        self.assertEqual(response.body, "b\xe4r".encode("ISO8859-1"))
+        self.assertEqual(response.body, b"b\xe4r")
 
     def test_304_with_content_length(self):
         # According to the spec 304 responses SHOULD NOT include
@@ -699,7 +699,7 @@ X-XSS-Protection: 1;
         self.assertLess(abs(response.start_time - start_time), 1.0)
 
         for k, v in response.time_info.items():
-            self.assertTrue(0 <= v < 1.0, "time_info[%s] out of bounds: %s" % (k, v))
+            self.assertTrue(0 <= v < 1.0, "time_info[{}] out of bounds: {}".format(k, v))
 
     def test_zero_timeout(self):
         response = self.fetch("/hello", connect_timeout=0)

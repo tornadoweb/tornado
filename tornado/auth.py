@@ -94,7 +94,7 @@ class AuthError(Exception):
     pass
 
 
-class OpenIdMixin(object):
+class OpenIdMixin:
     """Abstract implementation of OpenID and Attribute Exchange.
 
     Class attributes:
@@ -150,9 +150,9 @@ class OpenIdMixin(object):
         """
         handler = cast(RequestHandler, self)
         # Verify the OpenID response via direct request to the OP
-        args = dict(
-            (k, v[-1]) for k, v in handler.request.arguments.items()
-        )  # type: Dict[str, Union[str, bytes]]
+        args = {
+            k: v[-1] for k, v in handler.request.arguments.items()
+        }  # type: Dict[str, Union[str, bytes]]
         args["openid.mode"] = "check_authentication"
         url = self._OPENID_ENDPOINT  # type: ignore
         if http_client is None:
@@ -188,7 +188,7 @@ class OpenIdMixin(object):
             ax_attrs = set(ax_attrs)
             required = []  # type: List[str]
             if "name" in ax_attrs:
-                ax_attrs -= set(["name", "firstname", "fullname", "lastname"])
+                ax_attrs -= {"name", "firstname", "fullname", "lastname"}
                 required += ["firstname", "fullname", "lastname"]
                 args.update(
                     {
@@ -287,7 +287,7 @@ class OpenIdMixin(object):
         return httpclient.AsyncHTTPClient()
 
 
-class OAuthMixin(object):
+class OAuthMixin:
     """Abstract implementation of OAuth 1.0 and 1.0a.
 
     See `TwitterMixin` below for an example implementation.
@@ -378,9 +378,9 @@ class OAuthMixin(object):
         if not request_cookie:
             raise AuthError("Missing OAuth request token cookie")
         handler.clear_cookie("_oauth_request_token")
-        cookie_key, cookie_secret = [
+        cookie_key, cookie_secret = (
             base64.b64decode(escape.utf8(i)) for i in request_cookie.split("|")
-        ]
+        )
         if cookie_key != request_key:
             raise AuthError("Request token does not match cookie")
         token = dict(
@@ -555,7 +555,7 @@ class OAuthMixin(object):
         return httpclient.AsyncHTTPClient()
 
 
-class OAuth2Mixin(object):
+class OAuth2Mixin:
     """Abstract implementation of OAuth 2.0.
 
     See `FacebookGraphMixin` or `GoogleOAuth2Mixin` below for example
@@ -1065,9 +1065,9 @@ class FacebookGraphMixin(OAuth2Mixin):
             "client_secret": client_secret,
         }
 
-        fields = set(
-            ["id", "name", "first_name", "last_name", "locale", "picture", "link"]
-        )
+        fields = {
+            "id", "name", "first_name", "last_name", "locale", "picture", "link"
+        }
         if extra_fields:
             fields.update(extra_fields)
 
@@ -1194,7 +1194,7 @@ def _oauth_signature(
     base_elems.append(normalized_url)
     base_elems.append(
         "&".join(
-            "%s=%s" % (k, _oauth_escape(str(v))) for k, v in sorted(parameters.items())
+            "{}={}".format(k, _oauth_escape(str(v))) for k, v in sorted(parameters.items())
         )
     )
     base_string = "&".join(_oauth_escape(e) for e in base_elems)
@@ -1227,7 +1227,7 @@ def _oauth10a_signature(
     base_elems.append(normalized_url)
     base_elems.append(
         "&".join(
-            "%s=%s" % (k, _oauth_escape(str(v))) for k, v in sorted(parameters.items())
+            "{}={}".format(k, _oauth_escape(str(v))) for k, v in sorted(parameters.items())
         )
     )
 

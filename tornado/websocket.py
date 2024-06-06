@@ -115,7 +115,7 @@ class _DecompressTooLargeError(Exception):
     pass
 
 
-class _WebSocketParams(object):
+class _WebSocketParams:
     def __init__(
         self,
         ping_interval: Optional[float] = None,
@@ -701,7 +701,7 @@ class WebSocketProtocol(abc.ABC):
         raise NotImplementedError()
 
 
-class _PerMessageDeflateCompressor(object):
+class _PerMessageDeflateCompressor:
     def __init__(
         self,
         persistent: bool,
@@ -749,7 +749,7 @@ class _PerMessageDeflateCompressor(object):
         return data[:-4]
 
 
-class _PerMessageDeflateDecompressor(object):
+class _PerMessageDeflateDecompressor:
     def __init__(
         self,
         persistent: bool,
@@ -1001,14 +1001,12 @@ class WebSocketProtocol13(WebSocketProtocol):
         compression_options: Optional[Dict[str, Any]] = None,
     ) -> None:
         # TODO: handle invalid parameters gracefully
-        allowed_keys = set(
-            [
+        allowed_keys = {
                 "server_no_context_takeover",
                 "client_no_context_takeover",
                 "server_max_window_bits",
                 "client_max_window_bits",
-            ]
-        )
+        }
         for key in agreed_parameters:
             if key not in allowed_keys:
                 raise ValueError("unsupported compression parameter %r" % key)
