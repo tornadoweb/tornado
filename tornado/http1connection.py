@@ -38,6 +38,8 @@ from tornado.util import GzipDecompressor
 
 from typing import cast, Optional, Type, Awaitable, Callable, Union, Tuple
 
+CR_OR_LF_RE = re.compile(b"\r|\n")
+
 
 class _QuietException(Exception):
     def __init__(self) -> None:
@@ -453,8 +455,8 @@ class HTTP1Connection(httputil.HTTPConnection):
         )
         lines.extend(line.encode("latin1") for line in header_lines)
         for line in lines:
-            if b"\n" in line:
-                raise ValueError("Newline in header: " + repr(line))
+            if CR_OR_LF_RE.search(line):
+                raise ValueError("Illegal characters (CR or LF) in header: %r" % line)
         future = None
         if self.stream.closed():
             future = self._write_future = Future()
