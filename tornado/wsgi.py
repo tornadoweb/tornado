@@ -38,7 +38,7 @@ from tornado import httputil
 from tornado.ioloop import IOLoop
 from tornado.log import access_log
 
-from typing import List, Tuple, Optional, Callable, Any, Dict, Text
+from typing import List, Tuple, Optional, Callable, Any, Dict
 from types import TracebackType
 import typing
 

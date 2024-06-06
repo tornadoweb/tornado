@@ -33,7 +33,7 @@ from tornado.gen import TimeoutError
 from typing import Any, Union, Dict, Tuple, List, Callable, Iterator, Optional
 
 if typing.TYPE_CHECKING:
-    from typing import Set  # noqa(F401)
+    pass  # noqa(F401)
 
 _INITIAL_CONNECT_TIMEOUT = 0.3
 
