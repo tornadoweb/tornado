@@ -192,7 +192,15 @@ class RequestHandler(object):
 
     """
 
-    SUPPORTED_METHODS = ("GET", "HEAD", "POST", "DELETE", "PATCH", "PUT", "OPTIONS")
+    SUPPORTED_METHODS: Tuple[str, ...] = (
+        "GET",
+        "HEAD",
+        "POST",
+        "DELETE",
+        "PATCH",
+        "PUT",
+        "OPTIONS",
+    )
 
     _template_loaders = {}  # type: Dict[str, template.BaseLoader]
     _template_loader_lock = threading.Lock()
