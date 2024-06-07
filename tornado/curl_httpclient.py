@@ -556,7 +556,9 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if header_line.startswith("HTTP/"):
             headers.clear()
             try:
-                (__, __, reason) = httputil.parse_response_start_line(header_line)
+                (_version, _code, reason) = httputil.parse_response_start_line(
+                    header_line
+                )
                 header_line = "X-Http-Reason: %s" % reason
             except httputil.HTTPInputError:
                 return
