@@ -21,6 +21,7 @@ import unittest
 
 from tornado.concurrent import (
     Future,
+    chain_future,
     run_on_executor,
     future_set_result_unless_cancelled,
 )
@@ -45,6 +46,31 @@ class MiscFutureTest(AsyncTestCase):
         self.assertEqual(fut.cancelled(), is_cancelled)
         if not is_cancelled:
             self.assertEqual(fut.result(), 42)
+
+
+class ChainFutureTest(AsyncTestCase):
+    @gen_test
+    async def test_asyncio_futures(self):
+        fut: Future[int] = Future()
+        fut2: Future[int] = Future()
+        chain_future(fut, fut2)
+        fut.set_result(42)
+        result = await fut2
+        self.assertEqual(result, 42)
+
+    @gen_test
+    async def test_concurrent_futures(self):
+        # A three-step chain: two concurrent futures (showing that both arguments to chain_future
+        # can be concurrent futures), and then one from a concurrent future to an asyncio future so
+        # we can use it in await.
+        fut: futures.Future[int] = futures.Future()
+        fut2: futures.Future[int] = futures.Future()
+        fut3: Future[int] = Future()
+        chain_future(fut, fut2)
+        chain_future(fut2, fut3)
+        fut.set_result(42)
+        result = await fut3
+        self.assertEqual(result, 42)
 
 
 # The following series of classes demonstrate and test various styles
