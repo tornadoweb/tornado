@@ -12,7 +12,6 @@ and `.Resolver`.
 
 import array
 import asyncio
-import atexit
 from inspect import getfullargspec
 import os
 import re
@@ -46,22 +45,6 @@ if typing.TYPE_CHECKING:
 bytes_type = bytes
 unicode_type = str
 basestring_type = str
-
-try:
-    from sys import is_finalizing
-except ImportError:
-    # Emulate it
-    def _get_emulated_is_finalizing() -> Callable[[], bool]:
-        L = []  # type: List[None]
-        atexit.register(lambda: L.append(None))
-
-        def is_finalizing() -> bool:
-            # Not referencing any globals here
-            return L != []
-
-        return is_finalizing
-
-    is_finalizing = _get_emulated_is_finalizing()
 
 
 # versionchanged:: 6.2
