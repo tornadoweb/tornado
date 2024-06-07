@@ -48,9 +48,9 @@ markupsafe==2.1.2
     # via jinja2
 mccabe==0.7.0
     # via flake8
-mypy==1.0.1
+mypy==1.10.0
     # via -r requirements.in
-mypy-extensions==0.4.3
+mypy-extensions==1.0.0
     # via
     #   black
     #   mypy
@@ -111,9 +111,9 @@ sphinxcontrib-serializinghtml==1.1.5
     # via sphinx
 tox==4.6.0
     # via -r requirements.in
-types-pycurl==7.45.2.0
+types-pycurl==7.45.3.20240421
     # via -r requirements.in
-typing-extensions==4.4.0
+typing-extensions==4.12.1
     # via mypy
 urllib3==1.26.18
     # via requests

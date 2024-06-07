@@ -49,6 +49,9 @@ from typing import (
     Union,
 )
 
+if typing.TYPE_CHECKING:
+    from typing_extensions import TypeVarTuple, Unpack
+
 
 class _HasFileno(Protocol):
     def fileno(self) -> int:
@@ -59,6 +62,8 @@ _FileDescriptorLike = Union[int, _HasFileno]
 
 _T = TypeVar("_T")
 
+if typing.TYPE_CHECKING:
+    _Ts = TypeVarTuple("_Ts")
 
 # Collection of selector thread event loops to shut down on exit.
 _selector_loops: Set["SelectorThread"] = set()
@@ -702,12 +707,18 @@ class AddThreadSelectorEventLoop(asyncio.AbstractEventLoop):
         self._real_loop.close()
 
     def add_reader(
-        self, fd: "_FileDescriptorLike", callback: Callable[..., None], *args: Any
+        self,
+        fd: "_FileDescriptorLike",
+        callback: Callable[..., None],
+        *args: "Unpack[_Ts]",
     ) -> None:
         return self._selector.add_reader(fd, callback, *args)
 
     def add_writer(
-        self, fd: "_FileDescriptorLike", callback: Callable[..., None], *args: Any
+        self,
+        fd: "_FileDescriptorLike",
+        callback: Callable[..., None],
+        *args: "Unpack[_Ts]",
     ) -> None:
         return self._selector.add_writer(fd, callback, *args)
 

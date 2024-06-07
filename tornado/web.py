@@ -192,7 +192,15 @@ class RequestHandler(object):
 
     """
 
-    SUPPORTED_METHODS = ("GET", "HEAD", "POST", "DELETE", "PATCH", "PUT", "OPTIONS")
+    SUPPORTED_METHODS: Tuple[str, ...] = (
+        "GET",
+        "HEAD",
+        "POST",
+        "DELETE",
+        "PATCH",
+        "PUT",
+        "OPTIONS",
+    )
 
     _template_loaders = {}  # type: Dict[str, template.BaseLoader]
     _template_loader_lock = threading.Lock()
@@ -1628,14 +1636,14 @@ class RequestHandler(object):
         # information please see
         # http://www.djangoproject.com/weblog/2011/feb/08/security/
         # http://weblog.rubyonrails.org/2011/2/8/csrf-protection-bypass-in-ruby-on-rails
-        token = (
+        input_token = (
             self.get_argument("_xsrf", None)
             or self.request.headers.get("X-Xsrftoken")
             or self.request.headers.get("X-Csrftoken")
         )
-        if not token:
+        if not input_token:
             raise HTTPError(403, "'_xsrf' argument missing from POST")
-        _, token, _ = self._decode_xsrf_token(token)
+        _, token, _ = self._decode_xsrf_token(input_token)
         _, expected_token, _ = self._get_raw_xsrf_token()
         if not token:
             raise HTTPError(403, "'_xsrf' argument has invalid format")
@@ -1918,7 +1926,7 @@ class RequestHandler(object):
             if name not in self._active_modules:
                 self._active_modules[name] = module(self)
             rendered = self._active_modules[name].render(*args, **kwargs)
-            return rendered
+            return _unicode(rendered)
 
         return render
 
@@ -3355,7 +3363,7 @@ class UIModule(object):
     def current_user(self) -> Any:
         return self.handler.current_user
 
-    def render(self, *args: Any, **kwargs: Any) -> str:
+    def render(self, *args: Any, **kwargs: Any) -> Union[str, bytes]:
         """Override in subclasses to return this module's output."""
         raise NotImplementedError()
 
@@ -3403,12 +3411,12 @@ class UIModule(object):
 
 
 class _linkify(UIModule):
-    def render(self, text: str, **kwargs: Any) -> str:  # type: ignore
+    def render(self, text: str, **kwargs: Any) -> str:
         return escape.linkify(text, **kwargs)
 
 
 class _xsrf_form_html(UIModule):
-    def render(self) -> str:  # type: ignore
+    def render(self) -> str:
         return self.handler.xsrf_form_html()
 
 
@@ -3434,7 +3442,7 @@ class TemplateModule(UIModule):
         self._resource_list = []  # type: List[Dict[str, Any]]
         self._resource_dict = {}  # type: Dict[str, Dict[str, Any]]
 
-    def render(self, path: str, **kwargs: Any) -> bytes:  # type: ignore
+    def render(self, path: str, **kwargs: Any) -> bytes:
         def set_resources(**kwargs) -> str:  # type: ignore
             if path not in self._resource_dict:
                 self._resource_list.append(kwargs)

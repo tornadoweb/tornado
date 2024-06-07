@@ -145,7 +145,10 @@ def run_on_executor(*args: Any, **kwargs: Any) -> Callable:
 _NO_RESULT = object()
 
 
-def chain_future(a: "Future[_T]", b: "Future[_T]") -> None:
+def chain_future(
+    a: Union["Future[_T]", "futures.Future[_T]"],
+    b: Union["Future[_T]", "futures.Future[_T]"],
+) -> None:
     """Chain two futures together so that when one completes, so does the other.
 
     The result (success or failure) of ``a`` will be copied to ``b``, unless
