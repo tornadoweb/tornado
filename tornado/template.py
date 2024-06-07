@@ -399,7 +399,7 @@ class BaseLoader(object):
 
     def __init__(
         self,
-        autoescape: str = _DEFAULT_AUTOESCAPE,
+        autoescape: Optional[str] = _DEFAULT_AUTOESCAPE,
         namespace: Optional[Dict[str, Any]] = None,
         whitespace: Optional[str] = None,
     ) -> None:
