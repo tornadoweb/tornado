@@ -470,7 +470,23 @@ class RequestHandler(object):
 
         return self._get_arguments(name, self.request.arguments, strip)
 
-    def get_body_argument(
+    @overload
+    def get_body_argument(self, name: str, default: str, strip: bool = True) -> str:
+        pass
+
+    @overload
+    def get_body_argument(  # noqa: F811
+        self, name: str, default: _ArgDefaultMarker = _ARG_DEFAULT, strip: bool = True
+    ) -> str:
+        pass
+
+    @overload
+    def get_body_argument(  # noqa: F811
+        self, name: str, default: None, strip: bool = True
+    ) -> Optional[str]:
+        pass
+
+    def get_body_argument(  # noqa: F811
         self,
         name: str,
         default: Union[None, str, _ArgDefaultMarker] = _ARG_DEFAULT,
@@ -498,7 +514,23 @@ class RequestHandler(object):
         """
         return self._get_arguments(name, self.request.body_arguments, strip)
 
-    def get_query_argument(
+    @overload
+    def get_query_argument(self, name: str, default: str, strip: bool = True) -> str:
+        pass
+
+    @overload
+    def get_query_argument(  # noqa: F811
+        self, name: str, default: _ArgDefaultMarker = _ARG_DEFAULT, strip: bool = True
+    ) -> str:
+        pass
+
+    @overload
+    def get_query_argument(  # noqa: F811
+        self, name: str, default: None, strip: bool = True
+    ) -> Optional[str]:
+        pass
+
+    def get_query_argument(  # noqa: F811
         self,
         name: str,
         default: Union[None, str, _ArgDefaultMarker] = _ARG_DEFAULT,
