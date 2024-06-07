@@ -1894,7 +1894,7 @@ class RequestHandler(object):
             if name not in self._active_modules:
                 self._active_modules[name] = module(self)
             rendered = self._active_modules[name].render(*args, **kwargs)
-            return rendered
+            return _unicode(rendered)
 
         return render
 
@@ -3331,7 +3331,7 @@ class UIModule(object):
     def current_user(self) -> Any:
         return self.handler.current_user
 
-    def render(self, *args: Any, **kwargs: Any) -> str:
+    def render(self, *args: Any, **kwargs: Any) -> Union[str, bytes]:
         """Override in subclasses to return this module's output."""
         raise NotImplementedError()
 
@@ -3379,12 +3379,12 @@ class UIModule(object):
 
 
 class _linkify(UIModule):
-    def render(self, text: str, **kwargs: Any) -> str:  # type: ignore
+    def render(self, text: str, **kwargs: Any) -> str:
         return escape.linkify(text, **kwargs)
 
 
 class _xsrf_form_html(UIModule):
-    def render(self) -> str:  # type: ignore
+    def render(self) -> str:
         return self.handler.xsrf_form_html()
 
 
@@ -3410,7 +3410,7 @@ class TemplateModule(UIModule):
         self._resource_list = []  # type: List[Dict[str, Any]]
         self._resource_dict = {}  # type: Dict[str, Dict[str, Any]]
 
-    def render(self, path: str, **kwargs: Any) -> bytes:  # type: ignore
+    def render(self, path: str, **kwargs: Any) -> bytes:
         def set_resources(**kwargs) -> str:  # type: ignore
             if path not in self._resource_dict:
                 self._resource_list.append(kwargs)
