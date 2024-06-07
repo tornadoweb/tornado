@@ -1596,14 +1596,14 @@ class RequestHandler(object):
         # information please see
         # http://www.djangoproject.com/weblog/2011/feb/08/security/
         # http://weblog.rubyonrails.org/2011/2/8/csrf-protection-bypass-in-ruby-on-rails
-        token = (
+        input_token = (
             self.get_argument("_xsrf", None)
             or self.request.headers.get("X-Xsrftoken")
             or self.request.headers.get("X-Csrftoken")
         )
-        if not token:
+        if not input_token:
             raise HTTPError(403, "'_xsrf' argument missing from POST")
-        _, token, _ = self._decode_xsrf_token(token)
+        _, token, _ = self._decode_xsrf_token(input_token)
         _, expected_token, _ = self._get_raw_xsrf_token()
         if not token:
             raise HTTPError(403, "'_xsrf' argument has invalid format")

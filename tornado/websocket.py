@@ -1380,7 +1380,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             {
                 "Upgrade": "websocket",
                 "Connection": "Upgrade",
-                "Sec-WebSocket-Key": self.key,
+                "Sec-WebSocket-Key": to_unicode(self.key),
                 "Sec-WebSocket-Version": "13",
             }
         )
