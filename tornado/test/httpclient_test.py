@@ -690,12 +690,12 @@ X-XSS-Protection: 1;
         start_time = time.time()
         response = self.fetch("/hello")
         response.rethrow()
-        assert response.request_time is not None
+        self.assertIsNotNone(response.request_time)
         self.assertGreaterEqual(response.request_time, 0)
         self.assertLess(response.request_time, 1.0)
         # A very crude check to make sure that start_time is based on
         # wall time and not the monotonic clock.
-        assert response.start_time is not None
+        self.assertIsNotNone(response.start_time)
         self.assertLess(abs(response.start_time - start_time), 1.0)
 
         for k, v in response.time_info.items():
@@ -763,7 +763,7 @@ class RequestProxyTest(unittest.TestCase):
 
     def test_neither_set(self):
         proxy = _RequestProxy(HTTPRequest("http://example.com/"), dict())
-        self.assertIs(proxy.auth_username, None)
+        self.assertIsNone(proxy.auth_username)
 
     def test_bad_attribute(self):
         proxy = _RequestProxy(HTTPRequest("http://example.com/"), dict())
@@ -772,7 +772,7 @@ class RequestProxyTest(unittest.TestCase):
 
     def test_defaults_none(self):
         proxy = _RequestProxy(HTTPRequest("http://example.com/"), None)
-        self.assertIs(proxy.auth_username, None)
+        self.assertIsNone(proxy.auth_username)
 
 
 class HTTPResponseTestCase(unittest.TestCase):

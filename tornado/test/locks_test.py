@@ -346,7 +346,7 @@ class SemaphoreContextManagerTest(AsyncTestCase):
     def test_context_manager(self):
         sem = locks.Semaphore()
         with (yield sem.acquire()) as yielded:
-            self.assertTrue(yielded is None)
+            self.assertIsNone(yielded)
 
         # Semaphore was released and can be acquired again.
         self.assertTrue(asyncio.ensure_future(sem.acquire()).done())
@@ -358,7 +358,7 @@ class SemaphoreContextManagerTest(AsyncTestCase):
 
         async def f():
             async with sem as yielded:
-                self.assertTrue(yielded is None)
+                self.assertIsNone(yielded)
 
         yield f()
 

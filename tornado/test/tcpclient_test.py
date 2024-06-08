@@ -362,7 +362,7 @@ class ConnectorTest(AsyncTestCase):
         self.resolve_connect(AF1, "a", True)
         conn.on_connect_timeout()
         self.assert_pending()
-        self.assertEqual(self.streams["a"].closed, False)
+        self.assertFalse(self.streams["a"].closed)
         # success stream will be pop
         self.assertEqual(len(conn.streams), 0)
         # streams in connector should be closed after connect timeout

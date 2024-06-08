@@ -437,7 +437,7 @@ class GenCoroutineTest(AsyncTestCase):
             return
 
         result = yield f()
-        self.assertEqual(result, None)
+        self.assertIsNone(result)
         self.finished = True
 
     @gen_test
@@ -449,7 +449,7 @@ class GenCoroutineTest(AsyncTestCase):
             return
 
         result = yield f()
-        self.assertEqual(result, None)
+        self.assertIsNone(result)
         self.finished = True
 
     @gen_test
@@ -602,7 +602,7 @@ class GenCoroutineTest(AsyncTestCase):
 
         self.io_loop.run_sync(inner2, timeout=3)
 
-        self.assertIs(self.local_ref(), None)
+        self.assertIsNone(self.local_ref())
         self.finished = True
 
     def test_asyncio_future_debug_info(self):
@@ -803,8 +803,8 @@ class WaitIteratorTest(AsyncTestCase):
         with self.assertRaises(ValueError):
             g = gen.WaitIterator(Future(), bar=Future())
 
-        self.assertEqual(g.current_index, None, "bad nil current index")
-        self.assertEqual(g.current_future, None, "bad nil current future")
+        self.assertIsNone(g.current_index, "bad nil current index")
+        self.assertIsNone(g.current_future, "bad nil current future")
 
     @gen_test
     def test_already_done(self):
@@ -835,8 +835,8 @@ class WaitIteratorTest(AsyncTestCase):
                 self.assertEqual(r, 84)
             i += 1
 
-        self.assertEqual(g.current_index, None, "bad nil current index")
-        self.assertEqual(g.current_future, None, "bad nil current future")
+        self.assertIsNone(g.current_index, "bad nil current index")
+        self.assertIsNone(g.current_future, "bad nil current future")
 
         dg = gen.WaitIterator(f1=f1, f2=f2)
 
@@ -856,9 +856,8 @@ class WaitIteratorTest(AsyncTestCase):
                 self.fail("got bad WaitIterator index {}".format(dg.current_index))
 
             i += 1
-
-        self.assertEqual(dg.current_index, None, "bad nil current index")
-        self.assertEqual(dg.current_future, None, "bad nil current future")
+        self.assertIsNone(g.current_index, "bad nil current index")
+        self.assertIsNone(g.current_future, "bad nil current future")
 
     def finish_coroutines(self, iteration, futures):
         if iteration == 3:
@@ -998,12 +997,12 @@ class RunnerGCTest(AsyncTestCase):
         loop.close()
         gc.collect()
         # Future was collected
-        self.assertIs(wfut[0](), None)
+        self.assertIsNone(wfut[0]())
         # At least one wakeup
         self.assertGreaterEqual(len(result), 2)
         if not self.is_pypy3():
             # coroutine finalizer was called (not on PyPy3 apparently)
-            self.assertIs(result[-1], None)
+            self.assertIsNone(result[-1])
 
     def test_gc_infinite_async_await(self):
         # Same as test_gc_infinite_coro, but with a `async def` function
@@ -1034,12 +1033,12 @@ class RunnerGCTest(AsyncTestCase):
             loop.close()
             gc.collect()
         # Future was collected
-        self.assertIs(wfut[0](), None)
+        self.assertIsNone(wfut[0]())
         # At least one wakeup and one finally
         self.assertGreaterEqual(len(result), 2)
         if not self.is_pypy3():
             # coroutine finalizer was called (not on PyPy3 apparently)
-            self.assertIs(result[-1], None)
+            self.assertIsNone(result[-1])
 
     def test_multi_moment(self):
         # Test gen.multi with moment
