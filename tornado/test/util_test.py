@@ -14,7 +14,6 @@ from tornado.util import (
     timedelta_to_seconds,
     import_object,
     re_unescape,
-    is_finalizing,
 )
 
 import typing
@@ -301,8 +300,3 @@ class ReUnescapeTest(unittest.TestCase):
             re_unescape("\\b")
         with self.assertRaises(ValueError):
             re_unescape("\\Z")
-
-
-class IsFinalizingTest(unittest.TestCase):
-    def test_basic(self):
-        self.assertFalse(is_finalizing())
