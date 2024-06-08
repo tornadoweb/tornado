@@ -1065,9 +1065,7 @@ class FacebookGraphMixin(OAuth2Mixin):
             "client_secret": client_secret,
         }
 
-        fields = {
-            "id", "name", "first_name", "last_name", "locale", "picture", "link"
-        }
+        fields = {"id", "name", "first_name", "last_name", "locale", "picture", "link"}
         if extra_fields:
             fields.update(extra_fields)
 
@@ -1194,7 +1192,8 @@ def _oauth_signature(
     base_elems.append(normalized_url)
     base_elems.append(
         "&".join(
-            "{}={}".format(k, _oauth_escape(str(v))) for k, v in sorted(parameters.items())
+            "{}={}".format(k, _oauth_escape(str(v)))
+            for k, v in sorted(parameters.items())
         )
     )
     base_string = "&".join(_oauth_escape(e) for e in base_elems)
@@ -1227,7 +1226,8 @@ def _oauth10a_signature(
     base_elems.append(normalized_url)
     base_elems.append(
         "&".join(
-            "{}={}".format(k, _oauth_escape(str(v))) for k, v in sorted(parameters.items())
+            "{}={}".format(k, _oauth_escape(str(v)))
+            for k, v in sorted(parameters.items())
         )
     )
 

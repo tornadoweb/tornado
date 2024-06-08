@@ -699,7 +699,9 @@ X-XSS-Protection: 1;
         self.assertLess(abs(response.start_time - start_time), 1.0)
 
         for k, v in response.time_info.items():
-            self.assertTrue(0 <= v < 1.0, "time_info[{}] out of bounds: {}".format(k, v))
+            self.assertTrue(
+                0 <= v < 1.0, "time_info[{}] out of bounds: {}".format(k, v)
+            )
 
     def test_zero_timeout(self):
         response = self.fetch("/hello", connect_timeout=0)

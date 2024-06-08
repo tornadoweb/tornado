@@ -389,9 +389,7 @@ class Semaphore(_TimeoutGarbageCollector):
 
     def __repr__(self) -> str:
         res = super().__repr__()
-        extra = (
-            "locked" if self._value == 0 else f"unlocked,value:{self._value}"
-        )
+        extra = "locked" if self._value == 0 else f"unlocked,value:{self._value}"
         if self._waiters:
             extra = f"{extra},waiters:{len(self._waiters)}"
         return f"<{res[1:-1]} [{extra}]>"

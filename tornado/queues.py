@@ -328,7 +328,9 @@ class Queue(Generic[_T]):
             self._getters.popleft()
 
     def __repr__(self) -> str:
-        return "<{} at {} {}>".format(type(self).__name__, hex(id(self)), self._format())
+        return "<{} at {} {}>".format(
+            type(self).__name__, hex(id(self)), self._format()
+        )
 
     def __str__(self) -> str:
         return "<{} {}>".format(type(self).__name__, self._format())

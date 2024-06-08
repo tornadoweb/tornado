@@ -1002,10 +1002,10 @@ class WebSocketProtocol13(WebSocketProtocol):
     ) -> None:
         # TODO: handle invalid parameters gracefully
         allowed_keys = {
-                "server_no_context_takeover",
-                "client_no_context_takeover",
-                "server_max_window_bits",
-                "client_max_window_bits",
+            "server_no_context_takeover",
+            "client_no_context_takeover",
+            "server_max_window_bits",
+            "client_max_window_bits",
         }
         for key in agreed_parameters:
             if key not in allowed_keys:

@@ -271,9 +271,7 @@ def recursive_unicode(obj: Any) -> Any:
     Supports lists, tuples, and dictionaries.
     """
     if isinstance(obj, dict):
-        return {
-            recursive_unicode(k): recursive_unicode(v) for (k, v) in obj.items()
-        }
+        return {recursive_unicode(k): recursive_unicode(v) for (k, v) in obj.items()}
     elif isinstance(obj, list):
         return list(recursive_unicode(i) for i in obj)
     elif isinstance(obj, tuple):

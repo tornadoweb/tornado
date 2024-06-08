@@ -250,9 +250,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
 
 class _HTTPConnection(httputil.HTTPMessageDelegate):
-    _SUPPORTED_METHODS = {
-        "GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"
-    }
+    _SUPPORTED_METHODS = {"GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"}
 
     def __init__(
         self,

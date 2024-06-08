@@ -66,7 +66,9 @@ class DigestAuthHandler(RequestHandler):
             self.set_status(401)
             self.set_header(
                 "WWW-Authenticate",
-                'Digest realm="{}", nonce="{}", opaque="{}"'.format(realm, nonce, opaque),
+                'Digest realm="{}", nonce="{}", opaque="{}"'.format(
+                    realm, nonce, opaque
+                ),
             )
 
 

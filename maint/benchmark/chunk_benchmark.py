@@ -14,23 +14,23 @@ try:
 except NameError:
     xrange = range
 
-define('port', default=8888)
-define('num_chunks', default=1000)
-define('chunk_size', default=2048)
+define("port", default=8888)
+define("num_chunks", default=1000)
+define("chunk_size", default=2048)
 
 
 class ChunkHandler(RequestHandler):
     def get(self):
         for i in xrange(options.num_chunks):
-            self.write('A' * options.chunk_size)
+            self.write("A" * options.chunk_size)
             self.flush()
         self.finish()
 
 
 def main():
     parse_command_line()
-    app = Application([('/', ChunkHandler)])
-    app.listen(options.port, address='127.0.0.1')
+    app = Application([("/", ChunkHandler)])
+    app.listen(options.port, address="127.0.0.1")
 
     def callback(response):
         response.rethrow()
@@ -40,16 +40,14 @@ def main():
 
     logging.warning("Starting fetch with curl client")
     curl_client = CurlAsyncHTTPClient()
-    curl_client.fetch('http://localhost:%d/' % options.port,
-                      callback=callback)
+    curl_client.fetch("http://localhost:%d/" % options.port, callback=callback)
     IOLoop.current().start()
 
     logging.warning("Starting fetch with simple client")
     simple_client = SimpleAsyncHTTPClient()
-    simple_client.fetch('http://localhost:%d/' % options.port,
-                        callback=callback)
+    simple_client.fetch("http://localhost:%d/" % options.port, callback=callback)
     IOLoop.current().start()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

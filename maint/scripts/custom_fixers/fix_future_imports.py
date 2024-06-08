@@ -1,5 +1,6 @@
 """Updates all source files to import the same set of __future__ directives.
 """
+
 from lib2to3 import fixer_base
 from lib2to3 import pytree
 from lib2to3.pgen2 import token
@@ -20,10 +21,16 @@ class FixFutureImports(fixer_base.BaseFix):
         self.found_future_import = False
 
     def new_future_import(self, old):
-        new = FromImport("__future__",
-                         [Name("absolute_import", prefix=" "), Comma(),
-                          Name("division", prefix=" "), Comma(),
-                          Name("print_function", prefix=" ")])
+        new = FromImport(
+            "__future__",
+            [
+                Name("absolute_import", prefix=" "),
+                Comma(),
+                Name("division", prefix=" "),
+                Comma(),
+                Name("print_function", prefix=" "),
+            ],
+        )
         if old is not None:
             new.prefix = old.prefix
         return new

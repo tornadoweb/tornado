@@ -19,17 +19,19 @@ class CythonCoroutineTest(AsyncTestCase):
 
 class CythonArgReplacerTest(unittest.TestCase):
     def test_arg_replacer_function(self):
-        replacer = ArgReplacer(cythonapp.function_with_args, 'two')
-        args = (1, 'old', 3)
+        replacer = ArgReplacer(cythonapp.function_with_args, "two")
+        args = (1, "old", 3)
         kwargs = {}
-        self.assertEqual(replacer.get_old_value(args, kwargs), 'old')
-        self.assertEqual(replacer.replace('new', args, kwargs),
-                         ('old', [1, 'new', 3], {}))
+        self.assertEqual(replacer.get_old_value(args, kwargs), "old")
+        self.assertEqual(
+            replacer.replace("new", args, kwargs), ("old", [1, "new", 3], {})
+        )
 
     def test_arg_replacer_method(self):
-        replacer = ArgReplacer(cythonapp.AClass().method_with_args, 'two')
-        args = (1, 'old', 3)
+        replacer = ArgReplacer(cythonapp.AClass().method_with_args, "two")
+        args = (1, "old", 3)
         kwargs = {}
-        self.assertEqual(replacer.get_old_value(args, kwargs), 'old')
-        self.assertEqual(replacer.replace('new', args, kwargs),
-                         ('old', [1, 'new', 3], {}))
+        self.assertEqual(replacer.get_old_value(args, kwargs), "old")
+        self.assertEqual(
+            replacer.replace("new", args, kwargs), ("old", [1, "new", 3], {})
+        )

@@ -99,8 +99,9 @@ def main():
     except ValueError:
         known_benchmarks = [benchmark.value for benchmark in Benchmark]
         print(
-            "Unknown benchmark: '{}', supported values are: {}"
-            .format(options.benchmark, ", ".join(known_benchmarks))
+            "Unknown benchmark: '{}', supported values are: {}".format(
+                options.benchmark, ", ".join(known_benchmarks)
+            )
         )
         return
 
@@ -108,5 +109,5 @@ def main():
         func()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

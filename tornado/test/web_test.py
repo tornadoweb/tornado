@@ -1516,7 +1516,9 @@ class CustomStaticFileTest(WebTestCase):
             def parse_url_path(self, url_path):
                 extension_index = url_path.rindex(".")
                 version_index = url_path.rindex(".", 0, extension_index)
-                return "{}{}".format(url_path[:version_index], url_path[extension_index:])
+                return "{}{}".format(
+                    url_path[:version_index], url_path[extension_index:]
+                )
 
             @classmethod
             def get_absolute_path(cls, settings, path):
@@ -1972,7 +1974,9 @@ class UIMethodUIModuleTest(SimpleHandlerTestCase):
 
     def get_app_kwargs(self):
         def my_ui_method(handler, x):
-            return "In my_ui_method({}) with handler value {}.".format(x, handler.value())
+            return "In my_ui_method({}) with handler value {}.".format(
+                x, handler.value()
+            )
 
         class MyModule(UIModule):
             def render(self, x):
