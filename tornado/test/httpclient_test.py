@@ -691,11 +691,13 @@ X-XSS-Protection: 1;
         response = self.fetch("/hello")
         response.rethrow()
         self.assertIsNotNone(response.request_time)
+        assert response.request_time is not None  # for mypy
         self.assertGreaterEqual(response.request_time, 0)
         self.assertLess(response.request_time, 1.0)
         # A very crude check to make sure that start_time is based on
         # wall time and not the monotonic clock.
         self.assertIsNotNone(response.start_time)
+        assert response.start_time is not None  # for mypy
         self.assertLess(abs(response.start_time - start_time), 1.0)
 
         for k, v in response.time_info.items():

@@ -132,6 +132,7 @@ class SecureCookieV1Test(unittest.TestCase):
         cookie = handler._cookies["foo"]
         match = re.match(rb"12345678\|([0-9]+)\|([0-9a-f]+)", cookie)
         self.assertIsNotNone(match)
+        assert match is not None  # for mypy
         timestamp = match.group(1)
         sig = match.group(2)
         self.assertEqual(
@@ -402,8 +403,10 @@ class CookieTest(WebTestCase):
         response = self.fetch("/set_expires_days")
         header = response.headers.get("Set-Cookie")
         self.assertIsNotNone(header)
+        assert header is not None  # for mypy
         match = re.match("foo=bar; expires=(?P<expires>.+); Path=/", header)
         self.assertIsNotNone(match)
+        assert match is not None  # for mypy
 
         expires = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
             days=10
