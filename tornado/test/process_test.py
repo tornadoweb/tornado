@@ -140,19 +140,11 @@ class SubprocessTest(AsyncTestCase):
 
     @gen_test
     def test_subprocess(self):
-        # In Python 3.13.0b1, the new repl logs an error on exit if terminfo
-        # doesn't exist, the -i flag is used, and stdin is not a tty. This bug may
-        # have been fixed in beta 2, so for now we disable the new repl in this test
-        # and the next. Once we've tested with beta 2 we can either remove this env var
-        # or file a bug upstream if it still exists.
-        env = dict(os.environ)
-        env["PYTHON_BASIC_REPL"] = "1"
         subproc = Subprocess(
             [sys.executable, "-u", "-i"],
             stdin=Subprocess.STREAM,
             stdout=Subprocess.STREAM,
             stderr=subprocess.STDOUT,
-            env=env,
         )
         self.addCleanup(lambda: self.term_and_wait(subproc))
         self.addCleanup(subproc.stdout.close)
@@ -170,14 +162,11 @@ class SubprocessTest(AsyncTestCase):
     @gen_test
     def test_close_stdin(self):
         # Close the parent's stdin handle and see that the child recognizes it.
-        env = dict(os.environ)
-        env["PYTHON_BASIC_REPL"] = "1"
         subproc = Subprocess(
             [sys.executable, "-u", "-i"],
             stdin=Subprocess.STREAM,
             stdout=Subprocess.STREAM,
             stderr=subprocess.STDOUT,
-            env=env,
         )
         self.addCleanup(lambda: self.term_and_wait(subproc))
         yield subproc.stdout.read_until(b">>> ")
