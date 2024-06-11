@@ -264,7 +264,7 @@ Multiple modules
   of three optional dependencies: `~tornado.netutil.ThreadedResolver`
   using the `concurrent.futures` thread pool,
   `tornado.platform.caresresolver.CaresResolver` using the ``pycares``
-  library, or `tornado.platform.twisted.TwistedResolver` using ``twisted``
+  library, or ``tornado.platform.twisted.TwistedResolver`` using ``twisted``
 * New function `tornado.netutil.is_valid_ip` returns true if a given string
   is a valid IP (v4 or v6) address.
 * `tornado.netutil.bind_sockets` has a new ``flags`` argument that can
@@ -314,7 +314,7 @@ Multiple modules
 * New class ``tornado.platform.twisted.TwistedIOLoop`` allows Tornado
   code to be run on the Twisted reactor (as opposed to the existing
   ``TornadoReactor``, which bridges the gap in the other direction).
-* New class `tornado.platform.twisted.TwistedResolver` is an asynchronous
+* New class ``tornado.platform.twisted.TwistedResolver``` is an asynchronous
   implementation of the `.Resolver` interface.
 
 `tornado.process`

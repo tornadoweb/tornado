@@ -29,14 +29,6 @@ except ImportError:
 else:
     from tornado.platform.caresresolver import CaresResolver
 
-try:
-    import twisted  # type: ignore
-    import twisted.names  # type: ignore
-except ImportError:
-    twisted = None
-else:
-    from tornado.platform.twisted import TwistedResolver
-
 
 class _ResolverTestMixin(object):
     resolver = None  # type: typing.Any
@@ -176,25 +168,6 @@ class CaresResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
         super().setUp()
         self.resolver = CaresResolver()
-
-
-# TwistedResolver produces consistent errors in our test cases so we
-# could test the regular and error cases in the same class. However,
-# in the error cases it appears that cleanup of socket objects is
-# handled asynchronously and occasionally results in "unclosed socket"
-# warnings if not given time to shut down (and there is no way to
-# explicitly shut it down). This makes the test flaky, so we do not
-# test error cases here.
-@skipIfNoNetwork
-@unittest.skipIf(twisted is None, "twisted module not present")
-@unittest.skipIf(
-    getattr(twisted, "__version__", "0.0") < "12.1", "old version of twisted"
-)
-@unittest.skipIf(sys.platform == "win32", "twisted resolver hangs on windows")
-class TwistedResolverTest(AsyncTestCase, _ResolverTestMixin):
-    def setUp(self):
-        super().setUp()
-        self.resolver = TwistedResolver()
 
 
 class IsValidIPTest(unittest.TestCase):
