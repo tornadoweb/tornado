@@ -125,7 +125,7 @@ New modules
 `tornado.platform.twisted`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* `.TwistedResolver` now has better error handling.
+* ``.TwistedResolver``` now has better error handling.
 
 `tornado.process`
 ~~~~~~~~~~~~~~~~~

@@ -118,8 +118,6 @@ class TCPClientTest(AsyncTestCase):
     @skipIfNoIPv6
     def test_connect_ipv6_dual(self):
         self.skipIfLocalhostV4()
-        if Resolver.configured_class().__name__.endswith("TwistedResolver"):
-            self.skipTest("TwistedResolver does not support multiple addresses")
         self.do_test_connect(socket.AF_INET6, "localhost")
 
     def test_connect_unspec_ipv4(self):
