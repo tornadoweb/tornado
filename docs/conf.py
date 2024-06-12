@@ -36,7 +36,9 @@ autodoc_inherit_docstrings = False
 autodoc_docstring_signature = False
 
 coverage_skip_undoc_in_source = True
+coverage_show_missing_items = True
 coverage_ignore_modules = [
+    "tornado.curl_httpclient",
     "tornado.platform.asyncio",
     "tornado.platform.caresresolver",
     "tornado.platform.twisted",
@@ -106,6 +108,7 @@ missing_references = {
     "concurrent.futures._base.Future",
     "futures.Future",
     "socket.socket",
+    "unittest.case.TestCase",
     "TextIO",
     # Other stuff. I'm not sure why some of these are showing up, but
     # I'm just listing everything here to avoid blocking the upgrade of sphinx.

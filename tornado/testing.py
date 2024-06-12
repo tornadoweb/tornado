@@ -754,7 +754,17 @@ class ExpectLog(logging.Filter):
 
 # From https://nedbatchelder.com/blog/201508/using_context_managers_in_test_setup.html
 def setup_with_context_manager(testcase: unittest.TestCase, cm: Any) -> Any:
-    """Use a contextmanager to setUp a test case."""
+    """Use a context manager to setUp a test case.
+
+    Example::
+
+        def setUp(self):
+            setup_with_context_manager(self, warnings.catch_warnings())
+            warnings.filterwarnings("ignore", category=DeprecationWarning)
+            # The catch_warnings context manager will be deactivated
+            # automatically in tearDown.
+
+    """
     val = cm.__enter__()
     testcase.addCleanup(cm.__exit__, None, None, None)
     return val
