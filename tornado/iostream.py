@@ -1090,9 +1090,6 @@ class IOStream(BaseIOStream):
         if __name__ == '__main__':
             asyncio.run(main())
 
-    .. testoutput::
-       :hide:
-
     """
 
     def __init__(self, socket: socket.socket, *args: Any, **kwargs: Any) -> None:

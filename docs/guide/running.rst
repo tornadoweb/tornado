@@ -18,9 +18,6 @@ configuring a WSGI container to find your application, you write a
     if __name__ == '__main__':
         asyncio.run(main())
 
-.. testoutput::
-   :hide:
-
 Configure your operating system or process manager to run this program to
 start the server. Please note that it may be necessary to increase the number 
 of open files per process (to avoid "Too many open files"-Error). 
@@ -52,9 +49,6 @@ alterations to application startup.
             server.add_sockets(sockets)
             await asyncio.Event().wait()
         asyncio.run(post_fork_main())
-
-.. testoutput::
-   :hide:
 
 This is another way to start multiple processes and have them all
 share the same port, although it has some limitations.  First, each

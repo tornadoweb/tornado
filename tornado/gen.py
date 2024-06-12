@@ -29,9 +29,6 @@ For example, here's a coroutine-based handler:
             do_something_with_response(response)
             self.render("template.html")
 
-.. testoutput::
-   :hide:
-
 Asynchronous functions in Tornado return an ``Awaitable`` or `.Future`;
 yielding this object returns its result.
 
@@ -50,9 +47,6 @@ of results will be returned when they are all finished:
                                    response4=http_client.fetch(url4))
         response3 = response_dict['response3']
         response4 = response_dict['response4']
-
-.. testoutput::
-   :hide:
 
 If ``tornado.platform.twisted`` is imported, it is also possible to
 yield Twisted's ``Deferred`` objects. See the `convert_yielded`

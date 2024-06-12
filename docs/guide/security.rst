@@ -21,9 +21,6 @@ method:
             else:
                 self.write("Your cookie was set!")
 
-.. testoutput::
-   :hide:
-
 Cookies are not secure and can easily be modified by clients.  If you
 need to set cookies to, e.g., identify the currently logged in user,
 you need to sign your cookies to prevent forgery. Tornado supports
@@ -38,9 +35,6 @@ keyword arguments to your application:
     application = tornado.web.Application([
         (r"/", MainHandler),
     ], cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__")
-
-.. testoutput::
-   :hide:
 
 Signed cookies contain the encoded value of the cookie in addition to a
 timestamp and an `HMAC <http://en.wikipedia.org/wiki/HMAC>`_ signature.
@@ -57,9 +51,6 @@ set. The secure version of the example above:
                 self.write("Your cookie was not set yet!")
             else:
                 self.write("Your cookie was set!")
-
-.. testoutput::
-   :hide:
 
 Tornado's signed cookies guarantee integrity but not confidentiality.
 That is, the cookie cannot be modified but its contents can be seen by the
@@ -129,9 +120,6 @@ specifying a nickname, which is then saved in a cookie:
         (r"/login", LoginHandler),
     ], cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__")
 
-.. testoutput::
-   :hide:
-
 You can require that the user be logged in using the `Python
 decorator <http://www.python.org/dev/peps/pep-0318/>`_
 `tornado.web.authenticated`. If a request goes to a method with this
@@ -155,9 +143,6 @@ rewritten:
         (r"/", MainHandler),
         (r"/login", LoginHandler),
     ], **settings)
-
-.. testoutput::
-   :hide:
 
 If you decorate ``post()`` methods with the ``authenticated``
 decorator, and the user is not logged in, the server will send a
@@ -202,9 +187,6 @@ the Google credentials in a cookie for later access:
                     response_type='code',
                     extra_params={'approval_prompt': 'auto'})
 
-.. testoutput::
-   :hide:
-
 See the `tornado.auth` module documentation for more details.
 
 .. _xsrf:
@@ -236,9 +218,6 @@ include the application setting ``xsrf_cookies``:
         (r"/", MainHandler),
         (r"/login", LoginHandler),
     ], **settings)
-
-.. testoutput::
-   :hide:
 
 If ``xsrf_cookies`` is set, the Tornado web application will set the
 ``_xsrf`` cookie for all users and reject all ``POST``, ``PUT``, and
