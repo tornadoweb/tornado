@@ -516,16 +516,16 @@ class EchoHandler(RequestHandler):
         # In httpserver.py (i.e. self.request.arguments), they're left
         # as bytes.  Keys are always native strings.
         for key in self.request.arguments:
-            if type(key) != str:
+            if type(key) is not str:
                 raise Exception("incorrect type for key: %r" % type(key))
             for bvalue in self.request.arguments[key]:
-                if type(bvalue) != bytes:
+                if type(bvalue) is not bytes:
                     raise Exception("incorrect type for value: %r" % type(bvalue))
             for svalue in self.get_arguments(key):
-                if type(svalue) != unicode_type:
+                if type(svalue) is not unicode_type:
                     raise Exception("incorrect type for value: %r" % type(svalue))
         for arg in path_args:
-            if type(arg) != unicode_type:
+            if type(arg) is not unicode_type:
                 raise Exception("incorrect type for path arg: %r" % type(arg))
         self.write(
             dict(
@@ -630,7 +630,7 @@ class TypeCheckHandler(RequestHandler):
 
 class DecodeArgHandler(RequestHandler):
     def decode_argument(self, value, name=None):
-        if type(value) != bytes:
+        if type(value) is not bytes:
             raise Exception("unexpected type for value: %r" % type(value))
         # use self.request.arguments directly to avoid recursion
         if "encoding" in self.request.arguments:
@@ -640,9 +640,9 @@ class DecodeArgHandler(RequestHandler):
 
     def get(self, arg):
         def describe(s):
-            if type(s) == bytes:
+            if type(s) is bytes:
                 return ["bytes", native_str(binascii.b2a_hex(s))]
-            elif type(s) == unicode_type:
+            elif type(s) is unicode_type:
                 return ["unicode", s]
             raise Exception("unknown type")
 

@@ -36,7 +36,7 @@ filelock==3.12.0
     # via
     #   tox
     #   virtualenv
-flake8==6.0.0
+flake8==7.0.0
     # via -r requirements.in
 idna==3.7
     # via requests
@@ -72,9 +72,9 @@ platformdirs==3.5.1
     #   virtualenv
 pluggy==1.0.0
     # via tox
-pycodestyle==2.10.0
+pycodestyle==2.11.1
     # via flake8
-pyflakes==3.0.1
+pyflakes==3.2.0
     # via flake8
 pygments==2.15.0
     # via sphinx
