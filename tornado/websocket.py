@@ -160,9 +160,6 @@ class WebSocketHandler(tornado.web.RequestHandler):
           def on_close(self):
               print("WebSocket closed")
 
-    .. testoutput::
-       :hide:
-
     WebSockets are not standard HTTP connections. The "handshake" is
     HTTP, but after the handshake, the protocol is
     message-based. Consequently, most of the Tornado HTTP facilities

@@ -73,9 +73,6 @@ Here is a sample synchronous function:
         response = http_client.fetch(url)
         return response.body
 
-.. testoutput::
-   :hide:
-
 And here is the same function rewritten asynchronously as a native coroutine:
 
 .. testcode::
@@ -86,9 +83,6 @@ And here is the same function rewritten asynchronously as a native coroutine:
        http_client = AsyncHTTPClient()
        response = await http_client.fetch(url)
        return response.body
-
-.. testoutput::
-   :hide:
 
 Or for compatibility with older versions of Python, using the `tornado.gen` module:
 
@@ -117,9 +111,6 @@ Coroutines are a little magical, but what they do internally is something like t
             my_future.set_result(f.result().body)
         fetch_future.add_done_callback(on_fetch)
         return my_future
-
-.. testoutput::
-   :hide:
 
 Notice that the coroutine returns its `.Future` before the fetch is
 done. This is what makes coroutines *asynchronous*.

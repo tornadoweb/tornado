@@ -62,9 +62,6 @@ directory as your Python file, you could render this template with:
             items = ["Item 1", "Item 2", "Item 3"]
             self.render("template.html", title="My title", items=items)
 
-.. testoutput::
-   :hide:
-
 Tornado templates support *control statements* and *expressions*.
 Control statements are surrounded by ``{%`` and ``%}``, e.g.
 ``{% if len(items) > 2 %}``. Expressions are surrounded by ``{{`` and
@@ -201,9 +198,6 @@ by overriding `.RequestHandler.get_user_locale`:
                 # Use the Accept-Language header
                 return None
             return self.current_user.prefs["locale"]
-
-.. testoutput::
-   :hide:
 
 If ``get_user_locale`` returns ``None``, we fall back on the
 ``Accept-Language`` header.

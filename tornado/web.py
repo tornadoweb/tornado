@@ -39,10 +39,6 @@ Here is a simple "Hello, world" example app:
     if __name__ == "__main__":
         asyncio.run(main())
 
-.. testoutput::
-   :hide:
-
-
 See the :doc:`guide` for additional information.
 
 Thread-safety notes

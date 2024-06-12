@@ -37,9 +37,6 @@ A minimal "hello world" example looks something like this:
     if __name__ == "__main__":
         asyncio.run(main())
 
-.. testoutput::
-   :hide:
-
 The ``main`` coroutine
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -152,9 +149,6 @@ and `~.RequestHandler.get_body_argument`.
         def post(self):
             self.set_header("Content-Type", "text/plain")
             self.write("You wrote " + self.get_body_argument("message"))
-
-.. testoutput::
-   :hide:
 
 Since the HTML form encoding is ambiguous as to whether an argument is
 a single value or a list with one element, `.RequestHandler` has
@@ -331,9 +325,6 @@ For example, here is a simple handler using a coroutine:
             json = tornado.escape.json_decode(response.body)
             self.write("Fetched " + str(len(json["entries"])) + " entries "
                        "from the FriendFeed API")
-
-.. testoutput::
-   :hide:
 
 For a more advanced asynchronous example, take a look at the `chat
 example application
