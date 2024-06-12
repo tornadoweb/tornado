@@ -21,7 +21,6 @@ extensions = [
     "sphinx.ext.doctest",
     "sphinx.ext.intersphinx",
     "sphinx.ext.viewcode",
-    "sphinxcontrib.asyncio",
 ]
 
 primary_domain = "py"
