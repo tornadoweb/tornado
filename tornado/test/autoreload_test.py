@@ -114,7 +114,7 @@ else:
 
 spec = getattr(sys.modules[__name__], '__spec__', None)
 print(f"Starting {__name__=}, __spec__.name={getattr(spec, 'name', None)}")
-exec(open("run_twice_magic.py").read())
+exec(open("run_twice_magic.py", encoding="utf-8").read())
 """
 
         # Create temporary test application
@@ -195,7 +195,7 @@ if 'tornado.autoreload' not in sys.modules:
     raise Exception('started without autoreload wrapper')
 
 print('Starting')
-exec(open("run_twice_magic.py").read())
+exec(open("run_twice_magic.py", encoding="utf-8").read())
 """
 
         self.write_files(
@@ -219,7 +219,7 @@ import sys
 
 print(os.path.basename(sys.argv[0]))
 print(f'argv={sys.argv[1:]}')
-exec(open("run_twice_magic.py").read())
+exec(open("run_twice_magic.py", encoding="utf-8").read())
 """
         # Create temporary test application
         self.write_files({"main.py": main})
@@ -251,7 +251,7 @@ if "TESTAPP_STARTED" in os.environ:
     sys.exit(0)
 else:
     print("reloading")
-    exec(open("run_twice_magic.py").read())
+    exec(open("run_twice_magic.py", encoding="utf-8").read())
 """
 
         # Create temporary test application
