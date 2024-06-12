@@ -67,9 +67,6 @@ Example usage for Google OAuth:
                         response_type='code',
                         extra_params={'approval_prompt': 'auto'})
 
-.. testoutput::
-   :hide:
-
 """
 
 import base64
@@ -661,9 +658,6 @@ class OAuth2Mixin(object):
                         return
                     self.finish("Posted a message!")
 
-        .. testoutput::
-           :hide:
-
         .. versionadded:: 4.3
 
         .. versionchanged::: 6.0
@@ -720,9 +714,6 @@ class TwitterMixin(OAuthMixin):
                     # Save the user using e.g. set_signed_cookie()
                 else:
                     await self.authorize_redirect()
-
-    .. testoutput::
-       :hide:
 
     The user object returned by `~OAuthMixin.get_authenticated_user`
     includes the attributes ``username``, ``name``, ``access_token``,
@@ -804,9 +795,6 @@ class TwitterMixin(OAuthMixin):
                         await self.authorize_redirect()
                         return
                     self.finish("Posted a message!")
-
-        .. testoutput::
-           :hide:
 
         .. versionchanged:: 6.0
 
@@ -959,9 +947,6 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
                                 response_type='code',
                                 extra_params={'approval_prompt': 'auto'})
 
-        .. testoutput::
-           :hide:
-
         .. versionchanged:: 6.0
 
            The ``callback`` argument was removed. Use the returned awaitable object instead.
@@ -1033,9 +1018,6 @@ class FacebookGraphMixin(OAuth2Mixin):
                         redirect_uri=redirect_uri,
                         client_id=self.settings["facebook_api_key"],
                         extra_params={"scope": "user_posts"})
-
-        .. testoutput::
-           :hide:
 
         This method returns a dictionary which may contain the following fields:
 
@@ -1150,9 +1132,6 @@ class FacebookGraphMixin(OAuth2Mixin):
                         self.authorize_redirect()
                         return
                     self.finish("Posted a message!")
-
-        .. testoutput::
-           :hide:
 
         The given path is relative to ``self._FACEBOOK_BASE_URL``,
         by default "https://graph.facebook.com".

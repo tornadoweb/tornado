@@ -243,17 +243,17 @@ class TestIOLoop(AsyncTestCase):
         # All the timeout methods return non-None handles that can be
         # passed to remove_timeout.
         handle = self.io_loop.add_timeout(self.io_loop.time(), lambda: None)
-        self.assertFalse(handle is None)
+        self.assertIsNotNone(handle)
         self.io_loop.remove_timeout(handle)
 
     def test_call_at_return(self):
         handle = self.io_loop.call_at(self.io_loop.time(), lambda: None)
-        self.assertFalse(handle is None)
+        self.assertIsNotNone(handle)
         self.io_loop.remove_timeout(handle)
 
     def test_call_later_return(self):
         handle = self.io_loop.call_later(0, lambda: None)
-        self.assertFalse(handle is None)
+        self.assertIsNotNone(handle)
         self.io_loop.remove_timeout(handle)
 
     def test_close_file_object(self):
@@ -261,6 +261,7 @@ class TestIOLoop(AsyncTestCase):
         the object should be closed (by IOLoop.close(all_fds=True),
         not just the fd.
         """
+
         # Use a socket since they are supported by IOLoop on all platforms.
         # Unfortunately, sockets don't support the .closed attribute for
         # inspecting their close status, so we must use a wrapper.
@@ -502,7 +503,7 @@ class TestIOLoopFutures(AsyncTestCase):
             )
             future = self.wait()
             self.assertTrue(future.done())
-            self.assertTrue(future.result() is None)
+            self.assertIsNone(future.result())
 
     @gen_test
     def test_run_in_executor_gen(self):

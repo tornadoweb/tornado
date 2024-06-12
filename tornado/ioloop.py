@@ -116,9 +116,6 @@ class IOLoop(Configurable):
         if __name__ == "__main__":
             asyncio.run(main())
 
-    .. testoutput::
-       :hide:
-
     Most applications should not attempt to construct an `IOLoop` directly,
     and instead initialize the `asyncio` event loop and use `IOLoop.current()`.
     In some cases, such as in test frameworks when initializing an `IOLoop`

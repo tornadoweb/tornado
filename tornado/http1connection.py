@@ -38,6 +38,8 @@ from tornado.util import GzipDecompressor
 
 from typing import cast, Optional, Type, Awaitable, Callable, Union, Tuple
 
+CR_OR_LF_RE = re.compile(b"\r|\n")
+
 
 class _QuietException(Exception):
     def __init__(self) -> None:
@@ -389,14 +391,11 @@ class HTTP1Connection(httputil.HTTPConnection):
             self._request_start_line = start_line
             lines.append(utf8("%s %s HTTP/1.1" % (start_line[0], start_line[1])))
             # Client requests with a non-empty body must have either a
-            # Content-Length or a Transfer-Encoding.
+            # Content-Length or a Transfer-Encoding. If Content-Length is not
+            # present we'll add our Transfer-Encoding below.
             self._chunking_output = (
                 start_line.method in ("POST", "PUT", "PATCH")
                 and "Content-Length" not in headers
-                and (
-                    "Transfer-Encoding" not in headers
-                    or headers["Transfer-Encoding"] == "chunked"
-                )
             )
         else:
             assert isinstance(start_line, httputil.ResponseStartLine)
@@ -418,9 +417,6 @@ class HTTP1Connection(httputil.HTTPConnection):
                 and (start_line.code < 100 or start_line.code >= 200)
                 # No need to chunk the output if a Content-Length is specified.
                 and "Content-Length" not in headers
-                # Applications are discouraged from touching Transfer-Encoding,
-                # but if they do, leave it alone.
-                and "Transfer-Encoding" not in headers
             )
             # If connection to a 1.1 client will be closed, inform client
             if (
@@ -453,8 +449,8 @@ class HTTP1Connection(httputil.HTTPConnection):
         )
         lines.extend(line.encode("latin1") for line in header_lines)
         for line in lines:
-            if b"\n" in line:
-                raise ValueError("Newline in header: " + repr(line))
+            if CR_OR_LF_RE.search(line):
+                raise ValueError("Illegal characters (CR or LF) in header: %r" % line)
         future = None
         if self.stream.closed():
             future = self._write_future = Future()
@@ -560,7 +556,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             return connection_header != "close"
         elif (
             "Content-Length" in headers
-            or headers.get("Transfer-Encoding", "").lower() == "chunked"
+            or is_transfer_encoding_chunked(headers)
             or getattr(start_line, "method", None) in ("HEAD", "GET")
         ):
             # start_line may be a request or response start line; only
@@ -598,13 +594,6 @@ class HTTP1Connection(httputil.HTTPConnection):
         delegate: httputil.HTTPMessageDelegate,
     ) -> Optional[Awaitable[None]]:
         if "Content-Length" in headers:
-            if "Transfer-Encoding" in headers:
-                # Response cannot contain both Content-Length and
-                # Transfer-Encoding headers.
-                # http://tools.ietf.org/html/rfc7230#section-3.3.3
-                raise httputil.HTTPInputError(
-                    "Response with both Transfer-Encoding and Content-Length"
-                )
             if "," in headers["Content-Length"]:
                 # Proxies sometimes cause Content-Length headers to get
                 # duplicated.  If all the values are identical then we can
@@ -631,20 +620,22 @@ class HTTP1Connection(httputil.HTTPConnection):
         else:
             content_length = None
 
+        is_chunked = is_transfer_encoding_chunked(headers)
+
         if code == 204:
             # This response code is not allowed to have a non-empty body,
             # and has an implicit length of zero instead of read-until-close.
             # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.3
-            if "Transfer-Encoding" in headers or content_length not in (None, 0):
+            if is_chunked or content_length not in (None, 0):
                 raise httputil.HTTPInputError(
                     "Response with code %d should not have body" % code
                 )
             content_length = 0
 
+        if is_chunked:
+            return self._read_chunked_body(delegate)
         if content_length is not None:
             return self._read_fixed_body(content_length, delegate)
-        if headers.get("Transfer-Encoding", "").lower() == "chunked":
-            return self._read_chunked_body(delegate)
         if self.is_client:
             return self._read_body_until_close(delegate)
         return None
@@ -863,3 +854,33 @@ def parse_hex_int(s: str) -> int:
     if HEXDIGITS.fullmatch(s) is None:
         raise ValueError("not a hexadecimal integer: %r" % s)
     return int(s, 16)
+
+
+def is_transfer_encoding_chunked(headers: httputil.HTTPHeaders) -> bool:
+    """Returns true if the headers specify Transfer-Encoding: chunked.
+
+    Raise httputil.HTTPInputError if any other transfer encoding is used.
+    """
+    # Note that transfer-encoding is an area in which postel's law can lead
+    # us astray. If a proxy and a backend server are liberal in what they accept,
+    # but accept slightly different things, this can lead to mismatched framing
+    # and request smuggling issues. Therefore we are as strict as possible here
+    # (even technically going beyond the requirements of the RFCs: a value of
+    # ",chunked" is legal but doesn't appear in practice for legitimate traffic)
+    if "Transfer-Encoding" not in headers:
+        return False
+    if "Content-Length" in headers:
+        # Message cannot contain both Content-Length and
+        # Transfer-Encoding headers.
+        # http://tools.ietf.org/html/rfc7230#section-3.3.3
+        raise httputil.HTTPInputError(
+            "Message with both Transfer-Encoding and Content-Length"
+        )
+    if headers["Transfer-Encoding"].lower() == "chunked":
+        return True
+    # We do not support any transfer-encodings other than chunked, and we do not
+    # expect to add any support because the concept of transfer-encoding has
+    # been removed in HTTP/2.
+    raise httputil.HTTPInputError(
+        "Unsupported Transfer-Encoding %s" % headers["Transfer-Encoding"]
+    )

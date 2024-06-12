@@ -34,3 +34,5 @@
    .. autofunction:: bind_unused_port
 
    .. autofunction:: get_async_test_timeout
+
+   .. autofunction:: setup_with_context_manager

@@ -17,8 +17,8 @@ jobs:
     name: Run quick tests
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         name: Install Python
         with:
           # Lint python version must be synced with tox.ini
@@ -51,8 +51,11 @@ jobs:
             tox_env: py311-full
           - python: '3.11.0'
             tox_env: py311-full
-          - python: '3.12.0-beta.3 - 3.12'
+          - python: '3.12.0'
             tox_env: py312-full
+          - python: '3.13.0-beta.2 - 3.13'
+            # Some optional dependencies don't seem to work on 3.13 yet
+            tox_env: py313
           - python: 'pypy-3.8'
             # Pypy is a lot slower due to jit warmup costs, so don't run the
             # "full" test config there.
@@ -62,8 +65,8 @@ jobs:
             tox_env: docs
 
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         name: Install Python
         with:
           python-version: ${{ matrix.python}}
@@ -85,8 +88,8 @@ jobs:
     needs: test_quick
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         name: Install Python
         with:
           python-version: '3.11'

@@ -62,6 +62,15 @@ if typing.TYPE_CHECKING:
     from asyncio import Future  # noqa: F401
     import unittest  # noqa: F401
 
+    # This can be done unconditionally in the base class of HTTPHeaders
+    # after we drop support for Python 3.8.
+    StrMutableMapping = collections.abc.MutableMapping[str, str]
+else:
+    StrMutableMapping = collections.abc.MutableMapping
+
+# To be used with str.strip() and related methods.
+HTTP_WHITESPACE = " \t"
+
 
 @lru_cache(1000)
 def _normalize_header(name: str) -> str:
@@ -73,7 +82,7 @@ def _normalize_header(name: str) -> str:
     return "-".join([w.capitalize() for w in name.split("-")])
 
 
-class HTTPHeaders(collections.abc.MutableMapping):
+class HTTPHeaders(StrMutableMapping):
     """A dictionary that maintains ``Http-Header-Case`` for all keys.
 
     Supports multiple values per key via a pair of new methods,
@@ -171,7 +180,7 @@ class HTTPHeaders(collections.abc.MutableMapping):
             # continuation of a multi-line header
             if self._last_key is None:
                 raise HTTPInputError("first header line cannot start with whitespace")
-            new_part = " " + line.lstrip()
+            new_part = " " + line.lstrip(HTTP_WHITESPACE)
             self._as_list[self._last_key][-1] += new_part
             self._dict[self._last_key] += new_part
         else:
@@ -179,7 +188,7 @@ class HTTPHeaders(collections.abc.MutableMapping):
                 name, value = line.split(":", 1)
             except ValueError:
                 raise HTTPInputError("no colon in header line")
-            self.add(name, value.strip())
+            self.add(name, value.strip(HTTP_WHITESPACE))
 
     @classmethod
     def parse(cls, headers: str) -> "HTTPHeaders":
@@ -873,9 +882,10 @@ def format_timestamp(
     return email.utils.formatdate(time_num, usegmt=True)
 
 
-RequestStartLine = collections.namedtuple(
-    "RequestStartLine", ["method", "path", "version"]
-)
+class RequestStartLine(typing.NamedTuple):
+    method: str
+    path: str
+    version: str
 
 
 _http_version_re = re.compile(r"^HTTP/1\.[0-9]$")
@@ -885,7 +895,7 @@ _http_method_re = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
 def parse_request_start_line(line: str) -> RequestStartLine:
     """Returns a (method, path, version) tuple for an HTTP 1.x request line.
 
-    The response is a `collections.namedtuple`.
+    The response is a `typing.NamedTuple`.
 
     >>> parse_request_start_line("GET /foo HTTP/1.1")
     RequestStartLine(method='GET', path='/foo', version='HTTP/1.1')
@@ -907,9 +917,10 @@ def parse_request_start_line(line: str) -> RequestStartLine:
     return RequestStartLine(method, path, version)
 
 
-ResponseStartLine = collections.namedtuple(
-    "ResponseStartLine", ["version", "code", "reason"]
-)
+class ResponseStartLine(typing.NamedTuple):
+    version: str
+    code: int
+    reason: str
 
 
 _http_response_line_re = re.compile(r"(HTTP/1.[0-9]) ([0-9]+) ([^\r]*)")
@@ -918,7 +929,7 @@ _http_response_line_re = re.compile(r"(HTTP/1.[0-9]) ([0-9]+) ([^\r]*)")
 def parse_response_start_line(line: str) -> ResponseStartLine:
     """Returns a (version, code, reason) tuple for an HTTP 1.x response line.
 
-    The response is a `collections.namedtuple`.
+    The response is a `typing.NamedTuple`.
 
     >>> parse_response_start_line("HTTP/1.1 200 OK")
     ResponseStartLine(version='HTTP/1.1', code=200, reason='OK')

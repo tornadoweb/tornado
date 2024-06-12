@@ -179,10 +179,10 @@ class SimpleHTTPClientTestMixin(object):
 
     def test_singleton(self: typing.Any):
         # Class "constructor" reuses objects on the same IOLoop
-        self.assertTrue(SimpleAsyncHTTPClient() is SimpleAsyncHTTPClient())
+        self.assertIs(SimpleAsyncHTTPClient(), SimpleAsyncHTTPClient())
         # unless force_instance is used
-        self.assertTrue(
-            SimpleAsyncHTTPClient() is not SimpleAsyncHTTPClient(force_instance=True)
+        self.assertIsNot(
+            SimpleAsyncHTTPClient(), SimpleAsyncHTTPClient(force_instance=True)
         )
         # different IOLoops use different objects
         with closing(IOLoop()) as io_loop2:
@@ -193,7 +193,7 @@ class SimpleHTTPClientTestMixin(object):
 
             client1 = self.io_loop.run_sync(make_client)
             client2 = io_loop2.run_sync(make_client)
-            self.assertTrue(client1 is not client2)
+            self.assertIsNot(client1, client2)
 
     def test_connection_limit(self: typing.Any):
         with closing(self.create_client(max_clients=2)) as client:
@@ -828,7 +828,7 @@ class ChunkedWithContentLengthTest(AsyncHTTPTestCase):
         with ExpectLog(
             gen_log,
             (
-                "Malformed HTTP message from None: Response "
+                "Malformed HTTP message from None: Message "
                 "with both Transfer-Encoding and Content-Length"
             ),
             level=logging.INFO,

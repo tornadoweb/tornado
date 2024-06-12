@@ -22,8 +22,8 @@
 # is zero for an official release, positive for a development branch,
 # or negative for a release candidate or beta (after the base version
 # number has been incremented)
-version = "6.4"
-version_info = (6, 4, 0, 0)
+version = "6.5.dev1"
+version_info = (6, 5, 0, -100)
 
 import importlib
 import typing

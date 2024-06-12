@@ -257,7 +257,7 @@ Other notes
 `tornado.platform.twisted`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- The ``io_loop`` arguments to ``TornadoReactor``, `.TwistedResolver`,
+- The ``io_loop`` arguments to ``TornadoReactor``, ``TwistedResolver``,
   and ``tornado.platform.twisted.install`` have been removed.
 
 `tornado.process`

@@ -1090,9 +1090,6 @@ class IOStream(BaseIOStream):
         if __name__ == '__main__':
             asyncio.run(main())
 
-    .. testoutput::
-       :hide:
-
     """
 
     def __init__(self, socket: socket.socket, *args: Any, **kwargs: Any) -> None:
@@ -1374,7 +1371,7 @@ class SSLIOStream(IOStream):
                 return
             elif err.args[0] in (ssl.SSL_ERROR_EOF, ssl.SSL_ERROR_ZERO_RETURN):
                 return self.close(exc_info=err)
-            elif err.args[0] == ssl.SSL_ERROR_SSL:
+            elif err.args[0] in (ssl.SSL_ERROR_SSL, ssl.SSL_ERROR_SYSCALL):
                 try:
                     peer = self.socket.getpeername()
                 except Exception:

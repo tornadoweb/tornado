@@ -164,22 +164,16 @@ try{% set y = 1/x %}
         self.assertEqual(result, b"013456")
 
     def test_break_outside_loop(self):
-        try:
+        with self.assertRaises(ParseError, msg="Did not get expected exception"):
             Template(utf8("{% break %}"))
-            raise Exception("Did not get expected exception")
-        except ParseError:
-            pass
 
     def test_break_in_apply(self):
         # This test verifies current behavior, although of course it would
         # be nice if apply didn't cause seemingly unrelated breakage
-        try:
+        with self.assertRaises(ParseError, msg="Did not get expected exception"):
             Template(
                 utf8("{% for i in [] %}{% apply foo %}{% break %}{% end %}{% end %}")
             )
-            raise Exception("Did not get expected exception")
-        except ParseError:
-            pass
 
     @unittest.skip("no testable future imports")
     def test_no_inherit_future(self):
@@ -267,7 +261,7 @@ three{%end%}
             self.fail("did not get expected exception")
         except ZeroDivisionError:
             exc_stack = traceback.format_exc()
-        self.assertTrue("# base.html:1" in exc_stack)
+        self.assertIn("# base.html:1", exc_stack)
 
     def test_error_line_number_extends_sub_error(self):
         loader = DictLoader(
@@ -285,7 +279,7 @@ three{%end%}
             loader.load("sub.html").generate()
             self.fail("did not get expected exception")
         except ZeroDivisionError:
-            self.assertTrue("# sub.html:4 (via base.html:1)" in traceback.format_exc())
+            self.assertIn("# sub.html:4 (via base.html:1)", traceback.format_exc())
 
     def test_multi_includes(self):
         loader = DictLoader(
@@ -299,9 +293,7 @@ three{%end%}
             loader.load("a.html").generate()
             self.fail("did not get expected exception")
         except ZeroDivisionError:
-            self.assertTrue(
-                "# c.html:1 (via b.html:1, a.html:1)" in traceback.format_exc()
-            )
+            self.assertIn("# c.html:1 (via b.html:1, a.html:1)", traceback.format_exc())
 
 
 class ParseErrorDetailTest(unittest.TestCase):

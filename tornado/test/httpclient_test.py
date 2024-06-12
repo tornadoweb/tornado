@@ -690,12 +690,14 @@ X-XSS-Protection: 1;
         start_time = time.time()
         response = self.fetch("/hello")
         response.rethrow()
-        assert response.request_time is not None
+        self.assertIsNotNone(response.request_time)
+        assert response.request_time is not None  # for mypy
         self.assertGreaterEqual(response.request_time, 0)
         self.assertLess(response.request_time, 1.0)
         # A very crude check to make sure that start_time is based on
         # wall time and not the monotonic clock.
-        assert response.start_time is not None
+        self.assertIsNotNone(response.start_time)
+        assert response.start_time is not None  # for mypy
         self.assertLess(abs(response.start_time - start_time), 1.0)
 
         for k, v in response.time_info.items():
@@ -725,6 +727,22 @@ X-XSS-Protection: 1;
                 if el.logged_stack:
                     break
 
+    def test_header_crlf(self):
+        # Ensure that the client doesn't allow CRLF injection in headers. RFC 9112 section 2.2
+        # prohibits a bare CR specifically and "a recipient MAY recognize a single LF as a line
+        # terminator" so we check each character separately as well as the (redundant) CRLF pair.
+        for header, name in [
+            ("foo\rbar:", "cr"),
+            ("foo\nbar:", "lf"),
+            ("foo\r\nbar:", "crlf"),
+        ]:
+            with self.subTest(name=name, position="value"):
+                with self.assertRaises(ValueError):
+                    self.fetch("/hello", headers={"foo": header})
+            with self.subTest(name=name, position="key"):
+                with self.assertRaises(ValueError):
+                    self.fetch("/hello", headers={header: "foo"})
+
 
 class RequestProxyTest(unittest.TestCase):
     def test_request_set(self):
@@ -747,7 +765,7 @@ class RequestProxyTest(unittest.TestCase):
 
     def test_neither_set(self):
         proxy = _RequestProxy(HTTPRequest("http://example.com/"), dict())
-        self.assertIs(proxy.auth_username, None)
+        self.assertIsNone(proxy.auth_username)
 
     def test_bad_attribute(self):
         proxy = _RequestProxy(HTTPRequest("http://example.com/"), dict())
@@ -756,7 +774,7 @@ class RequestProxyTest(unittest.TestCase):
 
     def test_defaults_none(self):
         proxy = _RequestProxy(HTTPRequest("http://example.com/"), None)
-        self.assertIs(proxy.auth_username, None)
+        self.assertIsNone(proxy.auth_username)
 
 
 class HTTPResponseTestCase(unittest.TestCase):
