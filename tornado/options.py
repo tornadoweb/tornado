@@ -427,8 +427,8 @@ class OptionParser(object):
                             % (option.name, option.type.__name__)
                         )
 
-                if type(config[name]) == str and (
-                    option.type != str or option.multiple
+                if type(config[name]) is str and (
+                    option.type is not str or option.multiple
                 ):
                     option.parse(config[name])
                 else:
