@@ -38,7 +38,7 @@ from tornado import httputil
 from tornado.ioloop import IOLoop
 from tornado.log import access_log
 
-from typing import List, Tuple, Optional, Callable, Any, Dict, Text
+from typing import List, Tuple, Optional, Callable, Any, Dict
 from types import TracebackType
 import typing
 
@@ -204,7 +204,7 @@ class WSGIContainer:
         request.connection.finish()
         self._log(status_code, request)
 
-    def environ(self, request: httputil.HTTPServerRequest) -> Dict[Text, Any]:
+    def environ(self, request: httputil.HTTPServerRequest) -> Dict[str, Any]:
         """Converts a `tornado.httputil.HTTPServerRequest` to a WSGI environment.
 
         .. versionchanged:: 6.3
