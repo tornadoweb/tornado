@@ -3224,17 +3224,15 @@ class GZipContentEncoding(OutputTransform):
 
     # Whitelist of compressible mime types (in addition to any types
     # beginning with "text/").
-    CONTENT_TYPES = set(
-        [
-            "application/javascript",
-            "application/x-javascript",
-            "application/xml",
-            "application/atom+xml",
-            "application/json",
-            "application/xhtml+xml",
-            "image/svg+xml",
-        ]
-    )
+    CONTENT_TYPES = {
+        "application/javascript",
+        "application/x-javascript",
+        "application/xml",
+        "application/atom+xml",
+        "application/json",
+        "application/xhtml+xml",
+        "image/svg+xml",
+    }
     # Python's GzipFile defaults to level 9, while most other gzip
     # tools (including gzip itself) default to 6, which is probably a
     # better CPU/size tradeoff.

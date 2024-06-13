@@ -185,7 +185,7 @@ class OpenIdMixin:
             ax_attrs = set(ax_attrs)
             required = []  # type: List[str]
             if "name" in ax_attrs:
-                ax_attrs -= set(["name", "firstname", "fullname", "lastname"])
+                ax_attrs -= {"name", "firstname", "fullname", "lastname"}
                 required += ["firstname", "fullname", "lastname"]
                 args.update(
                     {
@@ -1047,9 +1047,7 @@ class FacebookGraphMixin(OAuth2Mixin):
             "client_secret": client_secret,
         }
 
-        fields = set(
-            ["id", "name", "first_name", "last_name", "locale", "picture", "link"]
-        )
+        fields = {"id", "name", "first_name", "last_name", "locale", "picture", "link"}
         if extra_fields:
             fields.update(extra_fields)
 

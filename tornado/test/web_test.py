@@ -1151,7 +1151,7 @@ class StaticFileTest(WebTestCase):
         # make sure the uncompressed file still has the correct type
         response = self.fetch("/static/sample.xml")
         self.assertIn(
-            response.headers.get("Content-Type"), set(("text/xml", "application/xml"))
+            response.headers.get("Content-Type"), {"text/xml", "application/xml"}
         )
 
     def test_static_url(self):
@@ -2937,7 +2937,7 @@ class XSRFTest(SimpleHandlerTestCase):
 
     def test_refresh_token(self):
         token = self.xsrf_token
-        tokens_seen = set([token])
+        tokens_seen = {token}
         # A user's token is stable over time.  Refreshing the page in one tab
         # might update the cookie while an older tab still has the old cookie
         # in its DOM.  Simulate this scenario by passing a constant token

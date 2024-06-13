@@ -570,7 +570,7 @@ class WebSocketTest(WebSocketBaseTestCase):
         # server is only running on ipv4. Test for this edge case and skip
         # the test if it happens.
         addrinfo = yield Resolver().resolve("localhost", port)
-        families = set(addr[0] for addr in addrinfo)
+        families = {addr[0] for addr in addrinfo}
         if socket.AF_INET not in families:
             self.skipTest("localhost does not resolve to ipv4")
             return
