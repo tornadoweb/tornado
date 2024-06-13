@@ -207,18 +207,18 @@ class OptionParser:
 
         .. versionadded:: 3.1
         """
-        return dict(
-            (opt.name, opt.value())
+        return {
+            opt.name: opt.value()
             for name, opt in self._options.items()
             if not group or group == opt.group_name
-        )
+        }
 
     def as_dict(self) -> Dict[str, Any]:
         """The names and values of all options.
 
         .. versionadded:: 3.1
         """
-        return dict((opt.name, opt.value()) for name, opt in self._options.items())
+        return {opt.name: opt.value() for name, opt in self._options.items()}
 
     def define(
         self,

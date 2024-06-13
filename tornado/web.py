@@ -1788,9 +1788,9 @@ class RequestHandler:
             if self.request.method not in self.SUPPORTED_METHODS:
                 raise HTTPError(405)
             self.path_args = [self.decode_argument(arg) for arg in args]
-            self.path_kwargs = dict(
-                (k, self.decode_argument(v, name=k)) for (k, v) in kwargs.items()
-            )
+            self.path_kwargs = {
+                k: self.decode_argument(v, name=k) for (k, v) in kwargs.items()
+            }
             # If XSRF cookies are turned on, reject form submissions without
             # the proper cookie
             if self.request.method not in (
@@ -2275,7 +2275,7 @@ class Application(ReversibleRouter):
 
     def _load_ui_methods(self, methods: Any) -> None:
         if isinstance(methods, types.ModuleType):
-            self._load_ui_methods(dict((n, getattr(methods, n)) for n in dir(methods)))
+            self._load_ui_methods({n: getattr(methods, n) for n in dir(methods)})
         elif isinstance(methods, list):
             for m in methods:
                 self._load_ui_methods(m)
@@ -2290,7 +2290,7 @@ class Application(ReversibleRouter):
 
     def _load_ui_modules(self, modules: Any) -> None:
         if isinstance(modules, types.ModuleType):
-            self._load_ui_modules(dict((n, getattr(modules, n)) for n in dir(modules)))
+            self._load_ui_modules({n: getattr(modules, n) for n in dir(modules)})
         elif isinstance(modules, list):
             for m in modules:
                 self._load_ui_modules(m)

@@ -147,9 +147,9 @@ class OpenIdMixin:
         """
         handler = cast(RequestHandler, self)
         # Verify the OpenID response via direct request to the OP
-        args = dict(
-            (k, v[-1]) for k, v in handler.request.arguments.items()
-        )  # type: Dict[str, Union[str, bytes]]
+        args = {
+            k: v[-1] for k, v in handler.request.arguments.items()
+        }  # type: Dict[str, Union[str, bytes]]
         args["openid.mode"] = "check_authentication"
         url = self._OPENID_ENDPOINT  # type: ignore
         if http_client is None:

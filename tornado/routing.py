@@ -582,9 +582,9 @@ class PathMatches(Matcher):
         # unnamed groups, we want to use either groups
         # or groupdict but not both.
         if self.regex.groupindex:
-            path_kwargs = dict(
-                (str(k), _unquote_or_none(v)) for (k, v) in match.groupdict().items()
-            )
+            path_kwargs = {
+                str(k): _unquote_or_none(v) for (k, v) in match.groupdict().items()
+            }
         else:
             path_args = [_unquote_or_none(s) for s in match.groups()]
 

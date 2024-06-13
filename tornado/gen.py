@@ -362,10 +362,10 @@ class WaitIterator:
             raise ValueError("You must provide args or kwargs, not both")
 
         if kwargs:
-            self._unfinished = dict((f, k) for (k, f) in kwargs.items())
+            self._unfinished = {f: k for (k, f) in kwargs.items()}
             futures = list(kwargs.values())  # type: Sequence[Future]
         else:
-            self._unfinished = dict((f, i) for (i, f) in enumerate(args))
+            self._unfinished = {f: i for (i, f) in enumerate(args)}
             futures = args
 
         self._finished = collections.deque()  # type: Deque[Future]
