@@ -89,7 +89,7 @@ class HTTPClient:
     def __init__(
         self,
         async_client_class: "Optional[Type[AsyncHTTPClient]]" = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         # Initialize self._closed at the beginning of the constructor
         # so that an exception raised here doesn't lead to confusing
@@ -250,7 +250,7 @@ class AsyncHTTPClient(Configurable):
         self,
         request: Union[str, "HTTPRequest"],
         raise_error: bool = True,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> "Future[HTTPResponse]":
         """Executes a request, asynchronously returning an `HTTPResponse`.
 

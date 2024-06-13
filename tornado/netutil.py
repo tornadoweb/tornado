@@ -645,7 +645,7 @@ def ssl_wrap_socket(
     ssl_options: Union[Dict[str, Any], ssl.SSLContext],
     server_hostname: Optional[str] = None,
     server_side: Optional[bool] = None,
-    **kwargs: Any
+    **kwargs: Any,
 ) -> ssl.SSLSocket:
     """Returns an ``ssl.SSLSocket`` wrapping the given socket.
 

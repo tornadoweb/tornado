@@ -212,7 +212,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         self,
         application: tornado.web.Application,
         request: httputil.HTTPServerRequest,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         super().__init__(application, request, **kwargs)
         self.ws_connection = None  # type: Optional[WebSocketProtocol]
@@ -1015,7 +1015,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             max_message_size=self.params.max_message_size,
             **self._get_compressor_options(
                 other_side, agreed_parameters, compression_options
-            )
+            ),
         )
 
     def _write_frame(

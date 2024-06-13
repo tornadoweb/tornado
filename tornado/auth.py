@@ -632,7 +632,7 @@ class OAuth2Mixin:
         url: str,
         access_token: Optional[str] = None,
         post_args: Optional[Dict[str, Any]] = None,
-        **args: Any
+        **args: Any,
     ) -> Any:
         """Fetches the given URL auth an OAuth2 access token.
 
@@ -761,7 +761,7 @@ class TwitterMixin(OAuthMixin):
         path: str,
         access_token: Dict[str, Any],
         post_args: Optional[Dict[str, Any]] = None,
-        **args: Any
+        **args: Any,
     ) -> Any:
         """Fetches the given API path, e.g., ``statuses/user_timeline/btaylor``
 
@@ -1096,7 +1096,7 @@ class FacebookGraphMixin(OAuth2Mixin):
         path: str,
         access_token: Optional[str] = None,
         post_args: Optional[Dict[str, Any]] = None,
-        **args: Any
+        **args: Any,
     ) -> Any:
         """Fetches the given relative API path, e.g., "/btaylor/picture"
 
