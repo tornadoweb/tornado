@@ -318,13 +318,13 @@ class TCPClient:
             # If the user requires binding also to a specific IP/port.
             try:
                 socket_obj.bind((source_ip_bind, source_port_bind))
-            except socket.error:
+            except OSError:
                 socket_obj.close()
                 # Fail loudly if unable to use the IP/port.
                 raise
         try:
             stream = IOStream(socket_obj, max_buffer_size=max_buffer_size)
-        except socket.error as e:
+        except OSError as e:
             fu = Future()  # type: Future[IOStream]
             fu.set_exception(e)
             return stream, fu

@@ -859,7 +859,7 @@ class BaseIOStream:
                     else:
                         buf = bytearray(self.read_chunk_size)
                     bytes_read = self.read_from_fd(buf)
-                except (socket.error, IOError, OSError) as e:
+                except OSError as e:
                     # ssl.SSLError is a subclass of socket.error
                     if self._is_connreset(e):
                         # Treat ECONNRESET as a connection close rather than
@@ -966,7 +966,7 @@ class BaseIOStream:
                 self._total_write_done_index += num_bytes
             except BlockingIOError:
                 break
-            except (socket.error, IOError, OSError) as e:
+            except OSError as e:
                 if not self._is_connreset(e):
                     # Broken pipe errors are usually caused by connection
                     # reset, and its better to not log EPIPE errors to
@@ -1180,7 +1180,7 @@ class IOStream(BaseIOStream):
             # In non-blocking mode we expect connect() to raise an
             # exception with EINPROGRESS or EWOULDBLOCK.
             pass
-        except socket.error as e:
+        except OSError as e:
             # On freebsd, other errors such as ECONNREFUSED may be
             # returned immediately when attempting to connect to
             # localhost, so handle them the same way as an error
@@ -1271,7 +1271,7 @@ class IOStream(BaseIOStream):
     def _handle_connect(self) -> None:
         try:
             err = self.socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
-        except socket.error as e:
+        except OSError as e:
             # Hurd doesn't allow SO_ERROR for loopback sockets because all
             # errors for such sockets are reported synchronously.
             if errno_from_exception(e) == errno.ENOPROTOOPT:
@@ -1305,7 +1305,7 @@ class IOStream(BaseIOStream):
                 self.socket.setsockopt(
                     socket.IPPROTO_TCP, socket.TCP_NODELAY, 1 if value else 0
                 )
-            except socket.error as e:
+            except OSError as e:
                 # Sometimes setsockopt will fail if the socket is closed
                 # at the wrong time.  This can happen with HTTPServer
                 # resetting the value to ``False`` between requests.
@@ -1342,7 +1342,7 @@ class SSLIOStream(IOStream):
         # If the socket is already connected, attempt to start the handshake.
         try:
             self.socket.getpeername()
-        except socket.error:
+        except OSError:
             pass
         else:
             # Indirectly start the handshake, which will run on the next
@@ -1387,7 +1387,7 @@ class SSLIOStream(IOStream):
             # in Python 3.7, this error is a subclass of SSLError
             # and will be handled by the previous block instead.
             return self.close(exc_info=err)
-        except socket.error as err:
+        except OSError as err:
             # Some port scans (e.g. nmap in -sT mode) have been known
             # to cause do_handshake to raise EBADF and ENOTCONN, so make
             # those errors quiet as well.
@@ -1606,7 +1606,7 @@ class PipeIOStream(BaseIOStream):
     def read_from_fd(self, buf: Union[bytearray, memoryview]) -> Optional[int]:
         try:
             return self._fio.readinto(buf)  # type: ignore
-        except (IOError, OSError) as e:
+        except OSError as e:
             if errno_from_exception(e) == errno.EBADF:
                 # If the writing half of a pipe is closed, select will
                 # report it as readable but reads will fail with EBADF.

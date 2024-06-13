@@ -93,7 +93,7 @@ class TCPServerTest(AsyncTestCase):
         def connect(c):
             try:
                 yield c.connect(server_addr)
-            except EnvironmentError:
+            except OSError:
                 pass
             else:
                 connected_clients.append(c)

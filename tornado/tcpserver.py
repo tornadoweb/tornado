@@ -352,7 +352,7 @@ class TCPServer:
                     return connection.close()
                 else:
                     raise
-            except socket.error as err:
+            except OSError as err:
                 # If the connection is closed immediately after it is created
                 # (as in a port scan), we can get one of several errors.
                 # wrap_socket makes an internal call to getpeername,
