@@ -28,7 +28,7 @@ if typing.TYPE_CHECKING:
 __all__ = ["Condition", "Event", "Semaphore", "BoundedSemaphore", "Lock"]
 
 
-class _TimeoutGarbageCollector(object):
+class _TimeoutGarbageCollector:
     """Base class for objects that periodically clean up timed-out waiters.
 
     Avoids memory leak in a common pattern like:
@@ -155,7 +155,7 @@ class Condition(_TimeoutGarbageCollector):
         self.notify(len(self._waiters))
 
 
-class Event(object):
+class Event:
     """An event blocks coroutines until its internal flag is set to True.
 
     Similar to `threading.Event`.
@@ -255,7 +255,7 @@ class Event(object):
             return timeout_fut
 
 
-class _ReleasingContextManager(object):
+class _ReleasingContextManager:
     """Releases a Lock or Semaphore at the end of a "with" statement.
 
     with (yield semaphore.acquire()):
@@ -484,7 +484,7 @@ class BoundedSemaphore(Semaphore):
         super().release()
 
 
-class Lock(object):
+class Lock:
     """A lock for coroutines.
 
     A Lock begins unlocked, and `acquire` locks it immediately. While it is

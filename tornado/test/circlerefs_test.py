@@ -105,7 +105,7 @@ def assert_no_cycle_garbage():
 class CircleRefsTest(unittest.TestCase):
     def test_known_leak(self):
         # Construct a known leak scenario to make sure the test harness works.
-        class C(object):
+        class C:
             def __init__(self, name):
                 self.name = name
                 self.a: typing.Optional[C] = None
@@ -199,7 +199,7 @@ class CircleRefsTest(unittest.TestCase):
 
         with concurrent.futures.ThreadPoolExecutor(1) as thread_pool:
 
-            class Factory(object):
+            class Factory:
                 executor = thread_pool
 
                 @tornado.concurrent.run_on_executor

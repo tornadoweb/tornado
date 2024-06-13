@@ -221,7 +221,7 @@ def get_supported_locales() -> Iterable[str]:
     return _supported_locales
 
 
-class Locale(object):
+class Locale:
     """Object representing a locale.
 
     After calling one of `load_translations` or `load_gettext_translations`,

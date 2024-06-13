@@ -438,7 +438,7 @@ class ReversibleRuleRouter(ReversibleRouter, RuleRouter):
         return None
 
 
-class Rule(object):
+class Rule:
     """A routing rule."""
 
     def __init__(
@@ -487,7 +487,7 @@ class Rule(object):
         )
 
 
-class Matcher(object):
+class Matcher:
     """Represents a matcher for request features."""
 
     def match(self, request: httputil.HTTPServerRequest) -> Optional[Dict[str, Any]]:

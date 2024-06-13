@@ -115,7 +115,7 @@ class BaseSSLTest(AsyncHTTPSTestCase):
         return Application([("/", HelloWorldRequestHandler, dict(protocol="https"))])
 
 
-class SSLTestMixin(object):
+class SSLTestMixin:
     def get_ssl_options(self):
         return dict(
             ssl_version=self.get_ssl_version(),

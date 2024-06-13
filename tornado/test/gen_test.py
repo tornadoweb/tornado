@@ -581,7 +581,7 @@ class GenCoroutineTest(AsyncTestCase):
         # without waiting for garbage collection.
         @gen.coroutine
         def inner():
-            class Foo(object):
+            class Foo:
                 pass
 
             local_var = Foo()

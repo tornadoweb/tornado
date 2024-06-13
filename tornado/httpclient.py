@@ -56,7 +56,7 @@ from tornado.util import Configurable
 from typing import Type, Any, Union, Dict, Callable, Optional, cast
 
 
-class HTTPClient(object):
+class HTTPClient:
     """A blocking HTTP client.
 
     This interface is provided to make it easier to share code between
@@ -336,7 +336,7 @@ class AsyncHTTPClient(Configurable):
         super(AsyncHTTPClient, cls).configure(impl, **kwargs)
 
 
-class HTTPRequest(object):
+class HTTPRequest:
     """HTTP client request object."""
 
     _headers = None  # type: Union[Dict[str, str], httputil.HTTPHeaders]
@@ -571,7 +571,7 @@ class HTTPRequest(object):
         self._body = utf8(value)
 
 
-class HTTPResponse(object):
+class HTTPResponse:
     """HTTP Response object.
 
     Attributes:
@@ -732,7 +732,7 @@ class HTTPClientError(Exception):
 HTTPError = HTTPClientError
 
 
-class _RequestProxy(object):
+class _RequestProxy:
     """Combines an object with a dictionary of defaults.
 
     Used internally by AsyncHTTPClient implementations.

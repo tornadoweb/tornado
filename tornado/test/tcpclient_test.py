@@ -197,7 +197,7 @@ class TestConnectorSplit(unittest.TestCase):
 
 
 class ConnectorTest(AsyncTestCase):
-    class FakeStream(object):
+    class FakeStream:
         def __init__(self):
             self.closed = False
 

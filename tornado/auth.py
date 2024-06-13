@@ -91,7 +91,7 @@ class AuthError(Exception):
     pass
 
 
-class OpenIdMixin(object):
+class OpenIdMixin:
     """Abstract implementation of OpenID and Attribute Exchange.
 
     Class attributes:
@@ -284,7 +284,7 @@ class OpenIdMixin(object):
         return httpclient.AsyncHTTPClient()
 
 
-class OAuthMixin(object):
+class OAuthMixin:
     """Abstract implementation of OAuth 1.0 and 1.0a.
 
     See `TwitterMixin` below for an example implementation.
@@ -552,7 +552,7 @@ class OAuthMixin(object):
         return httpclient.AsyncHTTPClient()
 
 
-class OAuth2Mixin(object):
+class OAuth2Mixin:
     """Abstract implementation of OAuth 2.0.
 
     See `FacebookGraphMixin` or `GoogleOAuth2Mixin` below for example

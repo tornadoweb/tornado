@@ -661,7 +661,7 @@ class WebSocketNativeCoroutineTest(WebSocketBaseTestCase):
         self.assertEqual(res, "hello2")
 
 
-class CompressionTestMixin(object):
+class CompressionTestMixin:
     MESSAGE = "Hello world. Testing 123 123"
 
     def get_app(self):
@@ -766,7 +766,7 @@ class DefaultCompressionTest(CompressionTestMixin, WebSocketBaseTestCase):
         self.assertEqual(bytes_out, bytes_in + 12)
 
 
-class MaskFunctionMixin(object):
+class MaskFunctionMixin:
     # Subclasses should define self.mask(mask, data)
     def mask(self, mask: bytes, data: bytes) -> bytes:
         raise NotImplementedError()

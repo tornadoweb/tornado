@@ -40,7 +40,7 @@ if typing.TYPE_CHECKING:
     from typing import Callable, List  # noqa: F401
 
 
-class TCPServer(object):
+class TCPServer:
     r"""A non-blocking, single-threaded TCP server.
 
     To use `TCPServer`, define a subclass which overrides the `handle_stream`

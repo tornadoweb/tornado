@@ -46,7 +46,7 @@ class _QuietException(Exception):
         pass
 
 
-class _ExceptionLoggingContext(object):
+class _ExceptionLoggingContext:
     """Used with the ``with`` statement when calling delegate methods to
     log any exceptions with the given logger.  Any exceptions caught are
     converted to _QuietException
@@ -70,7 +70,7 @@ class _ExceptionLoggingContext(object):
             raise _QuietException
 
 
-class HTTP1ConnectionParameters(object):
+class HTTP1ConnectionParameters:
     """Parameters for `.HTTP1Connection` and `.HTTP1ServerConnection`."""
 
     def __init__(
@@ -761,7 +761,7 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
         return self._delegate.on_connection_close()
 
 
-class HTTP1ServerConnection(object):
+class HTTP1ServerConnection:
     """An HTTP/1.x server."""
 
     def __init__(

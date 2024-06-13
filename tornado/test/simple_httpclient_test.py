@@ -142,7 +142,7 @@ class RespondInPrepareHandler(RequestHandler):
         self.finish("forbidden")
 
 
-class SimpleHTTPClientTestMixin(object):
+class SimpleHTTPClientTestMixin:
     def create_client(self, **kwargs):
         raise NotImplementedError()
 

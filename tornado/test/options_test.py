@@ -15,7 +15,7 @@ if typing.TYPE_CHECKING:
     from typing import List  # noqa: F401
 
 
-class Email(object):
+class Email:
     def __init__(self, value):
         if isinstance(value, str) and "@" in value:
             self._value = value

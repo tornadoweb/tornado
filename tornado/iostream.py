@@ -114,7 +114,7 @@ class StreamBufferFullError(Exception):
     """Exception raised by `IOStream` methods when the buffer is full."""
 
 
-class _StreamBuffer(object):
+class _StreamBuffer:
     """
     A specialized buffer that tries to avoid copies when large pieces
     of data are encountered.
@@ -204,7 +204,7 @@ class _StreamBuffer(object):
         self._first_pos = pos
 
 
-class BaseIOStream(object):
+class BaseIOStream:
     """A utility class to write to and read from a non-blocking file or socket.
 
     We support a non-blocking ``write()`` and a family of ``read_*()``

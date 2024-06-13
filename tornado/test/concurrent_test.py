@@ -94,7 +94,7 @@ class CapError(Exception):
     pass
 
 
-class BaseCapClient(object):
+class BaseCapClient:
     def __init__(self, port):
         self.port = port
 
@@ -124,7 +124,7 @@ class GeneratorCapClient(BaseCapClient):
         raise gen.Return(self.process_response(data))
 
 
-class ClientTestMixin(object):
+class ClientTestMixin:
     client_class = None  # type: typing.Callable
 
     def setUp(self):
@@ -174,7 +174,7 @@ class GeneratorClientTest(ClientTestMixin, AsyncTestCase):
 class RunOnExecutorTest(AsyncTestCase):
     @gen_test
     def test_no_calling(self):
-        class Object(object):
+        class Object:
             def __init__(self):
                 self.executor = futures.thread.ThreadPoolExecutor(1)
 
@@ -188,7 +188,7 @@ class RunOnExecutorTest(AsyncTestCase):
 
     @gen_test
     def test_call_with_no_args(self):
-        class Object(object):
+        class Object:
             def __init__(self):
                 self.executor = futures.thread.ThreadPoolExecutor(1)
 
@@ -202,7 +202,7 @@ class RunOnExecutorTest(AsyncTestCase):
 
     @gen_test
     def test_call_with_executor(self):
-        class Object(object):
+        class Object:
             def __init__(self):
                 self.__executor = futures.thread.ThreadPoolExecutor(1)
 
@@ -216,7 +216,7 @@ class RunOnExecutorTest(AsyncTestCase):
 
     @gen_test
     def test_async_await(self):
-        class Object(object):
+        class Object:
             def __init__(self):
                 self.executor = futures.thread.ThreadPoolExecutor(1)
 

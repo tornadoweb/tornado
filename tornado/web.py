@@ -176,7 +176,7 @@ class _ArgDefaultMarker:
 _ARG_DEFAULT = _ArgDefaultMarker()
 
 
-class RequestHandler(object):
+class RequestHandler:
     """Base class for HTTP request handlers.
 
     Subclasses must define at least one of the methods defined in the
@@ -3187,7 +3187,7 @@ class FallbackHandler(RequestHandler):
         self.on_finish()
 
 
-class OutputTransform(object):
+class OutputTransform:
     """A transform modifies the result of an HTTP request (e.g., GZip encoding)
 
     Applications are not expected to create their own OutputTransforms
@@ -3339,7 +3339,7 @@ def authenticated(
     return wrapper
 
 
-class UIModule(object):
+class UIModule:
     """A re-usable, modular UI unit on a page.
 
     UI modules often execute additional queries, and they can include
@@ -3487,7 +3487,7 @@ class TemplateModule(UIModule):
         return "".join(self._get_resources("html_body"))
 
 
-class _UIModuleNamespace(object):
+class _UIModuleNamespace:
     """Lazy namespace which creates UIModule proxies bound to a handler."""
 
     def __init__(
