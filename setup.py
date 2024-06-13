@@ -120,5 +120,11 @@ setuptools.setup(
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python :: Implementation :: PyPy",
     ],
+    extras_require={
+        "brotli": [
+            "brotli; platform_python_implementation == 'CPython'",
+            "brotlicffi; platform_python_implementation != 'CPython'",
+        ]
+    },
     **kwargs
 )
