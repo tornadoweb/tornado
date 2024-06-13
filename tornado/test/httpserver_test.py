@@ -282,13 +282,11 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
                 [
                     b"Content-Disposition: form-data; name=argument",
                     b"",
-                    "\u00e1".encode("utf-8"),
+                    "\u00e1".encode(),
                     b"--1234567890",
-                    'Content-Disposition: form-data; name="files"; filename="\u00f3"'.encode(
-                        "utf8"
-                    ),
+                    'Content-Disposition: form-data; name="files"; filename="\u00f3"'.encode(),
                     b"",
-                    "\u00fa".encode("utf-8"),
+                    "\u00fa".encode(),
                     b"--1234567890--",
                     b"",
                 ]
