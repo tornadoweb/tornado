@@ -178,7 +178,7 @@ class IOLoop(Configurable):
             impl = import_object(impl)
         if isinstance(impl, type) and not issubclass(impl, BaseAsyncIOLoop):
             raise RuntimeError("only AsyncIOLoop is allowed when asyncio is available")
-        super(IOLoop, cls).configure(impl, **kwargs)
+        super().configure(impl, **kwargs)
 
     @staticmethod
     def instance() -> "IOLoop":

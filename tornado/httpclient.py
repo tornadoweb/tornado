@@ -203,7 +203,7 @@ class AsyncHTTPClient(Configurable):
             instance_cache = cls._async_clients()
         if instance_cache is not None and io_loop in instance_cache:
             return instance_cache[io_loop]
-        instance = super(AsyncHTTPClient, cls).__new__(cls, **kwargs)  # type: ignore
+        instance = super().__new__(cls, **kwargs)  # type: ignore
         # Make sure the instance knows which cache to remove itself from.
         # It can't simply call _async_clients() because we may be in
         # __new__(AsyncHTTPClient) but instance.__class__ may be
@@ -333,7 +333,7 @@ class AsyncHTTPClient(Configurable):
 
            AsyncHTTPClient.configure("tornado.curl_httpclient.CurlAsyncHTTPClient")
         """
-        super(AsyncHTTPClient, cls).configure(impl, **kwargs)
+        super().configure(impl, **kwargs)
 
 
 class HTTPRequest:

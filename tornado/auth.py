@@ -375,9 +375,9 @@ class OAuthMixin:
         if not request_cookie:
             raise AuthError("Missing OAuth request token cookie")
         handler.clear_cookie("_oauth_request_token")
-        cookie_key, cookie_secret = [
+        cookie_key, cookie_secret = (
             base64.b64decode(escape.utf8(i)) for i in request_cookie.split("|")
-        ]
+        )
         if cookie_key != request_key:
             raise AuthError("Request token does not match cookie")
         token = dict(

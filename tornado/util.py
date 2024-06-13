@@ -252,7 +252,7 @@ class Configurable:
         if impl.configurable_base() is not base:
             # The impl class is itself configurable, so recurse.
             return impl(*args, **init_kwargs)
-        instance = super(Configurable, cls).__new__(impl)
+        instance = super().__new__(impl)
         # initialize vs __init__ chosen for compatibility with AsyncHTTPClient
         # singleton magic.  If we get rid of that we can switch to __init__
         # here too.
