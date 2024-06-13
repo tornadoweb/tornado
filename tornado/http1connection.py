@@ -389,7 +389,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         if self.is_client:
             assert isinstance(start_line, httputil.RequestStartLine)
             self._request_start_line = start_line
-            lines.append(utf8("%s %s HTTP/1.1" % (start_line[0], start_line[1])))
+            lines.append(utf8(f"{start_line[0]} {start_line[1]} HTTP/1.1"))
             # Client requests with a non-empty body must have either a
             # Content-Length or a Transfer-Encoding. If Content-Length is not
             # present we'll add our Transfer-Encoding below.

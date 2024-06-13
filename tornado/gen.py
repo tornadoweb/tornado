@@ -874,7 +874,7 @@ def convert_yielded(yielded: _Yieldable) -> Future:
     elif isawaitable(yielded):
         return _wrap_awaitable(yielded)  # type: ignore
     else:
-        raise BadYieldError("yielded unknown object %r" % (yielded,))
+        raise BadYieldError(f"yielded unknown object {yielded!r}")
 
 
 convert_yielded = singledispatch(convert_yielded)

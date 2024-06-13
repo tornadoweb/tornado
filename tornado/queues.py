@@ -328,13 +328,13 @@ class Queue(Generic[_T]):
             self._getters.popleft()
 
     def __repr__(self) -> str:
-        return "<%s at %s %s>" % (type(self).__name__, hex(id(self)), self._format())
+        return f"<{type(self).__name__} at {hex(id(self))} {self._format()}>"
 
     def __str__(self) -> str:
-        return "<%s %s>" % (type(self).__name__, self._format())
+        return f"<{type(self).__name__} {self._format()}>"
 
     def _format(self) -> str:
-        result = "maxsize=%r" % (self.maxsize,)
+        result = f"maxsize={self.maxsize!r}"
         if getattr(self, "_queue", None):
             result += " queue=%r" % self._queue
         if self._getters:

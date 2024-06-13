@@ -478,7 +478,7 @@ class Rule:
         return self.matcher.reverse(*args)
 
     def __repr__(self) -> str:
-        return "%s(%r, %s, kwargs=%r, name=%r)" % (
+        return "{}({!r}, {}, kwargs={!r}, name={!r})".format(
             self.__class__.__name__,
             self.matcher,
             self.target,
@@ -686,7 +686,7 @@ class URLSpec(Rule):
         self.kwargs = kwargs
 
     def __repr__(self) -> str:
-        return "%s(%r, %s, kwargs=%r, name=%r)" % (
+        return "{}({!r}, {}, kwargs={!r}, name={!r})".format(
             self.__class__.__name__,
             self.regex.pattern,
             self.handler_class,

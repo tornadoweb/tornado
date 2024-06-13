@@ -380,7 +380,7 @@ class TypeCheckHandler(RequestHandler):
     def check_type(self, name, obj, expected_type):
         actual_type = type(obj)
         if expected_type != actual_type:
-            self.errors[name] = "expected %s, got %s" % (expected_type, actual_type)
+            self.errors[name] = f"expected {expected_type}, got {actual_type}"
 
 
 class PostEchoHandler(RequestHandler):

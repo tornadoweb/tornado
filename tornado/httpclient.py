@@ -684,7 +684,7 @@ class HTTPResponse:
 
     def __repr__(self) -> str:
         args = ",".join("%s=%r" % i for i in sorted(self.__dict__.items()))
-        return "%s(%s)" % (self.__class__.__name__, args)
+        return f"{self.__class__.__name__}({args})"
 
 
 class HTTPClientError(Exception):

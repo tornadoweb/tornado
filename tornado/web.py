@@ -608,7 +608,7 @@ class RequestHandler:
             return _unicode(value)
         except UnicodeDecodeError:
             raise HTTPError(
-                400, "Invalid unicode in %s: %r" % (name or "url", value[:40])
+                400, "Invalid unicode in {}: {!r}".format(name or "url", value[:40])
             )
 
     @property
@@ -671,7 +671,7 @@ class RequestHandler:
         value = escape.native_str(value)
         if re.search(r"[\x00-\x20]", name + value):
             # Don't let us accidentally inject bad stuff
-            raise ValueError("Invalid cookie %r: %r" % (name, value))
+            raise ValueError(f"Invalid cookie {name!r}: {value!r}")
         if not hasattr(self, "_new_cookie"):
             self._new_cookie = (
                 http.cookies.SimpleCookie()
@@ -1859,7 +1859,7 @@ class RequestHandler:
         self.application.log_request(self)
 
     def _request_summary(self) -> str:
-        return "%s %s (%s)" % (
+        return "{} {} ({})".format(
             self.request.method,
             self.request.uri,
             self.request.remote_ip,
@@ -2758,7 +2758,7 @@ class StaticFileHandler(RequestHandler):
                 # and less than the first-byte-pos.
                 self.set_status(416)  # Range Not Satisfiable
                 self.set_header("Content-Type", "text/plain")
-                self.set_header("Content-Range", "bytes */%s" % (size,))
+                self.set_header("Content-Range", f"bytes */{size}")
                 return
             if end is not None and end > size:
                 # Clients sometimes blindly use a large range to limit their
@@ -2812,7 +2812,7 @@ class StaticFileHandler(RequestHandler):
         version_hash = self._get_cached_version(self.absolute_path)
         if not version_hash:
             return None
-        return '"%s"' % (version_hash,)
+        return f'"{version_hash}"'
 
     def set_headers(self) -> None:
         """Sets the content and caching headers on the response.
@@ -3111,7 +3111,7 @@ class StaticFileHandler(RequestHandler):
         if not version_hash:
             return url
 
-        return "%s?v=%s" % (url, version_hash)
+        return f"{url}?v={version_hash}"
 
     def parse_url_path(self, url_path: str) -> str:
         """Converts a static URL path into a filesystem path.

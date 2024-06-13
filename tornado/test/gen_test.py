@@ -853,7 +853,7 @@ class WaitIteratorTest(AsyncTestCase):
                     "WaitIterator dict status incorrect",
                 )
             else:
-                self.fail("got bad WaitIterator index {}".format(dg.current_index))
+                self.fail(f"got bad WaitIterator index {dg.current_index}")
 
             i += 1
         self.assertIsNone(g.current_index, "bad nil current index")

@@ -610,7 +610,7 @@ class _ApplyBlock(_Node):
             self.body.generate(writer)
             writer.write_line("return _tt_utf8('').join(_tt_buffer)", self.line)
         writer.write_line(
-            "_tt_append(_tt_utf8(%s(%s())))" % (self.method, method_name), self.line
+            f"_tt_append(_tt_utf8({self.method}({method_name}())))", self.line
         )
 
 
@@ -944,12 +944,10 @@ def _parse(
         allowed_parents = intermediate_blocks.get(operator)
         if allowed_parents is not None:
             if not in_block:
-                reader.raise_parse_error(
-                    "%s outside %s block" % (operator, allowed_parents)
-                )
+                reader.raise_parse_error(f"{operator} outside {allowed_parents} block")
             if in_block not in allowed_parents:
                 reader.raise_parse_error(
-                    "%s block cannot be attached to %s block" % (operator, in_block)
+                    f"{operator} block cannot be attached to {in_block} block"
                 )
             body.chunks.append(_IntermediateControlBlock(contents, line))
             continue
@@ -1038,7 +1036,7 @@ def _parse(
         elif operator in ("break", "continue"):
             if not in_loop:
                 reader.raise_parse_error(
-                    "%s outside %s block" % (operator, {"for", "while"})
+                    "{} outside {} block".format(operator, {"for", "while"})
                 )
             body.chunks.append(_Statement(contents, line))
             continue

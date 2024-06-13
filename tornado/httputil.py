@@ -247,7 +247,7 @@ class HTTPHeaders(StrMutableMapping):
     def __str__(self) -> str:
         lines = []
         for name, value in self.get_all():
-            lines.append("%s: %s\n" % (name, value))
+            lines.append(f"{name}: {value}\n")
         return "".join(lines)
 
     __unicode__ = __str__
@@ -471,8 +471,8 @@ class HTTPServerRequest:
 
     def __repr__(self) -> str:
         attrs = ("protocol", "host", "method", "uri", "version", "remote_ip")
-        args = ", ".join(["%s=%r" % (n, getattr(self, n)) for n in attrs])
-        return "%s(%s)" % (self.__class__.__name__, args)
+        args = ", ".join([f"{n}={getattr(self, n)!r}" for n in attrs])
+        return f"{self.__class__.__name__}({args})"
 
 
 class HTTPInputError(Exception):
@@ -741,7 +741,7 @@ def _get_content_range(start: Optional[int], end: Optional[int], total: int) -> 
     """
     start = start or 0
     end = (end or total) - 1
-    return "bytes %s-%s/%s" % (start, end, total)
+    return f"bytes {start}-{end}/{total}"
 
 
 def _int_or_none(val: str) -> Optional[int]:
@@ -1008,7 +1008,7 @@ def _encode_header(key: str, pdict: Dict[str, str]) -> str:
             out.append(k)
         else:
             # TODO: quote if necessary.
-            out.append("%s=%s" % (k, v))
+            out.append(f"{k}={v}")
     return "; ".join(out)
 
 
