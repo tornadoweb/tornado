@@ -617,6 +617,14 @@ class RequestHandler(object):
         `self.request.cookies <.httputil.HTTPServerRequest.cookies>`."""
         return self.request.cookies
 
+    @overload
+    def get_cookie(self, name: str, default: str) -> str:
+        pass
+
+    @overload
+    def get_cookie(self, name: str, default: None = None) -> Optional[str]:
+        pass
+
     def get_cookie(self, name: str, default: Optional[str] = None) -> Optional[str]:
         """Returns the value of the request cookie with the given name.
 
