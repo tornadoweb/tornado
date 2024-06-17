@@ -209,17 +209,20 @@ if hasattr(socket, "AF_UNIX"):
                 # Hurd doesn't support SO_REUSEADDR
                 raise
         sock.setblocking(False)
-        try:
-            st = os.stat(file)
-        except FileNotFoundError:
-            pass
-        else:
-            if stat.S_ISSOCK(st.st_mode):
-                os.remove(file)
+        if not file.startswith("\0"):
+            try:
+                st = os.stat(file)
+            except FileNotFoundError:
+                pass
             else:
-                raise ValueError("File %s exists and is not a socket", file)
-        sock.bind(file)
-        os.chmod(file, mode)
+                if stat.S_ISSOCK(st.st_mode):
+                    os.remove(file)
+                else:
+                    raise ValueError("File %s exists and is not a socket", file)
+            sock.bind(file)
+            os.chmod(file, mode)
+        else:
+            sock.bind(file)
         sock.listen(backlog)
         return sock
 
