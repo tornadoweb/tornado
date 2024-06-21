@@ -24,9 +24,10 @@ import unittest
 import warnings
 
 from tornado.escape import utf8
-from tornado.log import LogFormatter, define_logging_options, enable_pretty_logging
+from tornado.log import LogFormatter, define_logging_options, enable_pretty_logging, _stderr_supports_color
 from tornado.options import OptionParser
 from tornado.util import basestring_type
+from unittest.mock import patch, MagicMock
 
 
 @contextlib.contextmanager
@@ -231,3 +232,45 @@ class LoggingOptionTest(unittest.TestCase):
                 "options.logging = None; parse_command_line()", ["--logging=info"]
             )
         )
+
+    def test_stderr_supports_color(self):
+        with patch('sys.stderr') as mock_stderr:
+            mock_stderr.isatty.return_value = True
+
+            with patch('tornado.log.curses') as mock_curses:
+                mock_curses.setupterm.return_value = True
+
+                mock_curses.tigetnum.return_value = 8
+                result = _stderr_supports_color()
+                self.assertTrue(result)
+
+                mock_curses.tigetnum.return_value = 0
+                result = _stderr_supports_color()
+                self.assertFalse(result)
+
+                mock_curses.tigetnum.side_effect = Exception("Simulated error")
+                result = _stderr_supports_color()
+                self.assertFalse(result)
+
+            with patch('tornado.log.curses', None), patch('tornado.log.colorama') as mock_colorama:
+                mock_stderr.isatty.return_value = True
+
+                mock_colorama.initialise.wrapped_stderr = object()
+                result = _stderr_supports_color()
+                self.assertTrue(result)
+
+                mock_colorama.initialise.wrapped_stderr = None
+                result = _stderr_supports_color()
+                self.assertFalse(result)
+
+            with patch('tornado.log.curses', None), patch('tornado.log.colorama', None):
+                mock_stderr.isatty.return_value = True
+                result = _stderr_supports_color()
+                self.assertFalse(result)
+
+            mock_stderr.isatty.return_value = False
+            result = _stderr_supports_color()
+            self.assertFalse(result)
+
+if __name__ == '__main__':
+    unittest.main()
