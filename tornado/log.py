@@ -51,25 +51,43 @@ access_log = logging.getLogger("tornado.access")
 app_log = logging.getLogger("tornado.application")
 gen_log = logging.getLogger("tornado.general")
 
+log_ssc_dict = {
+    "log_1": False,  # try branch
+    "log_2": False,   # if branch
+    "log_3": False,  # ifif branch
+    "log_4": False,  # ififif branch
+    "log_5": False,  # elif branch
+    "log_6": False,  # elifif branch
+    "log_7": False,  # except branch
+}
 
 def _stderr_supports_color() -> bool:
     try:
+        log_ssc_dict["log_1"] = True
         if hasattr(sys.stderr, "isatty") and sys.stderr.isatty():
+            log_ssc_dict["log_2"] = True
             if curses:
+                log_ssc_dict["log_3"] = True
                 curses.setupterm()
                 if curses.tigetnum("colors") > 0:
+                    log_ssc_dict["log_4"] = True
                     return True
             elif colorama:
+                log_ssc_dict["log_5"] = True
                 if sys.stderr is getattr(
                     colorama.initialise, "wrapped_stderr", object()
                 ):
+                    log_ssc_dict["log_6"] = True
                     return True
     except Exception:
+        log_ssc_dict["log_7"] = True
         # Very broad exception handling because it's always better to
         # fall back to non-colored logs than to break at startup.
         pass
-    return False
 
+    with open('log_ssc.txt', 'a') as file:
+            file.write(str(log_ssc_dict) + "\n")
+    return False
 
 def _safe_unicode(s: Any) -> str:
     try:
