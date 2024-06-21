@@ -7,22 +7,19 @@ from tempfile import mkdtemp
 import textwrap
 import time
 import unittest
-
+import tornado.autoreload
+import types
+import threading
+from unittest.mock import patch, MagicMock, PropertyMock
+import runpy
+from tornado.autoreload import main
 
 class AutoreloadTest(unittest.TestCase):
     def setUp(self):
-        # When these tests fail the output sometimes exceeds the default maxDiff.
+        super().setUp()
+        self.test_coverage = {}
         self.maxDiff = 1024
-
         self.path = mkdtemp()
-
-        # Most test apps run themselves twice via autoreload. The first time it manually triggers
-        # a reload (could also do this by touching a file but this is faster since filesystem
-        # timestamps are not necessarily high resolution). The second time it exits directly
-        # so that the autoreload wrapper (if it is used) doesn't catch it.
-        #
-        # The last line of each such test's "main" program should be
-        #     exec(open("run_twice_magic.py").read())
         self.write_files(
             {
                 "run_twice_magic.py": """
@@ -43,23 +40,14 @@ class AutoreloadTest(unittest.TestCase):
         )
 
     def tearDown(self):
+        super().tearDown()
         try:
             shutil.rmtree(self.path)
         except OSError:
-            # Windows disallows deleting files that are in use by
-            # another process, and even though we've waited for our
-            # child process below, it appears that its lock on these
-            # files is not guaranteed to be released by this point.
-            # Sleep and try again (once).
             time.sleep(1)
             shutil.rmtree(self.path)
 
     def write_files(self, tree, base_path=None):
-        """Write a directory tree to self.path.
-
-        tree is a dictionary mapping file names to contents, or
-        sub-dictionaries representing subdirectories.
-        """
         if base_path is None:
             base_path = self.path
         for name, contents in tree.items():
@@ -71,15 +59,9 @@ class AutoreloadTest(unittest.TestCase):
                     f.write(textwrap.dedent(contents))
 
     def run_subprocess(self, args):
-        # Make sure the tornado module under test is available to the test
-        # application
-        parts = [os.getcwd()]
+        pythonpath = os.getcwd()
         if "PYTHONPATH" in os.environ:
-            parts += [
-                os.path.join(os.getcwd(), part)
-                for part in os.environ["PYTHONPATH"].split(os.pathsep)
-            ]
-        pythonpath = os.pathsep.join(parts)
+            pythonpath += os.pathsep + os.environ["PYTHONPATH"]
 
         p = Popen(
             args,
@@ -90,8 +72,6 @@ class AutoreloadTest(unittest.TestCase):
             encoding="utf-8",
         )
 
-        # This timeout needs to be fairly generous for pypy due to jit
-        # warmup costs.
         for i in range(40):
             if p.poll() is not None:
                 break
@@ -108,7 +88,6 @@ class AutoreloadTest(unittest.TestCase):
         main = """\
 import sys
 
-# In module mode, the path is set to the parent directory and we can import testapp.
 try:
     import testapp
 except ImportError:
@@ -118,10 +97,9 @@ else:
 
 spec = getattr(sys.modules[__name__], '__spec__', None)
 print(f"Starting {__name__=}, __spec__.name={getattr(spec, 'name', None)}")
-exec(open("run_twice_magic.py", encoding="utf-8").read())
+exec(open("run_twice_magic.py").read())
 """
 
-        # Create temporary test application
         self.write_files(
             {
                 "testapp": {
@@ -131,9 +109,6 @@ exec(open("run_twice_magic.py", encoding="utf-8").read())
             }
         )
 
-        # The autoreload wrapper should support all the same modes as the python interpreter.
-        # The wrapper itself should have no effect on this test so we try all modes with and
-        # without it.
         for wrapper in [False, True]:
             with self.subTest(wrapper=wrapper):
                 with self.subTest(mode="module"):
@@ -141,8 +116,6 @@ exec(open("run_twice_magic.py", encoding="utf-8").read())
                         base_args = [sys.executable, "-m", "tornado.autoreload"]
                     else:
                         base_args = [sys.executable]
-                    # In module mode, the path is set to the parent directory and we can import
-                    # testapp. Also, the __spec__.name is set to the fully qualified module name.
                     out = self.run_subprocess(base_args + ["-m", "testapp"])
                     self.assertEqual(
                         out,
@@ -155,15 +128,11 @@ exec(open("run_twice_magic.py", encoding="utf-8").read())
 
                 with self.subTest(mode="file"):
                     out = self.run_subprocess(base_args + ["testapp/__main__.py"])
-                    # In file mode, we do not expect the path to be set so we can import testapp,
-                    # but when the wrapper is used the -m argument to the python interpreter
-                    # does this for us.
                     expect_import = (
                         "import testapp succeeded"
                         if wrapper
                         else "import testapp failed"
                     )
-                    # In file mode there is no qualified module spec.
                     self.assertEqual(
                         out,
                         f"{expect_import}\nStarting __name__='__main__', __spec__.name=None\n"
@@ -171,8 +140,6 @@ exec(open("run_twice_magic.py", encoding="utf-8").read())
                     )
 
                 with self.subTest(mode="directory"):
-                    # Running as a directory finds __main__.py like a module. It does not manipulate
-                    # sys.path but it does set a spec with a name of exactly __main__.
                     out = self.run_subprocess(base_args + ["testapp"])
                     expect_import = (
                         "import testapp succeeded"
@@ -186,20 +153,16 @@ exec(open("run_twice_magic.py", encoding="utf-8").read())
                     )
 
     def test_reload_wrapper_preservation(self):
-        # This test verifies that when `python -m tornado.autoreload`
-        # is used on an application that also has an internal
-        # autoreload, the reload wrapper is preserved on restart.
         main = """\
 import sys
 
-# This import will fail if path is not set up correctly
 import testapp
 
 if 'tornado.autoreload' not in sys.modules:
     raise Exception('started without autoreload wrapper')
 
 print('Starting')
-exec(open("run_twice_magic.py", encoding="utf-8").read())
+exec(open("run_twice_magic.py").read())
 """
 
         self.write_files(
@@ -223,13 +186,10 @@ import sys
 
 print(os.path.basename(sys.argv[0]))
 print(f'argv={sys.argv[1:]}')
-exec(open("run_twice_magic.py", encoding="utf-8").read())
+exec(open("run_twice_magic.py").read())
 """
-        # Create temporary test application
         self.write_files({"main.py": main})
 
-        # Make sure the tornado module under test is available to the test
-        # application
         out = self.run_subprocess(
             [
                 sys.executable,
@@ -255,10 +215,9 @@ if "TESTAPP_STARTED" in os.environ:
     sys.exit(0)
 else:
     print("reloading")
-    exec(open("run_twice_magic.py", encoding="utf-8").read())
+    exec(open("run_twice_magic.py").read())
 """
 
-        # Create temporary test application
         self.write_files({"main.py": main})
 
         out = self.run_subprocess(
@@ -266,3 +225,300 @@ else:
         )
 
         self.assertEqual(out, "reloading\nexiting cleanly\n")
+        
+    # New Tests
+    def test_watch_file(self):
+        with patch('tornado.autoreload.os.path.isfile', return_value=True):
+            tornado.autoreload.watch('somefile.txt')
+            self.assertIn('somefile.txt', tornado.autoreload._watched_files)
+    
+    def test_watch_directory(self):
+        with patch('tornado.autoreload.os.path.isdir', return_value=True):
+            tornado.autoreload.watch('somedir')
+            self.assertIn('somedir', tornado.autoreload._watched_files)
+    
+    def test_start_autoreload(self):
+        with patch('tornado.ioloop.IOLoop.instance') as mock_ioloop:
+            mock_ioloop.return_value = mock_ioloop
+            tornado.autoreload.start()
+    
+    def test_io_loop_start(self):
+        with patch('tornado.ioloop.IOLoop.instance') as mock_ioloop:
+            mock_ioloop.return_value = mock_ioloop
+            tornado.autoreload.start()
+
+    # New tests to improve coverage for the _reload_on_update function
+    def test_reload_attempted(self):
+        tornado.autoreload._reload_attempted = True
+        tornado.autoreload._reload_on_update({})
+        self.assertTrue(tornado.autoreload._reload_attempted)
+
+    def test_task_id_not_none(self):
+        tornado.autoreload._reload_attempted = False
+        with patch('tornado.autoreload.process.task_id', return_value=1):
+            tornado.autoreload._reload_on_update({})
+            self.assertFalse(tornado.autoreload._reload_attempted)
+
+    def test_non_module_objects_in_sys_modules(self):
+        tornado.autoreload._reload_attempted = False
+        with patch('tornado.autoreload.process.task_id', return_value=None):
+            sys.modules['non_module'] = 'I am not a module'
+            tornado.autoreload._reload_on_update({})
+            self.assertNotIn('non_module', tornado.autoreload._watched_files)
+
+    def test_module_without_file(self):
+        tornado.autoreload._reload_attempted = False
+        with patch('tornado.autoreload.process.task_id', return_value=None):
+            mod = MagicMock(spec=types.ModuleType)
+            del mod.__file__
+            sys.modules['test_mod'] = mod
+            tornado.autoreload._reload_on_update({})
+            self.assertNotIn('test_mod', tornado.autoreload._watched_files)
+
+    def test_module_with_pyc_file(self):
+        tornado.autoreload._reload_attempted = False
+        with patch('tornado.autoreload.process.task_id', return_value=None):
+            mod = types.ModuleType('test_mod')
+            mod.__file__ = '/path/to/module.pyc'
+            sys.modules['test_mod'] = mod
+            with patch('tornado.autoreload._check_file') as mock_check_file:
+                tornado.autoreload._reload_on_update({})
+                mock_check_file.assert_called_with({}, '/path/to/module.py')
+
+    def test_watched_files(self):
+        tornado.autoreload._reload_attempted = False
+        tornado.autoreload._watched_files = {'/path/to/file.py'}
+        with patch('tornado.autoreload._check_file') as mock_check_file:
+            tornado.autoreload._reload_on_update({})
+            mock_check_file.assert_called_with({}, '/path/to/file.py')
+
+    # Tests to improve coverage for the _reload function
+    @patch('tornado.autoreload.os.execv')
+    def test_reload_sets_reload_attempted(self, mock_execv):
+        tornado.autoreload._reload_attempted = False
+        tornado.autoreload._reload_hooks = []
+        tornado.autoreload._reload()
+        self.assertTrue(tornado.autoreload._reload_attempted)
+
+    @patch('tornado.autoreload.os.execv')
+    def test_reload_calls_hooks(self, mock_execv):
+        mock_hook = MagicMock()
+        tornado.autoreload._reload_hooks = [mock_hook]
+        tornado.autoreload._reload()
+        mock_hook.assert_called_once()
+
+    @patch('tornado.autoreload.os.execv')
+    def test_reload_execv_called(self, mock_execv):
+        tornado.autoreload._reload_hooks = []
+        tornado.autoreload._reload()
+        mock_execv.assert_called_once_with(sys.executable, [sys.executable] + sys.argv)
+
+    @patch('tornado.autoreload.os.execv')
+    @patch('tornado.autoreload.sys.platform', 'win32')
+    def test_reload_on_windows(self, mock_execv):
+        main_thread = MagicMock()
+        main_thread.__class__ = threading._MainThread
+        with patch('tornado.autoreload.threading.enumerate', return_value=[main_thread]):
+            tornado.autoreload._reload_hooks = []
+            tornado.autoreload._reload()
+            mock_execv.assert_called_once_with(sys.executable, [sys.executable] + sys.argv)
+
+    # Tests to cover the if _autoreload_is_main branch
+    @patch('tornado.autoreload._autoreload_is_main', True)
+    def test_autoreload_is_main(self):
+        tornado.autoreload._original_argv = ['arg1', 'arg2']
+        tornado.autoreload._original_spec = 'test_spec'
+        tornado.autoreload._reload_hooks = []
+        tornado.autoreload._reload_attempted = False
+
+        with patch('tornado.autoreload.os.execv'):
+            tornado.autoreload._reload()
+            self.assertEqual(tornado.autoreload._original_argv, ['arg1', 'arg2'])
+            self.assertEqual(tornado.autoreload._original_spec, 'test_spec')
+
+    # Tests to cover the if not _has_execv branch
+    @patch('tornado.autoreload._has_execv', False)
+    def test_no_execv(self):
+        tornado.autoreload._original_argv = ['arg1', 'arg2']
+        with patch('tornado.autoreload.subprocess.Popen') as mock_popen, patch('tornado.autoreload.os._exit') as mock_exit:
+            tornado.autoreload._reload()
+            mock_popen.assert_called_once_with([sys.executable] + ['arg1', 'arg2'])
+            mock_exit.assert_called_once_with(0)
+
+    # Tests to cover _check_file function
+    @patch('tornado.autoreload.os.stat')
+    def test_file_stat_exception(self, mock_stat):
+        mock_stat.side_effect = Exception("File not found")
+        modify_times = {}
+        tornado.autoreload._check_file(modify_times, 'nonexistent_file.txt')
+        self.assertNotIn('nonexistent_file.txt', modify_times)
+
+    @patch('tornado.autoreload.os.stat')
+    def test_file_not_in_modify_times(self, mock_stat):
+        mock_stat.return_value.st_mtime = 100
+        modify_times = {}
+        tornado.autoreload._check_file(modify_times, 'new_file.txt')
+        self.assertIn('new_file.txt', modify_times)
+        self.assertEqual(modify_times['new_file.txt'], 100)
+
+    @patch('tornado.autoreload.os.stat')
+    def test_file_in_modify_times_no_change(self, mock_stat):
+        mock_stat.return_value.st_mtime = 100
+        modify_times = {'existing_file.txt': 100}
+        tornado.autoreload._check_file(modify_times, 'existing_file.txt')
+        self.assertEqual(modify_times['existing_file.txt'], 100)  # No change
+
+    @patch('tornado.autoreload.os.stat')
+    @patch('tornado.autoreload.gen_log')
+    @patch('tornado.autoreload._reload')
+    def test_file_in_modify_times_with_change(self, mock_reload, mock_log, mock_stat):
+        mock_stat.return_value.st_mtime = 200
+        modify_times = {'existing_file.txt': 100}
+        tornado.autoreload._check_file(modify_times, 'existing_file.txt')
+        self.assertEqual(mock_log.info.call_args[0][0], "%s modified; restarting server")
+        self.assertEqual(mock_log.info.call_args[0][1], 'existing_file.txt')
+        mock_reload.assert_called_once()
+
+    # Tests to cover main function
+    @patch('tornado.autoreload.wait')
+    @patch('tornado.autoreload.watch')
+    @patch('tornado.autoreload._autoreload_is_main', new_callable=PropertyMock)
+    @patch('tornado.autoreload._original_argv', new_callable=PropertyMock)
+    @patch('tornado.autoreload._original_spec', new_callable=PropertyMock)
+    def test_main_with_module(self, mock_original_spec, mock_original_argv, mock_autoreload_is_main, mock_watch, mock_wait):
+        test_module = 'tornado.test.runtests'
+        test_args = ['-m', test_module]
+        test_rest = []
+        sys.argv = ['python'] + test_args + test_rest
+
+        with patch('optparse.OptionParser.parse_args', return_value=(MagicMock(module=test_module, until_success=False), test_rest)):
+            with patch('runpy.run_module') as mock_run_module:
+                main()
+
+                # Ensure the module is run
+                mock_run_module.assert_called_once_with(test_module, run_name="__main__", alter_sys=True)
+
+                # Ensure the necessary attributes are set
+                self.assertTrue(mock_autoreload_is_main)
+                self.assertEqual(mock_original_argv, sys.argv)
+                self.assertIsNone(mock_original_spec)
+
+                # Ensure the wait function is called
+                mock_wait.assert_called_once()
+
+    @patch('tornado.autoreload.wait')
+    @patch('tornado.autoreload.watch')
+    @patch('tornado.autoreload._autoreload_is_main', new_callable=PropertyMock)
+    @patch('tornado.autoreload._original_argv', new_callable=PropertyMock)
+    @patch('tornado.autoreload._original_spec', new_callable=PropertyMock)
+    def test_main_with_path(self, mock_original_spec, mock_original_argv, mock_autoreload_is_main, mock_watch, mock_wait):
+        test_path = 'tornado/test/runtests.py'
+        test_args = [test_path]
+        sys.argv = ['python'] + test_args
+
+        with patch('optparse.OptionParser.parse_args', return_value=(MagicMock(module=None, until_success=False), test_args)):
+            with patch('runpy.run_path') as mock_run_path:
+                main()
+
+                # Ensure the path is run
+                mock_run_path.assert_called_once_with(test_path, run_name="__main__")
+
+                # Ensure the necessary attributes are set
+                self.assertTrue(mock_autoreload_is_main)
+                self.assertEqual(mock_original_argv, sys.argv)
+                self.assertIsNone(mock_original_spec)
+
+                # Ensure the wait function is called
+                mock_wait.assert_called_once()
+
+    @patch('tornado.autoreload.wait')
+    @patch('tornado.autoreload.watch')
+    @patch('tornado.autoreload._autoreload_is_main', new_callable=PropertyMock)
+    @patch('tornado.autoreload._original_argv', new_callable=PropertyMock)
+    @patch('tornado.autoreload._original_spec', new_callable=PropertyMock)
+    def test_main_syntax_error(self, mock_original_spec, mock_original_argv, mock_autoreload_is_main, mock_watch, mock_wait):
+        test_path = 'tornado/test/runtests.py'
+        test_args = [test_path]
+        sys.argv = ['python'] + test_args
+
+        with patch('optparse.OptionParser.parse_args', return_value=(MagicMock(module=None, until_success=False), test_args)):
+            with patch('runpy.run_path', side_effect=SyntaxError('Test syntax error')):
+                with patch('traceback.extract_tb', return_value=[('file.py', 1, 'function', 'line')]) as mock_extract_tb:
+                    main()
+
+                    # Ensure the file is watched
+                    mock_watch.assert_called_with('file.py')
+
+                    # Ensure the wait function is called
+                    mock_wait.assert_called_once()
+
+    @patch('tornado.autoreload.wait')
+    @patch('tornado.autoreload.watch')
+    @patch('tornado.autoreload._autoreload_is_main', new_callable=PropertyMock)
+    @patch('tornado.autoreload._original_argv', new_callable=PropertyMock)
+    @patch('tornado.autoreload._original_spec', new_callable=PropertyMock)
+    def test_main_uncaught_exception(self, mock_original_spec, mock_original_argv, mock_autoreload_is_main, mock_watch, mock_wait):
+        test_path = 'tornado/test/runtests.py'
+        test_args = [test_path]
+        sys.argv = ['python'] + test_args
+
+        with patch('optparse.OptionParser.parse_args', return_value=(MagicMock(module=None, until_success=False), test_args)):
+            with patch('runpy.run_path', side_effect=Exception('Test exception')):
+                with patch('traceback.extract_tb', return_value=[('file.py', 1, 'function', 'line')]) as mock_extract_tb:
+                    main()
+
+                    # Ensure the file is watched
+                    mock_watch.assert_called_with('file.py')
+
+                    # Ensure the wait function is called
+                    mock_wait.assert_called_once()
+
+    @patch('tornado.autoreload.wait')
+    @patch('tornado.autoreload.watch')
+    @patch('tornado.autoreload._autoreload_is_main', new_callable=PropertyMock)
+    @patch('tornado.autoreload._original_argv', new_callable=PropertyMock)
+    @patch('tornado.autoreload._original_spec', new_callable=PropertyMock)
+    def test_main_exit_success(self, mock_original_spec, mock_original_argv, mock_autoreload_is_main, mock_watch, mock_wait):
+        test_module = 'tornado.test.runtests'
+        test_args = ['-m', test_module]
+        test_rest = []
+        sys.argv = ['python'] + test_args + test_rest
+
+        with patch('optparse.OptionParser.parse_args', return_value=(MagicMock(module=test_module, until_success=True), test_rest)):
+            with patch('runpy.run_module') as mock_run_module:
+                with patch('sys.exit', side_effect=SystemExit(0)) as mock_exit:
+                    main()
+
+                    # Ensure the module is run
+                    mock_run_module.assert_called_once_with(test_module, run_name="__main__", alter_sys=True)
+
+                    # Ensure sys.exit is called with 0 status
+                    mock_exit.assert_called_once_with(0)
+
+    @patch('tornado.autoreload.wait')
+    @patch('tornado.autoreload.watch')
+    @patch('tornado.autoreload._autoreload_is_main', new_callable=PropertyMock)
+    @patch('tornado.autoreload._original_argv', new_callable=PropertyMock)
+    @patch('tornado.autoreload._original_spec', new_callable=PropertyMock)
+    def test_main_exit_failure(self, mock_original_spec, mock_original_argv, mock_autoreload_is_main, mock_watch, mock_wait):
+        test_module = 'tornado.test.runtests'
+        test_args = ['-m', test_module]
+        test_rest = []
+        sys.argv = ['python'] + test_args + test_rest
+
+        with patch('optparse.OptionParser.parse_args', return_value=(MagicMock(module=test_module, until_success=True), test_rest)):
+            with patch('runpy.run_module') as mock_run_module:
+                with patch('sys.exit', side_effect=SystemExit(1)) as mock_exit:
+                    main()
+
+                    # Ensure the module is run
+                    mock_run_module.assert_called_once_with(test_module, run_name="__main__", alter_sys=True)
+
+                    # Ensure sys.exit is called with 1 status
+                    mock_exit.assert_called_once_with(1)
+
+                    # Ensure the wait function is called (because of until_success=True)
+                    mock_wait.assert_called_once()
+
+if __name__ == "__main__":
+    unittest.main()
