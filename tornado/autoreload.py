@@ -110,21 +110,20 @@ _autoreload_is_main = False
 _original_argv: Optional[List[str]] = None
 _original_spec = None
 
-# Initialize coverage tracking global variable
 autoreload_start_dict = {
-    "start_1": False,  # Branch for checking if io_loop in _io_loops
-    "start_2": False,  # Branch for checking length of _io_loops > 1
+    "start_1": False, 
+    "start_2": False, 
 }
 autoreload_reload_on_update_dict = {
-    "reload_on_update_1": False,  # Branch for checking if _reload_attempted
-    "reload_on_update_2": False,  # Branch for checking process.task_id() is not None
-    "reload_on_update_3": False,  # Branch for checking if not isinstance(module, types.ModuleType)
-    "reload_on_update_4": False,  # Branch for checking if not path
-    "reload_on_update_5": False,  # Branch for checking if path.endswith(".pyc") or path.endswith(".pyo")
+    "reload_on_update_1": False,  
+    "reload_on_update_2": False, 
+    "reload_on_update_3": False,  
+    "reload_on_update_4": False,  
+    "reload_on_update_5": False,  
 }
 autoreload_check_file_dict = {
-    "check_file_1": False,  # Branch for checking if path not in modify_times
-    "check_file_2": False,  # Branch for checking if modify_times[path] != modified
+    "check_file_1": False,  
+    "check_file_2": False,  
 }
 autoreload_reload_dict = {
     "reload_1": False,
