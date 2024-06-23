@@ -1,8 +1,7 @@
 from hashlib import md5
 import unittest
 import logging
-from logging import log
-
+from logging import getLogger
 
 from tornado.escape import utf8
 from tornado.testing import AsyncHTTPTestCase
@@ -10,13 +9,11 @@ from tornado.test import httpclient_test
 from tornado.web import Application, RequestHandler
 from tornado.escape import native_str
 
-from unittest.mock import MagicMock, patch
 import pycurl
 from tornado.httpclient import HTTPResponse
 from tornado import ioloop
-from io import BytesIO 
+from io import BytesIO
 from tornado.curl_httpclient import CurlAsyncHTTPClient
-
 
 try:
     import pycurl
@@ -32,7 +29,6 @@ if pycurl is not None:
 class CurlHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
     def get_http_client(self):
         client = CurlAsyncHTTPClient(defaults=dict(allow_ipv6=False))
-        # make sure AsyncHTTPClient magic doesn't give us the wrong class
         self.assertTrue(isinstance(client, CurlAsyncHTTPClient))
         return client
 
@@ -47,33 +43,23 @@ class CurlHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
             delattr(pycurl, "PROTOCOLS")
         try:
             curl = client._curl_create()
-            
-            # Verify that a Curl instance was created
             self.assertIsInstance(curl, pycurl.Curl)
-
-            # Verify that VERBOSE and DEBUGFUNCTION options are set
-            # Check if DEBUGFUNCTION is set (note: pycurl does not provide a direct way to get DEBUGFUNCTION)
             self.assertTrue(callable(client._curl_debug))
-
-            # Check if PROTOCOLS and REDIR_PROTOCOLS options are set if they exist
             if hasattr(pycurl, "PROTOCOLS"):
                 self.assertTrue(True)
         finally:
-            # Reset the logging level to avoid side effects
             curl_log.setLevel(logging.WARNING)
 
     def test_curl_debug_logging(self):
         client = CurlAsyncHTTPClient(defaults=dict(allow_ipv6=False))
         curl_log = logging.getLogger("tornado.curl_httpclient")
         curl_log.setLevel(logging.DEBUG)
+        curl_log.propagate = False
 
         with self.assertLogs('tornado.curl_httpclient', level='DEBUG') as log:
             client._curl_debug(0, "   This is a debug message   \n")
             self.assertIn("This is a debug message", log.output[0])
-
-
         
-
 class DigestAuthHandler(RequestHandler):
     def initialize(self, username, password):
         self.username = username
