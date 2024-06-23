@@ -110,6 +110,46 @@ _autoreload_is_main = False
 _original_argv: Optional[List[str]] = None
 _original_spec = None
 
+autoreload_start_dict = {
+    "start_1": False, 
+    "start_2": False, 
+}
+autoreload_reload_on_update_dict = {
+    "reload_on_update_1": False,  
+    "reload_on_update_2": False, 
+    "reload_on_update_3": False,  
+    "reload_on_update_4": False,  
+    "reload_on_update_5": False,  
+}
+autoreload_check_file_dict = {
+    "check_file_1": False,  
+    "check_file_2": False,  
+}
+autoreload_reload_dict = {
+    "reload_1": False,
+    "reload_2": False,
+    "reload_3": False,
+    "reload_4": False,
+    "reload_5": False,
+    "reload_6": False
+}
+autoreload_main_dict = {
+    "main_1": False,
+    "main_2": False,
+    "main_3": False,
+    "main_4": False,
+    "main_5": False,
+    "main_6": False,
+    "main_7": False,
+    "main_8": False,
+    "main_9": False,
+    "main_10 ": False,
+    "main_11": False,
+    "main_12": False,
+    "main_13": False, 
+    "main_14": False,
+}
+
 def start(check_time: int = 500) -> None:
     """Begins watching source files for changes.
 
