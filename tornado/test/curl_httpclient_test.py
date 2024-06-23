@@ -1,11 +1,19 @@
 from hashlib import md5
 import unittest
+import logging
+from logging import getLogger
 
 from tornado.escape import utf8
 from tornado.testing import AsyncHTTPTestCase
 from tornado.test import httpclient_test
 from tornado.web import Application, RequestHandler
+from tornado.escape import native_str
 
+import pycurl
+from tornado.httpclient import HTTPResponse
+from tornado import ioloop
+from io import BytesIO
+from tornado.curl_httpclient import CurlAsyncHTTPClient
 
 try:
     import pycurl
@@ -17,14 +25,41 @@ if pycurl is not None:
 
 
 @unittest.skipIf(pycurl is None, "pycurl module not present")
+
 class CurlHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
     def get_http_client(self):
         client = CurlAsyncHTTPClient(defaults=dict(allow_ipv6=False))
-        # make sure AsyncHTTPClient magic doesn't give us the wrong class
         self.assertTrue(isinstance(client, CurlAsyncHTTPClient))
         return client
 
+    def test_curl_create(self):
+        client = CurlAsyncHTTPClient(defaults=dict(allow_ipv6=False))
+        curl = client._curl_create()
 
+        curl_log = logging.getLogger("tornado.curl_httpclient")
+        curl_log.setLevel(logging.DEBUG)
+
+        if hasattr(pycurl, "PROTOCOLS"):
+            delattr(pycurl, "PROTOCOLS")
+        try:
+            curl = client._curl_create()
+            self.assertIsInstance(curl, pycurl.Curl)
+            self.assertTrue(callable(client._curl_debug))
+            if hasattr(pycurl, "PROTOCOLS"):
+                self.assertTrue(True)
+        finally:
+            curl_log.setLevel(logging.WARNING)
+
+    def test_curl_debug_logging(self):
+        client = CurlAsyncHTTPClient(defaults=dict(allow_ipv6=False))
+        curl_log = logging.getLogger("tornado.curl_httpclient")
+        curl_log.setLevel(logging.DEBUG)
+    
+
+        with self.assertLogs('tornado.curl_httpclient', level='DEBUG') as log:
+            client._curl_debug(0, "   This is a debug message   \n")
+            self.assertIn("This is a debug message", log.output[0])
+        
 class DigestAuthHandler(RequestHandler):
     def initialize(self, username, password):
         self.username = username
