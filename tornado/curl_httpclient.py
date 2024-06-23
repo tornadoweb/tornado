@@ -47,17 +47,6 @@ curl_log = logging.getLogger("tornado.curl_httpclient")
 
 CR_OR_LF_RE = re.compile(b"\r|\n")
 
-curl_debug_dict = {
-    "example_function_1": False,  
-    "example_function_2": False,
-    "example_function_3": False
-}
-
-curl_create_dict = {
-    "example_function_1": False,  
-    "example_function_2": False
-}
-
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):
     def initialize(  # type: ignore
@@ -328,18 +317,13 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
     def _curl_create(self) -> pycurl.Curl:
         curl = pycurl.Curl()
         if curl_log.isEnabledFor(logging.DEBUG):
-            curl_create_dict["example_function_1"] = True
             curl.setopt(pycurl.VERBOSE, 1)
             curl.setopt(pycurl.DEBUGFUNCTION, self._curl_debug)
         if hasattr(
             pycurl, "PROTOCOLS"
         ):  # PROTOCOLS first appeared in pycurl 7.19.5 (2014-07-12)
-            curl_create_dict["example_function_2"] = True
             curl.setopt(pycurl.PROTOCOLS, pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS)
             curl.setopt(pycurl.REDIR_PROTOCOLS, pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS)
-
-        with open('curl_create.txt', 'a') as file:
-            file.write(str(curl_create_dict) + "\n")
         return curl
 
     def _curl_setup_request(
@@ -585,19 +569,15 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
     def _curl_debug(self, debug_type: int, debug_msg: str) -> None:
         debug_types = ("I", "<", ">", "<", ">")
         if debug_type == 0:
-            curl_debug_dict["example_function_1"] = True
             debug_msg = native_str(debug_msg)
             curl_log.debug("%s", debug_msg.strip())
         elif debug_type in (1, 2):
-            curl_debug_dict["example_function_2"] = True
             debug_msg = native_str(debug_msg)
             for line in debug_msg.splitlines():
                 curl_log.debug("%s %s", debug_types[debug_type], line)
         elif debug_type == 4:
-            curl_debug_dict["example_function_3"] = True
             curl_log.debug("%s %r", debug_types[debug_type], debug_msg)
-        with open('curl_debug.txt', 'a') as file:
-            file.write(str(curl_debug_dict) + "\n")
+
 
 class CurlError(HTTPError):
     def __init__(self, errno: int, message: str) -> None:
