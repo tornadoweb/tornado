@@ -115,7 +115,7 @@ class _DecompressTooLargeError(Exception):
     pass
 
 
-class _WebSocketParams(object):
+class _WebSocketParams:
     def __init__(
         self,
         ping_interval: Optional[float] = None,
@@ -212,7 +212,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         self,
         application: tornado.web.Application,
         request: httputil.HTTPServerRequest,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         super().__init__(application, request, **kwargs)
         self.ws_connection = None  # type: Optional[WebSocketProtocol]
@@ -698,7 +698,7 @@ class WebSocketProtocol(abc.ABC):
         raise NotImplementedError()
 
 
-class _PerMessageDeflateCompressor(object):
+class _PerMessageDeflateCompressor:
     def __init__(
         self,
         persistent: bool,
@@ -746,7 +746,7 @@ class _PerMessageDeflateCompressor(object):
         return data[:-4]
 
 
-class _PerMessageDeflateDecompressor(object):
+class _PerMessageDeflateDecompressor:
     def __init__(
         self,
         persistent: bool,
@@ -998,14 +998,12 @@ class WebSocketProtocol13(WebSocketProtocol):
         compression_options: Optional[Dict[str, Any]] = None,
     ) -> None:
         # TODO: handle invalid parameters gracefully
-        allowed_keys = set(
-            [
-                "server_no_context_takeover",
-                "client_no_context_takeover",
-                "server_max_window_bits",
-                "client_max_window_bits",
-            ]
-        )
+        allowed_keys = {
+            "server_no_context_takeover",
+            "client_no_context_takeover",
+            "server_max_window_bits",
+            "client_max_window_bits",
+        }
         for key in agreed_parameters:
             if key not in allowed_keys:
                 raise ValueError("unsupported compression parameter %r" % key)
@@ -1017,7 +1015,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             max_message_size=self.params.max_message_size,
             **self._get_compressor_options(
                 other_side, agreed_parameters, compression_options
-            )
+            ),
         )
 
     def _write_frame(

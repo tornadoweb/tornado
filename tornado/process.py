@@ -185,7 +185,7 @@ def task_id() -> Optional[int]:
     return _task_id
 
 
-class Subprocess(object):
+class Subprocess:
     """Wraps ``subprocess.Popen`` with IOStream support.
 
     The constructor is the same as ``subprocess.Popen`` with the following

@@ -28,7 +28,7 @@ if typing.TYPE_CHECKING:
 __all__ = ["Condition", "Event", "Semaphore", "BoundedSemaphore", "Lock"]
 
 
-class _TimeoutGarbageCollector(object):
+class _TimeoutGarbageCollector:
     """Base class for objects that periodically clean up timed-out waiters.
 
     Avoids memory leak in a common pattern like:
@@ -111,7 +111,7 @@ class Condition(_TimeoutGarbageCollector):
     """
 
     def __repr__(self) -> str:
-        result = "<%s" % (self.__class__.__name__,)
+        result = f"<{self.__class__.__name__}"
         if self._waiters:
             result += " waiters[%s]" % len(self._waiters)
         return result + ">"
@@ -155,7 +155,7 @@ class Condition(_TimeoutGarbageCollector):
         self.notify(len(self._waiters))
 
 
-class Event(object):
+class Event:
     """An event blocks coroutines until its internal flag is set to True.
 
     Similar to `threading.Event`.
@@ -200,7 +200,7 @@ class Event(object):
         self._waiters = set()  # type: Set[Future[None]]
 
     def __repr__(self) -> str:
-        return "<%s %s>" % (
+        return "<{} {}>".format(
             self.__class__.__name__,
             "set" if self.is_set() else "clear",
         )
@@ -255,7 +255,7 @@ class Event(object):
             return timeout_fut
 
 
-class _ReleasingContextManager(object):
+class _ReleasingContextManager:
     """Releases a Lock or Semaphore at the end of a "with" statement.
 
     with (yield semaphore.acquire()):
@@ -389,12 +389,10 @@ class Semaphore(_TimeoutGarbageCollector):
 
     def __repr__(self) -> str:
         res = super().__repr__()
-        extra = (
-            "locked" if self._value == 0 else "unlocked,value:{0}".format(self._value)
-        )
+        extra = "locked" if self._value == 0 else f"unlocked,value:{self._value}"
         if self._waiters:
-            extra = "{0},waiters:{1}".format(extra, len(self._waiters))
-        return "<{0} [{1}]>".format(res[1:-1], extra)
+            extra = f"{extra},waiters:{len(self._waiters)}"
+        return f"<{res[1:-1]} [{extra}]>"
 
     def release(self) -> None:
         """Increment the counter and wake one waiter."""
@@ -484,7 +482,7 @@ class BoundedSemaphore(Semaphore):
         super().release()
 
 
-class Lock(object):
+class Lock:
     """A lock for coroutines.
 
     A Lock begins unlocked, and `acquire` locks it immediately. While it is
@@ -525,7 +523,7 @@ class Lock(object):
         self._block = BoundedSemaphore(value=1)
 
     def __repr__(self) -> str:
-        return "<%s _block=%s>" % (self.__class__.__name__, self._block)
+        return f"<{self.__class__.__name__} _block={self._block}>"
 
     def acquire(
         self, timeout: Optional[Union[float, datetime.timedelta]] = None

@@ -57,7 +57,7 @@ class HelloHandler(RequestHandler):
         self.write("Hello")
 
 
-class TestIOStreamWebMixin(object):
+class TestIOStreamWebMixin:
     def _make_client_iostream(self):
         raise NotImplementedError()
 
@@ -177,7 +177,7 @@ class TestIOStreamWebMixin(object):
             stream.read_bytes(1)
 
 
-class TestReadWriteMixin(object):
+class TestReadWriteMixin:
     # Tests where one stream reads and the other writes.
     # These should work for BaseIOStream implementations.
 

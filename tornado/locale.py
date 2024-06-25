@@ -221,7 +221,7 @@ def get_supported_locales() -> Iterable[str]:
     return _supported_locales
 
 
-class Locale(object):
+class Locale:
     """Object representing a locale.
 
     After calling one of `load_translations` or `load_gettext_translations`,
@@ -569,8 +569,8 @@ class GettextLocale(Locale):
         if plural_message is not None:
             assert count is not None
             msgs_with_ctxt = (
-                "%s%s%s" % (context, CONTEXT_SEPARATOR, message),
-                "%s%s%s" % (context, CONTEXT_SEPARATOR, plural_message),
+                f"{context}{CONTEXT_SEPARATOR}{message}",
+                f"{context}{CONTEXT_SEPARATOR}{plural_message}",
                 count,
             )
             result = self.ngettext(*msgs_with_ctxt)
@@ -579,7 +579,7 @@ class GettextLocale(Locale):
                 result = self.ngettext(message, plural_message, count)
             return result
         else:
-            msg_with_ctxt = "%s%s%s" % (context, CONTEXT_SEPARATOR, message)
+            msg_with_ctxt = f"{context}{CONTEXT_SEPARATOR}{message}"
             result = self.gettext(msg_with_ctxt)
             if CONTEXT_SEPARATOR in result:
                 # Translation not found

@@ -158,7 +158,7 @@ class SecureCookieV1Test(unittest.TestCase):
         )
         # tamper with the cookie
         handler._cookies["foo"] = utf8(
-            "1234|5678%s|%s" % (to_basestring(timestamp), to_basestring(sig))
+            f"1234|5678{to_basestring(timestamp)}|{to_basestring(sig)}"
         )
         # it gets rejected
         with ExpectLog(gen_log, "Cookie timestamp in future"):
@@ -625,7 +625,7 @@ class TypeCheckHandler(RequestHandler):
     def check_type(self, name, obj, expected_type):
         actual_type = type(obj)
         if expected_type != actual_type:
-            self.errors[name] = "expected %s, got %s" % (expected_type, actual_type)
+            self.errors[name] = f"expected {expected_type}, got {actual_type}"
 
 
 class DecodeArgHandler(RequestHandler):
@@ -1151,7 +1151,7 @@ class StaticFileTest(WebTestCase):
         # make sure the uncompressed file still has the correct type
         response = self.fetch("/static/sample.xml")
         self.assertIn(
-            response.headers.get("Content-Type"), set(("text/xml", "application/xml"))
+            response.headers.get("Content-Type"), {"text/xml", "application/xml"}
         )
 
     def test_static_url(self):
@@ -1511,7 +1511,7 @@ class CustomStaticFileTest(WebTestCase):
                 extension_index = path.rindex(".")
                 before_version = path[:extension_index]
                 after_version = path[(extension_index + 1) :]
-                return "/static/%s.%s.%s" % (
+                return "/static/{}.{}.{}".format(
                     before_version,
                     version_hash,
                     after_version,
@@ -1520,7 +1520,7 @@ class CustomStaticFileTest(WebTestCase):
             def parse_url_path(self, url_path):
                 extension_index = url_path.rindex(".")
                 version_index = url_path.rindex(".", 0, extension_index)
-                return "%s%s" % (url_path[:version_index], url_path[extension_index:])
+                return f"{url_path[:version_index]}{url_path[extension_index:]}"
 
             @classmethod
             def get_absolute_path(cls, settings, path):
@@ -1976,11 +1976,11 @@ class UIMethodUIModuleTest(SimpleHandlerTestCase):
 
     def get_app_kwargs(self):
         def my_ui_method(handler, x):
-            return "In my_ui_method(%s) with handler value %s." % (x, handler.value())
+            return f"In my_ui_method({x}) with handler value {handler.value()}."
 
         class MyModule(UIModule):
             def render(self, x):
-                return "In MyModule(%s) with handler value %s." % (
+                return "In MyModule({}) with handler value {}.".format(
                     x,
                     typing.cast(UIMethodUIModuleTest.Handler, self.handler).value(),
                 )
@@ -2038,7 +2038,7 @@ class SetLazyPropertiesTest(SimpleHandlerTestCase):
             raise NotImplementedError()
 
         def get(self):
-            self.write("Hello %s (%s)" % (self.current_user, self.locale.code))
+            self.write(f"Hello {self.current_user} ({self.locale.code})")
 
     def test_set_properties(self):
         # Ensure that current_user can be assigned to normally for apps
@@ -2400,7 +2400,7 @@ class BaseFlowControlHandler(RequestHandler):
     @contextlib.contextmanager
     def in_method(self, method):
         if self.method is not None:
-            self.test.fail("entered method %s while in %s" % (method, self.method))
+            self.test.fail(f"entered method {method} while in {self.method}")
         self.method = method
         self.methods.append(method)
         try:
@@ -2422,7 +2422,7 @@ class BaseFlowControlHandler(RequestHandler):
         self.write(dict(methods=self.methods))
 
 
-class BaseStreamingRequestFlowControlTest(object):
+class BaseStreamingRequestFlowControlTest:
     def get_httpserver_options(self):
         # Use a small chunk size so flow control is relevant even though
         # all the data arrives at once.
@@ -2937,7 +2937,7 @@ class XSRFTest(SimpleHandlerTestCase):
 
     def test_refresh_token(self):
         token = self.xsrf_token
-        tokens_seen = set([token])
+        tokens_seen = {token}
         # A user's token is stable over time.  Refreshing the page in one tab
         # might update the cookie while an older tab still has the old cookie
         # in its DOM.  Simulate this scenario by passing a constant token

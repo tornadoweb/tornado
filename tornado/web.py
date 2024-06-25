@@ -176,7 +176,7 @@ class _ArgDefaultMarker:
 _ARG_DEFAULT = _ArgDefaultMarker()
 
 
-class RequestHandler(object):
+class RequestHandler:
     """Base class for HTTP request handlers.
 
     Subclasses must define at least one of the methods defined in the
@@ -608,7 +608,7 @@ class RequestHandler(object):
             return _unicode(value)
         except UnicodeDecodeError:
             raise HTTPError(
-                400, "Invalid unicode in %s: %r" % (name or "url", value[:40])
+                400, "Invalid unicode in {}: {!r}".format(name or "url", value[:40])
             )
 
     @property
@@ -671,7 +671,7 @@ class RequestHandler(object):
         value = escape.native_str(value)
         if re.search(r"[\x00-\x20]", name + value):
             # Don't let us accidentally inject bad stuff
-            raise ValueError("Invalid cookie %r: %r" % (name, value))
+            raise ValueError(f"Invalid cookie {name!r}: {value!r}")
         if not hasattr(self, "_new_cookie"):
             self._new_cookie = (
                 http.cookies.SimpleCookie()
@@ -1788,9 +1788,9 @@ class RequestHandler(object):
             if self.request.method not in self.SUPPORTED_METHODS:
                 raise HTTPError(405)
             self.path_args = [self.decode_argument(arg) for arg in args]
-            self.path_kwargs = dict(
-                (k, self.decode_argument(v, name=k)) for (k, v) in kwargs.items()
-            )
+            self.path_kwargs = {
+                k: self.decode_argument(v, name=k) for (k, v) in kwargs.items()
+            }
             # If XSRF cookies are turned on, reject form submissions without
             # the proper cookie
             if self.request.method not in (
@@ -1859,7 +1859,7 @@ class RequestHandler(object):
         self.application.log_request(self)
 
     def _request_summary(self) -> str:
-        return "%s %s (%s)" % (
+        return "{} {} ({})".format(
             self.request.method,
             self.request.uri,
             self.request.remote_ip,
@@ -2275,7 +2275,7 @@ class Application(ReversibleRouter):
 
     def _load_ui_methods(self, methods: Any) -> None:
         if isinstance(methods, types.ModuleType):
-            self._load_ui_methods(dict((n, getattr(methods, n)) for n in dir(methods)))
+            self._load_ui_methods({n: getattr(methods, n) for n in dir(methods)})
         elif isinstance(methods, list):
             for m in methods:
                 self._load_ui_methods(m)
@@ -2290,7 +2290,7 @@ class Application(ReversibleRouter):
 
     def _load_ui_modules(self, modules: Any) -> None:
         if isinstance(modules, types.ModuleType):
-            self._load_ui_modules(dict((n, getattr(modules, n)) for n in dir(modules)))
+            self._load_ui_modules({n: getattr(modules, n) for n in dir(modules)})
         elif isinstance(modules, list):
             for m in modules:
                 self._load_ui_modules(m)
@@ -2758,7 +2758,7 @@ class StaticFileHandler(RequestHandler):
                 # and less than the first-byte-pos.
                 self.set_status(416)  # Range Not Satisfiable
                 self.set_header("Content-Type", "text/plain")
-                self.set_header("Content-Range", "bytes */%s" % (size,))
+                self.set_header("Content-Range", f"bytes */{size}")
                 return
             if end is not None and end > size:
                 # Clients sometimes blindly use a large range to limit their
@@ -2812,7 +2812,7 @@ class StaticFileHandler(RequestHandler):
         version_hash = self._get_cached_version(self.absolute_path)
         if not version_hash:
             return None
-        return '"%s"' % (version_hash,)
+        return f'"{version_hash}"'
 
     def set_headers(self) -> None:
         """Sets the content and caching headers on the response.
@@ -3111,7 +3111,7 @@ class StaticFileHandler(RequestHandler):
         if not version_hash:
             return url
 
-        return "%s?v=%s" % (url, version_hash)
+        return f"{url}?v={version_hash}"
 
     def parse_url_path(self, url_path: str) -> str:
         """Converts a static URL path into a filesystem path.
@@ -3187,7 +3187,7 @@ class FallbackHandler(RequestHandler):
         self.on_finish()
 
 
-class OutputTransform(object):
+class OutputTransform:
     """A transform modifies the result of an HTTP request (e.g., GZip encoding)
 
     Applications are not expected to create their own OutputTransforms
@@ -3224,17 +3224,15 @@ class GZipContentEncoding(OutputTransform):
 
     # Whitelist of compressible mime types (in addition to any types
     # beginning with "text/").
-    CONTENT_TYPES = set(
-        [
-            "application/javascript",
-            "application/x-javascript",
-            "application/xml",
-            "application/atom+xml",
-            "application/json",
-            "application/xhtml+xml",
-            "image/svg+xml",
-        ]
-    )
+    CONTENT_TYPES = {
+        "application/javascript",
+        "application/x-javascript",
+        "application/xml",
+        "application/atom+xml",
+        "application/json",
+        "application/xhtml+xml",
+        "image/svg+xml",
+    }
     # Python's GzipFile defaults to level 9, while most other gzip
     # tools (including gzip itself) default to 6, which is probably a
     # better CPU/size tradeoff.
@@ -3339,7 +3337,7 @@ def authenticated(
     return wrapper
 
 
-class UIModule(object):
+class UIModule:
     """A re-usable, modular UI unit on a page.
 
     UI modules often execute additional queries, and they can include
@@ -3487,7 +3485,7 @@ class TemplateModule(UIModule):
         return "".join(self._get_resources("html_body"))
 
 
-class _UIModuleNamespace(object):
+class _UIModuleNamespace:
     """Lazy namespace which creates UIModule proxies bound to a handler."""
 
     def __init__(

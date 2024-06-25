@@ -238,7 +238,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         request, callback, timeout_handle = self.waiting[key]
         self.queue.remove((key, request, callback))
 
-        error_message = "Timeout {0}".format(info) if info else "Timeout"
+        error_message = f"Timeout {info}" if info else "Timeout"
         timeout_response = HTTPResponse(
             request,
             599,
@@ -250,9 +250,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
 
 class _HTTPConnection(httputil.HTTPMessageDelegate):
-    _SUPPORTED_METHODS = set(
-        ["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
-    )
+    _SUPPORTED_METHODS = {"GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"}
 
     def __init__(
         self,
@@ -401,7 +399,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             if self.request.user_agent:
                 self.request.headers["User-Agent"] = self.request.user_agent
             elif self.request.headers.get("User-Agent") is None:
-                self.request.headers["User-Agent"] = "Tornado/{}".format(version)
+                self.request.headers["User-Agent"] = f"Tornado/{version}"
             if not self.request.allow_nonstandard_methods:
                 # Some HTTP methods nearly always have bodies while others
                 # almost never do. Fail in this case unless the user has
@@ -487,7 +485,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         :info string key: More detailed timeout information.
         """
         self._timeout = None
-        error_message = "Timeout {0}".format(info) if info else "Timeout"
+        error_message = f"Timeout {info}" if info else "Timeout"
         if self.final_callback is not None:
             self._handle_exception(
                 HTTPTimeoutError, HTTPTimeoutError(error_message), None
@@ -607,7 +605,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             # Reassemble the start line.
             self.request.header_callback("%s %s %s\r\n" % first_line)
             for k, v in self.headers.get_all():
-                self.request.header_callback("%s: %s\r\n" % (k, v))
+                self.request.header_callback(f"{k}: {v}\r\n")
             self.request.header_callback("\r\n")
 
     def _should_follow_redirect(self) -> bool:

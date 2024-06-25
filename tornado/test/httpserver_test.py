@@ -115,7 +115,7 @@ class BaseSSLTest(AsyncHTTPSTestCase):
         return Application([("/", HelloWorldRequestHandler, dict(protocol="https"))])
 
 
-class SSLTestMixin(object):
+class SSLTestMixin:
     def get_ssl_options(self):
         return dict(
             ssl_version=self.get_ssl_version(),
@@ -282,13 +282,11 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
                 [
                     b"Content-Disposition: form-data; name=argument",
                     b"",
-                    "\u00e1".encode("utf-8"),
+                    "\u00e1".encode(),
                     b"--1234567890",
-                    'Content-Disposition: form-data; name="files"; filename="\u00f3"'.encode(
-                        "utf8"
-                    ),
+                    'Content-Disposition: form-data; name="files"; filename="\u00f3"'.encode(),
                     b"",
-                    "\u00fa".encode("utf-8"),
+                    "\u00fa".encode(),
                     b"--1234567890--",
                     b"",
                 ]
@@ -382,7 +380,7 @@ class TypeCheckHandler(RequestHandler):
     def check_type(self, name, obj, expected_type):
         actual_type = type(obj)
         if expected_type != actual_type:
-            self.errors[name] = "expected %s, got %s" % (expected_type, actual_type)
+            self.errors[name] = f"expected {expected_type}, got {actual_type}"
 
 
 class PostEchoHandler(RequestHandler):

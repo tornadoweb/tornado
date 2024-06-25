@@ -51,13 +51,9 @@ class DigestAuthHandler(RequestHandler):
             assert param_dict["nonce"] == nonce
             assert param_dict["username"] == self.username
             assert param_dict["uri"] == self.request.path
-            h1 = md5(
-                utf8("%s:%s:%s" % (self.username, realm, self.password))
-            ).hexdigest()
-            h2 = md5(
-                utf8("%s:%s" % (self.request.method, self.request.path))
-            ).hexdigest()
-            digest = md5(utf8("%s:%s:%s" % (h1, nonce, h2))).hexdigest()
+            h1 = md5(utf8(f"{self.username}:{realm}:{self.password}")).hexdigest()
+            h2 = md5(utf8(f"{self.request.method}:{self.request.path}")).hexdigest()
+            digest = md5(utf8(f"{h1}:{nonce}:{h2}")).hexdigest()
             if digest == param_dict["response"]:
                 self.write("ok")
             else:
@@ -66,7 +62,7 @@ class DigestAuthHandler(RequestHandler):
             self.set_status(401)
             self.set_header(
                 "WWW-Authenticate",
-                'Digest realm="%s", nonce="%s", opaque="%s"' % (realm, nonce, opaque),
+                f'Digest realm="{realm}", nonce="{nonce}", opaque="{opaque}"',
             )
 
 

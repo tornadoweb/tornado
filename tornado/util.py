@@ -65,7 +65,7 @@ class ObjectDict(Dict[str, Any]):
         self[name] = value
 
 
-class GzipDecompressor(object):
+class GzipDecompressor:
     """Streaming gzip decompressor.
 
     The interface is like that of `zlib.decompressobj` (without some of the
@@ -201,7 +201,7 @@ def re_unescape(s: str) -> str:
     return _re_unescape_pattern.sub(_re_unescape_replacement, s)
 
 
-class Configurable(object):
+class Configurable:
     """Base class for configurable interfaces.
 
     A configurable interface is an (abstract) class whose constructor
@@ -252,7 +252,7 @@ class Configurable(object):
         if impl.configurable_base() is not base:
             # The impl class is itself configurable, so recurse.
             return impl(*args, **init_kwargs)
-        instance = super(Configurable, cls).__new__(impl)
+        instance = super().__new__(impl)
         # initialize vs __init__ chosen for compatibility with AsyncHTTPClient
         # singleton magic.  If we get rid of that we can switch to __init__
         # here too.
@@ -336,7 +336,7 @@ class Configurable(object):
         base.__impl_kwargs = saved[1]
 
 
-class ArgReplacer(object):
+class ArgReplacer:
     """Replaces one value in an ``args, kwargs`` pair.
 
     Inspects the function signature to find an argument by name

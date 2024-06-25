@@ -30,7 +30,7 @@ else:
     from tornado.platform.caresresolver import CaresResolver
 
 
-class _ResolverTestMixin(object):
+class _ResolverTestMixin:
     resolver = None  # type: typing.Any
 
     @gen_test
@@ -48,7 +48,7 @@ class _ResolverTestMixin(object):
 
 # It is impossible to quickly and consistently generate an error in name
 # resolution, so test this case separately, using mocks as needed.
-class _ResolverErrorTestMixin(object):
+class _ResolverErrorTestMixin:
     resolver = None  # type: typing.Any
 
     @gen_test

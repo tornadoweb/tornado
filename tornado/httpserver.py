@@ -295,7 +295,7 @@ class _CallableAdapter(httputil.HTTPMessageDelegate):
         del self._chunks
 
 
-class _HTTPRequestContext(object):
+class _HTTPRequestContext:
     def __init__(
         self,
         stream: iostream.IOStream,

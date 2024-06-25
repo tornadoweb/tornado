@@ -38,7 +38,7 @@ from tornado import httputil
 from tornado.ioloop import IOLoop
 from tornado.log import access_log
 
-from typing import List, Tuple, Optional, Callable, Any, Dict, Text
+from typing import List, Tuple, Optional, Callable, Any, Dict
 from types import TracebackType
 import typing
 
@@ -56,7 +56,7 @@ def to_wsgi_str(s: bytes) -> str:
     return s.decode("latin1")
 
 
-class WSGIContainer(object):
+class WSGIContainer:
     r"""Makes a WSGI-compatible application runnable on Tornado's HTTP server.
 
     .. warning::
@@ -185,7 +185,7 @@ class WSGIContainer(object):
         status_code_str, reason = data["status"].split(" ", 1)
         status_code = int(status_code_str)
         headers = data["headers"]  # type: List[Tuple[str, str]]
-        header_set = set(k.lower() for (k, v) in headers)
+        header_set = {k.lower() for (k, v) in headers}
         body = escape.utf8(body)
         if status_code != 304:
             if "content-length" not in header_set:
@@ -204,7 +204,7 @@ class WSGIContainer(object):
         request.connection.finish()
         self._log(status_code, request)
 
-    def environ(self, request: httputil.HTTPServerRequest) -> Dict[Text, Any]:
+    def environ(self, request: httputil.HTTPServerRequest) -> Dict[str, Any]:
         """Converts a `tornado.httputil.HTTPServerRequest` to a WSGI environment.
 
         .. versionchanged:: 6.3

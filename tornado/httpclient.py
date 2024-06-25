@@ -56,7 +56,7 @@ from tornado.util import Configurable
 from typing import Type, Any, Union, Dict, Callable, Optional, cast
 
 
-class HTTPClient(object):
+class HTTPClient:
     """A blocking HTTP client.
 
     This interface is provided to make it easier to share code between
@@ -89,7 +89,7 @@ class HTTPClient(object):
     def __init__(
         self,
         async_client_class: "Optional[Type[AsyncHTTPClient]]" = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         # Initialize self._closed at the beginning of the constructor
         # so that an exception raised here doesn't lead to confusing
@@ -203,7 +203,7 @@ class AsyncHTTPClient(Configurable):
             instance_cache = cls._async_clients()
         if instance_cache is not None and io_loop in instance_cache:
             return instance_cache[io_loop]
-        instance = super(AsyncHTTPClient, cls).__new__(cls, **kwargs)  # type: ignore
+        instance = super().__new__(cls, **kwargs)  # type: ignore
         # Make sure the instance knows which cache to remove itself from.
         # It can't simply call _async_clients() because we may be in
         # __new__(AsyncHTTPClient) but instance.__class__ may be
@@ -250,7 +250,7 @@ class AsyncHTTPClient(Configurable):
         self,
         request: Union[str, "HTTPRequest"],
         raise_error: bool = True,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> "Future[HTTPResponse]":
         """Executes a request, asynchronously returning an `HTTPResponse`.
 
@@ -333,10 +333,10 @@ class AsyncHTTPClient(Configurable):
 
            AsyncHTTPClient.configure("tornado.curl_httpclient.CurlAsyncHTTPClient")
         """
-        super(AsyncHTTPClient, cls).configure(impl, **kwargs)
+        super().configure(impl, **kwargs)
 
 
-class HTTPRequest(object):
+class HTTPRequest:
     """HTTP client request object."""
 
     _headers = None  # type: Union[Dict[str, str], httputil.HTTPHeaders]
@@ -571,7 +571,7 @@ class HTTPRequest(object):
         self._body = utf8(value)
 
 
-class HTTPResponse(object):
+class HTTPResponse:
     """HTTP Response object.
 
     Attributes:
@@ -684,7 +684,7 @@ class HTTPResponse(object):
 
     def __repr__(self) -> str:
         args = ",".join("%s=%r" % i for i in sorted(self.__dict__.items()))
-        return "%s(%s)" % (self.__class__.__name__, args)
+        return f"{self.__class__.__name__}({args})"
 
 
 class HTTPClientError(Exception):
@@ -732,7 +732,7 @@ class HTTPClientError(Exception):
 HTTPError = HTTPClientError
 
 
-class _RequestProxy(object):
+class _RequestProxy:
     """Combines an object with a dictionary of defaults.
 
     Used internally by AsyncHTTPClient implementations.

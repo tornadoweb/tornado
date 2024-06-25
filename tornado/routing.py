@@ -438,7 +438,7 @@ class ReversibleRuleRouter(ReversibleRouter, RuleRouter):
         return None
 
 
-class Rule(object):
+class Rule:
     """A routing rule."""
 
     def __init__(
@@ -478,7 +478,7 @@ class Rule(object):
         return self.matcher.reverse(*args)
 
     def __repr__(self) -> str:
-        return "%s(%r, %s, kwargs=%r, name=%r)" % (
+        return "{}({!r}, {}, kwargs={!r}, name={!r})".format(
             self.__class__.__name__,
             self.matcher,
             self.target,
@@ -487,7 +487,7 @@ class Rule(object):
         )
 
 
-class Matcher(object):
+class Matcher:
     """Represents a matcher for request features."""
 
     def match(self, request: httputil.HTTPServerRequest) -> Optional[Dict[str, Any]]:
@@ -582,9 +582,9 @@ class PathMatches(Matcher):
         # unnamed groups, we want to use either groups
         # or groupdict but not both.
         if self.regex.groupindex:
-            path_kwargs = dict(
-                (str(k), _unquote_or_none(v)) for (k, v) in match.groupdict().items()
-            )
+            path_kwargs = {
+                str(k): _unquote_or_none(v) for (k, v) in match.groupdict().items()
+            }
         else:
             path_args = [_unquote_or_none(s) for s in match.groups()]
 
@@ -686,7 +686,7 @@ class URLSpec(Rule):
         self.kwargs = kwargs
 
     def __repr__(self) -> str:
-        return "%s(%r, %s, kwargs=%r, name=%r)" % (
+        return "{}({!r}, {}, kwargs={!r}, name={!r})".format(
             self.__class__.__name__,
             self.regex.pattern,
             self.handler_class,

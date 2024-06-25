@@ -83,7 +83,7 @@ class TCPClientTest(AsyncTestCase):
         # The port used here doesn't matter, but some systems require it
         # to be non-zero if we do not also pass AI_PASSIVE.
         addrinfo = self.io_loop.run_sync(lambda: Resolver().resolve("localhost", 80))
-        families = set(addr[0] for addr in addrinfo)
+        families = {addr[0] for addr in addrinfo}
         if socket.AF_INET6 not in families:
             self.skipTest("localhost does not resolve to ipv6")
 
@@ -197,7 +197,7 @@ class TestConnectorSplit(unittest.TestCase):
 
 
 class ConnectorTest(AsyncTestCase):
-    class FakeStream(object):
+    class FakeStream:
         def __init__(self):
             self.closed = False
 

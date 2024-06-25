@@ -142,7 +142,7 @@ class RespondInPrepareHandler(RequestHandler):
         self.finish("forbidden")
 
 
-class SimpleHTTPClientTestMixin(object):
+class SimpleHTTPClientTestMixin:
     def create_client(self, **kwargs):
         raise NotImplementedError()
 
@@ -215,14 +215,14 @@ class SimpleHTTPClientTestMixin(object):
             self.triggers.popleft()()
             self.triggers.popleft()()
             self.wait(condition=lambda: (len(self.triggers) == 2 and len(seen) == 2))
-            self.assertEqual(set(seen), set([0, 1]))
+            self.assertEqual(set(seen), {0, 1})
             self.assertEqual(len(client.queue), 0)
 
             # Finish all the pending requests
             self.triggers.popleft()()
             self.triggers.popleft()()
             self.wait(condition=lambda: len(seen) == 4)
-            self.assertEqual(set(seen), set([0, 1, 2, 3]))
+            self.assertEqual(set(seen), {0, 1, 2, 3})
             self.assertEqual(len(self.triggers), 0)
 
     @gen_test
@@ -251,7 +251,7 @@ class SimpleHTTPClientTestMixin(object):
     def test_default_user_agent(self: typing.Any):
         response = self.fetch("/user_agent", method="GET")
         self.assertEqual(200, response.code)
-        self.assertEqual(response.body.decode(), "Tornado/{}".format(version))
+        self.assertEqual(response.body.decode(), f"Tornado/{version}")
 
     def test_see_other_redirect(self: typing.Any):
         for code in (302, 303):

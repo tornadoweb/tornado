@@ -126,14 +126,14 @@ def bind_sockets(
             continue
         try:
             sock = socket.socket(af, socktype, proto)
-        except socket.error as e:
+        except OSError as e:
             if errno_from_exception(e) == errno.EAFNOSUPPORT:
                 continue
             raise
         if os.name != "nt":
             try:
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            except socket.error as e:
+            except OSError as e:
                 if errno_from_exception(e) != errno.ENOPROTOOPT:
                     # Hurd doesn't support SO_REUSEADDR.
                     raise
@@ -204,7 +204,7 @@ if hasattr(socket, "AF_UNIX"):
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        except socket.error as e:
+        except OSError as e:
             if errno_from_exception(e) != errno.ENOPROTOOPT:
                 # Hurd doesn't support SO_REUSEADDR
                 raise
@@ -645,7 +645,7 @@ def ssl_wrap_socket(
     ssl_options: Union[Dict[str, Any], ssl.SSLContext],
     server_hostname: Optional[str] = None,
     server_side: Optional[bool] = None,
-    **kwargs: Any
+    **kwargs: Any,
 ) -> ssl.SSLSocket:
     """Returns an ``ssl.SSLSocket`` wrapping the given socket.
 
