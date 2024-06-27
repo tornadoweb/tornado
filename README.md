@@ -115,13 +115,9 @@ Coverage results of our own coverage tool: 
 
 1. **\_reload**  in autoreload.py
 
-\<Show a patch (diff) or a link to a commit made in your forked repository that shows the instrumented code to gather coverage measurements>
-
 ![](https://lh7-us.googleusercontent.com/docsz/AD_4nXdMqLw59KVhF5XubemdxiRtx_LYrjeUvmPR_9W9-WNAxgxH6hMk8Q1EuSeVONRiDnMmVMKOIsFC0i9OaiRI9GRlIyx1N4vFTY352Vcea_VHb_e5thWHF2F9WkpnCiqLXQ023HKoOUeTumA5NTMR2ndytNHA?key=VOP6qdBBIo9ugIlHY77aOg)
 
 ![](https://lh7-us.googleusercontent.com/docsz/AD_4nXdr37YYOvPjsnmHAob87VuDHbbikyAlc_d2mhraugZzsXpeN40jQ9xzdwQDR4RBbXcFYN3Lb6hMXrVDNVz_8rqo0FZtW4dDJu1uZo1889c6DjEdfoGBiwz9MDxxhIysoUUsa2Dv-mp_52y8VzPHF4amyakq?key=VOP6qdBBIo9ugIlHY77aOg)
-
-\<Provide a screenshot of the coverage results output by the instrumentation>
 
 ![](https://lh7-us.googleusercontent.com/docsz/AD_4nXci6b28qZ_2ZNYm5e1nhlQkD_Ta8dErhDuEVi99S0w4gtkSHtsJ9eN6JYFzGGNCGPIY1YKOhg5HsVdD2ABcLuC0-7Vwbinx5-Rt-g2QddzOr_tNGDWsVJzKS7Ot6dE_WHI2-KR2ShG_RM81a4vDLupPwR4?key=VOP6qdBBIo9ugIlHY77aOg)
 
@@ -130,8 +126,6 @@ Coverage results of our own coverage tool: 
 ![](https://lh7-us.googleusercontent.com/docsz/AD_4nXeLp7RlVAS7Zrcd0vlIp2kwl2fhwo8-_wuZixVXycqGboSK5UNx1w1SLsnDe4I1zsbL2eof0RLuTk4r9pCgK5Ye6ldbeXPC2ksCXwcK4AhHPxOhV8rTqO5dlXSGK-SSVpu-mz-fw6i8M_lGd0YB6gu56BHW?key=VOP6qdBBIo9ugIlHY77aOg)
 
 ![](https://lh7-us.googleusercontent.com/docsz/AD_4nXeyykaQla03ZpD2iirbMePyfkwPx0mj22QUUrS0iPsBT_7-H3J7t976MbsQeg4tZw45s4ciuOQxaXzTp0ayYOfTKPc5WSLG7GZ1aspD5P4Hlvvc9n1EgKcigLF0YCgLytitaBHggpwoFW1gDfHY-Ev92mgQ?key=VOP6qdBBIo9ugIlHY77aOg)
-
-\<Provide the same kind of information provided for Function 1>
 
 ![](https://lh7-us.googleusercontent.com/docsz/AD_4nXcncwVWLHxebJpp47O5y7xXZctJY3JRUfQZSN-zaWxH9LtJ835MQ7LcGRAeFdam7qppO36ZkgCAQ9uCR_GcG3rWhGWz9KcrSByRREZxoh54kWQC-g8Wu1G4V5mnK9MIVL0CHsU4qWwlHhfNMZoyuIFkJcbK?key=VOP6qdBBIo9ugIlHY77aOg)
 
@@ -150,16 +144,14 @@ Coverage results of our own coverage tool: 
     def test_file_in_modify_times_no_change(self, mock_stat):
     def test_file_in_modify_times_with_change(self, mock_reload, mock_log, mock_stat):
 
-\<Show a patch (diff) or a link to a commit made in your forked repository that shows the new/enhanced test>
-
 \
 ![](https://lh7-us.googleusercontent.com/docsz/AD_4nXeEqNIOEbHKE5AhQtlhvFI_MfcwLxNebNy4Zzixwsn50OC4aYnX-1PAsmnB7eFlxokzrevS_WhvJgMrU_V3jaGGRS1fik2pSc0zhWtOdk0ke-cmyEn2XWlYHEtylWMiDcC5C6oqPrzf5K-vYiGP4tEDPW5A?key=VOP6qdBBIo9ugIlHY77aOg)
 
-\<Provide a screenshot of the old coverage results (the same as you already showed above)>![](https://lh7-us.googleusercontent.com/docsz/AD_4nXfZ6X8lqFy6uRifT400a8LwISW3ARG1s5wwq5KwyjYzS2u83WBK5SQWxaYh3psw361SWsfw10m8ajpgjCSJSeLUthvIos1AoYnXQYinoncnRRxCUqZp_TYazFacKdHegXNpnsMQ1pA2D-AsJ7ORfjXdhstd?key=VOP6qdBBIo9ugIlHY77aOg)
+\
+![](https://lh7-us.googleusercontent.com/docsz/AD_4nXfZ6X8lqFy6uRifT400a8LwISW3ARG1s5wwq5KwyjYzS2u83WBK5SQWxaYh3psw361SWsfw10m8ajpgjCSJSeLUthvIos1AoYnXQYinoncnRRxCUqZp_TYazFacKdHegXNpnsMQ1pA2D-AsJ7ORfjXdhstd?key=VOP6qdBBIo9ugIlHY77aOg)
 
-\<Provide a screenshot of the new coverage results>![](https://lh7-us.googleusercontent.com/docsz/AD_4nXd_uOHdhAJ6xlKDb7h1Ff4rP7AYnQBq2l8NcYV1JT_CchdtNht4E5G40kg_Wrdm9hr5icZIUaJtRMlbky6JYqKJYrzdvvpzBI8OUmlsWzDa57OoOLWhwAjKHdkK1IYvNqTwrcqUX_VuWeDDQM-5_woCQzW3?key=VOP6qdBBIo9ugIlHY77aOg)
-
-\<State the coverage improvement with a number and elaborate on why the coverage is improved>
+\
+![](https://lh7-us.googleusercontent.com/docsz/AD_4nXd_uOHdhAJ6xlKDb7h1Ff4rP7AYnQBq2l8NcYV1JT_CchdtNht4E5G40kg_Wrdm9hr5icZIUaJtRMlbky6JYqKJYrzdvvpzBI8OUmlsWzDa57OoOLWhwAjKHdkK1IYvNqTwrcqUX_VuWeDDQM-5_woCQzW3?key=VOP6qdBBIo9ugIlHY77aOg)
 
 The \_check\_file function was initially 0% covered and then it improved to 100%. This is because of the 4 functions I created which ensure that the \_check\_file function handles various scenarios correctly, such as exceptions during file checks, new files, unchanged files, and modified files, ensuring the appropriate actions are taken in each case.
 
@@ -180,7 +172,8 @@ Test 4: test\_file\_in\_modify\_times\_with\_change -> This test verifies the be
        def test_main_exit_success(self, mock_spec, mock_argv, mock_is_main, mock_watch, mock_wait):
        def test_main_exit_failure(self, mock_spec, mock_argv, mock_is_main, mock_watch, mock_wait):
 
-\<Provide the same kind of information provided for Test 1>![](https://lh7-us.googleusercontent.com/docsz/AD_4nXdkEcXtQPB84qkWaekLvr67AHswGy7PUANUuQAvk8zOEjT07qCJoiRpqLGOjw9YPDAqr2Y5q5utClK9kFqK-e3ovT9jfOwPRCMLNMROsZRtiqg4UBJc6D4QchTX38-H01BD93yX-ykX_ISmnJsk2lU1cU9d?key=VOP6qdBBIo9ugIlHY77aOg)
+\
+![](https://lh7-us.googleusercontent.com/docsz/AD_4nXdkEcXtQPB84qkWaekLvr67AHswGy7PUANUuQAvk8zOEjT07qCJoiRpqLGOjw9YPDAqr2Y5q5utClK9kFqK-e3ovT9jfOwPRCMLNMROsZRtiqg4UBJc6D4QchTX38-H01BD93yX-ykX_ISmnJsk2lU1cU9d?key=VOP6qdBBIo9ugIlHY77aOg)
 
 **Coverage before:**![](https://lh7-us.googleusercontent.com/docsz/AD_4nXdyz5082-eIe15GJ9AvA_ifP6xiiqKzRCuJn0pvAi3slNGE_QbsT3OWcdEk2jm-HzGjk6OGQ2SfUVKBLKENH0FBsZVX4WFglt0aCA--dc4RWw2g6WV4yAfDTkAG7gU-muql7xgSzrlY6WU0xs4tK6KCpQrA?key=VOP6qdBBIo9ugIlHY77aOg)
 
