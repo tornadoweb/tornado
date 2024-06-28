@@ -806,7 +806,11 @@ class ServerPeriodicPingTest(WebSocketBaseTestCase):
             def on_pong(self, data):
                 self.write_message("got pong")
 
-        return Application([("/", PingHandler)], websocket_ping_interval=0.01)
+        return Application(
+            [("/", PingHandler)],
+            websocket_ping_interval=0.01,
+            websocket_ping_timeout=1,
+        )
 
     @gen_test
     def test_server_ping(self):
@@ -827,7 +831,7 @@ class ClientPeriodicPingTest(WebSocketBaseTestCase):
 
     @gen_test
     def test_client_ping(self):
-        ws = yield self.ws_connect("/", ping_interval=0.01)
+        ws = yield self.ws_connect("/", ping_interval=0.01, ping_timeout=1)
         for i in range(3):
             response = yield ws.read_message()
             self.assertEqual(response, "got ping")
