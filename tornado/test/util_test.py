@@ -16,11 +16,7 @@ from tornado.util import (
     re_unescape,
 )
 
-import typing
-from typing import cast
-
-if typing.TYPE_CHECKING:
-    from typing import Dict, Any  # noqa: F401
+from typing import cast, Dict, Any
 
 
 class RaiseExcInfoTest(unittest.TestCase):
@@ -257,7 +253,7 @@ class ArgReplacerTest(unittest.TestCase):
 
     def test_omitted(self):
         args = (1, 2)
-        kwargs = dict()  # type: Dict[str, Any]
+        kwargs: Dict[str, Any] = dict()
         self.assertIsNone(self.replacer.get_old_value(args, kwargs))
         self.assertEqual(
             self.replacer.replace("new", args, kwargs),
@@ -266,7 +262,7 @@ class ArgReplacerTest(unittest.TestCase):
 
     def test_position(self):
         args = (1, 2, "old", 3)
-        kwargs = dict()  # type: Dict[str, Any]
+        kwargs: Dict[str, Any] = dict()
         self.assertEqual(self.replacer.get_old_value(args, kwargs), "old")
         self.assertEqual(
             self.replacer.replace("new", args, kwargs),
