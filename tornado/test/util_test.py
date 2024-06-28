@@ -300,3 +300,59 @@ class ReUnescapeTest(unittest.TestCase):
             re_unescape("\\b")
         with self.assertRaises(ValueError):
             re_unescape("\\Z")
+
+
+class VersionInfoTest(unittest.TestCase):
+    def assert_version_info_compatible(self, version, version_info):
+        # We map our version identifier string (a subset of
+        # https://packaging.python.org/en/latest/specifications/version-specifiers/#public-version-identifiers)
+        # to a 4-tuple of integers for easy comparisons. The last component is
+        # 0 for a final release, negative for a pre-release, and would be positive for a
+        # post-release if we did any of those. This test is not a promise that these are the
+        # only formats we will ever use, but it does catch accidents like
+        # https://github.com/tornadoweb/tornado/issues/3406.
+        major = minor = patch = "0"
+        is_pre = False
+        if m := re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version):
+            # Regular 3-component version number
+            major, minor, patch = m.groups()
+        elif m := re.fullmatch(r"(\d+)\.(\d+)", version):
+            # Two-component version number, equivalent to major.minor.0
+            major, minor = m.groups()
+        elif m := re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:\.dev|a|b|rc)\d+", version):
+            # Pre-release 3-component version number.
+            major, minor, patch = m.groups()
+            is_pre = True
+        elif m := re.fullmatch(r"(\d+)\.(\d+)(?:\.dev|a|b|rc)\d+", version):
+            # Pre-release 2-component version number.
+            major, minor = m.groups()
+            is_pre = True
+        else:
+            self.fail(f"Unrecognized version format: {version}")
+
+        self.assertEqual(version_info[:3], (int(major), int(minor), int(patch)))
+        if is_pre:
+            self.assertLess(int(version_info[3]), 0)
+        else:
+            self.assertEqual(int(version_info[3]), 0)
+
+    def test_version_info_compatible(self):
+        self.assert_version_info_compatible("6.5.0", (6, 5, 0, 0))
+        self.assert_version_info_compatible("6.5", (6, 5, 0, 0))
+        self.assert_version_info_compatible("6.5.1", (6, 5, 1, 0))
+        self.assert_version_info_compatible("6.6.dev1", (6, 6, 0, -100))
+        self.assert_version_info_compatible("6.6a1", (6, 6, 0, -100))
+        self.assert_version_info_compatible("6.6b1", (6, 6, 0, -100))
+        self.assert_version_info_compatible("6.6rc1", (6, 6, 0, -100))
+        self.assertRaises(
+            AssertionError, self.assert_version_info_compatible, "6.5.0", (6, 5, 0, 1)
+        )
+        self.assertRaises(
+            AssertionError, self.assert_version_info_compatible, "6.5.0", (6, 4, 0, 0)
+        )
+        self.assertRaises(
+            AssertionError, self.assert_version_info_compatible, "6.5.1", (6, 5, 0, 1)
+        )
+
+    def test_current_version(self):
+        self.assert_version_info_compatible(tornado.version, tornado.version_info)
