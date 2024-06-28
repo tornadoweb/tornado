@@ -1,7 +1,7 @@
-from io import StringIO
 import re
 import sys
 import datetime
+import textwrap
 import unittest
 
 import tornado
@@ -217,16 +217,35 @@ class UnicodeLiteralTest(unittest.TestCase):
 
 
 class ExecInTest(unittest.TestCase):
-    # TODO(bdarnell): make a version of this test for one of the new
-    # future imports available in python 3.
-    @unittest.skip("no testable future imports")
     def test_no_inherit_future(self):
-        # This file has from __future__ import print_function...
-        f = StringIO()
-        print("hello", file=f)
-        # ...but the template doesn't
-        exec_in('print >> f, "world"', dict(f=f))
-        self.assertEqual(f.getvalue(), "hello\nworld\n")
+        # Two files: the first has "from __future__ import annotations", and it executes the second
+        # which doesn't. The second file should not be affected by the first's __future__ imports.
+        #
+        # The annotations future became available in python 3.7 but has been replaced by PEP 649, so
+        # it should remain supported but off-by-default for the foreseeable future.
+        code1 = textwrap.dedent(
+            """
+            from __future__ import annotations
+            from tornado.util import exec_in
+
+            exec_in(code2, globals())
+            """
+        )
+
+        code2 = textwrap.dedent(
+            """
+            def f(x: int) -> int:
+                return x + 1
+            output[0] = f.__annotations__
+            """
+        )
+
+        # Make a mutable container to pass the result back to the caller
+        output = [None]
+        exec_in(code1, dict(code2=code2, output=output))
+        # If the annotations future were in effect, these would be strings instead of the int type
+        # object.
+        self.assertEqual(output[0], {"x": int, "return": int})
 
 
 class ArgReplacerTest(unittest.TestCase):
