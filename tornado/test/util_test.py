@@ -1,7 +1,7 @@
-from io import StringIO
 import re
 import sys
 import datetime
+import textwrap
 import unittest
 
 import tornado
@@ -16,11 +16,7 @@ from tornado.util import (
     re_unescape,
 )
 
-import typing
-from typing import cast
-
-if typing.TYPE_CHECKING:
-    from typing import Dict, Any  # noqa: F401
+from typing import cast, Dict, Any
 
 
 class RaiseExcInfoTest(unittest.TestCase):
@@ -217,16 +213,35 @@ class UnicodeLiteralTest(unittest.TestCase):
 
 
 class ExecInTest(unittest.TestCase):
-    # TODO(bdarnell): make a version of this test for one of the new
-    # future imports available in python 3.
-    @unittest.skip("no testable future imports")
     def test_no_inherit_future(self):
-        # This file has from __future__ import print_function...
-        f = StringIO()
-        print("hello", file=f)
-        # ...but the template doesn't
-        exec_in('print >> f, "world"', dict(f=f))
-        self.assertEqual(f.getvalue(), "hello\nworld\n")
+        # Two files: the first has "from __future__ import annotations", and it executes the second
+        # which doesn't. The second file should not be affected by the first's __future__ imports.
+        #
+        # The annotations future became available in python 3.7 but has been replaced by PEP 649, so
+        # it should remain supported but off-by-default for the foreseeable future.
+        code1 = textwrap.dedent(
+            """
+            from __future__ import annotations
+            from tornado.util import exec_in
+
+            exec_in(code2, globals())
+            """
+        )
+
+        code2 = textwrap.dedent(
+            """
+            def f(x: int) -> int:
+                return x + 1
+            output[0] = f.__annotations__
+            """
+        )
+
+        # Make a mutable container to pass the result back to the caller
+        output = [None]
+        exec_in(code1, dict(code2=code2, output=output))
+        # If the annotations future were in effect, these would be strings instead of the int type
+        # object.
+        self.assertEqual(output[0], {"x": int, "return": int})
 
 
 class ArgReplacerTest(unittest.TestCase):
@@ -238,7 +253,7 @@ class ArgReplacerTest(unittest.TestCase):
 
     def test_omitted(self):
         args = (1, 2)
-        kwargs = dict()  # type: Dict[str, Any]
+        kwargs: Dict[str, Any] = dict()
         self.assertIsNone(self.replacer.get_old_value(args, kwargs))
         self.assertEqual(
             self.replacer.replace("new", args, kwargs),
@@ -247,7 +262,7 @@ class ArgReplacerTest(unittest.TestCase):
 
     def test_position(self):
         args = (1, 2, "old", 3)
-        kwargs = dict()  # type: Dict[str, Any]
+        kwargs: Dict[str, Any] = dict()
         self.assertEqual(self.replacer.get_old_value(args, kwargs), "old")
         self.assertEqual(
             self.replacer.replace("new", args, kwargs),
@@ -300,3 +315,59 @@ class ReUnescapeTest(unittest.TestCase):
             re_unescape("\\b")
         with self.assertRaises(ValueError):
             re_unescape("\\Z")
+
+
+class VersionInfoTest(unittest.TestCase):
+    def assert_version_info_compatible(self, version, version_info):
+        # We map our version identifier string (a subset of
+        # https://packaging.python.org/en/latest/specifications/version-specifiers/#public-version-identifiers)
+        # to a 4-tuple of integers for easy comparisons. The last component is
+        # 0 for a final release, negative for a pre-release, and would be positive for a
+        # post-release if we did any of those. This test is not a promise that these are the
+        # only formats we will ever use, but it does catch accidents like
+        # https://github.com/tornadoweb/tornado/issues/3406.
+        major = minor = patch = "0"
+        is_pre = False
+        if m := re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version):
+            # Regular 3-component version number
+            major, minor, patch = m.groups()
+        elif m := re.fullmatch(r"(\d+)\.(\d+)", version):
+            # Two-component version number, equivalent to major.minor.0
+            major, minor = m.groups()
+        elif m := re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:\.dev|a|b|rc)\d+", version):
+            # Pre-release 3-component version number.
+            major, minor, patch = m.groups()
+            is_pre = True
+        elif m := re.fullmatch(r"(\d+)\.(\d+)(?:\.dev|a|b|rc)\d+", version):
+            # Pre-release 2-component version number.
+            major, minor = m.groups()
+            is_pre = True
+        else:
+            self.fail(f"Unrecognized version format: {version}")
+
+        self.assertEqual(version_info[:3], (int(major), int(minor), int(patch)))
+        if is_pre:
+            self.assertLess(int(version_info[3]), 0)
+        else:
+            self.assertEqual(int(version_info[3]), 0)
+
+    def test_version_info_compatible(self):
+        self.assert_version_info_compatible("6.5.0", (6, 5, 0, 0))
+        self.assert_version_info_compatible("6.5", (6, 5, 0, 0))
+        self.assert_version_info_compatible("6.5.1", (6, 5, 1, 0))
+        self.assert_version_info_compatible("6.6.dev1", (6, 6, 0, -100))
+        self.assert_version_info_compatible("6.6a1", (6, 6, 0, -100))
+        self.assert_version_info_compatible("6.6b1", (6, 6, 0, -100))
+        self.assert_version_info_compatible("6.6rc1", (6, 6, 0, -100))
+        self.assertRaises(
+            AssertionError, self.assert_version_info_compatible, "6.5.0", (6, 5, 0, 1)
+        )
+        self.assertRaises(
+            AssertionError, self.assert_version_info_compatible, "6.5.0", (6, 4, 0, 0)
+        )
+        self.assertRaises(
+            AssertionError, self.assert_version_info_compatible, "6.5.1", (6, 5, 0, 1)
+        )
+
+    def test_current_version(self):
+        self.assert_version_info_compatible(tornado.version, tornado.version_info)
