@@ -1691,6 +1691,18 @@ class Header204Test(SimpleHandlerTestCase):
         self.assertNotIn("Transfer-Encoding", response.headers)
 
 
+class Header204viaHTTPErrorTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            raise HTTPError(204)
+
+    def test_204_headers_via_httperror(self):
+        response = self.fetch("/")
+        self.assertEqual(response.code, 204)
+        self.assertNotIn("Content-Length", response.headers)
+        self.assertNotIn("Transfer-Encoding", response.headers)
+
+
 class Header304Test(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):
