@@ -209,6 +209,9 @@ if hasattr(socket, "AF_UNIX"):
                 # Hurd doesn't support SO_REUSEADDR
                 raise
         sock.setblocking(False)
+        # File names comprising of an initial null-byte denote an abstract
+        # namespace, on Linux, and therefore are not subject to file system
+        # orientated processing.
         if not file.startswith("\0"):
             try:
                 st = os.stat(file)

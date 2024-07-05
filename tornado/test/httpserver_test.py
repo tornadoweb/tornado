@@ -44,6 +44,7 @@ import tempfile
 import textwrap
 import unittest
 import urllib.parse
+import uuid
 from io import BytesIO
 
 import typing
@@ -815,10 +816,6 @@ class ManualProtocolTest(HandlerBaseTestCase):
         self.assertEqual(self.fetch_json("/")["protocol"], "https")
 
 
-@unittest.skipIf(
-    not hasattr(socket, "AF_UNIX") or sys.platform == "cygwin",
-    "unix sockets not supported on this platform",
-)
 class UnixSocketTest(AsyncTestCase):
     """HTTPServers can listen on Unix sockets too.
 
@@ -830,40 +827,25 @@ class UnixSocketTest(AsyncTestCase):
     an HTTP client, so we have to test this by hand.
     """
 
+    address = ""
+
     def setUp(self):
+        if type(self) is UnixSocketTest:
+            raise unittest.SkipTest("abstract base class")
         super().setUp()
-        self.tmpdir = tempfile.mkdtemp()
-        self.sockfile = os.path.join(self.tmpdir, "test.sock")
         app = Application([("/hello", HelloWorldRequestHandler)])
         self.server = HTTPServer(app)
-        if sys.platform.startswith("linux"):
-            self.sockabstract = "\0" + os.path.basename(self.tmpdir)
-            self.server.add_socket(netutil.bind_unix_socket(self.sockabstract))
-        self.server.add_socket(netutil.bind_unix_socket(self.sockfile))
+        self.server.add_socket(netutil.bind_unix_socket(self.address))
 
     def tearDown(self):
         self.io_loop.run_sync(self.server.close_all_connections)
         self.server.stop()
-        shutil.rmtree(self.tmpdir)
         super().tearDown()
 
     @gen_test
     def test_unix_socket(self):
         with closing(IOStream(socket.socket(socket.AF_UNIX))) as stream:
-            stream.connect(self.sockfile)
-            stream.write(b"GET /hello HTTP/1.0\r\n\r\n")
-            response = yield stream.read_until(b"\r\n")
-            self.assertEqual(response, b"HTTP/1.1 200 OK\r\n")
-            header_data = yield stream.read_until(b"\r\n\r\n")
-            headers = HTTPHeaders.parse(header_data.decode("latin1"))
-            body = yield stream.read_bytes(int(headers["Content-Length"]))
-            self.assertEqual(body, b"Hello world")
-
-    @unittest.skipUnless(sys.platform.startswith("linux"), "requires Linux")
-    @gen_test
-    def test_unix_socket_abstract(self):
-        with closing(IOStream(socket.socket(socket.AF_UNIX))) as stream:
-            stream.connect(self.sockabstract)
+            stream.connect(self.address)
             stream.write(b"GET /hello HTTP/1.0\r\n\r\n")
             response = yield stream.read_until(b"\r\n")
             self.assertEqual(response, b"HTTP/1.1 200 OK\r\n")
@@ -878,10 +860,37 @@ class UnixSocketTest(AsyncTestCase):
         # empty string.
         with ExpectLog(gen_log, "Malformed HTTP message from", level=logging.INFO):
             with closing(IOStream(socket.socket(socket.AF_UNIX))) as stream:
-                stream.connect(self.sockfile)
+                stream.connect(self.address)
                 stream.write(b"garbage\r\n\r\n")
                 response = yield stream.read_until_close()
         self.assertEqual(response, b"HTTP/1.1 400 Bad Request\r\n\r\n")
+
+
+@unittest.skipIf(
+    not hasattr(socket, "AF_UNIX") or sys.platform == "cygwin",
+    "unix sockets not supported on this platform",
+)
+class UnixSocketTestAbstract(UnixSocketTest):
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.address = os.path.join(self.tmpdir, "test.sock")
+        super().setUp()
+
+    def tearDown(self):
+        super().tearDown()
+        shutil.rmtree(self.tmpdir)
+
+
+@unittest.skipIf(
+    not (hasattr(socket, "AF_UNIX") and sys.platform.startswith("linux")),
+    "abstract namespace unix sockets not supported on this platform",
+)
+class UnixSocketTestFile(UnixSocketTest):
+
+    def setUp(self):
+        self.address = "\0" + uuid.uuid4().hex
+        super().setUp()
 
 
 class KeepAliveTest(AsyncHTTPTestCase):
