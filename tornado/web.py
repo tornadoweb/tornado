@@ -2861,7 +2861,10 @@ class StaticFileHandler(RequestHandler):
         # content has not been modified
         ims_value = self.request.headers.get("If-Modified-Since")
         if ims_value is not None:
-            if_since = email.utils.parsedate_to_datetime(ims_value)
+            try:
+                if_since = email.utils.parsedate_to_datetime(ims_value)
+            except ValueError:
+                return False
             if if_since.tzinfo is None:
                 if_since = if_since.replace(tzinfo=datetime.timezone.utc)
             assert self.modified is not None
