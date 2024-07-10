@@ -14,7 +14,7 @@ build==1.2.1
     # via pip-tools
 cachetools==5.3.3
     # via tox
-certifi==2024.6.2
+certifi==2024.7.4
     # via requests
 chardet==5.2.0
     # via tox
