@@ -28,7 +28,7 @@ from tornado.testing import (
     ExpectLog,
     gen_test,
 )
-from tornado.test.util import skipOnTravis
+from tornado.test.util import skipOnTravis, abstract_base_test
 from tornado.web import Application, RequestHandler, stream_request_body
 
 from contextlib import closing
@@ -814,6 +814,7 @@ class ManualProtocolTest(HandlerBaseTestCase):
         self.assertEqual(self.fetch_json("/")["protocol"], "https")
 
 
+@abstract_base_test
 class UnixSocketTest(AsyncTestCase):
     """HTTPServers can listen on Unix sockets too.
 
@@ -828,8 +829,6 @@ class UnixSocketTest(AsyncTestCase):
     address = ""
 
     def setUp(self):
-        if type(self) is UnixSocketTest:
-            raise unittest.SkipTest("abstract base class")
         super().setUp()
         app = Application([("/hello", HelloWorldRequestHandler)])
         self.server = HTTPServer(app)
