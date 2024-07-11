@@ -14,6 +14,7 @@ from tornado.log import gen_log, app_log
 from tornado.netutil import Resolver
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
+from tornado.test.util import abstract_base_test
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
 from tornado.web import Application, RequestHandler
 
@@ -661,7 +662,8 @@ class WebSocketNativeCoroutineTest(WebSocketBaseTestCase):
         self.assertEqual(res, "hello2")
 
 
-class CompressionTestMixin:
+@abstract_base_test
+class CompressionTestMixin(WebSocketBaseTestCase):
     MESSAGE = "Hello world. Testing 123 123"
 
     def get_app(self):
@@ -698,7 +700,7 @@ class CompressionTestMixin:
         raise NotImplementedError()
 
     @gen_test
-    def test_message_sizes(self: typing.Any):
+    def test_message_sizes(self):
         ws = yield self.ws_connect(
             "/echo", compression_options=self.get_client_compression_options()
         )
@@ -713,7 +715,7 @@ class CompressionTestMixin:
         self.verify_wire_bytes(ws.protocol._wire_bytes_in, ws.protocol._wire_bytes_out)
 
     @gen_test
-    def test_size_limit(self: typing.Any):
+    def test_size_limit(self):
         ws = yield self.ws_connect(
             "/limited", compression_options=self.get_client_compression_options()
         )
@@ -728,31 +730,32 @@ class CompressionTestMixin:
         self.assertIsNone(response)
 
 
+@abstract_base_test
 class UncompressedTestMixin(CompressionTestMixin):
     """Specialization of CompressionTestMixin when we expect no compression."""
 
-    def verify_wire_bytes(self: typing.Any, bytes_in, bytes_out):
+    def verify_wire_bytes(self, bytes_in, bytes_out):
         # Bytes out includes the 4-byte mask key per message.
         self.assertEqual(bytes_out, 3 * (len(self.MESSAGE) + 6))
         self.assertEqual(bytes_in, 3 * (len(self.MESSAGE) + 2))
 
 
-class NoCompressionTest(UncompressedTestMixin, WebSocketBaseTestCase):
+class NoCompressionTest(UncompressedTestMixin):
     pass
 
 
 # If only one side tries to compress, the extension is not negotiated.
-class ServerOnlyCompressionTest(UncompressedTestMixin, WebSocketBaseTestCase):
+class ServerOnlyCompressionTest(UncompressedTestMixin):
     def get_server_compression_options(self):
         return {}
 
 
-class ClientOnlyCompressionTest(UncompressedTestMixin, WebSocketBaseTestCase):
+class ClientOnlyCompressionTest(UncompressedTestMixin):
     def get_client_compression_options(self):
         return {}
 
 
-class DefaultCompressionTest(CompressionTestMixin, WebSocketBaseTestCase):
+class DefaultCompressionTest(CompressionTestMixin):
     def get_server_compression_options(self):
         return {}
 
@@ -766,7 +769,8 @@ class DefaultCompressionTest(CompressionTestMixin, WebSocketBaseTestCase):
         self.assertEqual(bytes_out, bytes_in + 12)
 
 
-class MaskFunctionMixin:
+@abstract_base_test
+class MaskFunctionMixin(unittest.TestCase):
     # Subclasses should define self.mask(mask, data)
     def mask(self, mask: bytes, data: bytes) -> bytes:
         raise NotImplementedError()
@@ -789,13 +793,13 @@ class MaskFunctionMixin:
         )
 
 
-class PythonMaskFunctionTest(MaskFunctionMixin, unittest.TestCase):
+class PythonMaskFunctionTest(MaskFunctionMixin):
     def mask(self, mask, data):
         return _websocket_mask_python(mask, data)
 
 
 @unittest.skipIf(speedups is None, "tornado.speedups module not present")
-class CythonMaskFunctionTest(MaskFunctionMixin, unittest.TestCase):
+class CythonMaskFunctionTest(MaskFunctionMixin):
     def mask(self, mask, data):
         return speedups.websocket_mask(mask, data)
 

@@ -16,7 +16,6 @@ from concurrent import futures
 import logging
 import re
 import socket
-import typing
 import unittest
 
 from tornado.concurrent import (
@@ -124,33 +123,31 @@ class GeneratorCapClient(BaseCapClient):
         raise gen.Return(self.process_response(data))
 
 
-class ClientTestMixin:
-    client_class = None  # type: typing.Callable
-
+class GeneratorCapClientTest(AsyncTestCase):
     def setUp(self):
-        super().setUp()  # type: ignore
+        super().setUp()
         self.server = CapServer()
         sock, port = bind_unused_port()
         self.server.add_sockets([sock])
-        self.client = self.client_class(port=port)
+        self.client = GeneratorCapClient(port=port)
 
     def tearDown(self):
         self.server.stop()
-        super().tearDown()  # type: ignore
+        super().tearDown()
 
-    def test_future(self: typing.Any):
+    def test_future(self):
         future = self.client.capitalize("hello")
         self.io_loop.add_future(future, self.stop)
         self.wait()
         self.assertEqual(future.result(), "HELLO")
 
-    def test_future_error(self: typing.Any):
+    def test_future_error(self):
         future = self.client.capitalize("HELLO")
         self.io_loop.add_future(future, self.stop)
         self.wait()
-        self.assertRaisesRegex(CapError, "already capitalized", future.result)  # type: ignore
+        self.assertRaisesRegex(CapError, "already capitalized", future.result)
 
-    def test_generator(self: typing.Any):
+    def test_generator(self):
         @gen.coroutine
         def f():
             result = yield self.client.capitalize("hello")
@@ -158,17 +155,13 @@ class ClientTestMixin:
 
         self.io_loop.run_sync(f)
 
-    def test_generator_error(self: typing.Any):
+    def test_generator_error(self):
         @gen.coroutine
         def f():
             with self.assertRaisesRegex(CapError, "already capitalized"):
                 yield self.client.capitalize("HELLO")
 
         self.io_loop.run_sync(f)
-
-
-class GeneratorClientTest(ClientTestMixin, AsyncTestCase):
-    client_class = GeneratorCapClient
 
 
 class RunOnExecutorTest(AsyncTestCase):

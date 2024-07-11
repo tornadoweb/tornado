@@ -13,6 +13,7 @@ from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 from tornado.netutil import Resolver
 from tornado.options import define, add_parse_callback, options
+from tornado.test.util import ABT_SKIP_MESSAGE
 
 
 TEST_MODULES = [
@@ -60,9 +61,20 @@ def all():
 
 
 def test_runner_factory(stderr):
+
+    class TornadoTextTestResult(unittest.TextTestResult):
+        def addSkip(self, test, reason):
+            if reason == ABT_SKIP_MESSAGE:
+                # Don't report abstract base tests as skips in our own tooling.
+                #
+                # See tornado.test.util.abstract_base_test.
+                return
+            super().addSkip(test, reason)
+
     class TornadoTextTestRunner(unittest.TextTestRunner):
         def __init__(self, *args, **kwargs):
             kwargs["stream"] = stderr
+            kwargs["resultclass"] = TornadoTextTestResult
             super().__init__(*args, **kwargs)
 
         def run(self, test):
