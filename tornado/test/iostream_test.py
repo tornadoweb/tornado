@@ -27,7 +27,6 @@ from tornado.testing import (
 from tornado.test.util import (
     skipIfNonUnix,
     refusing_port,
-    skipPypy3V58,
     ignore_deprecation,
     abstract_base_test,
 )
@@ -828,7 +827,6 @@ class TestIOStreamMixin(TestReadWriteMixin):
             client.close()
 
     @skipIfNonUnix
-    @skipPypy3V58
     @gen_test
     def test_inline_read_error(self):
         # An error on an inline read is raised without logging (on the
@@ -862,7 +860,6 @@ class TestIOStreamMixin(TestReadWriteMixin):
             server.close()
             client.close()
 
-    @skipPypy3V58
     @gen_test
     def test_async_read_error_logging(self):
         # Socket errors on asynchronous reads should be logged (but only

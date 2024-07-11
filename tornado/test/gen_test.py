@@ -572,9 +572,6 @@ class GenCoroutineTest(AsyncTestCase):
         self.finished = True
 
     @skipNotCPython
-    @unittest.skipIf(
-        (3,) < sys.version_info < (3, 6), "asyncio.Future has reference cycles"
-    )
     def test_coroutine_refcounting(self):
         # On CPython, tasks and their arguments should be released immediately
         # without waiting for garbage collection.

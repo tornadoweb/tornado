@@ -1,5 +1,4 @@
 import errno
-import os
 import signal
 import socket
 from subprocess import Popen

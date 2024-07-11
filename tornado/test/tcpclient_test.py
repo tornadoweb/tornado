@@ -14,7 +14,6 @@
 # under the License.
 from contextlib import closing
 import getpass
-import os
 import socket
 import unittest
 
