@@ -80,18 +80,6 @@ def exec_test(caller_globals, caller_locals, s):
     return local_namespace
 
 
-def subTest(test, *args, **kwargs):
-    """Compatibility shim for unittest.TestCase.subTest.
-
-    Usage: ``with tornado.test.util.subTest(self, x=x):``
-    """
-    try:
-        subTest = test.subTest  # py34+
-    except AttributeError:
-        subTest = contextlib.contextmanager(lambda *a, **kw: (yield))
-    return subTest(*args, **kwargs)
-
-
 @contextlib.contextmanager
 def ignore_deprecation():
     """Context manager to ignore deprecation warnings."""
