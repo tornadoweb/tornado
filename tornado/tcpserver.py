@@ -339,7 +339,7 @@ class TCPServer:
 
     def _handle_connection(self, connection: socket.socket, address: Any) -> None:
         if self.ssl_options is not None:
-            assert ssl, "Python 2.6+ and OpenSSL required for SSL"
+            assert ssl, "OpenSSL required for SSL"
             try:
                 connection = ssl_wrap_socket(
                     connection,

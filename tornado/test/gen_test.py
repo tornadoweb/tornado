@@ -441,7 +441,6 @@ class GenCoroutineTest(AsyncTestCase):
 
     @gen_test
     def test_async_return_no_value(self):
-        # Without a return value we don't need python 3.3.
         @gen.coroutine
         def f():
             yield gen.moment

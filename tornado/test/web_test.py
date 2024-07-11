@@ -367,7 +367,7 @@ class CookieTest(WebTestCase):
         self.assertEqual(len(headers), 3)
         self.assertEqual(headers[0], 'equals="a=b"; Path=/')
         self.assertEqual(headers[1], 'quote="a\\"b"; Path=/')
-        # python 2.7 octal-escapes the semicolon; older versions leave it alone
+        # Semicolons are octal-escaped
         self.assertIn(
             headers[2],
             ('semicolon="a;b"; Path=/', 'semicolon="a\\073b"; Path=/'),
@@ -1888,12 +1888,8 @@ class ClearAllCookiesTest(SimpleHandlerTestCase):
         response = self.fetch("/", headers={"Cookie": "foo=bar; baz=xyzzy"})
         set_cookies = sorted(response.headers.get_list("Set-Cookie"))
         # Python 3.5 sends 'baz="";'; older versions use 'baz=;'
-        self.assertTrue(
-            set_cookies[0].startswith("baz=;") or set_cookies[0].startswith('baz="";')
-        )
-        self.assertTrue(
-            set_cookies[1].startswith("foo=;") or set_cookies[1].startswith('foo="";')
-        )
+        self.assertTrue(set_cookies[0].startswith('baz="";'))
+        self.assertTrue(set_cookies[1].startswith('foo="";'))
 
 
 class PermissionError(Exception):

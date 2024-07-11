@@ -275,6 +275,10 @@ def is_coroutine_function(func: Any) -> bool:
 class Return(Exception):
     """Special exception to return a value from a `coroutine`.
 
+    This exception exists for compatibility with older versions of
+    Python (before 3.3). In newer code use the ``return`` statement
+    instead.
+
     If this exception is raised, its value argument is used as the
     result of the coroutine::
 
@@ -283,14 +287,7 @@ class Return(Exception):
             response = yield AsyncHTTPClient().fetch(url)
             raise gen.Return(json_decode(response.body))
 
-    In Python 3.3, this exception is no longer necessary: the ``return``
-    statement can be used directly to return a value (previously
-    ``yield`` and ``return`` with a value could not be combined in the
-    same function).
-
-    By analogy with the return statement, the value argument is optional,
-    but it is never necessary to ``raise gen.Return()``.  The ``return``
-    statement can be used with no arguments instead.
+    By analogy with the return statement, the value argument is optional.
     """
 
     def __init__(self, value: Any = None) -> None:
@@ -337,7 +334,7 @@ class WaitIterator:
     arguments were used in the construction of the `WaitIterator`,
     ``current_index`` will use the corresponding keyword).
 
-    On Python 3.5, `WaitIterator` implements the async iterator
+    `WaitIterator` implements the async iterator
     protocol, so it can be used with the ``async for`` statement (note
     that in this version the entire iteration is aborted if any value
     raises an exception, while the previous example can continue past

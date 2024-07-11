@@ -501,10 +501,6 @@ class BlockingResolver(ExecutorResolver):
 class ThreadedResolver(ExecutorResolver):
     """Multithreaded non-blocking `Resolver` implementation.
 
-    Requires the `concurrent.futures` package to be installed
-    (available in the standard library since Python 3.2,
-    installable with ``pip install futures`` in older versions).
-
     The thread pool size can be configured with::
 
         Resolver.configure('tornado.netutil.ThreadedResolver',
@@ -598,17 +594,15 @@ def ssl_options_to_context(
     """Try to convert an ``ssl_options`` dictionary to an
     `~ssl.SSLContext` object.
 
-    The ``ssl_options`` dictionary contains keywords to be passed to
-    ``ssl.SSLContext.wrap_socket``.  In Python 2.7.9+, `ssl.SSLContext` objects can
-    be used instead.  This function converts the dict form to its
-    `~ssl.SSLContext` equivalent, and may be used when a component which
-    accepts both forms needs to upgrade to the `~ssl.SSLContext` version
-    to use features like SNI or NPN.
+    The ``ssl_options`` argument may be either an `ssl.SSLContext` object or a dictionary containing
+    keywords to be passed to ``ssl.SSLContext.wrap_socket``.  This function converts the dict form
+    to its `~ssl.SSLContext` equivalent, and may be used when a component which accepts both forms
+    needs to upgrade to the `~ssl.SSLContext` version to use features like SNI or ALPN.
 
     .. versionchanged:: 6.2
 
-       Added server_side argument. Omitting this argument will
-       result in a DeprecationWarning on Python 3.10.
+       Added server_side argument. Omitting this argument will result in a DeprecationWarning on
+       Python 3.10.
 
     """
     if isinstance(ssl_options, ssl.SSLContext):

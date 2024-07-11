@@ -482,15 +482,11 @@ class OptionParser:
 
     def mockable(self) -> "_Mockable":
         """Returns a wrapper around self that is compatible with
-        `mock.patch <unittest.mock.patch>`.
+        `unittest.mock.patch`.
 
-        The `mock.patch <unittest.mock.patch>` function (included in
-        the standard library `unittest.mock` package since Python 3.3,
-        or in the third-party ``mock`` package for older versions of
-        Python) is incompatible with objects like ``options`` that
-        override ``__getattr__`` and ``__setattr__``.  This function
-        returns an object that can be used with `mock.patch.object
-        <unittest.mock.patch.object>` to modify option values::
+        The `unittest.mock.patch` function is incompatible with objects like ``options`` that
+        override ``__getattr__`` and ``__setattr__``.  This function returns an object that can be
+        used with `mock.patch.object <unittest.mock.patch.object>` to modify option values::
 
             with mock.patch.object(options.mockable(), 'name', value):
                 assert options.name == value
@@ -664,9 +660,8 @@ class _Option:
                 num = float(m.group(1))
                 units = m.group(2) or "seconds"
                 units = self._TIMEDELTA_ABBREV_DICT.get(units, units)
-                # This line confuses mypy when setup.py sets python_version=3.6
-                # https://github.com/python/mypy/issues/9676
-                sum += datetime.timedelta(**{units: num})  # type: ignore
+
+                sum += datetime.timedelta(**{units: num})
                 start = m.end()
             return sum
         except Exception:

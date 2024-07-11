@@ -1078,8 +1078,6 @@ class TestIOStreamStartTLS(AsyncTestCase):
     @gen_test
     def test_check_hostname(self):
         # Test that server_hostname parameter to start_tls is being used.
-        # The check_hostname functionality is only available in python 2.7 and
-        # up and in python 3.4 and up.
         server_future = self.server_start_tls(_server_ssl_options())
         with ExpectLog(gen_log, "SSL Error"):
             client_future = self.client_start_tls(

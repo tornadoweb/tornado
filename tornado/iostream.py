@@ -1147,8 +1147,7 @@ class IOStream(BaseIOStream):
 
         In SSL mode, the ``server_hostname`` parameter will be used
         for certificate validation (unless disabled in the
-        ``ssl_options``) and SNI (if supported; requires Python
-        2.7.9+).
+        ``ssl_options``) and SNI.
 
         Note that it is safe to call `IOStream.write
         <BaseIOStream.write>` while the connection is pending, in
@@ -1381,12 +1380,6 @@ class SSLIOStream(IOStream):
                 )
                 return self.close(exc_info=err)
             raise
-        except ssl.CertificateError as err:
-            # CertificateError can happen during handshake (hostname
-            # verification) and should be passed to user. Starting
-            # in Python 3.7, this error is a subclass of SSLError
-            # and will be handled by the previous block instead.
-            return self.close(exc_info=err)
         except OSError as err:
             # Some port scans (e.g. nmap in -sT mode) have been known
             # to cause do_handshake to raise EBADF and ENOTCONN, so make
