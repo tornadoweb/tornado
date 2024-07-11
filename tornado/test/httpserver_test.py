@@ -868,8 +868,7 @@ class UnixSocketTest(AsyncTestCase):
     not hasattr(socket, "AF_UNIX") or sys.platform == "cygwin",
     "unix sockets not supported on this platform",
 )
-class UnixSocketTestAbstract(UnixSocketTest):
-
+class UnixSocketTestFile(UnixSocketTest):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
         self.address = os.path.join(self.tmpdir, "test.sock")
@@ -884,8 +883,7 @@ class UnixSocketTestAbstract(UnixSocketTest):
     not (hasattr(socket, "AF_UNIX") and sys.platform.startswith("linux")),
     "abstract namespace unix sockets not supported on this platform",
 )
-class UnixSocketTestFile(UnixSocketTest):
-
+class UnixSocketTestAbstract(UnixSocketTest):
     def setUp(self):
         self.address = "\0" + uuid.uuid4().hex
         super().setUp()
