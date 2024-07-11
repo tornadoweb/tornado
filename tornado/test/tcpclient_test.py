@@ -64,8 +64,6 @@ class TCPClientTest(AsyncTestCase):
         self.client = TCPClient()
 
     def start_server(self, family):
-        if family == socket.AF_UNSPEC and "TRAVIS" in os.environ:
-            self.skipTest("dual-stack servers often have port conflicts on travis")
         self.server = TestTCPServer(family)
         return self.server.port
 

@@ -11,7 +11,7 @@ import unittest
 from tornado.concurrent import Future
 from tornado.log import app_log
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
-from tornado.test.util import skipOnTravis, skipNotCPython
+from tornado.test.util import skipNotCPython
 from tornado.web import Application, RequestHandler, HTTPError
 
 from tornado import gen
@@ -139,7 +139,6 @@ class GenBasicTest(AsyncTestCase):
 
         self.io_loop.run_sync(f)
 
-    @skipOnTravis
     @gen_test
     def test_multi_performance(self):
         # Yielding a list used to have quadratic performance; make

@@ -28,7 +28,7 @@ from tornado.iostream import IOStream
 from tornado.log import gen_log, app_log
 from tornado import netutil
 from tornado.testing import AsyncHTTPTestCase, bind_unused_port, gen_test, ExpectLog
-from tornado.test.util import skipOnTravis, ignore_deprecation
+from tornado.test.util import ignore_deprecation
 from tornado.web import Application, RequestHandler, url
 from tornado.httputil import format_timestamp, HTTPHeaders
 
@@ -191,7 +191,6 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         self.assertEqual(response.code, 200)
         self.assertEqual(response.body, body)
 
-    @skipOnTravis
     def test_hello_world(self):
         response = self.fetch("/hello")
         self.assertEqual(response.code, 200)

@@ -16,12 +16,6 @@ skipIfNonUnix = unittest.skipIf(
     os.name != "posix" or sys.platform == "cygwin", "non-unix platform"
 )
 
-# travis-ci.org runs our tests in an overworked virtual machine, which makes
-# timing-related tests unreliable.
-skipOnTravis = unittest.skipIf(
-    "TRAVIS" in os.environ, "timing tests unreliable on travis"
-)
-
 # Set the environment variable NO_NETWORK=1 to disable any tests that
 # depend on an external network.
 skipIfNoNetwork = unittest.skipIf("NO_NETWORK" in os.environ, "network access disabled")
@@ -67,7 +61,7 @@ def refusing_port():
     Return value is (cleanup_func, port); the cleanup function
     must be called to free the port to be reused.
     """
-    # On travis-ci, port numbers are reassigned frequently. To avoid
+    # On travis-ci port numbers are reassigned frequently. To avoid
     # collisions with other tests, we use an open client-side socket's
     # ephemeral port number to ensure that nothing can listen on that
     # port.

@@ -188,8 +188,6 @@ class IsValidIPTest(unittest.TestCase):
 
 class TestPortAllocation(unittest.TestCase):
     def test_same_port_allocation(self):
-        if "TRAVIS" in os.environ:
-            self.skipTest("dual-stack servers often have port conflicts on travis")
         sockets = bind_sockets(0, "localhost")
         try:
             port = sockets[0].getsockname()[1]

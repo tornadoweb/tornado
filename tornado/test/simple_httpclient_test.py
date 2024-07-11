@@ -41,7 +41,6 @@ from tornado.testing import (
 )
 from tornado.test.util import (
     abstract_base_test,
-    skipOnTravis,
     skipIfNoIPv6,
     refusing_port,
 )
@@ -288,7 +287,6 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
             # request is the original request, is a POST still
             self.assertEqual("POST", response.request.method)
 
-    @skipOnTravis
     @gen_test
     def test_connect_timeout(self):
         timeout = 0.1
@@ -317,7 +315,6 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
         cleanup_event.set()
         yield gen.sleep(0.2)
 
-    @skipOnTravis
     def test_request_timeout(self):
         timeout = 0.1
         if os.name == "nt":
