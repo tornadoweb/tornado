@@ -19,7 +19,6 @@ from tornado.httputil import (
 from tornado.iostream import IOStream
 from tornado.locks import Event
 from tornado.log import gen_log, app_log
-from tornado.netutil import ssl_options_to_context
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import (
     AsyncHTTPTestCase,
@@ -28,7 +27,7 @@ from tornado.testing import (
     ExpectLog,
     gen_test,
 )
-from tornado.test.util import skipOnTravis
+from tornado.test.util import skipOnTravis, abstract_base_test
 from tornado.web import Application, RequestHandler, stream_request_body
 
 from contextlib import closing
@@ -100,41 +99,25 @@ class HelloWorldRequestHandler(RequestHandler):
         self.finish("Got %d bytes in POST" % len(self.request.body))
 
 
-# In pre-1.0 versions of openssl, SSLv23 clients always send SSLv2
-# ClientHello messages, which are rejected by SSLv3 and TLSv1
-# servers.  Note that while the OPENSSL_VERSION_INFO was formally
-# introduced in python3.2, it was present but undocumented in
-# python 2.7
-skipIfOldSSL = unittest.skipIf(
-    getattr(ssl, "OPENSSL_VERSION_INFO", (0, 0)) < (1, 0),
-    "old version of ssl module and/or openssl",
-)
-
-
-class BaseSSLTest(AsyncHTTPSTestCase):
+class SSLTest(AsyncHTTPSTestCase):
     def get_app(self):
         return Application([("/", HelloWorldRequestHandler, dict(protocol="https"))])
 
-
-class SSLTestMixin:
     def get_ssl_options(self):
         return dict(
-            ssl_version=self.get_ssl_version(),
+            ssl_version=ssl.PROTOCOL_TLS_SERVER,
             **AsyncHTTPSTestCase.default_ssl_options(),
         )
 
-    def get_ssl_version(self):
-        raise NotImplementedError()
-
-    def test_ssl(self: typing.Any):
+    def test_ssl(self):
         response = self.fetch("/")
         self.assertEqual(response.body, b"Hello world")
 
-    def test_large_post(self: typing.Any):
+    def test_large_post(self):
         response = self.fetch("/", method="POST", body="A" * 5000)
         self.assertEqual(response.body, b"Got 5000 bytes in POST")
 
-    def test_non_ssl_request(self: typing.Any):
+    def test_non_ssl_request(self):
         # Make sure the server closes the connection when it gets a non-ssl
         # connection, rather than waiting for a timeout or otherwise
         # misbehaving.
@@ -148,7 +131,7 @@ class SSLTestMixin:
                         raise_error=True,
                     )
 
-    def test_error_logging(self: typing.Any):
+    def test_error_logging(self):
         # No stack traces are logged for SSL errors.
         with ExpectLog(gen_log, "SSL Error") as expect_log:
             with self.assertRaises((IOError, HTTPError)):  # type: ignore
@@ -156,38 +139,6 @@ class SSLTestMixin:
                     self.get_url("/").replace("https:", "http:"), raise_error=True
                 )
         self.assertFalse(expect_log.logged_stack)
-
-
-# Python's SSL implementation differs significantly between versions.
-# For example, SSLv3 and TLSv1 throw an exception if you try to read
-# from the socket before the handshake is complete, but the default
-# of SSLv23 allows it.
-
-
-class SSLv23Test(BaseSSLTest, SSLTestMixin):
-    def get_ssl_version(self):
-        return ssl.PROTOCOL_SSLv23
-
-
-@skipIfOldSSL
-class SSLv3Test(BaseSSLTest, SSLTestMixin):
-    def get_ssl_version(self):
-        return ssl.PROTOCOL_SSLv3
-
-
-@skipIfOldSSL
-class TLSv1Test(BaseSSLTest, SSLTestMixin):
-    def get_ssl_version(self):
-        return ssl.PROTOCOL_TLSv1
-
-
-class SSLContextTest(BaseSSLTest, SSLTestMixin):
-    def get_ssl_options(self):
-        context = ssl_options_to_context(
-            AsyncHTTPSTestCase.get_ssl_options(self), server_side=True
-        )
-        assert isinstance(context, ssl.SSLContext)
-        return context
 
 
 class BadSSLOptionsTest(unittest.TestCase):
@@ -814,6 +765,7 @@ class ManualProtocolTest(HandlerBaseTestCase):
         self.assertEqual(self.fetch_json("/")["protocol"], "https")
 
 
+@abstract_base_test
 class UnixSocketTest(AsyncTestCase):
     """HTTPServers can listen on Unix sockets too.
 
@@ -828,8 +780,6 @@ class UnixSocketTest(AsyncTestCase):
     address = ""
 
     def setUp(self):
-        if type(self) is UnixSocketTest:
-            raise unittest.SkipTest("abstract base class")
         super().setUp()
         app = Application([("/hello", HelloWorldRequestHandler)])
         self.server = HTTPServer(app)
@@ -868,8 +818,7 @@ class UnixSocketTest(AsyncTestCase):
     not hasattr(socket, "AF_UNIX") or sys.platform == "cygwin",
     "unix sockets not supported on this platform",
 )
-class UnixSocketTestAbstract(UnixSocketTest):
-
+class UnixSocketTestFile(UnixSocketTest):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
         self.address = os.path.join(self.tmpdir, "test.sock")
@@ -884,8 +833,7 @@ class UnixSocketTestAbstract(UnixSocketTest):
     not (hasattr(socket, "AF_UNIX") and sys.platform.startswith("linux")),
     "abstract namespace unix sockets not supported on this platform",
 )
-class UnixSocketTestFile(UnixSocketTest):
-
+class UnixSocketTestAbstract(UnixSocketTest):
     def setUp(self):
         self.address = "\0" + uuid.uuid4().hex
         super().setUp()
