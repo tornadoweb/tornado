@@ -2863,7 +2863,7 @@ class StaticFileHandler(RequestHandler):
         if ims_value is not None:
             try:
                 if_since = email.utils.parsedate_to_datetime(ims_value)
-            except ValueError:
+            except Exception:
                 return False
             if if_since.tzinfo is None:
                 if_since = if_since.replace(tzinfo=datetime.timezone.utc)
