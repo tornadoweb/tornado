@@ -11,7 +11,7 @@ import unittest
 from tornado.concurrent import Future
 from tornado.log import app_log
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
-from tornado.test.util import skipOnTravis, skipNotCPython
+from tornado.test.util import skipNotCPython
 from tornado.web import Application, RequestHandler, HTTPError
 
 from tornado import gen
@@ -139,7 +139,6 @@ class GenBasicTest(AsyncTestCase):
 
         self.io_loop.run_sync(f)
 
-    @skipOnTravis
     @gen_test
     def test_multi_performance(self):
         # Yielding a list used to have quadratic performance; make
@@ -442,7 +441,6 @@ class GenCoroutineTest(AsyncTestCase):
 
     @gen_test
     def test_async_return_no_value(self):
-        # Without a return value we don't need python 3.3.
         @gen.coroutine
         def f():
             yield gen.moment
@@ -573,9 +571,6 @@ class GenCoroutineTest(AsyncTestCase):
         self.finished = True
 
     @skipNotCPython
-    @unittest.skipIf(
-        (3,) < sys.version_info < (3, 6), "asyncio.Future has reference cycles"
-    )
     def test_coroutine_refcounting(self):
         # On CPython, tasks and their arguments should be released immediately
         # without waiting for garbage collection.

@@ -27,7 +27,7 @@ from tornado.testing import (
     ExpectLog,
     gen_test,
 )
-from tornado.test.util import skipOnTravis, abstract_base_test
+from tornado.test.util import abstract_base_test
 from tornado.web import Application, RequestHandler, stream_request_body
 
 from contextlib import closing
@@ -1267,7 +1267,6 @@ class MaxHeaderSizeTest(AsyncHTTPTestCase):
                     self.assertIn(e.response.code, (431, 599))
 
 
-@skipOnTravis
 class IdleTimeoutTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application([("/", HelloWorldRequestHandler)])

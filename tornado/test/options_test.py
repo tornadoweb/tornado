@@ -7,7 +7,6 @@ import unittest
 
 from tornado.options import OptionParser, Error
 from tornado.util import basestring_type
-from tornado.test.util import subTest
 
 import typing
 
@@ -277,7 +276,7 @@ class OptionsTest(unittest.TestCase):
             ("foo_bar", "foo-bar"),
         ]
         for a, b in tests:
-            with subTest(self, a=a, b=b):
+            with self.subTest(self, a=a, b=b):
                 options = OptionParser()
                 options.define(a)
                 with self.assertRaises(Error) as cm:
