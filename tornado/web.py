@@ -70,6 +70,7 @@ import hashlib
 import hmac
 import http.cookies
 from inspect import isclass
+from inspect import iscoroutinefunction
 from io import BytesIO
 import mimetypes
 import numbers
@@ -96,6 +97,7 @@ from tornado import locale
 from tornado.log import access_log, app_log, gen_log
 from tornado import template
 from tornado.escape import utf8, _unicode
+from tornado.ioloop import IOLoop
 from tornado.routing import (
     AnyMatches,
     DefaultHostMatches,
@@ -216,8 +218,10 @@ class RequestHandler(object):
         self.application = application
         self.request = request
         self._headers_written = False
+        # When this flag is True, avoid further request writting, but finish() will be called later
         self._finished = False
-        self._auto_finish = True
+        self._skip_finish_fn = False
+        self._finish_called = False
         self._prepared_future = None
         self.ui = ObjectDict(
             (n, self._ui_method(m)) for n, m in application.ui_methods.items()
@@ -892,7 +896,7 @@ class RequestHandler(object):
             assert isinstance(status, int) and 300 <= status <= 399
         self.set_status(status)
         self.set_header("Location", utf8(url))
-        self.finish()
+        self._finished = True
 
     def write(self, chunk: Union[str, bytes, dict]) -> None:
         """Writes the given chunk to the output buffer.
@@ -999,7 +1003,8 @@ class RequestHandler(object):
         if html_bodies:
             hloc = html.index(b"</body>")
             html = html[:hloc] + b"".join(html_bodies) + b"\n" + html[hloc:]
-        return self.finish(html)
+        self.write(html)
+        self._finished = True
 
     def render_linked_js(self, js_files: Iterable[str]) -> str:
         """Default method used to render the final js links for the
@@ -1201,7 +1206,9 @@ class RequestHandler(object):
 
            Now returns a `.Future` instead of ``None``.
         """
-        if self._finished:
+        if self._skip_finish_fn:
+            return
+        if self._finish_called:
             raise RuntimeError("finish() called twice")
 
         if chunk is not None:
@@ -1238,7 +1245,7 @@ class RequestHandler(object):
         future = self.flush(include_footers=True)
         self.request.connection.finish()
         self._log()
-        self._finished = True
+        self._finish_called = True
         self.on_finish()
         self._break_cycles()
         return future
@@ -1255,6 +1262,7 @@ class RequestHandler(object):
         .. versionadded:: 5.1
         """
         self._finished = True
+        self._skip_finish_fn = True
         # TODO: add detach to HTTPConnection?
         return self.request.connection.detach()  # type: ignore
 
@@ -1276,15 +1284,7 @@ class RequestHandler(object):
         """
         if self._headers_written:
             gen_log.error("Cannot send error response after headers written")
-            if not self._finished:
-                # If we get an error between writing headers and finishing,
-                # we are unlikely to be able to finish due to a
-                # Content-Length mismatch. Try anyway to release the
-                # socket.
-                try:
-                    self.finish()
-                except Exception:
-                    gen_log.error("Failed to flush partial response", exc_info=True)
+            self._finished = True
             return
         self.clear()
 
@@ -1298,8 +1298,7 @@ class RequestHandler(object):
             self.write_error(status_code, **kwargs)
         except Exception:
             app_log.error("Uncaught exception in write_error", exc_info=True)
-        if not self._finished:
-            self.finish()
+        self._finished = True
 
     def write_error(self, status_code: int, **kwargs: Any) -> None:
         """Override to implement custom error pages.
@@ -1318,13 +1317,13 @@ class RequestHandler(object):
             self.set_header("Content-Type", "text/plain")
             for line in traceback.format_exception(*kwargs["exc_info"]):
                 self.write(line)
-            self.finish()
         else:
-            self.finish(
+            self.write(
                 "<html><title>%(code)d: %(message)s</title>"
                 "<body>%(code)d: %(message)s</body></html>"
                 % {"code": status_code, "message": self._reason}
             )
+        self._finished = True
 
     @property
     def locale(self) -> tornado.locale.Locale:
@@ -1743,12 +1742,8 @@ class RequestHandler(object):
                     break
         return match
 
-    async def _execute(
-        self, transforms: List["OutputTransform"], *args: bytes, **kwargs: bytes
-    ) -> None:
-        """Executes this request with the given output transforms."""
-        self._transforms = transforms
-        try:
+    async def _execute_no_err(self, *args: bytes, **kwargs: bytes):
+        if True:
             if self.request.method not in self.SUPPORTED_METHODS:
                 raise HTTPError(405)
             self.path_args = [self.decode_argument(arg) for arg in args]
@@ -1782,27 +1777,46 @@ class RequestHandler(object):
                 try:
                     await self.request._body_future
                 except iostream.StreamClosedError:
-                    return
+                    raise FinishExecute()
 
+            tornado_workers_executor = self.application.settings.get('tornado_workers_executor')
             method = getattr(self, self.request.method.lower())
-            result = method(*self.path_args, **self.path_kwargs)
-            if result is not None:
-                result = await result
-            if self._auto_finish and not self._finished:
-                self.finish()
+            if iscoroutinefunction(method) or getattr(method, '__tornado_coroutine__', False):
+                result = await method(*self.path_args, **self.path_kwargs)
+            elif tornado_workers_executor:
+                result = await IOLoop.current().run_in_executor(
+                    tornado_workers_executor,
+                    functools.partial(method, *self.path_args, **self.path_kwargs))
+            else:
+                result = method(*self.path_args, **self.path_kwargs)
+
+    async def _execute(
+        self, transforms: List["OutputTransform"], *args: bytes, **kwargs: bytes
+    ) -> None:
+        """Executes this request with the given output transforms."""
+        self._transforms = transforms
+        try:
+            await self._execute_no_err(*args, **kwargs)
+        except FinishExecute:
+            return
+        except Finish as e:
+            self.write(*e.args)
+            self._finished = True
         except Exception as e:
             try:
                 self._handle_request_exception(e)
             except Exception:
                 app_log.error("Exception in exception handler", exc_info=True)
-            finally:
-                # Unset result to avoid circular references
-                result = None
             if self._prepared_future is not None and not self._prepared_future.done():
                 # In case we failed before setting _prepared_future, do it
                 # now (to unblock the HTTP server).  Note that this is not
                 # in a finally block to avoid GC issues prior to Python 3.4.
                 self._prepared_future.set_result(None)
+        finally:
+            try:
+                self.finish()
+            except Exception:
+                gen_log.error("Failed to flush response", exc_info=True)
 
     def data_received(self, chunk: bytes) -> Optional[Awaitable[None]]:
         """Implement this method to handle streamed request data.
@@ -1830,11 +1844,6 @@ class RequestHandler(object):
         )
 
     def _handle_request_exception(self, e: BaseException) -> None:
-        if isinstance(e, Finish):
-            # Not an error; just finish the request without logging.
-            if not self._finished:
-                self.finish(*e.args)
-            return
         try:
             self.log_exception(*sys.exc_info())
         except Exception:
@@ -2518,6 +2527,11 @@ class Finish(Exception):
     pass
 
 
+class FinishExecute(Exception):
+    """A convenience exception to just finish _execute() without calling finish()"""
+    pass
+
+
 class MissingArgumentError(HTTPError):
     """Exception raised by `RequestHandler.get_argument`.
 
@@ -3148,6 +3162,7 @@ class FallbackHandler(RequestHandler):
     def prepare(self) -> None:
         self.fallback(self.request)
         self._finished = True
+        self._skip_finish_fn = True
         self.on_finish()
 
 
