@@ -1191,7 +1191,12 @@ class RequestHandler(object):
                 future.set_result(None)
                 return future
 
-    def finish(self, chunk: Optional[Union[str, bytes, dict]] = None) -> "Future[None]":
+    def finish(self, chunk: Optional[Union[str, bytes, dict]] = None) -> None:
+        if chunk is not None:
+            self.write(chunk)
+        self._finished = True
+
+    def _real_finish(self) -> "Future[None]":
         """Finishes this response, ending the HTTP request.
 
         Passing a ``chunk`` to ``finish()`` is equivalent to passing that
@@ -1210,9 +1215,6 @@ class RequestHandler(object):
             return
         if self._finish_called:
             raise RuntimeError("finish() called twice")
-
-        if chunk is not None:
-            self.write(chunk)
 
         # Automatically support ETags and add the Content-Length header if
         # we have not flushed any content yet.
@@ -1817,8 +1819,9 @@ class RequestHandler(object):
         finally:
             if not self._finish_called:
                 try:
-                    self.finish()
+                    self._real_finish()
                 except Exception:
+                    self.log_exception(*sys.exc_info())
                     gen_log.error("Failed to flush response", exc_info=True)
 
     def data_received(self, chunk: bytes) -> Optional[Awaitable[None]]:
