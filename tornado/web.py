@@ -60,6 +60,7 @@ the executor do not refer to Tornado objects.
 
 """
 
+from asyncio import iscoroutine
 import base64
 import binascii
 import datetime
@@ -1792,6 +1793,12 @@ class RequestHandler(object):
                     functools.partial(method, *self.path_args, **self.path_kwargs))
             else:
                 result = method(*self.path_args, **self.path_kwargs)
+            if result is not None:
+                if iscoroutine(result):
+                    app_log.warn(f'{method} returned a coroutine, you should await your own coroutines')
+                    await result
+                else:
+                    app_log.warn(f'{method} returned {result}, it was ignored')
 
     async def _execute(
         self, transforms: List["OutputTransform"], *args: bytes, **kwargs: bytes
