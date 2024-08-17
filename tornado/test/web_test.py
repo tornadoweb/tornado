@@ -262,10 +262,10 @@ class FinalReturnTest(WebTestCase):
         self.assertIsInstance(self.final_return, Future)
         self.assertTrue(self.final_return.done())
 
-    def test_render_method_return_future(self):
+    def test_render_method_return_none(self):
         response = self.fetch(self.get_url("/render"))
         self.assertEqual(response.code, 200)
-        self.assertIsInstance(self.final_return, Future)
+        self.assertTrue(self.final_return is None)
 
 
 class CookieTest(WebTestCase):

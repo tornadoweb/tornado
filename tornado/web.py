@@ -1246,6 +1246,7 @@ class RequestHandler(object):
         self.request.connection.finish()
         self._log()
         self._finish_called = True
+        self._finished = True
         self.on_finish()
         self._break_cycles()
         return future
@@ -1800,7 +1801,8 @@ class RequestHandler(object):
         except FinishExecute:
             return
         except Finish as e:
-            self.write(*e.args)
+            if e.args:
+                self.write(*e.args)
             self._finished = True
         except Exception as e:
             try:
@@ -1813,10 +1815,11 @@ class RequestHandler(object):
                 # in a finally block to avoid GC issues prior to Python 3.4.
                 self._prepared_future.set_result(None)
         finally:
-            try:
-                self.finish()
-            except Exception:
-                gen_log.error("Failed to flush response", exc_info=True)
+            if not self._finish_called:
+                try:
+                    self.finish()
+                except Exception:
+                    gen_log.error("Failed to flush response", exc_info=True)
 
     def data_received(self, chunk: bytes) -> Optional[Awaitable[None]]:
         """Implement this method to handle streamed request data.
@@ -2691,8 +2694,8 @@ class StaticFileHandler(RequestHandler):
         with cls._lock:
             cls._static_hashes = {}
 
-    def head(self, path: str) -> Awaitable[None]:
-        return self.get(path, include_body=False)
+    async def head(self, path: str) -> Awaitable[None]:
+        return await self.get(path, include_body=False)
 
     async def get(self, path: str, include_body: bool = True) -> None:
         # Set up our path instance variables.
