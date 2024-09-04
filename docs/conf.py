@@ -146,3 +146,16 @@ def missing_reference_handler(app, env, node, contnode):
 
 def setup(app):
     app.connect("missing-reference", missing_reference_handler)
+
+
+# Read the Docs configuration updates from
+# https://about.readthedocs.com/blog/2024/07/addons-by-default/
+
+# Define the canonical URL if you are using a custom domain on Read the Docs
+html_baseurl = os.environ.get("READTHEDOCS_CANONICAL_URL", "")
+
+# Tell Jinja2 templates the build is running on Read the Docs
+if os.environ.get("READTHEDOCS", "") == "True":
+    if "html_context" not in globals():
+        html_context = {}
+    html_context["READTHEDOCS"] = True
