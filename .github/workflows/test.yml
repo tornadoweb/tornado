@@ -36,8 +36,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - python: '3.8'
-            tox_env: py38-full
           - python: '3.9'
             tox_env: py39-full
           - python: '3.10'
@@ -54,9 +52,8 @@ jobs:
           - python: '3.12.0'
             tox_env: py312-full
           - python: '3.13.0-beta.2 - 3.13'
-            # Some optional dependencies don't seem to work on 3.13 yet
-            tox_env: py313
-          - python: 'pypy-3.8'
+            tox_env: py313-full
+          - python: 'pypy-3.10'
             # Pypy is a lot slower due to jit warmup costs, so don't run the
             # "full" test config there.
             tox_env: pypy3

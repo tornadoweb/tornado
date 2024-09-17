@@ -52,7 +52,7 @@ if (
             # Use the stable ABI so our wheels are compatible across python
             # versions.
             py_limited_api=True,
-            define_macros=[("Py_LIMITED_API", "0x03080000")],
+            define_macros=[("Py_LIMITED_API", "0x03090000")],
         )
     ]
 
@@ -63,7 +63,7 @@ if wheel is not None:
             python, abi, plat = super().get_tag()
 
             if python.startswith("cp"):
-                return "cp38", "abi3", plat
+                return "cp39", "abi3", plat
             return python, abi, plat
 
     kwargs["cmdclass"] = {"bdist_wheel": bdist_wheel_abi3}
@@ -72,7 +72,7 @@ if wheel is not None:
 setuptools.setup(
     name="tornado",
     version=version,
-    python_requires=">= 3.8",
+    python_requires=">= 3.9",
     packages=["tornado", "tornado.test", "tornado.platform"],
     package_data={
         # data files need to be listed both here (which determines what gets
@@ -112,13 +112,13 @@ setuptools.setup(
     classifiers=[
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python :: Implementation :: PyPy",
     ],
-    **kwargs
+    **kwargs,
 )
