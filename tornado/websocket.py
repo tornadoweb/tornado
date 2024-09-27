@@ -927,6 +927,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         handler.set_header("Connection", "Upgrade")
         handler.set_header("Sec-WebSocket-Accept", self._challenge_response(handler))
         handler.finish()
+        handler._real_finish()
 
         self.stream = handler._detach_stream()
 
