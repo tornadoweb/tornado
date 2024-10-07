@@ -635,7 +635,7 @@ ok
                     yield stream.read_until_close()
 
 
-class XHeaderTest(HandlerBaseTestCase):
+class XHeaderDirectProxyNotTrustedTest(HandlerBaseTestCase):
     class Handler(RequestHandler):
         def get(self):
             self.set_header("request-version", self.request.version)
@@ -648,6 +648,27 @@ class XHeaderTest(HandlerBaseTestCase):
 
     def get_httpserver_options(self):
         return dict(xheaders=True, trusted_downstream=["5.5.5.5"])
+
+    def test_direct_proxy_not_trusted(self):
+        valid_ipv4_list = {"X-Forwarded-For": "4.4.4.4, 5.5.5.5"}
+        self.assertEqual(
+            self.fetch_json("/", headers=valid_ipv4_list)["remote_ip"], "127.0.0.1"
+        )
+
+
+class XHeaderTest(HandlerBaseTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            self.set_header("request-version", self.request.version)
+            self.write(
+                dict(
+                    remote_ip=self.request.remote_ip,
+                    remote_protocol=self.request.protocol,
+                )
+            )
+
+    def get_httpserver_options(self):
+        return dict(xheaders=True, trusted_downstream=["127.0.0.1", "5.5.5.5"])
 
     def test_ip_headers(self):
         self.assertEqual(self.fetch_json("/")["remote_ip"], "127.0.0.1")
@@ -737,6 +758,7 @@ class SSLXHeaderTest(AsyncHTTPSTestCase, HandlerBaseTestCase):
     def get_httpserver_options(self):
         output = super().get_httpserver_options()
         output["xheaders"] = True
+        output["trusted_downstream"] = ["127.0.0.1"]
         return output
 
     def test_request_without_xprotocol(self):
