@@ -20,9 +20,13 @@ import platform
 import setuptools
 
 try:
-    import wheel.bdist_wheel
+    import setuptools.command.bdist_wheel as wheel
 except ImportError:
-    wheel = None
+    try:
+        import wheel.bdist_wheel as wheel
+    except ImportError:
+        wheel = None
+
 
 
 kwargs = {}
@@ -58,7 +62,7 @@ if (
 
 if wheel is not None:
     # From https://github.com/joerick/python-abi3-package-sample/blob/main/setup.py
-    class bdist_wheel_abi3(wheel.bdist_wheel.bdist_wheel):
+    class bdist_wheel_abi3(wheel.bdist_wheel):
         def get_tag(self):
             python, abi, plat = super().get_tag()
 
