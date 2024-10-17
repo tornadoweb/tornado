@@ -80,7 +80,7 @@ import tornado
 import traceback
 import types
 import urllib.parse
-from urllib.parse import urlencode, unquote
+from urllib.parse import urlencode
 from tornado.webmiddleware import RequestParsingMiddleware
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado import escape
