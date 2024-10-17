@@ -80,8 +80,8 @@ import tornado
 import traceback
 import types
 import urllib.parse
-from urllib.parse import urlencode
-
+from urllib.parse import urlencode, unquote
+from tornado.webmiddleware import RequestParsingMiddleware
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado import escape
 from tornado import gen
@@ -294,7 +294,13 @@ class RequestHandler:
         .. versionadded:: 3.1
            Asynchronous support.
         """
-        pass
+        self.parsed_body = None
+        self._apply_middlewares()
+
+    def _apply_middlewares(self):
+        middlewares = [RequestParsingMiddleware()]
+        for middleware in middlewares:
+            middleware.process_request(self)
 
     def on_finish(self) -> None:
         """Called after the end of a request.
