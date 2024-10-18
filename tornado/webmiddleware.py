@@ -5,7 +5,7 @@ from tornado.escape import json_decode
 from tornado.httputil import parse_body_arguments
 
 class Middleware:
-    def process_request(self, handler: Any) -> None:  # Update type hint
+    async def process_request(self, handler: Any) -> None:
         raise NotImplementedError
 
 class RequestParsingMiddleware(Middleware):
@@ -48,35 +48,37 @@ class RequestParsingMiddleware(Middleware):
         example implementation:
 
         ```python
-        import tornado.ioloop
-        import tornado.web
-        import json
-        from tornado.webmiddleware import RequestParsingMiddleware
+            import tornado.ioloop
+            import tornado.web
+            import json
+            from tornado.webmiddleware import RequestParsingMiddleware
 
-        class MainHandler(tornado.web.RequestHandler):
-            def prepare(self):
-                self.parsed_body = None
-                self._apply_middlewares()
+            class MainHandler(tornado.web.RequestHandler):
+                async def prepare(self):
+                    self.parsed_body = None
+                    await self._apply_middlewares()  # Await middleware processing
 
-            def _apply_middlewares(self):
-                middlewares = [RequestParsingMiddleware()]
-                for middleware in middlewares:
-                    middleware.process_request(self)
+                async def _apply_middlewares(self):
+                    middlewares = [RequestParsingMiddleware()]
+                    for middleware in middlewares:
+                        await middleware.process_request(self)  # Await middleware
 
-            def post(self):
-                # Respond with the parsed body as JSON
-                self.set_header("Content-Type", "application/json")
-                self.write(json.dumps(self.parsed_body))
+                async def post(self):
+                    # Respond with the parsed body as JSON
+                    self.set_header("Content-Type", "application/json")
+                    self.write(json.dumps(self.parsed_body))
 
-        def make_app():
-            return tornado.web.Application([
-                (r"/", MainHandler),
-            ])
+            def make_app():
+                return tornado.web.Application([
+                    (r"/", MainHandler),
+                ])
 
-        if __name__ == "__main__":
-            app = make_app()
-            app.listen(8888)
-            tornado.ioloop.IOLoop.current().start()
+            if __name__ == "__main__":
+                app = make_app()
+                app.listen(8888)
+                print("Server is running on http://localhost:8888")
+                tornado.ioloop.IOLoop.current().start()
+
         ```
 
         In this example, the `MainHandler` prepares for requests by applying the 
@@ -89,29 +91,29 @@ class RequestParsingMiddleware(Middleware):
     the request body will be available for parsing.
     """
 
-
-    def process_request(self, handler: Any) -> None:
+    async def process_request(self, handler: Any) -> None:
         content_type = handler.request.headers.get("Content-Type", "")
         if not handler.request.body:
             handler.parsed_body = {}
         elif content_type.startswith("application/json"):
-            handler.parsed_body = self._parse_json(handler.request)
+            handler.parsed_body = await self._parse_json(handler.request)
         elif content_type.startswith("application/x-www-form-urlencoded") or content_type.startswith("multipart/form-data"):
-            handler.parsed_body = self._parse_form_or_multipart(handler.request)
+            handler.parsed_body = await self._parse_form_or_multipart(handler.request)
         else:
             handler.set_status(400)
             handler.finish({"error": "Unsupported content type"})
 
-    def _parse_json(self, request: HTTPServerRequest) -> Any:
+    async def _parse_json(self, request: HTTPServerRequest) -> Any:
         try:
             return json_decode(request.body)
         except json.JSONDecodeError:
             return None
 
-    def _parse_form_or_multipart(self, request: HTTPServerRequest) -> Dict[str, Any]:
+    async def _parse_form_or_multipart(self, request: HTTPServerRequest) -> Dict[str, Any]:
         arguments = {}
         files = {}
 
+        # Use Tornado's built-in function to parse body arguments and files
         parse_body_arguments(
             request.headers.get("Content-Type", ""), 
             request.body, 

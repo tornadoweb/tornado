@@ -5,16 +5,16 @@ from tornado.web import Application, RequestHandler
 from tornado.webmiddleware import RequestParsingMiddleware
 
 class TestHandler(RequestHandler):
-    def prepare(self):
+    async def prepare(self):
         self.parsed_body = None
-        self._apply_middlewares()
+        await self._apply_middlewares()  # Await the middleware
 
-    def _apply_middlewares(self):
+    async def _apply_middlewares(self):
         middlewares = [RequestParsingMiddleware()]
         for middleware in middlewares:
-            middleware.process_request(self)
+            await middleware.process_request(self)  # Await the middleware
 
-    def post(self):
+    async def post(self):
         # Convert any bytes in parsed_body to base64 before responding
         if isinstance(self.parsed_body, dict):
             for file_key, files in self.parsed_body.get("files", {}).items():
