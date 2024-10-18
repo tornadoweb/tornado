@@ -1,9 +1,8 @@
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 from tornado.httputil import HTTPServerRequest
 from tornado.escape import json_decode
 from tornado.httputil import parse_body_arguments
-import base64
 
 class Middleware:
     def process_request(self, handler: Any) -> None:  # Update type hint
@@ -17,27 +16,31 @@ class RequestParsingMiddleware(Middleware):
     parse the body content according to the specified Content-Type. 
     It supports multiple formats, including:
 
-    - JSON: Parses the body as a JSON object when the Content-Type is 
+    - **JSON**: Parses the body as a JSON object when the Content-Type is 
       'application/json'. The resulting data structure is made accessible 
       via the `parsed_body` attribute of the request handler.
 
-    - Form Data: Handles URL-encoded form data when the Content-Type is 
+    - **Form Data**: Handles URL-encoded form data when the Content-Type is 
       'application/x-www-form-urlencoded'. It converts the body into a 
       dictionary format where each key corresponds to form fields and 
       the values are lists of field values.
 
-    - Multipart Data: Processes multipart form data (e.g., file uploads) 
+    - **Multipart Data**: Processes multipart form data (e.g., file uploads) 
       when the Content-Type is 'multipart/form-data'. This is particularly 
       useful for handling file uploads alongside other form fields. The 
-      parsed data will contain both regular arguments and files.
+      parsed data will contain both regular arguments and files, making it 
+      easy to manage complex data submissions.
 
     Attributes:
-        None
+        - `raise_on_error` (bool): A flag indicating whether to raise an error 
+          on parsing failures or simply populate the parsed body with `None`.
 
     Methods:
-        process_request(handler): Analyzes the Content-Type of the incoming 
-        request and calls the appropriate parsing method to populate the 
-        `parsed_body` attribute of the request handler.
+        - `process_request(handler)`: Analyzes the Content-Type of the incoming 
+          request and calls the appropriate parsing method to populate the 
+          `parsed_body` attribute of the request handler. It also handles 
+          unsupported Content-Types by setting a 400 status and finishing the 
+          request with an error message.
 
     Example Usage:
         In a Tornado application, you can use the `RequestParsingMiddleware` 
@@ -86,15 +89,18 @@ class RequestParsingMiddleware(Middleware):
     the request body will be available for parsing.
     """
 
-    def process_request(self, handler: Any) -> None:
 
+    def process_request(self, handler: Any) -> None:
         content_type = handler.request.headers.get("Content-Type", "")
-        if content_type.startswith("application/json"):
+        if not handler.request.body:
+            handler.parsed_body = {}
+        elif content_type.startswith("application/json"):
             handler.parsed_body = self._parse_json(handler.request)
         elif content_type.startswith("application/x-www-form-urlencoded") or content_type.startswith("multipart/form-data"):
             handler.parsed_body = self._parse_form_or_multipart(handler.request)
         else:
-            handler.parsed_body = None
+            handler.set_status(400)
+            handler.finish({"error": "Unsupported content type"})
 
     def _parse_json(self, request: HTTPServerRequest) -> Any:
         try:
@@ -106,7 +112,6 @@ class RequestParsingMiddleware(Middleware):
         arguments = {}
         files = {}
 
-        # Use Tornado's built-in function to parse body arguments and files
         parse_body_arguments(
             request.headers.get("Content-Type", ""), 
             request.body, 
@@ -123,13 +128,10 @@ class RequestParsingMiddleware(Middleware):
             "files": {
                 k: [{
                     "filename": f.filename,
-                    "body": base64.b64encode(f.body).decode('utf-8') if f.body else None,  # Encode file body to base64
+                    "body": f.body,  # Keep as raw bytes
                     "content_type": f.content_type
                 } for f in file_list]
                 for k, file_list in files.items()
             }
         }
         return parsed_data
-    
-    
-

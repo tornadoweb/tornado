@@ -15,6 +15,12 @@ class TestHandler(RequestHandler):
             middleware.process_request(self)
 
     def post(self):
+        # Convert any bytes in parsed_body to base64 before responding
+        if isinstance(self.parsed_body, dict):
+            for file_key, files in self.parsed_body.get("files", {}).items():
+                for file in files:
+                    file['body'] = base64.b64encode(file['body']).decode('utf-8')  # Encode to base64
+
         self.set_header("Content-Type", "application/json")
         self.write(json.dumps(self.parsed_body))  # Return parsed body as JSON
 
@@ -34,7 +40,6 @@ class MiddlewareTest(AsyncHTTPTestCase):
         response = self.fetch("/test", method="POST", body=body, headers={"Content-Type": "application/x-www-form-urlencoded"})
         self.assertEqual(response.code, 200)
 
-        # Adjusted expected response to match middleware's output structure
         self.assertEqual(json.loads(response.body), {
             "arguments": {
                 "key": ["value"]
@@ -82,10 +87,9 @@ class MiddlewareTest(AsyncHTTPTestCase):
         self.assertEqual(uploaded_file["filename"], file_name)
         
         # Compare base64-encoded file content
-        self.assertEqual(uploaded_file["body"], base64.b64encode(file_content).decode('utf-8'))
+        self.assertEqual(uploaded_file["body"], base64.b64encode(file_content).decode('utf-8'))  # Compare with base64
         self.assertEqual(uploaded_file["content_type"], "text/plain")
 
-        
 if __name__ == "__main__":
     import unittest
     unittest.main()
