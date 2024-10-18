@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 from tornado.httputil import HTTPServerRequest
 from tornado.escape import json_decode
 from tornado.httputil import parse_body_arguments
+import base64
 
 class Middleware:
     def process_request(self, handler: Any) -> None:  # Update type hint
@@ -122,10 +123,13 @@ class RequestParsingMiddleware(Middleware):
             "files": {
                 k: [{
                     "filename": f.filename,
-                    "body": f.body.decode('utf-8') if f.body else None,
+                    "body": base64.b64encode(f.body).decode('utf-8') if f.body else None,  # Encode file body to base64
                     "content_type": f.content_type
                 } for f in file_list]
                 for k, file_list in files.items()
             }
         }
         return parsed_data
+    
+    
+

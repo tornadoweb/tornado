@@ -1,8 +1,7 @@
 import json
+import base64
 from tornado.testing import AsyncHTTPTestCase
 from tornado.web import Application, RequestHandler
-from tornado.httputil import HTTPServerRequest
-from tornado.web import RequestHandler
 from tornado.webmiddleware import RequestParsingMiddleware
 
 class TestHandler(RequestHandler):
@@ -16,7 +15,8 @@ class TestHandler(RequestHandler):
             middleware.process_request(self)
 
     def post(self):
-        self.write(self.parsed_body)
+        self.set_header("Content-Type", "application/json")
+        self.write(json.dumps(self.parsed_body))  # Return parsed body as JSON
 
 class MiddlewareTest(AsyncHTTPTestCase):
     def get_app(self):
@@ -80,7 +80,9 @@ class MiddlewareTest(AsyncHTTPTestCase):
 
         uploaded_file = parsed_body["files"]["file"][0]
         self.assertEqual(uploaded_file["filename"], file_name)
-        self.assertEqual(uploaded_file["body"], file_content.decode('utf-8'))
+        
+        # Compare base64-encoded file content
+        self.assertEqual(uploaded_file["body"], base64.b64encode(file_content).decode('utf-8'))
         self.assertEqual(uploaded_file["content_type"], "text/plain")
 
         
