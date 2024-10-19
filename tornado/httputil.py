@@ -142,16 +142,29 @@ class HTTPHeaders(StrMutableMapping):
     # new public methods
 
     def add(self, name: str, value: str) -> None:
-        """Adds a new value for the given key."""
         norm_name = _normalize_header(name)
         self._last_key = norm_name
-        if norm_name in self:
-            self._dict[norm_name] = (
-                native_str(self[norm_name]) + "," + native_str(value)
-            )
-            self._as_list[norm_name].append(value)
+
+        # Special case: Content-Length should not concatenate values
+        if norm_name == 'content-length':
+            # Always overwrite the previous value for Content-Length
+            self._dict[norm_name] = native_str(value.strip())
+            self._as_list[norm_name] = [value.strip()]
         else:
-            self[norm_name] = value
+            # For other headers, concatenate values if they already exist
+            if norm_name in self:
+                # Concatenation happens only for non-single-value headers
+                self._dict[norm_name] = (
+                    native_str(self[norm_name]) + "," + native_str(value.strip())
+                )
+                self._as_list[norm_name].append(value.strip())
+            else:
+                self[norm_name] = value.strip()
+
+
+        print(f"Adding header: {norm_name}, value: {value.strip()}")
+        print(f"Current stored value: {self._dict.get(norm_name)}")
+
 
     def get_list(self, name: str) -> List[str]:
         """Returns all values for the given header as a list."""
@@ -176,8 +189,14 @@ class HTTPHeaders(StrMutableMapping):
         >>> h.get('content-type')
         'text/html'
         """
+        # Strip leading and trailing spaces from the entire line first
+        line = line.strip()
+
+        if not line:
+            return  # Ignore empty lines
+
         if line[0].isspace():
-            # continuation of a multi-line header
+            # Continuation of a multi-line header
             if self._last_key is None:
                 raise HTTPInputError("first header line cannot start with whitespace")
             new_part = " " + line.lstrip(HTTP_WHITESPACE)
@@ -185,10 +204,13 @@ class HTTPHeaders(StrMutableMapping):
             self._dict[self._last_key] += new_part
         else:
             try:
+                # Split header name and value, then strip leading/trailing spaces
                 name, value = line.split(":", 1)
+                name = name.strip()  # Strip spaces from the header name
+                value = value.strip(HTTP_WHITESPACE).rstrip()  # Strip spaces from the value
+                self.add(name, value)
             except ValueError:
                 raise HTTPInputError("no colon in header line")
-            self.add(name, value.strip(HTTP_WHITESPACE))
 
     @classmethod
     def parse(cls, headers: str) -> "HTTPHeaders":
