@@ -142,28 +142,30 @@ class HTTPHeaders(StrMutableMapping):
     # new public methods
 
     def add(self, name: str, value: str) -> None:
+        """Adds a new value for the given key."""
         norm_name = _normalize_header(name)
         self._last_key = norm_name
-
-        # Special case: Content-Length should not concatenate values
-        if norm_name == 'content-length':
-            # Always overwrite the previous value for Content-Length
-            self._dict[norm_name] = native_str(value.strip())
-            self._as_list[norm_name] = [value.strip()]
+        
+        # Print the current state
+        print('self._dict', self._dict)
+        
+        # Strip whitespace from the value before storing
+        value = value.strip()  # Remove any leading/trailing whitespace
+        
+        # Check if the normalized name is already in the headers
+        if norm_name in self._dict:
+            print(f"Key '{norm_name}' already exists. Replacing old value.")
+            
+            # Replace the existing value instead of appending
+            self._dict[norm_name] = value  # Overwrite with new value
+            self._as_list[norm_name] = [value]  # Reset list with the new value
+            
+            print(f"Updated value for '{norm_name}' to '{value}'")
         else:
-            # For other headers, concatenate values if they already exist
-            if norm_name in self:
-                # Concatenation happens only for non-single-value headers
-                self._dict[norm_name] = (
-                    native_str(self[norm_name]) + "," + native_str(value.strip())
-                )
-                self._as_list[norm_name].append(value.strip())
-            else:
-                self[norm_name] = value.strip()
-
-
-        print(f"Adding header: {norm_name}, value: {value.strip()}")
-        print(f"Current stored value: {self._dict.get(norm_name)}")
+            self._dict[norm_name] = value
+            self._as_list[norm_name] = [value]  # Initialize the list with the new value
+        
+        print("nam1", name, "valu1", value)
 
 
     def get_list(self, name: str) -> List[str]:
@@ -182,35 +184,47 @@ class HTTPHeaders(StrMutableMapping):
                 yield (name, value)
 
     def parse_line(self, line: str) -> None:
-        """Updates the dictionary with a single header line.
+        """Updates the dictionary with a single header line."""
+        print(f"\n=== Parsing line: {line} ===")
 
-        >>> h = HTTPHeaders()
-        >>> h.parse_line("Content-Type: text/html")
-        >>> h.get('content-type')
-        'text/html'
-        """
-        # Strip leading and trailing spaces from the entire line first
-        line = line.strip()
-
-        if not line:
-            return  # Ignore empty lines
-
-        if line[0].isspace():
-            # Continuation of a multi-line header
+        # Check if line starts with whitespace but treat it as a new header if it has a colon
+        if line[0].isspace() and ':' not in line:
+            # Continuation of a multi-line header (true continuation)
             if self._last_key is None:
+                print(f"Error: Found whitespace at the start, but no previous header to continue. Last key: {self._last_key}")
                 raise HTTPInputError("first header line cannot start with whitespace")
-            new_part = " " + line.lstrip(HTTP_WHITESPACE)
-            self._as_list[self._last_key][-1] += new_part
-            self._dict[self._last_key] += new_part
+
+            new_part = line.lstrip(HTTP_WHITESPACE).strip()  # Strip leading and trailing spaces
+            print(f"Continuation line. New part to add: '{new_part}' to key '{self._last_key}'")
+
+            normalized_key = _normalize_header(self._last_key)
+            print(f"Using normalized key '{normalized_key}'")
+
+            # Strip any leading/trailing spaces from new_part before appending
+            if new_part:  # Only append if new_part is not empty
+                self._as_list[normalized_key][-1] += " " + new_part.strip()
+                self._dict[normalized_key] += " " + new_part.strip()
+
+            print(f"Updated _as_list for '{normalized_key}': {self._as_list[normalized_key]}")
+            print(f"Updated _dict for '{normalized_key}': {self._dict[normalized_key]}")
+
         else:
+            # This case handles new headers (or lines with leading whitespace but containing a colon)
             try:
-                # Split header name and value, then strip leading/trailing spaces
                 name, value = line.split(":", 1)
-                name = name.strip()  # Strip spaces from the header name
-                value = value.strip(HTTP_WHITESPACE).rstrip()  # Strip spaces from the value
-                self.add(name, value)
+                name = name.strip()
+                value = value.strip(HTTP_WHITESPACE)  # Strip leading/trailing whitespace
+                print(f"New header line. Name: '{name}', Value: '{value}'")
             except ValueError:
                 raise HTTPInputError("no colon in header line")
+
+            # Add or overwrite the header
+            self.add(name, value)
+            print(f"After add: _dict: {self._dict}, _as_list: {self._as_list}")
+
+            # Update the last key
+            self._last_key = _normalize_header(name)
+            print(f"Set _last_key to: '{self._last_key}' (normalized)")
 
     @classmethod
     def parse(cls, headers: str) -> "HTTPHeaders":
