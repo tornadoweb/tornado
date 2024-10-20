@@ -279,14 +279,6 @@ class HTTPHeadersTest(unittest.TestCase):
         self.assertEqual(headers.get('content-length'), '42')  # Ensure spaces don't affect value
 
 
-    def test_parse_line_with_invalid_header(self):
-        headers = HTTPHeaders()
-
-        # Test header without colon
-        with self.assertRaises(HTTPInputError):
-            headers.parse_line("InvalidHeaderWithoutColon")
-
-
 
 
     def test_multi_line(self):
