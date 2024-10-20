@@ -145,28 +145,30 @@ class HTTPHeaders(StrMutableMapping):
         """Adds a new value for the given key."""
         norm_name = _normalize_header(name)
         self._last_key = norm_name
-        
+
         # Print the current state
         print('self._dict', self._dict)
-        
-        # Strip whitespace from the value before storing
-        value = value.strip()  # Remove any leading/trailing whitespace
-        
-        # Check if the normalized name is already in the headers
-        if norm_name in self._dict:
-            print(f"Key '{norm_name}' already exists. Replacing old value.")
-            
-            # Replace the existing value instead of appending
-            self._dict[norm_name] = value  # Overwrite with new value
-            self._as_list[norm_name] = [value]  # Reset list with the new value
-            
-            print(f"Updated value for '{norm_name}' to '{value}'")
-        else:
-            self._dict[norm_name] = value
-            self._as_list[norm_name] = [value]  # Initialize the list with the new value
-        
-        print("nam1", name, "valu1", value)
 
+        # Strip leading whitespace from the value
+        value = value.lstrip(' \t')  # Remove leading spaces and tabs
+
+        # Handle Content-Length specifically
+        if norm_name == 'Content-Length':
+            print(f"Key '{norm_name}' found. Overwriting value to '{value}'.")
+            self._dict[norm_name] = value  # Overwrite the existing value
+            self._as_list[norm_name] = [value]  # Reset list with the new value
+        else:
+            # For all other headers, append the value
+            if norm_name in self._dict:
+                print(f"Key '{norm_name}' already exists. Appending value.")
+                self._dict[norm_name] += ',' + value  # Append with a comma
+                self._as_list[norm_name].append(value)  # Append to the list
+            else:
+                self._dict[norm_name] = value
+                self._as_list[norm_name] = [value]  # Initialize the list with the new value
+
+        print("nam1", name, "valu1", value)
+        
 
     def get_list(self, name: str) -> List[str]:
         """Returns all values for the given header as a list."""
@@ -187,29 +189,35 @@ class HTTPHeaders(StrMutableMapping):
         """Updates the dictionary with a single header line."""
         print(f"\n=== Parsing line: {line} ===")
 
-        # Check if line starts with whitespace but treat it as a new header if it has a colon
-        if line[0].isspace() and ':' not in line:
-            # Continuation of a multi-line header (true continuation)
+        # Check if line starts with whitespace
+        if line[0].isspace():
             if self._last_key is None:
                 print(f"Error: Found whitespace at the start, but no previous header to continue. Last key: {self._last_key}")
                 raise HTTPInputError("first header line cannot start with whitespace")
 
-            new_part = line.lstrip(HTTP_WHITESPACE).strip()  # Strip leading and trailing spaces
+            new_part = line.strip()  # Strip leading and trailing spaces
             print(f"Continuation line. New part to add: '{new_part}' to key '{self._last_key}'")
 
             normalized_key = _normalize_header(self._last_key)
             print(f"Using normalized key '{normalized_key}'")
 
-            # Strip any leading/trailing spaces from new_part before appending
-            if new_part:  # Only append if new_part is not empty
-                self._as_list[normalized_key][-1] += " " + new_part.strip()
-                self._dict[normalized_key] += " " + new_part.strip()
+            # Handle for Content-Length
+            if normalized_key == 'Content-Length':
+                if new_part:  # Only if new_part is not empty
+                    value = new_part.split(":", 1)[-1].strip()  # Get the part after the colon
+                    self._dict[normalized_key] = value  # Overwrite the existing value
+                    self._as_list[normalized_key][-1] = value  # Update last entry in the list
+            else:
+                # For other headers, we append
+                if new_part:  # Ensure that the new part is not empty
+                    self._as_list[normalized_key][-1] += " " + new_part
+                    self._dict[normalized_key] += " " + new_part
 
             print(f"Updated _as_list for '{normalized_key}': {self._as_list[normalized_key]}")
             print(f"Updated _dict for '{normalized_key}': {self._dict[normalized_key]}")
 
         else:
-            # This case handles new headers (or lines with leading whitespace but containing a colon)
+            # Handle new headers (not continuation lines)
             try:
                 name, value = line.split(":", 1)
                 name = name.strip()
