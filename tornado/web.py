@@ -300,8 +300,8 @@ class RequestHandler:
         """Called after the end of a request.
 
         Override this method to perform cleanup, logging, etc.
-        This method is a counterpart to `prepare`.  ``on_finish`` may
-        not produce any output, as it is called after the response
+        This method is a counterpart to `prepare` - except it will be called even if the request method is not in ``SUPPORTED_METHODS``.  
+        ``on_finish`` may not produce any output, as it is called after the response
         has been sent to the client.
         """
         pass
