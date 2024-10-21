@@ -283,8 +283,8 @@ class RequestHandler:
     def prepare(self) -> Optional[Awaitable[None]]:
         """Called at the beginning of a request before  `get`/`post`/etc.
 
-        Override this method to perform common initialization regardless
-        of the request method.
+        Override this method to perform common initialization for request method.
+        If the request method is not in ``SUPPORTED_METHODS`` this will not be called.
 
         Asynchronous support: Use ``async def`` or decorate this method with
         `.gen.coroutine` to make it asynchronous.
