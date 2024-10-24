@@ -19,11 +19,6 @@ import os
 import platform
 import setuptools
 
-try:
-    import wheel.bdist_wheel
-except ImportError:
-    wheel = None
-
 
 kwargs = {}
 
@@ -56,17 +51,7 @@ if (
         )
     ]
 
-if wheel is not None:
-    # From https://github.com/joerick/python-abi3-package-sample/blob/main/setup.py
-    class bdist_wheel_abi3(wheel.bdist_wheel.bdist_wheel):
-        def get_tag(self):
-            python, abi, plat = super().get_tag()
-
-            if python.startswith("cp"):
-                return "cp39", "abi3", plat
-            return python, abi, plat
-
-    kwargs["cmdclass"] = {"bdist_wheel": bdist_wheel_abi3}
+    kwargs["options"] = {"bdist_wheel": {"py_limited_api": "cp39"}}
 
 
 setuptools.setup(
