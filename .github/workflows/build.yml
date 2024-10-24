@@ -47,7 +47,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-2022, macos-12]
+        os: [ubuntu-22.04, windows-2022, macos-15]
 
     steps:
       - uses: actions/checkout@v4
@@ -63,6 +63,11 @@ jobs:
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.18
+
+      - name: Audit ABI3 compliance
+        # This may be moved into cibuildwheel itself in the future. See
+        # https://github.com/pypa/cibuildwheel/issues/1342
+        run: "pip install abi3audit && abi3audit --verbose --summary ./wheelhouse/*.whl"
 
       - uses: actions/upload-artifact@v4
         with:
