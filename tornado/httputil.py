@@ -146,9 +146,6 @@ class HTTPHeaders(StrMutableMapping):
         norm_name = _normalize_header(name)
         self._last_key = norm_name
 
-        # Strip leading whitespace from the value
-        value = value.lstrip(HTTP_WHITESPACE)
-
         # Handle Content-Length specifically
         if norm_name == 'Content-Length':
             if not value.isdigit():
