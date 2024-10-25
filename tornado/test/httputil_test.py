@@ -1,5 +1,3 @@
-from docutils.nodes import header
-
 from tornado.httputil import (
     url_concat,
     parse_multipart_form_data,
