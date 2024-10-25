@@ -151,13 +151,11 @@ class HTTPHeaders(StrMutableMapping):
 
         # Handle Content-Length specifically
         if norm_name == 'Content-Length':
-            try:
-                value_int = int(value)  # Convert value to integer to validate
-                if value_int < 0:
-                    raise HTTPInputError("Invalid Content-Length header, must be a non-negative integer")
-            except ValueError:
-                raise HTTPInputError("Invalid Content-Length header, must be an integer")
-            
+            if not value.isdigit():
+                raise HTTPInputError("Invalid Content-Length header, must be a non-negative integer")
+            if int(value) < 0:
+                raise HTTPInputError("Invalid Content-Length header, must be a non-negative integer")
+
             if norm_name in self._dict:
                 # Compare the existing value (which is stored as a string) to the new integer value (converted to string)
                 if self._dict[norm_name] != value:
