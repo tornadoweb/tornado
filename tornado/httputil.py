@@ -147,12 +147,26 @@ class HTTPHeaders(StrMutableMapping):
         self._last_key = norm_name
 
         # Strip leading whitespace from the value
-        value = value.lstrip(' \t')  # Remove leading spaces and tabs
+        value = value.lstrip(HTTP_WHITESPACE)
 
         # Handle Content-Length specifically
         if norm_name == 'Content-Length':
-            self._dict[norm_name] = value  # Overwrite the existing value
+            try:
+                value_int = int(value)  # Convert value to integer to validate
+                if value_int < 0:
+                    raise HTTPInputError("Invalid Content-Length header, must be a non-negative integer")
+            except ValueError:
+                raise HTTPInputError("Invalid Content-Length header, must be an integer")
+            
+            if norm_name in self._dict:
+                # Compare the existing value (which is stored as a string) to the new integer value (converted to string)
+                if self._dict[norm_name] != value:
+                    raise HTTPInputError("Conflicting Content-Length headers")
+            
+            # Store the Content-Length as a string
+            self._dict[norm_name] = value  # Overwrite the existing value as a string
             self._as_list[norm_name] = [value]  # Reset list with the new value
+            
         else:
             # For all other headers, append the value
             if norm_name in self._dict:
@@ -160,7 +174,7 @@ class HTTPHeaders(StrMutableMapping):
                 self._as_list[norm_name].append(value)  # Append to the list
             else:
                 self._dict[norm_name] = value
-                self._as_list[norm_name] = [value]  # Initialize the list with the new value        
+                self._as_list[norm_name] = [value]  # Initialize the list with the new value
 
     def get_list(self, name: str) -> List[str]:
         """Returns all values for the given header as a list."""
@@ -178,44 +192,26 @@ class HTTPHeaders(StrMutableMapping):
                 yield (name, value)
 
     def parse_line(self, line: str) -> None:
-        """Updates the dictionary with a single header line."""
+        """Updates the dictionary with a single header line.
 
-        # Check if line starts with whitespace
+        >>> h = HTTPHeaders()
+        >>> h.parse_line("Content-Type: text/html")
+        >>> h.get('content-type')
+        'text/html'
+        """
         if line[0].isspace():
+            # continuation of a multi-line header
             if self._last_key is None:
                 raise HTTPInputError("first header line cannot start with whitespace")
-
-            new_part = line.strip()  # Strip leading and trailing spaces
-
-            normalized_key = _normalize_header(self._last_key)
-
-            # Handle for Content-Length
-            if normalized_key == 'Content-Length':
-                if new_part:  # Only if new_part is not empty
-                    value = new_part.split(":", 1)[-1].strip()  # Get the part after the colon
-                    self._dict[normalized_key] = value  # Overwrite the existing value
-                    self._as_list[normalized_key][-1] = value  # Update last entry in the list
-            else:
-                # For other headers, we append
-                if new_part:  # Ensure that the new part is not empty
-                    self._as_list[normalized_key][-1] += " " + new_part
-                    self._dict[normalized_key] += " " + new_part
-
-
+            new_part = " " + line.lstrip(HTTP_WHITESPACE)
+            self._as_list[self._last_key][-1] += new_part
+            self._dict[self._last_key] += new_part
         else:
-            # Handle new headers (not continuation lines)
             try:
                 name, value = line.split(":", 1)
-                name = name.strip()
-                value = value.strip(HTTP_WHITESPACE)  # Strip leading/trailing whitespace
             except ValueError:
                 raise HTTPInputError("no colon in header line")
-
-            # Add or overwrite the header
-            self.add(name, value)
-
-            # Update the last key
-            self._last_key = _normalize_header(name)
+            self.add(name, value.strip(HTTP_WHITESPACE))
 
     @classmethod
     def parse(cls, headers: str) -> "HTTPHeaders":

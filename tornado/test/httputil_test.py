@@ -262,22 +262,34 @@ Foo
 
 class HTTPHeadersTest(unittest.TestCase):
 
-    def test_parse_line_with_trailing_spaces(self):
+    def test_multiple_content_length_headers(self):
         headers = HTTPHeaders()
 
-        # Test header with multiple trailing spaces
-        headers.parse_line("Content-Length: 0   ")
-        self.assertEqual(headers.get('content-length'), '0')
+        headers.parse_line("Content-Length: 123")
 
-        # Test header with leading and trailing spaces
-        headers.parse_line(" Content-Length :  123  ")
-        self.assertEqual(headers.get('content-length'), '123')  # Ensure value is overwritten
+        headers.parse_line("Content-Length: 123")
+        self.assertEqual(headers.get("content-length"), "123")
+        with self.assertRaises(HTTPInputError):
+            headers.parse_line("Content-Length: 456")  # Should raise error
+    def test_invalid_content_length(self):
+        headers = HTTPHeaders()
+        with self.assertRaises(HTTPInputError):
+            headers.parse_line("Content-Length: abc")  # Should raise error
 
-        # Test continuation line with trailing spaces
-        headers.parse_line("Content-Length: 42")
-        headers.parse_line("  ")  # Test multi-line continuation
-        self.assertEqual(headers.get('content-length'), '42')  # Ensure spaces don't affect value
+    def test_negative_content_length(self):
+        headers = HTTPHeaders()
+        with self.assertRaises(HTTPInputError):
+            headers.parse_line("Content-Length: -123")
 
+    def test_leading_trailing_whitespace(self):
+        headers = HTTPHeaders()
+        headers.parse_line("Content-Length: 123   ")
+        self.assertEqual(headers.get('content-length'), '123')  # Should handle whitespace correctly
+
+    def test_zero_content_length(self):
+        headers = HTTPHeaders()
+        headers.parse_line("Content-Length: 0")
+        self.assertEqual(headers.get('content-length'), '0')  # Should handle zero correctly
 
 
 
