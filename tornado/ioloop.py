@@ -491,7 +491,7 @@ class IOLoop(Configurable):
         .. versionchanged:: 6.2
            ``tornado.util.TimeoutError`` is now an alias to ``asyncio.TimeoutError``.
         """
-        future_cell = [None]  # type: List[Optional[Future]]
+        future_cell = [None, False]  # type: List[Optional[Future], bool]
 
         def run() -> None:
             try:
@@ -518,6 +518,8 @@ class IOLoop(Configurable):
         if timeout is not None:
 
             def timeout_callback() -> None:
+                # signal that timeout is triggered
+                future_cell[1] = True
                 # If we can cancel the future, do so and wait on it. If not,
                 # Just stop the loop and return with the task still pending.
                 # (If we neither cancel nor wait for the task, a warning
@@ -532,7 +534,13 @@ class IOLoop(Configurable):
             self.remove_timeout(timeout_handle)
         assert future_cell[0] is not None
         if future_cell[0].cancelled() or not future_cell[0].done():
-            raise TimeoutError("Operation timed out after %s seconds" % timeout)
+            if future_cell[1]:
+                msg = "Operation timed out after %s seconds" % timeout
+            else:
+                # timeout not called; maybe stop() was called explicitly
+                # or some other cancellation
+                msg = "Operation cancelled"
+            raise TimeoutError(msg)
         return future_cell[0].result()
 
     def time(self) -> float:
