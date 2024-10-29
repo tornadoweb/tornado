@@ -3,6 +3,7 @@ import os
 import platform
 import socket
 import sys
+import sysconfig
 import textwrap
 import typing
 import unittest
@@ -22,6 +23,10 @@ skipIfNoNetwork = unittest.skipIf("NO_NETWORK" in os.environ, "network access di
 
 skipNotCPython = unittest.skipIf(
     platform.python_implementation() != "CPython", "Not CPython implementation"
+)
+skipFreeThreaded = unittest.skipIf(
+    sysconfig.get_config_var("Py_GIL_DISABLED"),
+    "Freethreaded Python build"
 )
 
 

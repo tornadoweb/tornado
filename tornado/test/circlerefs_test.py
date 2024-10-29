@@ -19,7 +19,7 @@ import unittest
 
 import tornado
 from tornado import web, gen, httpclient
-from tornado.test.util import skipNotCPython
+from tornado.test.util import skipNotCPython, skipFreeThreaded
 
 
 def find_circular_references(garbage):
@@ -102,6 +102,7 @@ def assert_no_cycle_garbage():
 
 # GC behavior is cpython-specific
 @skipNotCPython
+@skipFreeThreaded
 class CircleRefsTest(unittest.TestCase):
     def test_known_leak(self):
         # Construct a known leak scenario to make sure the test harness works.
