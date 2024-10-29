@@ -25,8 +25,7 @@ skipNotCPython = unittest.skipIf(
     platform.python_implementation() != "CPython", "Not CPython implementation"
 )
 skipFreeThreaded = unittest.skipIf(
-    sysconfig.get_config_var("Py_GIL_DISABLED"),
-    "Freethreaded Python build"
+    sysconfig.get_config_var("Py_GIL_DISABLED"), "Freethreaded Python build"
 )
 
 
