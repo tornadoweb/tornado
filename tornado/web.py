@@ -2520,7 +2520,7 @@ class HTTPError(Exception):
     ) -> None:
         self.status_code = status_code
         self._log_message = log_message
-        self.args = args
+        self.log_args = args
         self.reason = kwargs.get("reason", None)
 
     @property
@@ -2528,13 +2528,13 @@ class HTTPError(Exception):
         """
         A backwards compatible way of accessing log_message.
         """
-        if self._log_message and not self.args:
+        if self._log_message and not self.log_args:
             return self._log_message.replace("%", "%%")
         return self._log_message
 
     def get_message(self) -> Optional[str]:
-        if self._log_message and self.args:
-            return self._log_message % self.args
+        if self._log_message and self.log_args:
+            return self._log_message % self.log_args
         return self._log_message
 
     def __str__(self) -> str:
