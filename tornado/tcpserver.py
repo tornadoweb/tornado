@@ -75,7 +75,7 @@ class TCPServer:
             async def main():
                 server = TCPServer()
                 server.listen(8888)
-                await asyncio.Event.wait()
+                await asyncio.Event().wait()
 
             asyncio.run(main())
 
