@@ -782,6 +782,9 @@ class TestIOLoopConfiguration(unittest.TestCase):
         )
         self.assertEqual(cls, "AsyncIOMainLoop")
 
+    @unittest.skipIf(
+        sys.version_info >= (3, 14), "implicit event loop creation not available"
+    )
     def test_asyncio_main(self):
         cls = self.run_python(
             "from tornado.platform.asyncio import AsyncIOMainLoop",
