@@ -467,8 +467,8 @@ class HTTPServerRequestTest(unittest.TestCase):
         HTTPServerRequest(uri="/")
 
     def test_body_is_a_byte_string(self):
-        requets = HTTPServerRequest(uri="/")
-        self.assertIsInstance(requets.body, bytes)
+        request = HTTPServerRequest(uri="/")
+        self.assertIsInstance(request.body, bytes)
 
     def test_repr_does_not_contain_headers(self):
         request = HTTPServerRequest(
