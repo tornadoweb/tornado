@@ -18,7 +18,7 @@
 import os
 import platform
 import setuptools
-
+import sysconfig
 
 kwargs = {}
 
@@ -35,6 +35,16 @@ if (
     platform.python_implementation() == "CPython"
     and os.environ.get("TORNADO_EXTENSION") != "0"
 ):
+    # build with Py_LIMITED_API unless in freethreading build (which does not currently
+    # support the limited API in py313t)
+    if not sysconfig.get_config_var("Py_GIL_DISABLED"):
+        extension_kwargs = dict(
+            py_limited_api=True, define_macros=[("Py_LIMITED_API", "0x03090000")]
+        )
+        kwargs["options"] = {"bdist_wheel": {"py_limited_api": "cp39"}}
+    else:
+        extension_kwargs = {}
+
     # This extension builds and works on pypy as well, although pypy's jit
     # produces equivalent performance.
     kwargs["ext_modules"] = [
@@ -45,13 +55,10 @@ if (
             # fall back to the pure-python implementation on any build failure.
             optional=os.environ.get("TORNADO_EXTENSION") != "1",
             # Use the stable ABI so our wheels are compatible across python
-            # versions.
-            py_limited_api=True,
-            define_macros=[("Py_LIMITED_API", "0x03090000")],
+            # versions if not in freethreading build
+            **extension_kwargs,
         )
     ]
-
-    kwargs["options"] = {"bdist_wheel": {"py_limited_api": "cp39"}}
 
 
 setuptools.setup(
