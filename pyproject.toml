@@ -22,8 +22,8 @@ test-command = "python -m tornado.test --fail-if-logs=false"
 
 [tool.cibuildwheel.linux]
 # Build wheels for the native platform (i.e. x86) as well as an emulated
-# build for aarch64.
-archs = "auto aarch64"
+# build for aarch64 and ppc64le.
+archs = "auto aarch64 ppc64le"
 
 [[tool.cibuildwheel.overrides]]
 # The emulated arm build is quite slow, so only run a portion of the test
