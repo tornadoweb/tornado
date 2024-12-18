@@ -706,6 +706,23 @@ class HeaderInjectionHandler(RequestHandler):
                 raise
 
 
+class SetHeaderHandler(RequestHandler):
+    def get(self):
+        # tests the validity of web.RequestHandler._INVALID_HEADER_CHAR_RE
+        # should match the invalid characters from
+        # https://www.rfc-editor.org/rfc/rfc9110#name-field-values
+        illegal_chars = [chr(o) for o in range(0, 0x20)]
+        illegal_chars.remove('\t')
+        for char in illegal_chars:
+            try:
+                self.set_header("X-Foo", "foo" + char + "bar")
+                raise Exception("Didn't get expected exception")
+            except ValueError as e:
+                if "Unsafe header value" not in str(e):
+                    raise
+        self.finish(b"ok")
+
+
 class GetArgumentHandler(RequestHandler):
     def prepare(self):
         if self.get_argument("source", None) == "query":
@@ -790,6 +807,7 @@ class WSGISafeWebTest(WebTestCase):
             url("/header_injection", HeaderInjectionHandler),
             url("/get_argument", GetArgumentHandler),
             url("/get_arguments", GetArgumentsHandler),
+            url("/set_header", SetHeaderHandler),
         ]
         return urls
 
@@ -936,6 +954,10 @@ js_embed()
 
     def test_header_injection(self):
         response = self.fetch("/header_injection")
+        self.assertEqual(response.body, b"ok")
+
+    def test_set_header(self):
+        response = self.fetch("/set_header")
         self.assertEqual(response.body, b"ok")
 
     def test_get_argument(self):

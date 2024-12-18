@@ -399,7 +399,7 @@ class RequestHandler:
         if name in self._headers:
             del self._headers[name]
 
-    _INVALID_HEADER_CHAR_RE = re.compile(r"[\x00-\x1f]")
+    _INVALID_HEADER_CHAR_RE = re.compile(r"[\x00-\x08\x0a-\x1f]")
 
     def _convert_header_value(self, value: _HeaderTypes) -> str:
         # Convert the input value to a str. This type check is a bit
