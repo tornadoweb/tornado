@@ -700,10 +700,11 @@ class HeaderInjectionHandler(RequestHandler):
             self.set_header("X-Foo", "foo\r\nX-Bar: baz")
             raise Exception("Didn't get expected exception")
         except ValueError as e:
-            if "Unsafe header value" in str(e):
-                self.finish(b"ok")
-            else:
+            if "Unsafe header value" not in str(e):
                 raise
+
+        self.set_header("X-Foo", "foo\tX-Bar: baz")
+        self.finish(b"ok")
 
 
 class GetArgumentHandler(RequestHandler):
