@@ -712,6 +712,7 @@ class SetHeaderHandler(RequestHandler):
         # should match the invalid characters from
         # https://www.rfc-editor.org/rfc/rfc9110#name-field-values
         illegal_chars = [chr(o) for o in range(0, 0x20)]
+        illegal_chars.append(chr(0x7f))
         illegal_chars.remove('\t')
         for char in illegal_chars:
             try:
