@@ -399,7 +399,8 @@ class RequestHandler:
         if name in self._headers:
             del self._headers[name]
 
-    _INVALID_HEADER_CHAR_RE = re.compile(r"[\x00-\x08\x0a-\x1f\x7f]")
+    # https://www.rfc-editor.org/rfc/rfc9110#name-field-values
+    _VALID_HEADER_CHARS = re.compile(r"[\x09\x20-\x7e\x80-\xff]*")
 
     def _convert_header_value(self, value: _HeaderTypes) -> str:
         # Convert the input value to a str. This type check is a bit
@@ -421,7 +422,7 @@ class RequestHandler:
             raise TypeError("Unsupported header value %r" % value)
         # If \n is allowed into the header, it is possible to inject
         # additional headers or split the request.
-        if RequestHandler._INVALID_HEADER_CHAR_RE.search(retval):
+        if RequestHandler._VALID_HEADER_CHARS.fullmatch(retval) is None:
             raise ValueError("Unsafe header value %r", retval)
         return retval
 

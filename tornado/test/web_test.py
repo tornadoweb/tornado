@@ -708,9 +708,7 @@ class HeaderInjectionHandler(RequestHandler):
 
 class SetHeaderHandler(RequestHandler):
     def get(self):
-        # tests the validity of web.RequestHandler._INVALID_HEADER_CHAR_RE
-        # should match the invalid characters from
-        # https://www.rfc-editor.org/rfc/rfc9110#name-field-values
+        # tests the validity of web.RequestHandler._VALID_HEADER_CHARS
         illegal_chars = [chr(o) for o in range(0, 0x20)]
         illegal_chars.append(chr(0x7f))
         illegal_chars.remove('\t')
@@ -721,6 +719,10 @@ class SetHeaderHandler(RequestHandler):
             except ValueError as e:
                 if "Unsafe header value" not in str(e):
                     raise
+
+        # an empty header value is valid as well
+        self.set_header("X-Foo", "")
+
         self.finish(b"ok")
 
 
