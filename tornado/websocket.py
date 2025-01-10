@@ -832,7 +832,6 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._wire_bytes_in = 0
         self._wire_bytes_out = 0
         self.ping_callback = None  # type: Optional[PeriodicCallback]
-        self.last_ping = 0.0
         self.last_pong = 0.0
         self.close_code = None  # type: Optional[int]
         self.close_reason = None  # type: Optional[str]
@@ -1298,38 +1297,29 @@ class WebSocketProtocol13(WebSocketProtocol):
         """Start sending periodic pings to keep the connection alive"""
         assert self.ping_interval is not None
         if self.ping_interval > 0:
-            self.last_ping = self.last_pong = IOLoop.current().time()
             self.ping_callback = PeriodicCallback(
                 self.periodic_ping, self.ping_interval * 1000
             )
             self.ping_callback.start()
 
-    def periodic_ping(self) -> None:
-        """Send a ping to keep the websocket alive
+    async def periodic_ping(self) -> None:
+        """Send a ping and wait for a pong if ping_timeout is configured.
 
         Called periodically if the websocket_ping_interval is set and non-zero.
         """
-        if self.is_closing() and self.ping_callback is not None:
-            self.ping_callback.stop()
-            return
-
-        # Check for timeout on pong. Make sure that we really have
-        # sent a recent ping in case the machine with both server and
-        # client has been suspended since the last ping.
         now = IOLoop.current().time()
-        since_last_pong = now - self.last_pong
-        since_last_ping = now - self.last_ping
-        assert self.ping_interval is not None
-        assert self.ping_timeout is not None
-        if (
-            since_last_ping < 2 * self.ping_interval
-            and since_last_pong > self.ping_timeout
-        ):
-            self.close()
-            return
 
+        # send a ping
         self.write_ping(b"")
-        self.last_ping = now
+
+        if self.ping_timeout and self.ping_timeout > 0:
+            # wait for the pong
+            await asyncio.sleep(self.ping_timeout)
+
+            # close the connection if the pong is not received within the
+            # configured timeout
+            if self.last_pong - now > self.ping_timeout:
+                self.close()
 
     def set_nodelay(self, x: bool) -> None:
         self.stream.set_nodelay(x)
