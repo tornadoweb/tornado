@@ -261,6 +261,38 @@ Foo
 
 
 class HTTPHeadersTest(unittest.TestCase):
+
+    def test_multiple_content_length_headers(self):
+        headers = HTTPHeaders()
+
+        headers.parse_line("Content-Length: 123")
+
+        headers.parse_line("Content-Length: 123")
+        self.assertEqual(headers.get("content-length"), "123")
+        with self.assertRaises(HTTPInputError):
+            headers.parse_line("Content-Length: 456")  # Should raise error
+    def test_invalid_content_length(self):
+        headers = HTTPHeaders()
+        with self.assertRaises(HTTPInputError):
+            headers.parse_line("Content-Length: abc")  # Should raise error
+
+    def test_negative_content_length(self):
+        headers = HTTPHeaders()
+        with self.assertRaises(HTTPInputError):
+            headers.parse_line("Content-Length: -123")
+
+    def test_leading_trailing_whitespace(self):
+        headers = HTTPHeaders()
+        headers.parse_line("Content-Length: 123   ")
+        self.assertEqual(headers.get('content-length'), '123')  # Should handle whitespace correctly
+
+    def test_zero_content_length(self):
+        headers = HTTPHeaders()
+        headers.parse_line("Content-Length: 0")
+        self.assertEqual(headers.get('content-length'), '0')  # Should handle zero correctly
+
+
+
     def test_multi_line(self):
         # Lines beginning with whitespace are appended to the previous line
         # with any leading whitespace replaced by a single space.
