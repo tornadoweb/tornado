@@ -117,7 +117,7 @@ typing-extensions==4.12.2
     # via mypy
 urllib3==2.2.2
     # via requests
-virtualenv==20.26.2
+virtualenv==20.26.6
     # via tox
 wheel==0.43.0
     # via pip-tools
