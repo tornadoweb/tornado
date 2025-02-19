@@ -111,10 +111,6 @@ class LeakTest(unittest.TestCase):
     def setUp(self):
         # Trigger a cleanup of the mapping so we start with a clean slate.
         AsyncIOLoop(make_current=False).close()
-        # If we don't clean up after ourselves other tests may fail on
-        # py34.
-        self.orig_policy = asyncio.get_event_loop_policy()
-        asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
 
     def tearDown(self):
         try:
@@ -124,7 +120,6 @@ class LeakTest(unittest.TestCase):
             pass
         else:
             loop.close()
-        asyncio.set_event_loop_policy(self.orig_policy)
 
     def test_ioloop_close_leak(self):
         orig_count = len(IOLoop._ioloop_for_asyncio)
