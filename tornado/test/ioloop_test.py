@@ -132,7 +132,7 @@ class TestIOLoop(AsyncTestCase):
         # Very crude test, just to make sure that we cover this case.
         # This also happens to be the first test where we run an IOLoop in
         # a non-main thread.
-        other_ioloop = IOLoop()
+        other_ioloop = IOLoop(make_current=False)
         thread = threading.Thread(target=other_ioloop.start)
         thread.start()
         with ignore_deprecation():
@@ -152,7 +152,7 @@ class TestIOLoop(AsyncTestCase):
             closing.set()
             other_ioloop.close(all_fds=True)
 
-        other_ioloop = IOLoop()
+        other_ioloop = IOLoop(make_current=False)
         thread = threading.Thread(target=target)
         thread.start()
         closing.wait()
@@ -276,8 +276,12 @@ class TestIOLoop(AsyncTestCase):
 
         sockobj, port = bind_unused_port()
         socket_wrapper = SocketWrapper(sockobj)
-        io_loop = IOLoop()
-        io_loop.add_handler(socket_wrapper, lambda fd, events: None, IOLoop.READ)
+        io_loop = IOLoop(make_current=False)
+        io_loop.run_sync(
+            lambda: io_loop.add_handler(
+                socket_wrapper, lambda fd, events: None, IOLoop.READ
+            )
+        )
         io_loop.close(all_fds=True)
         self.assertTrue(socket_wrapper.closed)
 
