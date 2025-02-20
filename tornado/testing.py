@@ -155,6 +155,19 @@ class AsyncTestCase(unittest.TestCase):
                 category=DeprecationWarning,
                 module=r"tornado\..*",
             )
+        if (3, 14) <= py_ver:
+            # TODO: This is a temporary hack pending resolution of
+            # https://github.com/python/cpython/issues/130322
+            # If set_event_loop is undeprecated, we can remove it; if not
+            # we need substantial changes to this class to use asyncio.Runner
+            # like IsolatedAsyncioTestCase does.
+            setup_with_context_manager(self, warnings.catch_warnings())
+            warnings.filterwarnings(
+                "ignore",
+                message="'asyncio.set_event_loop' is deprecated",
+                category=DeprecationWarning,
+                module="tornado.testing",
+            )
         super().setUp()
         if type(self).get_new_ioloop is not AsyncTestCase.get_new_ioloop:
             warnings.warn("get_new_ioloop is deprecated", DeprecationWarning)

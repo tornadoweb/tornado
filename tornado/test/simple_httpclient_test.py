@@ -210,7 +210,7 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
             SimpleAsyncHTTPClient(), SimpleAsyncHTTPClient(force_instance=True)
         )
         # different IOLoops use different objects
-        with closing(IOLoop()) as io_loop2:
+        with closing(IOLoop(make_current=False)) as io_loop2:
 
             async def make_client():
                 await gen.sleep(0)
