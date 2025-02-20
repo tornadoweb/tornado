@@ -386,58 +386,76 @@ def to_asyncio_future(tornado_future: asyncio.Future) -> asyncio.Future:
     return convert_yielded(tornado_future)
 
 
-if sys.platform == "win32" and hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
-    # "Any thread" and "selector" should be orthogonal, but there's not a clean
-    # interface for composing policies so pick the right base.
-    _BasePolicy = asyncio.WindowsSelectorEventLoopPolicy  # type: ignore
-else:
-    _BasePolicy = asyncio.DefaultEventLoopPolicy
+_AnyThreadEventLoopPolicy = None
 
 
-class AnyThreadEventLoopPolicy(_BasePolicy):  # type: ignore
-    """Event loop policy that allows loop creation on any thread.
+def __getattr__(name: str) -> typing.Any:
+    # The event loop policy system is deprecated in Python 3.14; simply accessing
+    # the name asyncio.DefaultEventLoopPolicy will raise a warning. Lazily create
+    # the AnyThreadEventLoopPolicy class so that the warning is only raised if
+    # the policy is used.
+    if name != "AnyThreadEventLoopPolicy":
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-    The default `asyncio` event loop policy only automatically creates
-    event loops in the main threads. Other threads must create event
-    loops explicitly or `asyncio.get_event_loop` (and therefore
-    `.IOLoop.current`) will fail. Installing this policy allows event
-    loops to be created automatically on any thread, matching the
-    behavior of Tornado versions prior to 5.0 (or 5.0 on Python 2).
+    global _AnyThreadEventLoopPolicy
+    if _AnyThreadEventLoopPolicy is None:
+        if sys.platform == "win32" and hasattr(
+            asyncio, "WindowsSelectorEventLoopPolicy"
+        ):
+            # "Any thread" and "selector" should be orthogonal, but there's not a clean
+            # interface for composing policies so pick the right base.
+            _BasePolicy = asyncio.WindowsSelectorEventLoopPolicy  # type: ignore
+        else:
+            _BasePolicy = asyncio.DefaultEventLoopPolicy
 
-    Usage::
+        class AnyThreadEventLoopPolicy(_BasePolicy):  # type: ignore
+            """Event loop policy that allows loop creation on any thread.
 
-        asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
+            The default `asyncio` event loop policy only automatically creates
+            event loops in the main threads. Other threads must create event
+            loops explicitly or `asyncio.get_event_loop` (and therefore
+            `.IOLoop.current`) will fail. Installing this policy allows event
+            loops to be created automatically on any thread, matching the
+            behavior of Tornado versions prior to 5.0 (or 5.0 on Python 2).
 
-    .. versionadded:: 5.0
+            Usage::
 
-    .. deprecated:: 6.2
+                asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
 
-        ``AnyThreadEventLoopPolicy`` affects the implicit creation
-        of an event loop, which is deprecated in Python 3.10 and
-        will be removed in a future version of Python. At that time
-        ``AnyThreadEventLoopPolicy`` will no longer be useful.
-        If you are relying on it, use `asyncio.new_event_loop`
-        or `asyncio.run` explicitly in any non-main threads that
-        need event loops.
-    """
+            .. versionadded:: 5.0
 
-    def __init__(self) -> None:
-        super().__init__()
-        warnings.warn(
-            "AnyThreadEventLoopPolicy is deprecated, use asyncio.run "
-            "or asyncio.new_event_loop instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
+            .. deprecated:: 6.2
 
-    def get_event_loop(self) -> asyncio.AbstractEventLoop:
-        try:
-            return super().get_event_loop()
-        except RuntimeError:
-            # "There is no current event loop in thread %r"
-            loop = self.new_event_loop()
-            self.set_event_loop(loop)
-            return loop
+                ``AnyThreadEventLoopPolicy`` affects the implicit creation
+                of an event loop, which is deprecated in Python 3.10 and
+                will be removed in a future version of Python. At that time
+                ``AnyThreadEventLoopPolicy`` will no longer be useful.
+                If you are relying on it, use `asyncio.new_event_loop`
+                or `asyncio.run` explicitly in any non-main threads that
+                need event loops.
+            """
+
+            def __init__(self) -> None:
+                super().__init__()
+                warnings.warn(
+                    "AnyThreadEventLoopPolicy is deprecated, use asyncio.run "
+                    "or asyncio.new_event_loop instead",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+
+            def get_event_loop(self) -> asyncio.AbstractEventLoop:
+                try:
+                    return super().get_event_loop()
+                except RuntimeError:
+                    # "There is no current event loop in thread %r"
+                    loop = self.new_event_loop()
+                    self.set_event_loop(loop)
+                    return loop
+
+        _AnyThreadEventLoopPolicy = AnyThreadEventLoopPolicy
+
+    return _AnyThreadEventLoopPolicy
 
 
 class SelectorThread:

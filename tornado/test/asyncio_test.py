@@ -17,15 +17,16 @@ import unittest
 import warnings
 
 from concurrent.futures import ThreadPoolExecutor
+import tornado.platform.asyncio
 from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.platform.asyncio import (
     AsyncIOLoop,
     to_asyncio_future,
-    AnyThreadEventLoopPolicy,
     AddThreadSelectorEventLoop,
 )
-from tornado.testing import AsyncTestCase, gen_test
+from tornado.testing import AsyncTestCase, gen_test, setup_with_context_manager
+from tornado.test.util import ignore_deprecation
 
 
 class AsyncIOLoopTest(AsyncTestCase):
@@ -200,6 +201,12 @@ class SelectorThreadLeakTest(unittest.TestCase):
 
 class AnyThreadEventLoopPolicyTest(unittest.TestCase):
     def setUp(self):
+        setup_with_context_manager(self, ignore_deprecation())
+        # Referencing the event loop policy attributes raises deprecation warnings,
+        # so instead of importing this at the top of the file we capture it here.
+        self.AnyThreadEventLoopPolicy = (
+            tornado.platform.asyncio.AnyThreadEventLoopPolicy
+        )
         self.orig_policy = asyncio.get_event_loop_policy()
         self.executor = ThreadPoolExecutor(1)
 
@@ -232,7 +239,7 @@ class AnyThreadEventLoopPolicyTest(unittest.TestCase):
                 RuntimeError, self.executor.submit(asyncio.get_event_loop).result
             )
             # Set the policy and we can get a loop.
-            asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
+            asyncio.set_event_loop_policy(self.AnyThreadEventLoopPolicy())
             self.assertIsInstance(
                 self.executor.submit(asyncio.get_event_loop).result(),
                 asyncio.AbstractEventLoop,
@@ -251,6 +258,6 @@ class AnyThreadEventLoopPolicyTest(unittest.TestCase):
             # IOLoop doesn't (currently) close the underlying loop.
             self.executor.submit(lambda: asyncio.get_event_loop().close()).result()  # type: ignore
 
-            asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
+            asyncio.set_event_loop_policy(self.AnyThreadEventLoopPolicy())
             self.assertIsInstance(self.executor.submit(IOLoop.current).result(), IOLoop)
             self.executor.submit(lambda: asyncio.get_event_loop().close()).result()  # type: ignore
