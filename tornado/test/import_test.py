@@ -9,7 +9,10 @@ _import_everything = b"""
 # Explicitly disallow the default event loop so that an error will be raised
 # if something tries to touch it.
 import asyncio
-asyncio.set_event_loop(None)
+import warnings
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", DeprecationWarning)
+    asyncio.set_event_loop(None)
 
 import importlib
 import tornado
