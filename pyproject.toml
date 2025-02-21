@@ -17,8 +17,10 @@ archs = "x86_64 universal2"
 test-skip = "*_universal2:arm64"
 
 [tool.cibuildwheel.windows]
+archs = "AMD64 x86 ARM64"
 # TODO: figure out what's going on with these occasional log messages.
 test-command = "python -m tornado.test --fail-if-logs=false"
+test-skip = "*-win_arm64"
 
 [tool.cibuildwheel.linux]
 # Build wheels for the native platform (i.e. x86) as well as an emulated
