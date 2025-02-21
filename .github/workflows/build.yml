@@ -17,6 +17,8 @@ on:
   workflow_dispatch:
     # Allow this workflow to be run manually (pushing to testpypi instead of pypi)
 
+permissions: {}
+
 env:
   python-version: '3.9'
 

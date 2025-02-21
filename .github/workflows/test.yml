@@ -9,6 +9,8 @@ name: Test
 
 on: pull_request
 
+permissions: {}
+
 jobs:
   # Before starting the full build matrix, run one test configuration
   # and the linter (the `black` linter is especially likely to catch
@@ -103,3 +105,15 @@ jobs:
       - name: Run test suite
         # TODO: figure out what's up with these log messages
         run: py -m tornado.test --fail-if-logs=false
+
+  zizmor:
+    name: Analyze action configs with zizmor
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v5
+        name: Install uv
+      - name: Run zizmor
+        run: uvx zizmor .github/workflows
