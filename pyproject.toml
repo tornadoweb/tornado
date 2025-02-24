@@ -18,3 +18,14 @@ archs = "AMD64 x86 ARM64"
 test-command = "python -m tornado.test --fail-if-logs=false"
 # Arm builds are cross-compiled and cannot be tested on the x86 host
 test-skip = "*-win_arm64"
+
+[tool.cibuildwheel.linux]
+# This configuration has a bug which appears unrelated to Tornado:
+# https://github.com/python/cpython/issues/130522
+# If the underlying bug is not fixed by the time 3.14 is released,
+# we may need to skip that in musllinux_i686 as well.
+#
+# Note that because we use the stable ABI, the wheels built for
+# cp39-musllinux_i686 will still be available for users of 3.13, this just
+# means we won't be testing them in this configuration.
+test-skip = "cp313-musllinux_i686"
