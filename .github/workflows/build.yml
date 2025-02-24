@@ -51,7 +51,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-2022, macos-15]
+        os: [ubuntu-22.04, ubuntu-22.04-arm, windows-2022, macos-15]
 
     steps:
       - uses: actions/checkout@v4
@@ -61,14 +61,9 @@ jobs:
         name: Install Python
         with:
           python-version: ${{ env.python-version }}
-      - name: Set up QEMU
-        if: runner.os == 'Linux'
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: all
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.18
+        uses: pypa/cibuildwheel@v2.22
 
       - name: Audit ABI3 compliance
         # This may be moved into cibuildwheel itself in the future. See

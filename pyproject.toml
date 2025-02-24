@@ -11,25 +11,21 @@ test-command = "python -m tornado.test"
 
 [tool.cibuildwheel.macos]
 archs = "x86_64 universal2"
-# The arm portion of a universal wheel is a cross-compile and cannot
-# be tested on an x86 host. This must be configured explicitly to silence
-# a warning.
-test-skip = "*_universal2:arm64"
 
 [tool.cibuildwheel.windows]
 archs = "AMD64 x86 ARM64"
 # TODO: figure out what's going on with these occasional log messages.
 test-command = "python -m tornado.test --fail-if-logs=false"
+# Arm builds are cross-compiled and cannot be tested on the x86 host
 test-skip = "*-win_arm64"
 
 [tool.cibuildwheel.linux]
-# Build wheels for the native platform (i.e. x86) as well as an emulated
-# build for aarch64.
-archs = "auto aarch64"
-
-[[tool.cibuildwheel.overrides]]
-# The emulated arm build is quite slow, so only run a portion of the test
-# suite. websocket_test is the most platform-dependent part of the tests
-# because it uses the C speedups module.
-select = "*linux_aarch64"
-test-command = "python -m tornado.test tornado.test.websocket_test"
+# This configuration has a bug which appears unrelated to Tornado:
+# https://github.com/python/cpython/issues/130522
+# If the underlying bug is not fixed by the time 3.14 is released,
+# we may need to skip that in musllinux_i686 as well.
+#
+# Note that because we use the stable ABI, the wheels built for
+# cp39-musllinux_i686 will still be available for users of 3.13, this just
+# means we won't be testing them in this configuration.
+test-skip = "cp313-musllinux_i686"
