@@ -2520,8 +2520,6 @@ class HTTPError(Exception):
         self.log_message = log_message
         self.args = args
         self.reason = kwargs.get("reason", None)
-        if log_message and not args:
-            self.log_message = log_message.replace("%", "%%")
 
     def __str__(self) -> str:
         message = "HTTP %d: %s" % (
@@ -2529,7 +2527,8 @@ class HTTPError(Exception):
             self.reason or httputil.responses.get(self.status_code, "Unknown"),
         )
         if self.log_message:
-            return message + " (" + (self.log_message % self.args) + ")"
+            log_message = (self.log_message % self.args) if self.args else self.log_message
+            return message + " (" + log_message + ")"
         else:
             return message
 
