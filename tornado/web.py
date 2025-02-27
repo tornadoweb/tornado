@@ -1911,9 +1911,10 @@ class RequestHandler:
         .. versionadded:: 3.1
         """
         if isinstance(value, HTTPError):
-            if value.log_message:
-                format = "%d %s: " + value.log_message
-                args = [value.status_code, self._request_summary()] + list(value.args)
+            log_message = value.get_message()
+            if log_message:
+                format = "%d %s: %s"
+                args = [value.status_code, self._request_summary(), log_message]
                 gen_log.warning(format, *args)
         else:
             app_log.error(
@@ -2521,13 +2522,18 @@ class HTTPError(Exception):
         self.args = args
         self.reason = kwargs.get("reason", None)
 
+    def get_message(self) -> Optional[str]:
+        if self.log_message and self.args:
+            return self.log_message % self.args
+        return self.log_message
+
     def __str__(self) -> str:
         message = "HTTP %d: %s" % (
             self.status_code,
             self.reason or httputil.responses.get(self.status_code, "Unknown"),
         )
-        if self.log_message:
-            log_message = (self.log_message % self.args) if self.args else self.log_message
+        log_message = self.get_message()
+        if log_message:
             return message + " (" + log_message + ")"
         else:
             return message
