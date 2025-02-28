@@ -18,6 +18,7 @@
 import os
 import platform
 import setuptools
+import sysconfig
 
 
 kwargs = {}
@@ -35,6 +36,9 @@ if (
     platform.python_implementation() == "CPython"
     and os.environ.get("TORNADO_EXTENSION") != "0"
 ):
+
+    can_use_limited_api = not sysconfig.get_config_var("Py_GIL_DISABLED")
+
     # This extension builds and works on pypy as well, although pypy's jit
     # produces equivalent performance.
     kwargs["ext_modules"] = [
@@ -46,12 +50,13 @@ if (
             optional=os.environ.get("TORNADO_EXTENSION") != "1",
             # Use the stable ABI so our wheels are compatible across python
             # versions.
-            py_limited_api=True,
+            py_limited_api=can_use_limited_api,
             define_macros=[("Py_LIMITED_API", "0x03090000")],
         )
     ]
 
-    kwargs["options"] = {"bdist_wheel": {"py_limited_api": "cp39"}}
+    if can_use_limited_api:
+        kwargs["options"] = {"bdist_wheel": {"py_limited_api": "cp39"}}
 
 
 setuptools.setup(
