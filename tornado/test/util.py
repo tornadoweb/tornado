@@ -3,6 +3,7 @@ import os
 import platform
 import socket
 import sys
+import sysconfig
 import textwrap
 import typing
 import unittest
@@ -21,7 +22,11 @@ skipIfNonUnix = unittest.skipIf(
 skipIfNoNetwork = unittest.skipIf("NO_NETWORK" in os.environ, "network access disabled")
 
 skipNotCPython = unittest.skipIf(
-    platform.python_implementation() != "CPython", "Not CPython implementation"
+    # "CPython" here essentially refers to the traditional synchronous refcounting GC,
+    # so we skip these tests in free-threading builds of cpython too.
+    platform.python_implementation() != "CPython"
+    or sysconfig.get_config_var("Py_GIL_DISABLED"),
+    "Not CPython implementation",
 )
 
 
