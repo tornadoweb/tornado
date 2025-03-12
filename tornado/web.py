@@ -2518,14 +2518,23 @@ class HTTPError(Exception):
         **kwargs: Any,
     ) -> None:
         self.status_code = status_code
-        self.log_message = log_message
+        self._log_message = log_message
         self.args = args
         self.reason = kwargs.get("reason", None)
 
+    @property
+    def log_message(self) -> Optional[str]:
+        """
+        A backwards compatible way of accessing log_message.
+        """
+        if self._log_message and not self.args:
+            return self._log_message.replace("%", "%%")
+        return self._log_message
+
     def get_message(self) -> Optional[str]:
-        if self.log_message and self.args:
-            return self.log_message % self.args
-        return self.log_message
+        if self._log_message and self.args:
+            return self._log_message % self.args
+        return self._log_message
 
     def __str__(self) -> str:
         message = "HTTP %d: %s" % (
