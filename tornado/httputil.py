@@ -71,6 +71,8 @@ else:
 # To be used with str.strip() and related methods.
 HTTP_WHITESPACE = " \t"
 
+HTTP_TOKEN_RE = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
+
 
 @lru_cache(1000)
 def _normalize_header(name: str) -> str:
@@ -143,6 +145,8 @@ class HTTPHeaders(StrMutableMapping):
 
     def add(self, name: str, value: str) -> None:
         """Adds a new value for the given key."""
+        if not HTTP_TOKEN_RE.match(name):
+            raise HTTPInputError("Invalid header name %r" % name)
         norm_name = _normalize_header(name)
         self._last_key = norm_name
         if norm_name in self:
@@ -859,7 +863,7 @@ def parse_multipart_form_data(
 
 
 def format_timestamp(
-    ts: Union[int, float, tuple, time.struct_time, datetime.datetime]
+    ts: Union[int, float, tuple, time.struct_time, datetime.datetime],
 ) -> str:
     """Formats a timestamp in the format used by HTTP.
 

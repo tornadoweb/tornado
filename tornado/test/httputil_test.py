@@ -409,6 +409,22 @@ Foo: even
         headers2 = HTTPHeaders.parse(str(headers))
         self.assertEqual(headers, headers2)
 
+    def test_invalid_header_names(self):
+        invalid_names = [
+            "",
+            "foo bar",
+            "foo\tbar",
+            "foo\nbar",
+            "foo\x00bar",
+            "foo ",
+            " foo",
+            "é",
+        ]
+        for name in invalid_names:
+            headers = HTTPHeaders()
+            with self.assertRaises(HTTPInputError):
+                headers.add(name, "bar")
+
 
 class FormatTimestampTest(unittest.TestCase):
     # Make sure that all the input types are supported.
