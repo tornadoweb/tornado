@@ -149,13 +149,31 @@ class HTTPHeaders(StrMutableMapping):
             raise HTTPInputError("Invalid header name %r" % name)
         norm_name = _normalize_header(name)
         self._last_key = norm_name
-        if norm_name in self:
-            self._dict[norm_name] = (
-                native_str(self[norm_name]) + "," + native_str(value)
-            )
-            self._as_list[norm_name].append(value)
+
+        # Handle Content-Length specifically
+        if norm_name == 'Content-Length':
+            if not value.isdigit():
+                raise HTTPInputError("Invalid Content-Length header, must be a non-negative integer")
+            if int(value) < 0:
+                raise HTTPInputError("Invalid Content-Length header, must be a non-negative integer")
+
+            if norm_name in self._dict:
+                # Compare the existing value (which is stored as a string) to the new integer value (converted to string)
+                if self._dict[norm_name] != value:
+                    raise HTTPInputError("Conflicting Content-Length headers")
+            
+            # Store the Content-Length as a string
+            self._dict[norm_name] = value  # Overwrite the existing value as a string
+            self._as_list[norm_name] = [value]  # Reset list with the new value
+            
         else:
-            self[norm_name] = value
+            # For all other headers, append the value
+            if norm_name in self._dict:
+                self._dict[norm_name] += ',' + value  # Append with a comma
+                self._as_list[norm_name].append(value)  # Append to the list
+            else:
+                self._dict[norm_name] = value
+                self._as_list[norm_name] = [value]  # Initialize the list with the new value
 
     def get_list(self, name: str) -> List[str]:
         """Returns all values for the given header as a list."""
