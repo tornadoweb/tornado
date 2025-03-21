@@ -539,12 +539,11 @@ class IOLoop(Configurable):
         assert future_cell["future"] is not None
         if future_cell["future"].cancelled() or not future_cell["future"].done():
             if future_cell["timeout_called"]:
-                msg = "Operation timed out after %s seconds" % timeout
+                raise TimeoutError("Operation timed out after %s seconds" % timeout)
             else:
                 # timeout not called; maybe stop() was called explicitly
                 # or some other cancellation
-                msg = "Operation cancelled"
-            raise TimeoutError(msg)
+                raise RuntimeError("Event loop stopped before Future completed.")
         return future_cell["future"].result()
 
     def time(self) -> float:

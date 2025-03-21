@@ -629,9 +629,9 @@ class TestIOLoopRunSync(unittest.TestCase):
             IOLoop.current().stop()
             await asyncio.sleep(10)
 
-        with self.assertRaises(TimeoutError) as cm:
+        with self.assertRaises(RuntimeError) as cm:
             self.io_loop.run_sync(f)
-        assert "Operation cancelled" in str(cm.exception)
+        assert "Event loop stopped" in str(cm.exception)
 
 
 class TestPeriodicCallbackMath(unittest.TestCase):
