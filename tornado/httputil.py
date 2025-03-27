@@ -86,13 +86,22 @@ class _ABNF:
 
     # RFC 9110 (HTTP Semantics)
     obs_text = re.compile(r"[\x80-\xFF]")
+    field_vchar = re.compile(rf"(?:{VCHAR.pattern}|{obs_text.pattern})")
     tchar = re.compile(r"[!#$%&'*+\-.^_`|~0-9A-Za-z]")
     token = re.compile(rf"{tchar.pattern}+")
     field_name = token
+    method = token
 
     # RFC 9112 (HTTP/1.1)
     HTTP_version = re.compile(r"HTTP/[0-9]\.[0-9]")
     reason_phrase = re.compile(rf"(?:[\t ]|{VCHAR.pattern}|{obs_text.pattern})+")
+    # request_target delegates to the URI RFC 3986, which is complex and may be
+    # too restrictive (for example, the WHATWG version of the URL spec allows non-ASCII
+    # characters). Instead, we allow everything but control chars and whitespace.
+    request_target = re.compile(rf"{field_vchar.pattern}+")
+    request_line = re.compile(
+        rf"({method.pattern}) ({request_target.pattern}) ({HTTP_version.pattern})"
+    )
     status_code = re.compile(r"[0-9]{3}")
     status_line = re.compile(
         rf"({HTTP_version.pattern}) ({status_code.pattern}) ({reason_phrase.pattern})?"
@@ -170,7 +179,7 @@ class HTTPHeaders(StrMutableMapping):
 
     def add(self, name: str, value: str) -> None:
         """Adds a new value for the given key."""
-        if not _ABNF.token.fullmatch(name):
+        if not _ABNF.field_name.fullmatch(name):
             raise HTTPInputError("Invalid header name %r" % name)
         norm_name = _normalize_header(name)
         self._last_key = norm_name
@@ -925,22 +934,18 @@ def parse_request_start_line(line: str) -> RequestStartLine:
     >>> parse_request_start_line("GET /foo HTTP/1.1")
     RequestStartLine(method='GET', path='/foo', version='HTTP/1.1')
     """
-    try:
-        method, path, version = line.split(" ")
-    except ValueError:
+    match = _ABNF.request_line.fullmatch(line)
+    if not match:
         # https://tools.ietf.org/html/rfc7230#section-3.1.1
         # invalid request-line SHOULD respond with a 400 (Bad Request)
         raise HTTPInputError("Malformed HTTP request line")
-    if not _ABNF.HTTP_version.fullmatch(version):
-        raise HTTPInputError(
-            "Malformed HTTP version in HTTP Request-Line: %r" % version
-        )
-    if not version.startswith("HTTP/1"):
+    r = RequestStartLine(match.group(1), match.group(2), match.group(3))
+    if not r.version.startswith("HTTP/1"):
         # HTTP/2 and above doesn't use parse_request_start_line.
         # This could be folded into the regex but we don't want to deviate
         # from the ABNF in the RFCs.
-        raise HTTPInputError("Unexpected HTTP version %r" % version)
-    return RequestStartLine(method, path, version)
+        raise HTTPInputError("Unexpected HTTP version %r" % r.version)
+    return r
 
 
 class ResponseStartLine(typing.NamedTuple):
