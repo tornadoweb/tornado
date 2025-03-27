@@ -71,7 +71,41 @@ else:
 # To be used with str.strip() and related methods.
 HTTP_WHITESPACE = " \t"
 
-HTTP_TOKEN_RE = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
+
+class _ABNF:
+    """Class that holds a subset of ABNF rules from RFC 9110 and friends.
+
+    Class attributes are re.Pattern objects, with the same name as in the RFC
+    (with hyphens changed to underscores). Currently contains only the subset
+    we use (which is why this class is not public). Unfortunately the fields
+    cannot be alphabetized as they are in the RFCs because of dependencies.
+    """
+
+    # RFC 5234 (ABNF)
+    VCHAR = re.compile(r"[\x21-\x7E]")
+
+    # RFC 9110 (HTTP Semantics)
+    obs_text = re.compile(r"[\x80-\xFF]")
+    field_vchar = re.compile(rf"(?:{VCHAR.pattern}|{obs_text.pattern})")
+    tchar = re.compile(r"[!#$%&'*+\-.^_`|~0-9A-Za-z]")
+    token = re.compile(rf"{tchar.pattern}+")
+    field_name = token
+    method = token
+
+    # RFC 9112 (HTTP/1.1)
+    HTTP_version = re.compile(r"HTTP/[0-9]\.[0-9]")
+    reason_phrase = re.compile(rf"(?:[\t ]|{VCHAR.pattern}|{obs_text.pattern})+")
+    # request_target delegates to the URI RFC 3986, which is complex and may be
+    # too restrictive (for example, the WHATWG version of the URL spec allows non-ASCII
+    # characters). Instead, we allow everything but control chars and whitespace.
+    request_target = re.compile(rf"{field_vchar.pattern}+")
+    request_line = re.compile(
+        rf"({method.pattern}) ({request_target.pattern}) ({HTTP_version.pattern})"
+    )
+    status_code = re.compile(r"[0-9]{3}")
+    status_line = re.compile(
+        rf"({HTTP_version.pattern}) ({status_code.pattern}) ({reason_phrase.pattern})?"
+    )
 
 
 @lru_cache(1000)
@@ -145,7 +179,7 @@ class HTTPHeaders(StrMutableMapping):
 
     def add(self, name: str, value: str) -> None:
         """Adds a new value for the given key."""
-        if not HTTP_TOKEN_RE.match(name):
+        if not _ABNF.field_name.fullmatch(name):
             raise HTTPInputError("Invalid header name %r" % name)
         norm_name = _normalize_header(name)
         self._last_key = norm_name
@@ -892,9 +926,6 @@ class RequestStartLine(typing.NamedTuple):
     version: str
 
 
-_http_version_re = re.compile(r"^HTTP/1\.[0-9]$")
-
-
 def parse_request_start_line(line: str) -> RequestStartLine:
     """Returns a (method, path, version) tuple for an HTTP 1.x request line.
 
@@ -903,26 +934,24 @@ def parse_request_start_line(line: str) -> RequestStartLine:
     >>> parse_request_start_line("GET /foo HTTP/1.1")
     RequestStartLine(method='GET', path='/foo', version='HTTP/1.1')
     """
-    try:
-        method, path, version = line.split(" ")
-    except ValueError:
+    match = _ABNF.request_line.fullmatch(line)
+    if not match:
         # https://tools.ietf.org/html/rfc7230#section-3.1.1
         # invalid request-line SHOULD respond with a 400 (Bad Request)
         raise HTTPInputError("Malformed HTTP request line")
-    if not _http_version_re.match(version):
-        raise HTTPInputError(
-            "Malformed HTTP version in HTTP Request-Line: %r" % version
-        )
-    return RequestStartLine(method, path, version)
+    r = RequestStartLine(match.group(1), match.group(2), match.group(3))
+    if not r.version.startswith("HTTP/1"):
+        # HTTP/2 and above doesn't use parse_request_start_line.
+        # This could be folded into the regex but we don't want to deviate
+        # from the ABNF in the RFCs.
+        raise HTTPInputError("Unexpected HTTP version %r" % r.version)
+    return r
 
 
 class ResponseStartLine(typing.NamedTuple):
     version: str
     code: int
     reason: str
-
-
-_http_response_line_re = re.compile(r"(HTTP/1.[0-9]) ([0-9]+) ([^\r]*)")
 
 
 def parse_response_start_line(line: str) -> ResponseStartLine:
@@ -933,11 +962,14 @@ def parse_response_start_line(line: str) -> ResponseStartLine:
     >>> parse_response_start_line("HTTP/1.1 200 OK")
     ResponseStartLine(version='HTTP/1.1', code=200, reason='OK')
     """
-    line = native_str(line)
-    match = _http_response_line_re.match(line)
+    match = _ABNF.status_line.fullmatch(line)
     if not match:
         raise HTTPInputError("Error parsing response start line")
-    return ResponseStartLine(match.group(1), int(match.group(2)), match.group(3))
+    r = ResponseStartLine(match.group(1), int(match.group(2)), match.group(3))
+    if not r.version.startswith("HTTP/1"):
+        # HTTP/2 and above doesn't use parse_response_start_line.
+        raise HTTPInputError("Unexpected HTTP version %r" % r.version)
+    return r
 
 
 # _parseparam and _parse_header are copied and modified from python2.7's cgi.py
