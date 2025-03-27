@@ -710,8 +710,8 @@ class SetHeaderHandler(RequestHandler):
     def get(self):
         # tests the validity of web.RequestHandler._VALID_HEADER_CHARS
         illegal_chars = [chr(o) for o in range(0, 0x20)]
-        illegal_chars.append(chr(0x7f))
-        illegal_chars.remove('\t')
+        illegal_chars.append(chr(0x7F))
+        illegal_chars.remove("\t")
         for char in illegal_chars:
             try:
                 self.set_header("X-Foo", "foo" + char + "bar")
