@@ -57,9 +57,7 @@ jobs:
             tox_env: py312-full
           - python: '3.13'
             tox_env: py313-full
-          - python: '3.14.0-alpha.4'
-            # TODO: Alpha 5 has a bug that affects us, so stick with alpha 4 until 6 is released.
-            # https://github.com/python/cpython/issues/130380
+          - python: '3.14.0-alpha.1 - 3.14'
             tox_env: py314-full
           - python: 'pypy-3.10'
             # Pypy is a lot slower due to jit warmup costs, so don't run the
