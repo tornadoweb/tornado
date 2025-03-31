@@ -627,6 +627,16 @@ class TestIOLoopRunSync(unittest.TestCase):
 
         self.io_loop.run_sync(f2)
 
+    def test_stop_no_timeout(self):
+        async def f():
+            await asyncio.sleep(0.1)
+            IOLoop.current().stop()
+            await asyncio.sleep(10)
+
+        with self.assertRaises(RuntimeError) as cm:
+            self.io_loop.run_sync(f)
+        assert "Event loop stopped" in str(cm.exception)
+
 
 class TestPeriodicCallbackMath(unittest.TestCase):
     def simulate_calls(self, pc, durations):

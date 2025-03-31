@@ -30,7 +30,7 @@ from tornado.testing import (
 from tornado.test.util import abstract_base_test
 from tornado.web import Application, RequestHandler, stream_request_body
 
-from contextlib import closing
+from contextlib import closing, contextmanager
 import datetime
 import gzip
 import logging
@@ -633,6 +633,38 @@ ok
                         )
                     )
                     yield stream.read_until_close()
+
+    @gen_test
+    def test_invalid_methods(self):
+        # RFC 9110 distinguishes between syntactically invalid methods and those that are
+        # valid but unknown. The former must give a 400 status code, while the latter should
+        # give a 405.
+        test_cases = [
+            ("FOO", 405, None),
+            ("FOO,BAR", 400, ".*Malformed HTTP request line"),
+        ]
+        for method, code, log_msg in test_cases:
+            if log_msg is not None:
+                expect_log = ExpectLog(gen_log, log_msg, level=logging.INFO)
+            else:
+
+                @contextmanager
+                def noop_context():
+                    yield
+
+                expect_log = noop_context()  # type: ignore
+            with (
+                self.subTest(method=method),
+                closing(IOStream(socket.socket())) as stream,
+                expect_log,
+            ):
+                yield stream.connect(("127.0.0.1", self.get_http_port()))
+                stream.write(utf8(f"{method} /echo HTTP/1.1\r\n\r\n"))
+                resp = yield stream.read_until(b"\r\n\r\n")
+                self.assertTrue(
+                    resp.startswith(b"HTTP/1.1 %d" % code),
+                    f"expected status code {code} in {resp!r}",
+                )
 
 
 class XHeaderTest(HandlerBaseTestCase):
