@@ -372,7 +372,9 @@ class HTTPRequest:
         user_agent: Optional[str] = None,
         use_gzip: Optional[bool] = None,
         network_interface: Optional[str] = None,
-        streaming_callback: Optional[Callable[[bytes], Optional[Awaitable[None]]]] = None,
+        streaming_callback: Optional[
+            Callable[[bytes], Optional[Awaitable[None]]]
+        ] = None,
         header_callback: Optional[Callable[[str], None]] = None,
         prepare_curl_callback: Optional[Callable[[Any], None]] = None,
         proxy_host: Optional[str] = None,

@@ -691,7 +691,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         if self._should_follow_redirect():
             # We're going to follow a redirect so just discard the body.
             return None
-        if self.request.streaming_callback is not None:  
+        if self.request.streaming_callback is not None:
             return self.request.streaming_callback(chunk)
         else:
             self.chunks.append(chunk)
