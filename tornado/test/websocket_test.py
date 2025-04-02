@@ -878,7 +878,10 @@ class ServerPingTimeoutTest(WebSocketBaseTestCase):
     @gen_test
     def test_client_ping_timeout(self):
         # websocket client
-        ws = yield self.ws_connect("/", ping_interval=0.2, ping_timeout=0.05)
+        interval = 0.2
+        ws = yield self.ws_connect(
+            "/", ping_interval=interval, ping_timeout=interval / 4
+        )
 
         # websocket handler (server side)
         handler = self.handlers[0]
@@ -894,11 +897,11 @@ class ServerPingTimeoutTest(WebSocketBaseTestCase):
             # connection should still be open from the client end
             assert ws.protocol.close_code is None
 
-        # delay the pong message by 0.10 seconds (timeout=0.05)
+        # suppress the pong response message
         self.suppress_pong(ws)
 
         # give the server time to register this
-        yield gen.sleep(0.2)
+        yield gen.sleep(interval * 1.5)
 
         # connection should be closed from the server side
         self.assertEqual(handler.close_code, 1000)
