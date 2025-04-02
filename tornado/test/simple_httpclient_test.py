@@ -540,8 +540,8 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
         self.assertEqual(num_start_lines, 1)
 
     def test_streaming_callback_coroutine(self: typing.Any):
-        headers = []
-        chunk_bytes = []
+        headers = []  # type: typing.List[str]
+        chunk_bytes = []  # type: typing.List[bytes]
 
         @gen.coroutine
         def _put_chunk(chunk):
