@@ -28,7 +28,7 @@ import zlib
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado.escape import utf8, native_str, to_unicode
 from tornado import gen, httpclient, httputil
-from tornado.ioloop import IOLoop, PeriodicCallback
+from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError, IOStream
 from tornado.log import gen_log, app_log
 from tornado.netutil import Resolver
@@ -860,7 +860,6 @@ class WebSocketProtocol13(WebSocketProtocol):
         # the effect of compression, frame overhead, and control frames.
         self._wire_bytes_in = 0
         self._wire_bytes_out = 0
-        self.ping_callback = None  # type: Optional[PeriodicCallback]
         self._received_pong = False  # type: bool
         self.close_code = None  # type: Optional[int]
         self.close_reason = None  # type: Optional[str]
@@ -1327,13 +1326,13 @@ class WebSocketProtocol13(WebSocketProtocol):
                     # Note: using de_dupe_gen_log to prevent this message from
                     # being duplicated for each connection
                     logging.WARNING,
-                    f'The websocket_ping_timeout ({timeout}) cannot be longer'
-                    f' than the websocket_ping_interval ({self.ping_interval}).'
-                    f'\nSetting websocket_ping_timeout={self.ping_interval}'
+                    f"The websocket_ping_timeout ({timeout}) cannot be longer"
+                    f" than the websocket_ping_interval ({self.ping_interval})."
+                    f"\nSetting websocket_ping_timeout={self.ping_interval}",
                 )
                 return self.ping_interval
             return timeout
-        return min(self.ping_interval, 30)
+        return self.ping_interval
 
     def start_pinging(self) -> None:
         """Start sending periodic pings to keep the connection alive"""
@@ -1366,7 +1365,7 @@ class WebSocketProtocol13(WebSocketProtocol):
 
             # make sure we received a pong within the timeout
             if timeout > 0 and not self._received_pong:
-                self.close(reason='ping timed out')
+                self.close(reason="ping timed out")
                 return
 
             # wait until the next scheduled ping
