@@ -888,8 +888,8 @@ class ServerPingTimeoutTest(WebSocketBaseTestCase):
             yield gen.sleep(0.2)
 
             # connection should still be open from the server end
-            assert handler.close_code is None
-            assert handler.close_reason is None
+            self.assertIsNone(handler.close_code)
+            self.assertIsNone(handler.close_reason)
 
             # connection should still be open from the client end
             assert ws.protocol.close_code is None
@@ -901,11 +901,11 @@ class ServerPingTimeoutTest(WebSocketBaseTestCase):
         yield gen.sleep(0.2)
 
         # connection should be closed from the server side
-        assert handler.close_code == 1000
-        assert handler.close_reason == "ping timed out"
+        self.assertEqual(handler.close_code, 1000)
+        self.assertEqual(handler.close_reason, "ping timed out")
 
         # client should have received a close operation
-        assert ws.protocol.close_code == 1000
+        self.assertEqual(ws.protocol.close_code, 1000)
 
 
 class ManualPingTest(WebSocketBaseTestCase):
