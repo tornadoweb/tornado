@@ -101,11 +101,12 @@ from typing import (
     Tuple,
     Awaitable,
     Dict,
+    Sequence,
     overload,
 )
 
 if typing.TYPE_CHECKING:
-    from typing import Sequence, Deque, Optional, Set, Iterable  # noqa: F401
+    from typing import Deque, Optional, Set, Iterable  # noqa: F401
 
 _T = typing.TypeVar("_T")
 
