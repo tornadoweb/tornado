@@ -1912,9 +1912,10 @@ class RequestHandler:
         .. versionadded:: 3.1
         """
         if isinstance(value, HTTPError):
-            if value.log_message:
-                format = "%d %s: " + value.log_message
-                args = [value.status_code, self._request_summary()] + list(value.args)
+            log_message = value.get_message()
+            if log_message:
+                format = "%d %s: %s"
+                args = [value.status_code, self._request_summary(), log_message]
                 gen_log.warning(format, *args)
         else:
             app_log.error(
@@ -2518,19 +2519,32 @@ class HTTPError(Exception):
         **kwargs: Any,
     ) -> None:
         self.status_code = status_code
-        self.log_message = log_message
+        self._log_message = log_message
         self.args = args
         self.reason = kwargs.get("reason", None)
-        if log_message and not args:
-            self.log_message = log_message.replace("%", "%%")
+
+    @property
+    def log_message(self) -> Optional[str]:
+        """
+        A backwards compatible way of accessing log_message.
+        """
+        if self._log_message and not self.args:
+            return self._log_message.replace("%", "%%")
+        return self._log_message
+
+    def get_message(self) -> Optional[str]:
+        if self._log_message and self.args:
+            return self._log_message % self.args
+        return self._log_message
 
     def __str__(self) -> str:
         message = "HTTP %d: %s" % (
             self.status_code,
             self.reason or httputil.responses.get(self.status_code, "Unknown"),
         )
-        if self.log_message:
-            return message + " (" + (self.log_message % self.args) + ")"
+        log_message = self.get_message()
+        if log_message:
+            return message + " (" + log_message + ")"
         else:
             return message
 
