@@ -482,6 +482,23 @@ Transfer-Encoding: chunked
         self.assertRegex(first_line[0], "HTTP/[0-9]\\.[0-9] 200.*\r\n")
         self.assertEqual(chunks, [b"asdf", b"qwer"])
 
+    def test_header_callback_to_parse_line(self):
+        # Make a request with header_callback and feed the headers to HTTPHeaders.parse_line.
+        # (Instead of HTTPHeaders.parse which is used in normal cases). Ensure that the resulting
+        # headers are as expected, and in particular do not have trailing whitespace added
+        # due to the final CRLF line.
+        headers = HTTPHeaders()
+
+        def header_callback(line):
+            if line.startswith("HTTP/"):
+                # Ignore the first status line
+                return
+            headers.parse_line(line)
+
+        self.fetch("/hello", header_callback=header_callback)
+        for k, v in headers.get_all():
+            self.assertTrue(v == v.strip(), (k, v))
+
     @gen_test
     def test_configure_defaults(self):
         defaults = dict(user_agent="TestDefaultUserAgent", allow_ipv6=False)
