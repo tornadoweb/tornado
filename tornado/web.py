@@ -283,8 +283,8 @@ class RequestHandler:
     def prepare(self) -> Optional[Awaitable[None]]:
         """Called at the beginning of a request before  `get`/`post`/etc.
 
-        Override this method to perform common initialization regardless
-        of the request method.
+        Override this method to perform common initialization for request method.
+        If the request method is not in ``SUPPORTED_METHODS`` this will not be called.
 
         Asynchronous support: Use ``async def`` or decorate this method with
         `.gen.coroutine` to make it asynchronous.
@@ -300,8 +300,8 @@ class RequestHandler:
         """Called after the end of a request.
 
         Override this method to perform cleanup, logging, etc.
-        This method is a counterpart to `prepare`.  ``on_finish`` may
-        not produce any output, as it is called after the response
+        This method is a counterpart to `prepare` - except it will be called even if the request method is not in ``SUPPORTED_METHODS``.  
+        ``on_finish`` may not produce any output, as it is called after the response
         has been sent to the client.
         """
         pass
