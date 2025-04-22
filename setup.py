@@ -51,7 +51,7 @@ if (
             # Use the stable ABI so our wheels are compatible across python
             # versions.
             py_limited_api=can_use_limited_api,
-            define_macros=[("Py_LIMITED_API", "0x03090000")],
+            define_macros=[("Py_LIMITED_API", "0x03090000")] if can_use_limited_api else [],
         )
     ]
 
