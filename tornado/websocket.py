@@ -204,6 +204,8 @@ class WebSocketHandler(tornado.web.RequestHandler):
     If the application setting ``websocket_ping_interval`` has a non-zero
     value, a ping will be sent periodically, and the connection will be
     closed if a response is not received before the ``websocket_ping_timeout``.
+    Both settings are in seconds; floating point values are allowed.
+    The default timeout is equal to the interval.
 
     Messages larger than the ``websocket_max_message_size`` application setting
     (default 10MiB) will not be accepted.
@@ -308,7 +310,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         Set ``websocket_ping_timeout = 0`` to disable the ping timeout.
 
-        Default: ``min(ping_interval, 30)``
+        Default: equal to the ``ping_interval``.
 
         .. versionchanged:: 6.5.0
            Default changed from the max of 3 pings or 30 seconds.
@@ -406,8 +408,8 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         ``mem_level`` specifies the amount of memory used for the internal compression state.
 
-         These parameters are documented in details here:
-         https://docs.python.org/3.6/library/zlib.html#zlib.compressobj
+         These parameters are documented in detail here:
+         https://docs.python.org/3.13/library/zlib.html#zlib.compressobj
 
         .. versionadded:: 4.1
 
