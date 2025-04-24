@@ -207,18 +207,39 @@ class HTTPHeaders(StrMutableMapping):
                 yield (name, value)
 
     def parse_line(self, line: str) -> None:
-        """Updates the dictionary with a single header line.
+        r"""Updates the dictionary with a single header line.
 
         >>> h = HTTPHeaders()
         >>> h.parse_line("Content-Type: text/html")
         >>> h.get('content-type')
         'text/html'
+        >>> h.parse_line("Content-Length: 42\r\n")
+        >>> h.get('content-type')
+        'text/html'
+
+        .. versionchanged:: 6.5
+            Now supports lines with or without the trailing CRLF, making it possible
+            to pass lines from AsyncHTTPClient's header_callback directly to this method.
+
+        .. deprecated:: 6.5
+           In Tornado 7.0, certain deprecated features of HTTP will become errors.
+           Specifically, line folding and the use of LF (with CR) as a line separator
+           will be removed.
         """
+        if m := re.search(r"\r?\n$", line):
+            # RFC 9112 section 2.2: a recipient MAY recognize a single LF as a line
+            # terminator and ignore any preceding CR.
+            # TODO(7.0): Remove this support for LF-only line endings.
+            line = line[: m.start()]
+        if not line:
+            # Empty line, or the final CRLF of a header block.
+            return
         if line[0].isspace():
             # continuation of a multi-line header
+            # TODO(7.0): Remove support for line folding.
             if self._last_key is None:
                 raise HTTPInputError("first header line cannot start with whitespace")
-            new_part = " " + line.lstrip(HTTP_WHITESPACE)
+            new_part = " " + line.strip(HTTP_WHITESPACE)
             self._as_list[self._last_key][-1] += new_part
             self._dict[self._last_key] += new_part
         else:
@@ -243,13 +264,16 @@ class HTTPHeaders(StrMutableMapping):
 
         """
         h = cls()
-        # RFC 7230 section 3.5: a recipient MAY recognize a single LF as a line
-        # terminator and ignore any preceding CR.
-        for line in headers.split("\n"):
-            if line.endswith("\r"):
-                line = line[:-1]
-            if line:
-                h.parse_line(line)
+
+        start = 0
+        while True:
+            lf = headers.find("\n", start)
+            if lf == -1:
+                h.parse_line(headers[start:])
+                break
+            line = headers[start : lf + 1]
+            start = lf + 1
+            h.parse_line(line)
         return h
 
     # MutableMapping abstract method implementations.
