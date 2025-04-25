@@ -248,7 +248,7 @@ class HTTPHeaders(StrMutableMapping):
         if not line:
             # Empty line, or the final CRLF of a header block.
             return
-        if line[0].isspace():
+        if line[0] in HTTP_WHITESPACE:
             # continuation of a multi-line header
             # TODO(7.0): Remove support for line folding.
             if self._last_key is None:
