@@ -14,7 +14,7 @@ from tornado.log import gen_log, app_log
 from tornado.netutil import Resolver
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
-from tornado.test.util import abstract_base_test
+from tornado.test.util import abstract_base_test, ignore_deprecation
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
 from tornado.web import Application, RequestHandler
 
@@ -333,9 +333,10 @@ class WebSocketTest(WebSocketBaseTestCase):
         self.assertEqual(response, "hello")
 
     def test_websocket_callbacks(self):
-        websocket_connect(
-            "ws://127.0.0.1:%d/echo" % self.get_http_port(), callback=self.stop
-        )
+        with ignore_deprecation():
+            websocket_connect(
+                "ws://127.0.0.1:%d/echo" % self.get_http_port(), callback=self.stop
+            )
         ws = self.wait().result()
         ws.write_message("hello")
         ws.read_message(self.stop)

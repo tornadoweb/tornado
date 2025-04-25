@@ -1675,6 +1675,11 @@ def websocket_connect(
 
     .. versionchanged:: 6.3
        Added the ``resolver`` argument.
+
+    .. deprecated:: 6.5
+       The ``callback`` argument is deprecated and will be removed in Tornado 7.0.
+       Use the returned Future instead. Note that ``on_message_callback`` is not
+       deprecated and may still be used.
     """
     if isinstance(url, httpclient.HTTPRequest):
         assert connect_timeout is None
@@ -1699,5 +1704,11 @@ def websocket_connect(
         resolver=resolver,
     )
     if callback is not None:
+        warnings.warn(
+            "The callback argument to websocket_connect is deprecated. "
+            "Use the returned Future instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         IOLoop.current().add_future(conn.connect_future, callback)
     return conn.connect_future
