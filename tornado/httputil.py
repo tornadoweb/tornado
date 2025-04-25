@@ -81,6 +81,19 @@ class _ABNF:
     cannot be alphabetized as they are in the RFCs because of dependencies.
     """
 
+    # RFC 3986 (URI)
+    # The URI hostname ABNF is both complex (including detailed vaildation of IPv4 and IPv6
+    # literals) and not strict enough (a lot of punctuation is allowed by the ABNF even though
+    # it is not allowed by DNS). We simplify it by allowing square brackets and colons in any
+    # position, not only for their use in IPv6 literals.
+    uri_unreserved = re.compile(r"[A-Za-z0-9\-._~]")
+    uri_sub_delims = re.compile(r"[!$&'()*+,;=]")
+    uri_pct_encoded = re.compile(r"%[0-9A-Fa-f]{2}")
+    uri_host = re.compile(
+        rf"(?:[\[\]:]|{uri_unreserved.pattern}|{uri_sub_delims.pattern}|{uri_pct_encoded.pattern})*"
+    )
+    uri_port = re.compile(r"[0-9]*")
+
     # RFC 5234 (ABNF)
     VCHAR = re.compile(r"[\x21-\x7E]")
 
@@ -91,6 +104,7 @@ class _ABNF:
     token = re.compile(rf"{tchar.pattern}+")
     field_name = token
     method = token
+    host = re.compile(rf"(?:{uri_host.pattern})(?::{uri_port.pattern})?")
 
     # RFC 9112 (HTTP/1.1)
     HTTP_version = re.compile(r"HTTP/[0-9]\.[0-9]")
@@ -421,7 +435,7 @@ class HTTPServerRequest:
         version: str = "HTTP/1.0",
         headers: Optional[HTTPHeaders] = None,
         body: Optional[bytes] = None,
-        host: Optional[str] = None,
+        # host: Optional[str] = None,
         files: Optional[Dict[str, List["HTTPFile"]]] = None,
         connection: Optional["HTTPConnection"] = None,
         start_line: Optional["RequestStartLine"] = None,
@@ -440,7 +454,35 @@ class HTTPServerRequest:
         self.remote_ip = getattr(context, "remote_ip", None)
         self.protocol = getattr(context, "protocol", "http")
 
-        self.host = host or self.headers.get("Host") or "127.0.0.1"
+        try:
+            self.host = self.headers["Host"]
+        except KeyError:
+            if version == "HTTP/1.0":
+                # HTTP/1.0 does not require the Host header.
+                self.host = "127.0.0.1"
+            else:
+                raise HTTPInputError("Missing Host header")
+        if not _ABNF.host.fullmatch(self.host):
+            print(_ABNF.host.pattern)
+            raise HTTPInputError("Invalid Host header: %r" % self.host)
+        if "," in self.host:
+            # https://www.rfc-editor.org/rfc/rfc9112.html#name-request-target
+            # Server MUST respond with 400 Bad Request if multiple
+            # Host headers are present.
+            #
+            # We test for the presence of a comma instead of the number of
+            # headers received because a proxy may have converted
+            # multiple headers into a single comma-separated value
+            # (per RFC 9110 section 5.3).
+            #
+            # This is technically a departure from the RFC since the ABNF
+            # does not forbid commas in the host header. However, since
+            # commas are not allowed in DNS names, it is appropriate to
+            # disallow them. (The same argument could be made for other special
+            # characters, but commas are the most problematic since they could
+            # be used to exploit differences between proxies when multiple headers
+            # are supplied).
+            raise HTTPInputError("Multiple host headers not allowed: %r" % self.host)
         self.host_name = split_host_and_port(self.host.lower())[0]
         self.files = files or {}
         self.connection = connection

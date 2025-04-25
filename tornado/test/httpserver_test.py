@@ -267,6 +267,7 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
             b"\r\n".join(
                 [
                     b"POST /hello HTTP/1.1",
+                    b"Host: 127.0.0.1",
                     b"Content-Length: 1024",
                     b"Expect: 100-continue",
                     b"Connection: close",
@@ -467,6 +468,7 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
         self.stream.write(
             b"""\
 POST /echo HTTP/1.1
+Host: 127.0.0.1
 Transfer-Encoding: chunked
 Content-Type: application/x-www-form-urlencoded
 
@@ -491,6 +493,7 @@ bar
         self.stream.write(
             b"""\
 POST /echo HTTP/1.1
+Host: 127.0.0.1
 Transfer-Encoding: Chunked
 Content-Type: application/x-www-form-urlencoded
 
@@ -515,6 +518,7 @@ bar
         self.stream.write(
             b"""\
 POST /echo HTTP/1.1
+Host: 127.0.0.1
 Transfer-Encoding: chunked
 
 1_a
@@ -537,6 +541,7 @@ Transfer-Encoding: chunked
         self.stream.write(
             b"""\
 POST /echo HTTP/1.1
+Host: 127.0.0.1
 Transfer-Encoding: chunked
 Transfer-encoding: chunked
 
@@ -561,6 +566,7 @@ ok
         self.stream.write(
             b"""\
 POST /echo HTTP/1.1
+Host: 127.0.0.1
 Transfer-Encoding: gzip, chunked
 
 2
@@ -582,6 +588,7 @@ ok
         self.stream.write(
             b"""\
 POST /echo HTTP/1.1
+Host: 127.0.0.1
 Transfer-Encoding: chunked
 Content-Length: 2
 
@@ -624,6 +631,7 @@ ok
                             textwrap.dedent(
                                 f"""\
                             POST /echo HTTP/1.1
+                            Host: 127.0.0.1
                             Content-Length: {value}
                             Connection: close
 
@@ -659,7 +667,7 @@ ok
                 expect_log,
             ):
                 yield stream.connect(("127.0.0.1", self.get_http_port()))
-                stream.write(utf8(f"{method} /echo HTTP/1.1\r\n\r\n"))
+                stream.write(utf8(f"{method} /echo HTTP/1.1\r\nHost:127.0.0.1\r\n\r\n"))
                 resp = yield stream.read_until(b"\r\n\r\n")
                 self.assertTrue(
                     resp.startswith(b"HTTP/1.1 %d" % code),
@@ -968,16 +976,18 @@ class KeepAliveTest(AsyncHTTPTestCase):
     @gen_test
     def test_two_requests(self):
         yield self.connect()
-        self.stream.write(b"GET / HTTP/1.1\r\n\r\n")
+        self.stream.write(b"GET / HTTP/1.1\r\nHost:127.0.0.1\r\n\r\n")
         yield self.read_response()
-        self.stream.write(b"GET / HTTP/1.1\r\n\r\n")
+        self.stream.write(b"GET / HTTP/1.1\r\nHost:127.0.0.1\r\n\r\n")
         yield self.read_response()
         self.close()
 
     @gen_test
     def test_request_close(self):
         yield self.connect()
-        self.stream.write(b"GET / HTTP/1.1\r\nConnection: close\r\n\r\n")
+        self.stream.write(
+            b"GET / HTTP/1.1\r\nHost:127.0.0.1\r\nConnection: close\r\n\r\n"
+        )
         yield self.read_response()
         data = yield self.stream.read_until_close()
         self.assertTrue(not data)
@@ -1023,7 +1033,9 @@ class KeepAliveTest(AsyncHTTPTestCase):
     @gen_test
     def test_pipelined_requests(self):
         yield self.connect()
-        self.stream.write(b"GET / HTTP/1.1\r\n\r\nGET / HTTP/1.1\r\n\r\n")
+        self.stream.write(
+            b"GET / HTTP/1.1\r\nHost:127.0.0.1\r\n\r\nGET / HTTP/1.1\r\nHost:127.0.0.1\r\n\r\n"
+        )
         yield self.read_response()
         yield self.read_response()
         self.close()
@@ -1031,7 +1043,9 @@ class KeepAliveTest(AsyncHTTPTestCase):
     @gen_test
     def test_pipelined_cancel(self):
         yield self.connect()
-        self.stream.write(b"GET / HTTP/1.1\r\n\r\nGET / HTTP/1.1\r\n\r\n")
+        self.stream.write(
+            b"GET / HTTP/1.1\r\nHost:127.0.0.1\r\n\r\nGET / HTTP/1.1\r\nHost:127.0.0.1\r\n\r\n"
+        )
         # only read once
         yield self.read_response()
         self.close()
@@ -1039,7 +1053,7 @@ class KeepAliveTest(AsyncHTTPTestCase):
     @gen_test
     def test_cancel_during_download(self):
         yield self.connect()
-        self.stream.write(b"GET /large HTTP/1.1\r\n\r\n")
+        self.stream.write(b"GET /large HTTP/1.1\r\nHost:127.0.0.1\r\n\r\n")
         yield self.read_headers()
         yield self.stream.read_bytes(1024)
         self.close()
@@ -1047,7 +1061,7 @@ class KeepAliveTest(AsyncHTTPTestCase):
     @gen_test
     def test_finish_while_closed(self):
         yield self.connect()
-        self.stream.write(b"GET /finish_on_close HTTP/1.1\r\n\r\n")
+        self.stream.write(b"GET /finish_on_close HTTP/1.1\r\nHost:127.0.0.1\r\n\r\n")
         yield self.read_headers()
         self.close()
         # Let the hanging coroutine clean up after itself
@@ -1075,10 +1089,10 @@ class KeepAliveTest(AsyncHTTPTestCase):
     @gen_test
     def test_keepalive_chunked_head_no_body(self):
         yield self.connect()
-        self.stream.write(b"HEAD /chunked HTTP/1.1\r\n\r\n")
+        self.stream.write(b"HEAD /chunked HTTP/1.1\r\nHost:127.0.0.1\r\n\r\n")
         yield self.read_headers()
 
-        self.stream.write(b"HEAD /chunked HTTP/1.1\r\n\r\n")
+        self.stream.write(b"HEAD /chunked HTTP/1.1\r\nHost:127.0.0.1\r\n\r\n")
         yield self.read_headers()
         self.close()
 
@@ -1337,7 +1351,7 @@ class IdleTimeoutTest(AsyncHTTPTestCase):
 
         # Use the connection twice to make sure keep-alives are working
         for i in range(2):
-            stream.write(b"GET / HTTP/1.1\r\n\r\n")
+            stream.write(b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
             yield stream.read_until(b"\r\n\r\n")
             data = yield stream.read_bytes(11)
             self.assertEqual(data, b"Hello world")
@@ -1459,6 +1473,7 @@ class BodyLimitsTest(AsyncHTTPTestCase):
             # Use a raw stream so we can make sure it's all on one connection.
             stream.write(
                 b"PUT /streaming?expected_size=10240 HTTP/1.1\r\n"
+                b"Host: 127.0.0.1\r\n"
                 b"Content-Length: 10240\r\n\r\n"
             )
             stream.write(b"a" * 10240)
@@ -1466,7 +1481,9 @@ class BodyLimitsTest(AsyncHTTPTestCase):
             self.assertEqual(response, b"10240")
             # Without the ?expected_size parameter, we get the old default value
             stream.write(
-                b"PUT /streaming HTTP/1.1\r\n" b"Content-Length: 10240\r\n\r\n"
+                b"PUT /streaming HTTP/1.1\r\n"
+                b"Host: 127.0.0.1\r\n"
+                b"Content-Length: 10240\r\n\r\n"
             )
             with ExpectLog(gen_log, ".*Content-Length too long", level=logging.INFO):
                 data = yield stream.read_until_close()
