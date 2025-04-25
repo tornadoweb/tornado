@@ -287,11 +287,20 @@ Foo: even
             [("Asdf", "qwer zxcv"), ("Foo", "bar baz"), ("Foo", "even more lines")],
         )
 
-    def test_malformed_continuation(self):
+    def test_continuation(self):
+        data = "Foo: bar\r\n\tasdf"
+        headers = HTTPHeaders.parse(data)
+        self.assertEqual(headers["Foo"], "bar asdf")
+
         # If the first line starts with whitespace, it's a
         # continuation line with nothing to continue, so reject it
         # (with a proper error).
         data = " Foo: bar"
+        self.assertRaises(HTTPInputError, HTTPHeaders.parse, data)
+
+        # \f (formfeed) is whitespace according to str.isspace, but
+        # not according to the HTTP spec.
+        data = "Foo: bar\r\n\fasdf"
         self.assertRaises(HTTPInputError, HTTPHeaders.parse, data)
 
     def test_unicode_newlines(self):
