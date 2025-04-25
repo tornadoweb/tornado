@@ -2362,7 +2362,7 @@ class StreamingRequestBodyTest(WebTestCase):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         s.connect(("127.0.0.1", self.get_http_port()))
         stream = IOStream(s)
-        stream.write(b"GET " + url + b" HTTP/1.1\r\n")
+        stream.write(b"GET " + url + b" HTTP/1.1\r\nHost: 127.0.0.1\r\n")
         if connection_close:
             stream.write(b"Connection: close\r\n")
         stream.write(b"Transfer-Encoding: chunked\r\n\r\n")
