@@ -56,24 +56,22 @@ static PyMethodDef methods[] = {
     {NULL, NULL, 0, NULL}
 };
 
+static PyModuleDef_Slot slots[] = {
+    {Py_mod_multiple_interpreters, Py_MOD_PER_INTERPRETER_GIL_SUPPORTED},
+    {Py_mod_gil, Py_MOD_GIL_NOT_USED},
+    {0, NULL}
+};
+
 static struct PyModuleDef speedupsmodule = {
    PyModuleDef_HEAD_INIT,
    "speedups",
    NULL,
-   -1,
-   methods
+   0,
+   methods,
+   slots,
 };
 
 PyMODINIT_FUNC
 PyInit_speedups(void) {
-    PyObject *m = PyModule_Create(&speedupsmodule);
-    if (!m) {
-        return NULL;
-    }
-
-#ifdef Py_GIL_DISABLED
-    PyUnstable_Module_SetGIL(m, Py_MOD_GIL_NOT_USED);
-#endif
-
-    return m;
+    return PyModuleDef_Init(&speedupsmodule);
 }
