@@ -14,7 +14,7 @@ from tornado.log import gen_log, app_log
 from tornado.netutil import Resolver
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
-from tornado.test.util import abstract_base_test
+from tornado.test.util import abstract_base_test, ignore_deprecation
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
 from tornado.web import Application, RequestHandler
 
@@ -333,9 +333,10 @@ class WebSocketTest(WebSocketBaseTestCase):
         self.assertEqual(response, "hello")
 
     def test_websocket_callbacks(self):
-        websocket_connect(
-            "ws://127.0.0.1:%d/echo" % self.get_http_port(), callback=self.stop
-        )
+        with ignore_deprecation():
+            websocket_connect(
+                "ws://127.0.0.1:%d/echo" % self.get_http_port(), callback=self.stop
+            )
         ws = self.wait().result()
         ws.write_message("hello")
         ws.read_message(self.stop)
@@ -810,7 +811,11 @@ class ServerPeriodicPingTest(WebSocketBaseTestCase):
             def on_pong(self, data):
                 self.write_message("got pong")
 
-        return Application([("/", PingHandler)], websocket_ping_interval=0.01)
+        return Application(
+            [("/", PingHandler)],
+            websocket_ping_interval=0.01,
+            websocket_ping_timeout=0,
+        )
 
     @gen_test
     def test_server_ping(self):
@@ -831,12 +836,80 @@ class ClientPeriodicPingTest(WebSocketBaseTestCase):
 
     @gen_test
     def test_client_ping(self):
-        ws = yield self.ws_connect("/", ping_interval=0.01)
+        ws = yield self.ws_connect("/", ping_interval=0.01, ping_timeout=0)
         for i in range(3):
             response = yield ws.read_message()
             self.assertEqual(response, "got ping")
-        # TODO: test that the connection gets closed if ping responses stop.
         ws.close()
+
+
+class ServerPingTimeoutTest(WebSocketBaseTestCase):
+    def get_app(self):
+        self.handlers: list[WebSocketHandler] = []
+        test = self
+
+        class PingHandler(TestWebSocketHandler):
+            def initialize(self, close_future=None, compression_options=None):
+                self.handlers = test.handlers
+                # capture the handler instance so we can interrogate it later
+                self.handlers.append(self)
+                return super().initialize(
+                    close_future=close_future, compression_options=compression_options
+                )
+
+        app = Application([("/", PingHandler)])
+        return app
+
+    @staticmethod
+    def suppress_pong(ws):
+        """Suppress the client's "pong" response."""
+
+        def wrapper(fcn):
+            def _inner(oppcode: int, data: bytes):
+                if oppcode == 0xA:  # NOTE: 0x9=ping, 0xA=pong
+                    # prevent pong responses
+                    return
+                # leave all other responses unchanged
+                return fcn(oppcode, data)
+
+            return _inner
+
+        ws.protocol._handle_message = wrapper(ws.protocol._handle_message)
+
+    @gen_test
+    def test_client_ping_timeout(self):
+        # websocket client
+        interval = 0.2
+        ws = yield self.ws_connect(
+            "/", ping_interval=interval, ping_timeout=interval / 4
+        )
+
+        # websocket handler (server side)
+        handler = self.handlers[0]
+
+        for _ in range(5):
+            # wait for the ping period
+            yield gen.sleep(0.2)
+
+            # connection should still be open from the server end
+            self.assertIsNone(handler.close_code)
+            self.assertIsNone(handler.close_reason)
+
+            # connection should still be open from the client end
+            assert ws.protocol.close_code is None
+
+        # suppress the pong response message
+        self.suppress_pong(ws)
+
+        # give the server time to register this
+        yield gen.sleep(interval * 1.5)
+
+        # connection should be closed from the server side
+        self.assertEqual(handler.close_code, 1000)
+        self.assertEqual(handler.close_reason, "ping timed out")
+
+        # client should have received a close operation
+        self.assertEqual(ws.protocol.close_code, 1000)
 
 
 class ManualPingTest(WebSocketBaseTestCase):
