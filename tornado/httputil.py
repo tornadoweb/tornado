@@ -33,7 +33,7 @@ import time
 import unicodedata
 from urllib.parse import urlencode, urlparse, urlunparse, parse_qsl
 
-from tornado.escape import native_str, parse_qs_bytes, utf8
+from tornado.escape import native_str, parse_qs_bytes, utf8, to_unicode
 from tornado.log import gen_log
 from tornado.util import ObjectDict, unicode_type
 
@@ -100,6 +100,12 @@ class _ABNF:
     # RFC 9110 (HTTP Semantics)
     obs_text = re.compile(r"[\x80-\xFF]")
     field_vchar = re.compile(rf"(?:{VCHAR.pattern}|{obs_text.pattern})")
+    # Not exactly from the RFC to simplify and combine field-content and field-value.
+    field_value = re.compile(
+        rf"|"
+        rf"{field_vchar.pattern}|"
+        rf"{field_vchar.pattern}(?:{field_vchar.pattern}| |\t)*{field_vchar.pattern}"
+    )
     tchar = re.compile(r"[!#$%&'*+\-.^_`|~0-9A-Za-z]")
     token = re.compile(rf"{tchar.pattern}+")
     field_name = token
@@ -195,6 +201,10 @@ class HTTPHeaders(StrMutableMapping):
         """Adds a new value for the given key."""
         if not _ABNF.field_name.fullmatch(name):
             raise HTTPInputError("Invalid header name %r" % name)
+        if not _ABNF.field_value.fullmatch(to_unicode(value)):
+            # TODO: the fact we still support bytes here (contrary to type annotations)
+            # and still test for it should probably be changed.
+            raise HTTPInputError("Invalid header value %r" % value)
         norm_name = _normalize_header(name)
         self._last_key = norm_name
         if norm_name in self:
@@ -254,6 +264,8 @@ class HTTPHeaders(StrMutableMapping):
             if self._last_key is None:
                 raise HTTPInputError("first header line cannot start with whitespace")
             new_part = " " + line.strip(HTTP_WHITESPACE)
+            if not _ABNF.field_value.fullmatch(new_part[1:]):
+                raise HTTPInputError("Invalid header continuation %r" % new_part)
             self._as_list[self._last_key][-1] += new_part
             self._dict[self._last_key] += new_part
         else:
