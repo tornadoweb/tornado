@@ -675,6 +675,40 @@ ok
                 )
 
 
+class UnsafeRemoteIPTest(HandlerBaseTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            self.set_header("request-version", self.request.version)
+            self.write(
+                dict(
+                    remote_ip=self.request.remote_ip,
+                    unsafe_remote_ip=self.request.unsafe_remote_ip,
+                )
+            )
+
+    def get_httpserver_options(self):
+        return dict(xheaders=True, trusted_downstream=["5.5.5.5"])
+
+    def test_unsafe_ip(self):
+        self.assertEqual(self.fetch_json("/")["remote_ip"], "127.0.0.1")
+        self.assertEqual(self.fetch_json("/")["unsafe_remote_ip"], "127.0.0.1")
+
+        valid_ip = {"X-Forwarded-for": "4.4.4.4"}
+        self.assertEqual(
+            self.fetch_json("/", headers=valid_ip)["unsafe_remote_ip"], "4.4.4.4"
+        )
+
+        valid_ip_list = {"X-Forwarded-for": "3.3.3.3, 4.4.4.4"}
+        self.assertEqual(
+            self.fetch_json("/", headers=valid_ip_list)["unsafe_remote_ip"], "3.3.3.3"
+        )
+
+        skip_private_ip = {"X-Forwarded-for": "10.0.0.1, 3.3.3.3, 4.4.4.4"}
+        self.assertEqual(
+            self.fetch_json("/", headers=skip_private_ip)["unsafe_remote_ip"], "3.3.3.3"
+        )
+
+
 class XHeaderTest(HandlerBaseTestCase):
     class Handler(RequestHandler):
         def get(self):

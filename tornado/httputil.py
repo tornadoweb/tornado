@@ -27,6 +27,7 @@ import email.utils
 from functools import lru_cache
 from http.client import responses
 import http.cookies
+import ipaddress
 import re
 from ssl import SSLError
 import time
@@ -35,6 +36,7 @@ from urllib.parse import urlencode, urlparse, urlunparse, parse_qsl
 
 from tornado.escape import native_str, parse_qs_bytes, utf8, to_unicode
 from tornado.log import gen_log
+from tornado.netutil import is_valid_ip
 from tornado.util import ObjectDict, unicode_type
 
 
@@ -507,6 +509,22 @@ class HTTPServerRequest:
         self.arguments = parse_qs_bytes(self.query, keep_blank_values=True)
         self.query_arguments = copy.deepcopy(self.arguments)
         self.body_arguments = {}  # type: Dict[str, List[bytes]]
+
+    @property
+    def unsafe_remote_ip(self) -> str:
+        """The IP a client claims to be using.
+
+        This is the first public IP in the X-Forwarded-For header.
+
+        Unlike `remote_ip` this IP is untrustworthy but potentially more
+        representative of the real IP a client is using. Useful for situations
+        like geolocation.
+        """
+        ip = self.headers.get("X-Forwarded-For", self.remote_ip)
+        for ip in (cand.strip() for cand in ip.split(",")):
+            if is_valid_ip(ip) and ipaddress.ip_address(ip).is_global:
+                break
+        return ip
 
     @property
     def cookies(self) -> Dict[str, http.cookies.Morsel]:
