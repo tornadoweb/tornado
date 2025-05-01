@@ -97,7 +97,7 @@ if TYPE_CHECKING:
             pass
 
 
-_default_max_message_size = 10 * 1024 * 1024
+_default_max_message_size = os.environ.get("TORNADO_MAX_MESSAGE_SIZE", 100 * 1024 * 1024)
 
 # log to "gen_log" but suppress duplicate log messages
 de_dupe_gen_log = functools.lru_cache(gen_log.log)
