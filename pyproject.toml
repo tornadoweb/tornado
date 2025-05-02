@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
 
 [tool.cibuildwheel]
-build = "cp39* cp310* cp311* cp312* cp313*"
+build = "cp39* cp310* cp311* cp312* cp313* cp313t*"
 test-command = "python -m tornado.test"
 
 [tool.cibuildwheel.macos]

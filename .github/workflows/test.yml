@@ -58,7 +58,7 @@ jobs:
           - python: '3.13'
             tox_env: py313-full
           - python: '3.13t'
-            tox_env: py313t-full
+            tox_env: py313t
           - python: '3.14.0-alpha.1 - 3.14'
             tox_env: py314-full
           - python: 'pypy-3.10'
@@ -141,15 +141,4 @@ jobs:
           # For speed, we only build one python version and one arch. We throw away the wheels
           # built here; the real build is defined in build.yml.
           CIBW_ARCHS: native
-          CIBW_BUILD: cp313-manylinux* cp313t-manylinux*
-          CIBW_ENABLE: cpython-freethreading
-
-          # Alternatively, uncomment the following lines (and replace the previous CIBW_BUILD)
-          # to test a freethreading build of python.
-          #CIBW_BUILD: cp313t-manylinux*
-          #CIBW_ENABLE: cpython-freethreading
-          # I don't understand what this does but auditwheel seems to fail in this configuration.
-          # Since we're throwing away the wheels here, just skip it.
-          # TODO: When we no longer need to disable this, we can enable freethreading in
-          # build.yml.
-          #CIBW_REPAIR_WHEEL_COMMAND: ""
+          CIBW_BUILD: cp313-manylinux*
