@@ -6,7 +6,8 @@ build-backend = "setuptools.build_meta"
 target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
 
 [tool.cibuildwheel]
-build = "cp39* cp310* cp311* cp312* cp313*"
+build = "cp39* cp310* cp311* cp312* cp313* cp313t*"
+enable = "cpython-freethreading"
 test-command = "python -m tornado.test"
 
 [tool.cibuildwheel.macos]
@@ -28,4 +29,4 @@ test-skip = "*-win_arm64"
 # Note that because we use the stable ABI, the wheels built for
 # cp39-musllinux_i686 will still be available for users of 3.13, this just
 # means we won't be testing them in this configuration.
-test-skip = "cp313-musllinux_i686"
+test-skip = "cp313-musllinux_i686 cp313t-musllinux_i686"
