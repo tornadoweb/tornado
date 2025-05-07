@@ -494,7 +494,8 @@ class SelectorThread:
         # clean up if we get to this point but the event loop is closed without
         # starting.
         self._real_loop.call_soon(
-            lambda: self._real_loop.create_task(thread_manager_anext()), context=self._main_thread_ctx
+            lambda: self._real_loop.create_task(thread_manager_anext()),
+            context=self._main_thread_ctx
         )
 
         self._readers: Dict[_FileDescriptorLike, Callable] = {}
@@ -621,7 +622,10 @@ class SelectorThread:
                     raise
 
             try:
-                self._real_loop.call_soon_threadsafe(self._handle_select, rs, ws, context=self._main_thread_ctx)
+                self._real_loop.call_soon_threadsafe(
+                    self._handle_select, rs, ws,
+                    context=self._main_thread_ctx
+                )
             except RuntimeError:
                 # "Event loop is closed". Swallow the exception for
                 # consistency with PollIOLoop (and logical consistency

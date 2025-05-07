@@ -276,11 +276,14 @@ class SelectorThreadContextvarsTest(AsyncHTTPTestCase):
         class Handler(RequestHandler):
             async def get(self):
                 # On the Windows platform,
-                # when a asyncio.events.Handle is created in the SelectorThread without providing a context, 
+                # when a asyncio.events.Handle is created 
+                # in the SelectorThread without providing a context, 
                 # it will copy the current thread's context, 
-                # which can lead to the loss of the main thread's context when executing the handle. 
+                # which can lead to the loss of the main thread's context 
+                # when executing the handle. 
                 # Therefore, it is necessary to 
-                # save a copy of the main thread's context in the SelectorThread for creating the handle.
+                # save a copy of the main thread's context in the SelectorThread 
+                # for creating the handle.
                 self.write(tornado_test_ctx.get())
 
         return Application([(self.test_endpoint, Handler)])
