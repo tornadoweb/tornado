@@ -1801,6 +1801,14 @@ class RequestHandler:
         try:
             if self.request.method not in self.SUPPORTED_METHODS:
                 raise HTTPError(405)
+
+            # If we're not in stream_request_body mode, this is the place where we parse the body.
+            if not _has_stream_request_body(self.__class__):
+                try:
+                    self.request._parse_body()
+                except httputil.HTTPInputError as e:
+                    raise HTTPError(400, "Invalid body: %s" % e) from e
+
             self.path_args = [self.decode_argument(arg) for arg in args]
             self.path_kwargs = {
                 k: self.decode_argument(v, name=k) for (k, v) in kwargs.items()
@@ -1992,7 +2000,7 @@ def _has_stream_request_body(cls: Type[RequestHandler]) -> bool:
 
 
 def removeslash(
-    method: Callable[..., Optional[Awaitable[None]]]
+    method: Callable[..., Optional[Awaitable[None]]],
 ) -> Callable[..., Optional[Awaitable[None]]]:
     """Use this decorator to remove trailing slashes from the request path.
 
@@ -2021,7 +2029,7 @@ def removeslash(
 
 
 def addslash(
-    method: Callable[..., Optional[Awaitable[None]]]
+    method: Callable[..., Optional[Awaitable[None]]],
 ) -> Callable[..., Optional[Awaitable[None]]]:
     """Use this decorator to add a missing trailing slash to the request path.
 
@@ -2445,8 +2453,9 @@ class _HandlerDelegate(httputil.HTTPMessageDelegate):
         if self.stream_request_body:
             future_set_result_unless_cancelled(self.request._body_future, None)
         else:
+            # Note that the body gets parsed in RequestHandler._execute so it can be in
+            # the right exception handler scope.
             self.request.body = b"".join(self.chunks)
-            self.request._parse_body()
             self.execute()
 
     def on_connection_close(self) -> None:
@@ -3332,7 +3341,7 @@ class GZipContentEncoding(OutputTransform):
 
 
 def authenticated(
-    method: Callable[..., Optional[Awaitable[None]]]
+    method: Callable[..., Optional[Awaitable[None]]],
 ) -> Callable[..., Optional[Awaitable[None]]]:
     """Decorate methods with this to require that the user be logged in.
 
