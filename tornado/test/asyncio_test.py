@@ -26,8 +26,14 @@ from tornado.platform.asyncio import (
     to_asyncio_future,
     AddThreadSelectorEventLoop,
 )
-from tornado.testing import AsyncTestCase, gen_test, setup_with_context_manager
+from tornado.testing import (
+    AsyncTestCase,
+    gen_test,
+    setup_with_context_manager,
+    AsyncHTTPTestCase,
+)
 from tornado.test.util import ignore_deprecation
+from tornado.web import Application, RequestHandler
 
 
 class AsyncIOLoopTest(AsyncTestCase):
@@ -276,13 +282,13 @@ class SelectorThreadContextvarsTest(AsyncHTTPTestCase):
         class Handler(RequestHandler):
             async def get(self):
                 # On the Windows platform,
-                # when a asyncio.events.Handle is created 
-                # in the SelectorThread without providing a context, 
-                # it will copy the current thread's context, 
-                # which can lead to the loss of the main thread's context 
-                # when executing the handle. 
-                # Therefore, it is necessary to 
-                # save a copy of the main thread's context in the SelectorThread 
+                # when a asyncio.events.Handle is created
+                # in the SelectorThread without providing a context,
+                # it will copy the current thread's context,
+                # which can lead to the loss of the main thread's context
+                # when executing the handle.
+                # Therefore, it is necessary to
+                # save a copy of the main thread's context in the SelectorThread
                 # for creating the handle.
                 self.write(tornado_test_ctx.get())
 
