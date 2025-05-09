@@ -495,7 +495,7 @@ class SelectorThread:
         # starting.
         self._real_loop.call_soon(
             lambda: self._real_loop.create_task(thread_manager_anext()),
-            context=self._main_thread_ctx
+            context=self._main_thread_ctx,
         )
 
         self._readers: Dict[_FileDescriptorLike, Callable] = {}
@@ -623,8 +623,7 @@ class SelectorThread:
 
             try:
                 self._real_loop.call_soon_threadsafe(
-                    self._handle_select, rs, ws,
-                    context=self._main_thread_ctx
+                    self._handle_select, rs, ws, context=self._main_thread_ctx
                 )
             except RuntimeError:
                 # "Event loop is closed". Swallow the exception for

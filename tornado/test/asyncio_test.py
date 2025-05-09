@@ -271,9 +271,9 @@ class AnyThreadEventLoopPolicyTest(unittest.TestCase):
 
 
 class SelectorThreadContextvarsTest(AsyncHTTPTestCase):
-    ctx_value = 'foo'
-    test_endpoint = '/'
-    tornado_test_ctx = contextvars.ContextVar('tornado_test_ctx', default='default')
+    ctx_value = "foo"
+    test_endpoint = "/"
+    tornado_test_ctx = contextvars.ContextVar("tornado_test_ctx", default="default")
     tornado_test_ctx.set(ctx_value)
 
     def get_app(self) -> Application:
