@@ -51,20 +51,36 @@ static PyObject* websocket_mask(PyObject* self, PyObject* args) {
     return result;
 }
 
+static int speedups_exec(PyObject *module) {
+    return 0;
+}
+
 static PyMethodDef methods[] = {
     {"websocket_mask",  websocket_mask, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
+};
+
+static PyModuleDef_Slot slots[] = {
+    {Py_mod_exec, speedups_exec},
+#if (!defined(Py_LIMITED_API) && PY_VERSION_HEX >= 0x030c0000) || Py_LIMITED_API >= 0x030c0000
+    {Py_mod_multiple_interpreters, Py_MOD_PER_INTERPRETER_GIL_SUPPORTED},
+#endif
+#if (!defined(Py_LIMITED_API) && PY_VERSION_HEX >= 0x030d0000) || Py_LIMITED_API >= 0x030d0000
+    {Py_mod_gil, Py_MOD_GIL_NOT_USED},
+#endif
+    {0, NULL}
 };
 
 static struct PyModuleDef speedupsmodule = {
    PyModuleDef_HEAD_INIT,
    "speedups",
    NULL,
-   -1,
-   methods
+   0,
+   methods,
+   slots,
 };
 
 PyMODINIT_FUNC
 PyInit_speedups(void) {
-    return PyModule_Create(&speedupsmodule);
+    return PyModuleDef_Init(&speedupsmodule);
 }

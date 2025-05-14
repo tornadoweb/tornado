@@ -184,7 +184,18 @@ from tornado.escape import url_escape, url_unescape, utf8
 from tornado.log import app_log
 from tornado.util import basestring_type, import_object, re_unescape, unicode_type
 
-from typing import Any, Union, Optional, Awaitable, List, Dict, Pattern, Tuple, overload
+from typing import (
+    Any,
+    Union,
+    Optional,
+    Awaitable,
+    List,
+    Dict,
+    Pattern,
+    Tuple,
+    overload,
+    Sequence,
+)
 
 
 class Router(httputil.HTTPServerConnectionDelegate):
@@ -286,7 +297,7 @@ class _DefaultMessageDelegate(httputil.HTTPMessageDelegate):
 
 # _RuleList can either contain pre-constructed Rules or a sequence of
 # arguments to be passed to the Rule constructor.
-_RuleList = List[
+_RuleList = Sequence[
     Union[
         "Rule",
         List[Any],  # Can't do detailed typechecking of lists.

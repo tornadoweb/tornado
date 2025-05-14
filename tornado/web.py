@@ -284,7 +284,8 @@ class RequestHandler:
         """Called at the beginning of a request before  `get`/`post`/etc.
 
         Override this method to perform common initialization regardless
-        of the request method.
+        of the request method. There is no guarantee that ``prepare`` will
+        be called if an error occurs that is handled by the framework.
 
         Asynchronous support: Use ``async def`` or decorate this method with
         `.gen.coroutine` to make it asynchronous.
@@ -299,10 +300,14 @@ class RequestHandler:
     def on_finish(self) -> None:
         """Called after the end of a request.
 
-        Override this method to perform cleanup, logging, etc.
-        This method is a counterpart to `prepare`.  ``on_finish`` may
-        not produce any output, as it is called after the response
-        has been sent to the client.
+        Override this method to perform cleanup, logging, etc. This method is primarily intended as
+        a counterpart to `prepare`. However, there are a few error cases where ``on_finish`` may be
+        called when ``prepare`` has not. (These are considered bugs and may be fixed in the future,
+        but for now you may need to check to see if the initialization work done in ``prepare`` has
+        occurred)
+
+        ``on_finish`` may not produce any output, as it is called after the response has been sent
+        to the client.
         """
         pass
 
@@ -1912,9 +1917,10 @@ class RequestHandler:
         .. versionadded:: 3.1
         """
         if isinstance(value, HTTPError):
-            if value.log_message:
-                format = "%d %s: " + value.log_message
-                args = [value.status_code, self._request_summary()] + list(value.args)
+            log_message = value.get_message()
+            if log_message:
+                format = "%d %s: %s"
+                args = [value.status_code, self._request_summary(), log_message]
                 gen_log.warning(format, *args)
         else:
             app_log.error(
@@ -2518,19 +2524,32 @@ class HTTPError(Exception):
         **kwargs: Any,
     ) -> None:
         self.status_code = status_code
-        self.log_message = log_message
+        self._log_message = log_message
         self.args = args
         self.reason = kwargs.get("reason", None)
-        if log_message and not args:
-            self.log_message = log_message.replace("%", "%%")
+
+    @property
+    def log_message(self) -> Optional[str]:
+        """
+        A backwards compatible way of accessing log_message.
+        """
+        if self._log_message and not self.args:
+            return self._log_message.replace("%", "%%")
+        return self._log_message
+
+    def get_message(self) -> Optional[str]:
+        if self._log_message and self.args:
+            return self._log_message % self.args
+        return self._log_message
 
     def __str__(self) -> str:
         message = "HTTP %d: %s" % (
             self.status_code,
             self.reason or httputil.responses.get(self.status_code, "Unknown"),
         )
-        if self.log_message:
-            return message + " (" + (self.log_message % self.args) + ")"
+        log_message = self.get_message()
+        if log_message:
+            return message + " (" + log_message + ")"
         else:
             return message
 

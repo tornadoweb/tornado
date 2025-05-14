@@ -91,10 +91,22 @@ except ImportError:
     contextvars = None  # type: ignore
 
 import typing
-from typing import Union, Any, Callable, List, Type, Tuple, Awaitable, Dict, overload
+from typing import (
+    Mapping,
+    Union,
+    Any,
+    Callable,
+    List,
+    Type,
+    Tuple,
+    Awaitable,
+    Dict,
+    Sequence,
+    overload,
+)
 
 if typing.TYPE_CHECKING:
-    from typing import Sequence, Deque, Optional, Set, Iterable  # noqa: F401
+    from typing import Deque, Optional, Set, Iterable  # noqa: F401
 
 _T = typing.TypeVar("_T")
 
@@ -426,7 +438,7 @@ class WaitIterator:
 
 
 def multi(
-    children: Union[List[_Yieldable], Dict[Any, _Yieldable]],
+    children: Union[Sequence[_Yieldable], Mapping[Any, _Yieldable]],
     quiet_exceptions: "Union[Type[Exception], Tuple[Type[Exception], ...]]" = (),
 ) -> "Union[Future[List], Future[Dict]]":
     """Runs multiple asynchronous operations in parallel.
@@ -480,7 +492,7 @@ Multi = multi
 
 
 def multi_future(
-    children: Union[List[_Yieldable], Dict[Any, _Yieldable]],
+    children: Union[Sequence[_Yieldable], Mapping[Any, _Yieldable]],
     quiet_exceptions: "Union[Type[Exception], Tuple[Type[Exception], ...]]" = (),
 ) -> "Union[Future[List], Future[Dict]]":
     """Wait for multiple asynchronous futures in parallel.

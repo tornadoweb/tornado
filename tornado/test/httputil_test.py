@@ -287,12 +287,32 @@ Foo: even
             [("Asdf", "qwer zxcv"), ("Foo", "bar baz"), ("Foo", "even more lines")],
         )
 
-    def test_malformed_continuation(self):
+    def test_continuation(self):
+        data = "Foo: bar\r\n\tasdf"
+        headers = HTTPHeaders.parse(data)
+        self.assertEqual(headers["Foo"], "bar asdf")
+
         # If the first line starts with whitespace, it's a
         # continuation line with nothing to continue, so reject it
         # (with a proper error).
         data = " Foo: bar"
         self.assertRaises(HTTPInputError, HTTPHeaders.parse, data)
+
+        # \f (formfeed) is whitespace according to str.isspace, but
+        # not according to the HTTP spec.
+        data = "Foo: bar\r\n\fasdf"
+        self.assertRaises(HTTPInputError, HTTPHeaders.parse, data)
+
+    def test_forbidden_ascii_characters(self):
+        # Control characters and ASCII whitespace other than space, tab, and CRLF are not allowed in
+        # headers.
+        for c in range(0xFF):
+            data = f"Foo: bar{chr(c)}baz\r\n"
+            if c == 0x09 or (c >= 0x20 and c != 0x7F):
+                headers = HTTPHeaders.parse(data)
+                self.assertEqual(headers["Foo"], f"bar{chr(c)}baz")
+            else:
+                self.assertRaises(HTTPInputError, HTTPHeaders.parse, data)
 
     def test_unicode_newlines(self):
         # Ensure that only \r\n is recognized as a header separator, and not
@@ -302,10 +322,13 @@ Foo: even
         # and cpython's unicodeobject.c (which defines the implementation
         # of unicode_type.splitlines(), and uses a different list than TR13).
         newlines = [
-            "\u001b",  # VERTICAL TAB
-            "\u001c",  # FILE SEPARATOR
-            "\u001d",  # GROUP SEPARATOR
-            "\u001e",  # RECORD SEPARATOR
+            # The following ascii characters are sometimes treated as newline-like,
+            # but they're disallowed in HTTP headers. This test covers unicode
+            # characters that are permitted in headers (under the obs-text rule).
+            # "\u001b",  # VERTICAL TAB
+            # "\u001c",  # FILE SEPARATOR
+            # "\u001d",  # GROUP SEPARATOR
+            # "\u001e",  # RECORD SEPARATOR
             "\u0085",  # NEXT LINE
             "\u2028",  # LINE SEPARATOR
             "\u2029",  # PARAGRAPH SEPARATOR
@@ -354,13 +377,16 @@ Foo: even
             self.assertEqual(expected, list(headers.get_all()))
 
     def test_optional_cr(self):
+        # Bare CR is  not a valid line separator
+        with self.assertRaises(HTTPInputError):
+            HTTPHeaders.parse("CRLF: crlf\r\nLF: lf\nCR: cr\rMore: more\r\n")
+
         # Both CRLF and LF should be accepted as separators. CR should not be
-        # part of the data when followed by LF, but it is a normal char
-        # otherwise (or should bare CR be an error?)
-        headers = HTTPHeaders.parse("CRLF: crlf\r\nLF: lf\nCR: cr\rMore: more\r\n")
+        # part of the data when followed by LF.
+        headers = HTTPHeaders.parse("CRLF: crlf\r\nLF: lf\nMore: more\r\n")
         self.assertEqual(
             sorted(headers.get_all()),
-            [("Cr", "cr\rMore: more"), ("Crlf", "crlf"), ("Lf", "lf")],
+            [("Crlf", "crlf"), ("Lf", "lf"), ("More", "more")],
         )
 
     def test_copy(self):
