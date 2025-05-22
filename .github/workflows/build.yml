@@ -20,7 +20,7 @@ on:
 permissions: {}
 
 env:
-  python-version: '3.9'
+  python-version: '3.13'
 
 jobs:
   build_sdist:
