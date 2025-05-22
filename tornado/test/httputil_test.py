@@ -155,7 +155,7 @@ Foo
             self.assertEqual(file["filename"], filename)
             self.assertEqual(file["body"], b"Foo")
 
-    def test_non_ascii_filename(self):
+    def test_non_ascii_filename_rfc5987(self):
         data = b"""\
 --1234
 Content-Disposition: form-data; name="files"; filename="ab.txt"; filename*=UTF-8''%C3%A1b.txt
@@ -168,6 +168,23 @@ Foo
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
         self.assertEqual(file["filename"], "áb.txt")
+        self.assertEqual(file["body"], b"Foo")
+
+    def test_non_ascii_filename_raw(self):
+        data = """\
+--1234
+Content-Disposition: form-data; name="files"; filename="测试.txt"
+
+Foo
+--1234--""".encode(
+            "utf-8"
+        ).replace(
+            b"\n", b"\r\n"
+        )
+        args, files = form_data_args()
+        parse_multipart_form_data(b"1234", data, args, files)
+        file = files["files"][0]
+        self.assertEqual(file["filename"], "测试.txt")
         self.assertEqual(file["body"], b"Foo")
 
     def test_boundary_starts_and_ends_with_quotes(self):
