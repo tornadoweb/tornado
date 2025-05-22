@@ -117,7 +117,6 @@ def fork_processes(
     if max_restarts is None:
         max_restarts = 100
 
-    global _task_id
     assert _task_id is None
     if num_processes is None or num_processes <= 0:
         num_processes = cpu_count()
@@ -181,7 +180,6 @@ def task_id() -> Optional[int]:
 
     Returns None if this process was not created by `fork_processes`.
     """
-    global _task_id
     return _task_id
 
 

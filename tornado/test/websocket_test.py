@@ -141,7 +141,7 @@ class PathArgsHandler(TestWebSocketHandler):
 
 
 class CoroutineOnMessageHandler(TestWebSocketHandler):
-    def initialize(self, **kwargs):
+    def initialize(self, **kwargs):  # type: ignore[override]
         super().initialize(**kwargs)
         self.sleeping = 0
 
@@ -161,7 +161,7 @@ class RenderMessageHandler(TestWebSocketHandler):
 
 
 class SubprotocolHandler(TestWebSocketHandler):
-    def initialize(self, **kwargs):
+    def initialize(self, **kwargs):  # type: ignore[override]
         super().initialize(**kwargs)
         self.select_subprotocol_called = False
 
@@ -180,7 +180,7 @@ class SubprotocolHandler(TestWebSocketHandler):
 
 
 class OpenCoroutineHandler(TestWebSocketHandler):
-    def initialize(self, test, **kwargs):
+    def initialize(self, test, **kwargs):  # type: ignore[override]
         super().initialize(**kwargs)
         self.test = test
         self.open_finished = False
@@ -634,7 +634,7 @@ class WebSocketTest(WebSocketBaseTestCase):
 
 
 class NativeCoroutineOnMessageHandler(TestWebSocketHandler):
-    def initialize(self, **kwargs):
+    def initialize(self, **kwargs):  # type: ignore[override]
         super().initialize(**kwargs)
         self.sleeping = 0
 

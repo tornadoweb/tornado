@@ -171,7 +171,7 @@ def _fake_ctx_run(f: Callable[..., _T], *args: Any, **kw: Any) -> _T:
 
 @overload
 def coroutine(
-    func: Callable[..., "Generator[Any, Any, _T]"]
+    func: Callable[..., "Generator[Any, Any, _T]"],
 ) -> Callable[..., "Future[_T]"]: ...
 
 
@@ -180,7 +180,7 @@ def coroutine(func: Callable[..., _T]) -> Callable[..., "Future[_T]"]: ...
 
 
 def coroutine(
-    func: Union[Callable[..., "Generator[Any, Any, _T]"], Callable[..., _T]]
+    func: Union[Callable[..., "Generator[Any, Any, _T]"], Callable[..., _T]],
 ) -> Callable[..., "Future[_T]"]:
     """Decorator for asynchronous generators.
 
