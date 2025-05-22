@@ -1,0 +1,11 @@
+What's new in Tornado 6.5.1
+===========================
+
+May 22, 2025
+------------
+
+Bug fixes
+~~~~~~~~~
+
+- Fixed a bug in ``multipart/form-data`` parsing that could incorrectly reject filenames containing
+  characters above U+00FF (i.e. most characters outside the Latin alphabet).
