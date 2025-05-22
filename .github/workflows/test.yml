@@ -17,7 +17,7 @@ jobs:
   # first-time contributors).
   test_quick:
     name: Run quick tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,7 +36,7 @@ jobs:
   test_tox:
     name: Run full tests
     needs: test_quick
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -91,7 +91,7 @@ jobs:
     # enough that we'll break it if we don't test it in CI.
     name: Run windows tests
     needs: test_quick
-    runs-on: windows-2022
+    runs-on: windows-2025
     steps:
       - uses: actions/checkout@v4
         with:
@@ -106,13 +106,13 @@ jobs:
 
   zizmor:
     name: Analyze action configs with zizmor
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: test_quick
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v6
         name: Install uv
       - name: Run zizmor
         run: uvx zizmor .github/workflows
@@ -127,14 +127,14 @@ jobs:
     # test_tox with test_cibw would entail either increasing test runtime or reducing
     # test coverage.
     name: Test with cibuildwheel
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: test_quick
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - name: Run cibuildwheel
-        uses: pypa/cibuildwheel@v2.22
+        uses: pypa/cibuildwheel@v2.23
         env:
           # For speed, we only build one python version and one arch. We throw away the wheels
           # built here; the real build is defined in build.yml.
