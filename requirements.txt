@@ -4,31 +4,31 @@
 #
 #    pip-compile
 #
-alabaster==0.7.16
+alabaster==1.0.0
     # via sphinx
-babel==2.15.0
+babel==2.17.0
     # via sphinx
-black==24.4.2
+black==25.1.0
     # via -r requirements.in
-build==1.2.1
+build==1.2.2.post1
     # via pip-tools
 cachetools==5.5.2
     # via tox
-certifi==2024.7.4
+certifi==2025.4.26
     # via requests
 chardet==5.2.0
     # via tox
-charset-normalizer==3.3.2
+charset-normalizer==3.4.2
     # via requests
-click==8.1.7
+click==8.2.1
     # via
     #   black
     #   pip-tools
 colorama==0.4.6
     # via tox
-distlib==0.3.8
+distlib==0.3.9
     # via virtualenv
-docutils==0.20.1
+docutils==0.21.2
     # via
     #   sphinx
     #   sphinx-rtd-theme
@@ -36,21 +36,21 @@ filelock==3.18.0
     # via
     #   tox
     #   virtualenv
-flake8==7.0.0
+flake8==7.2.0
     # via -r requirements.in
-idna==3.7
+idna==3.10
     # via requests
 imagesize==1.4.1
     # via sphinx
 jinja2==3.1.6
     # via sphinx
-markupsafe==2.1.5
+markupsafe==3.0.2
     # via jinja2
 mccabe==0.7.0
     # via flake8
-mypy==1.10.0
+mypy==1.15.0
     # via -r requirements.in
-mypy-extensions==1.0.0
+mypy-extensions==1.1.0
     # via
     #   black
     #   mypy
@@ -70,56 +70,58 @@ platformdirs==4.3.8
     #   black
     #   tox
     #   virtualenv
-pluggy==1.5.0
+pluggy==1.6.0
     # via tox
-pycodestyle==2.11.1
+pycodestyle==2.13.0
     # via flake8
-pyflakes==3.2.0
+pyflakes==3.3.2
     # via flake8
-pygments==2.18.0
+pygments==2.19.1
     # via sphinx
 pyproject-api==1.9.1
     # via tox
-pyproject-hooks==1.1.0
+pyproject-hooks==1.2.0
     # via
     #   build
     #   pip-tools
 requests==2.32.3
     # via sphinx
-snowballstemmer==2.2.0
+roman-numerals-py==3.1.0
     # via sphinx
-sphinx==7.3.7
+snowballstemmer==3.0.1
+    # via sphinx
+sphinx==8.2.3
     # via
     #   -r requirements.in
     #   sphinx-rtd-theme
     #   sphinxcontrib-jquery
-sphinx-rtd-theme==2.0.0
+sphinx-rtd-theme==3.0.2
     # via -r requirements.in
-sphinxcontrib-applehelp==1.0.8
+sphinxcontrib-applehelp==2.0.0
     # via sphinx
-sphinxcontrib-devhelp==1.0.6
+sphinxcontrib-devhelp==2.0.0
     # via sphinx
-sphinxcontrib-htmlhelp==2.0.5
+sphinxcontrib-htmlhelp==2.1.0
     # via sphinx
 sphinxcontrib-jquery==4.1
     # via sphinx-rtd-theme
 sphinxcontrib-jsmath==1.0.1
     # via sphinx
-sphinxcontrib-qthelp==1.0.7
+sphinxcontrib-qthelp==2.0.0
     # via sphinx
-sphinxcontrib-serializinghtml==1.1.10
+sphinxcontrib-serializinghtml==2.0.0
     # via sphinx
 tox==4.26.0
     # via -r requirements.in
-types-pycurl==7.45.3.20240421
+types-pycurl==7.45.6.20250309
     # via -r requirements.in
-typing-extensions==4.12.2
+typing-extensions==4.13.2
     # via mypy
-urllib3==2.2.2
+urllib3==2.4.0
     # via requests
 virtualenv==20.31.2
     # via tox
-wheel==0.43.0
+wheel==0.45.1
     # via pip-tools
 
 # The following packages are considered to be unsafe in a requirements file:

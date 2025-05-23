@@ -1,5 +1,4 @@
-"""Shim to allow python -m tornado.test.
-"""
+"""Shim to allow python -m tornado.test."""
 
 from tornado.test.runtests import all, main
 

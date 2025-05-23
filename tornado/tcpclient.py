@@ -13,8 +13,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""A non-blocking TCP connection factory.
-"""
+"""A non-blocking TCP connection factory."""
 
 import functools
 import socket
@@ -296,7 +295,7 @@ class TCPClient:
 
     def _create_stream(
         self,
-        max_buffer_size: int,
+        max_buffer_size: Optional[int],
         af: socket.AddressFamily,
         addr: Tuple,
         source_ip: Optional[str] = None,

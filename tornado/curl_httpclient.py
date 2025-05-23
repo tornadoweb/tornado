@@ -544,7 +544,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
     def _curl_header_callback(
         self,
         headers: httputil.HTTPHeaders,
-        header_callback: Callable[[str], None],
+        header_callback: Optional[Callable[[str], None]],
         header_line_bytes: bytes,
     ) -> None:
         header_line = native_str(header_line_bytes.decode("latin1"))

@@ -555,7 +555,7 @@ class TestIOLoopFutures(AsyncTestCase):
         count = [0]
 
         class MyExecutor(futures.ThreadPoolExecutor):
-            def submit(self, func, *args):
+            def submit(self, func, *args):  # type: ignore[override]
                 count[0] += 1
                 return super().submit(func, *args)
 

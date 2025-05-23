@@ -65,7 +65,9 @@ if TYPE_CHECKING:
             pass
 
     class _Decompressor(Protocol):
-        unconsumed_tail = b""  # type: bytes
+        @property
+        def unconsumed_tail(self) -> bytes:
+            pass
 
         def decompress(self, data: bytes, max_length: int) -> bytes:
             pass
@@ -420,21 +422,23 @@ class WebSocketHandler(tornado.web.RequestHandler):
         # TODO: Add wbits option.
         return None
 
-    def open(self, *args: str, **kwargs: str) -> Optional[Awaitable[None]]:
-        """Invoked when a new WebSocket is opened.
-
-        The arguments to `open` are extracted from the `tornado.web.URLSpec`
-        regular expression, just like the arguments to
-        `tornado.web.RequestHandler.get`.
-
-        `open` may be a coroutine. `on_message` will not be called until
-        `open` has returned.
-
-        .. versionchanged:: 5.1
-
-           ``open`` may be a coroutine.
-        """
+    def _open(self, *args: str, **kwargs: str) -> Optional[Awaitable[None]]:
         pass
+
+    open = _open  # type: Callable[..., Optional[Awaitable[None]]]
+    """Invoked when a new WebSocket is opened.
+
+    The arguments to `open` are extracted from the `tornado.web.URLSpec`
+    regular expression, just like the arguments to
+    `tornado.web.RequestHandler.get`.
+
+    `open` may be a coroutine. `on_message` will not be called until
+    `open` has returned.
+
+    .. versionchanged:: 5.1
+
+        ``open`` may be a coroutine.
+    """
 
     def on_message(self, message: Union[str, bytes]) -> Optional[Awaitable[None]]:
         """Handle incoming messages on the WebSocket
