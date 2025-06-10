@@ -84,7 +84,7 @@ pyproject-hooks==1.2.0
     # via
     #   build
     #   pip-tools
-requests==2.32.3
+requests==2.32.4
     # via sphinx
 roman-numerals-py==3.1.0
     # via sphinx
