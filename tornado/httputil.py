@@ -502,7 +502,6 @@ class HTTPServerRequest:
             else:
                 raise HTTPInputError("Missing Host header")
         if not _ABNF.host.fullmatch(self.host):
-            print(_ABNF.host.pattern)
             raise HTTPInputError("Invalid Host header: %r" % self.host)
         if "," in self.host:
             # https://www.rfc-editor.org/rfc/rfc9112.html#name-request-target
