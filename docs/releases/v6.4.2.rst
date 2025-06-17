@@ -1,0 +1,12 @@
+What's new in Tornado 6.4.2
+===========================
+
+Nov 21, 2024
+------------
+
+Security Improvements
+~~~~~~~~~~~~~~~~~~~~~
+
+- Parsing of the cookie header is now much more efficient. The older algorithm sometimes had
+  quadratic performance which allowed for a denial-of-service attack in which the server would spend
+  excessive CPU time parsing cookies and block the event loop. This change fixes CVE-2024-7592.

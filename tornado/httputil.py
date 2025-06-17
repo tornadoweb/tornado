@@ -33,8 +33,7 @@ import time
 import unicodedata
 from urllib.parse import urlencode, urlparse, urlunparse, parse_qsl
 
-from tornado.escape import native_str, parse_qs_bytes, utf8
-from tornado.log import gen_log
+from tornado.escape import native_str, parse_qs_bytes, utf8, to_unicode
 from tornado.util import ObjectDict, unicode_type
 
 
@@ -71,6 +70,10 @@ else:
 # To be used with str.strip() and related methods.
 HTTP_WHITESPACE = " \t"
 
+# Roughly the inverse of RequestHandler._VALID_HEADER_CHARS, but permits
+# chars greater than \xFF (which may appear after decoding utf8).
+_FORBIDDEN_HEADER_CHARS_RE = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]")
+
 
 class _ABNF:
     """Class that holds a subset of ABNF rules from RFC 9110 and friends.
@@ -81,16 +84,36 @@ class _ABNF:
     cannot be alphabetized as they are in the RFCs because of dependencies.
     """
 
+    # RFC 3986 (URI)
+    # The URI hostname ABNF is both complex (including detailed vaildation of IPv4 and IPv6
+    # literals) and not strict enough (a lot of punctuation is allowed by the ABNF even though
+    # it is not allowed by DNS). We simplify it by allowing square brackets and colons in any
+    # position, not only for their use in IPv6 literals.
+    uri_unreserved = re.compile(r"[A-Za-z0-9\-._~]")
+    uri_sub_delims = re.compile(r"[!$&'()*+,;=]")
+    uri_pct_encoded = re.compile(r"%[0-9A-Fa-f]{2}")
+    uri_host = re.compile(
+        rf"(?:[\[\]:]|{uri_unreserved.pattern}|{uri_sub_delims.pattern}|{uri_pct_encoded.pattern})*"
+    )
+    uri_port = re.compile(r"[0-9]*")
+
     # RFC 5234 (ABNF)
     VCHAR = re.compile(r"[\x21-\x7E]")
 
     # RFC 9110 (HTTP Semantics)
     obs_text = re.compile(r"[\x80-\xFF]")
     field_vchar = re.compile(rf"(?:{VCHAR.pattern}|{obs_text.pattern})")
+    # Not exactly from the RFC to simplify and combine field-content and field-value.
+    field_value = re.compile(
+        rf"|"
+        rf"{field_vchar.pattern}|"
+        rf"{field_vchar.pattern}(?:{field_vchar.pattern}| |\t)*{field_vchar.pattern}"
+    )
     tchar = re.compile(r"[!#$%&'*+\-.^_`|~0-9A-Za-z]")
     token = re.compile(rf"{tchar.pattern}+")
     field_name = token
     method = token
+    host = re.compile(rf"(?:{uri_host.pattern})(?::{uri_port.pattern})?")
 
     # RFC 9112 (HTTP/1.1)
     HTTP_version = re.compile(r"HTTP/[0-9]\.[0-9]")
@@ -177,10 +200,18 @@ class HTTPHeaders(StrMutableMapping):
 
     # new public methods
 
-    def add(self, name: str, value: str) -> None:
+    def add(self, name: str, value: str, *, _chars_are_bytes: bool = True) -> None:
         """Adds a new value for the given key."""
         if not _ABNF.field_name.fullmatch(name):
             raise HTTPInputError("Invalid header name %r" % name)
+        if _chars_are_bytes:
+            if not _ABNF.field_value.fullmatch(to_unicode(value)):
+                # TODO: the fact we still support bytes here (contrary to type annotations)
+                # and still test for it should probably be changed.
+                raise HTTPInputError("Invalid header value %r" % value)
+        else:
+            if _FORBIDDEN_HEADER_CHARS_RE.search(value):
+                raise HTTPInputError("Invalid header value %r" % value)
         norm_name = _normalize_header(name)
         self._last_key = norm_name
         if norm_name in self:
@@ -206,19 +237,46 @@ class HTTPHeaders(StrMutableMapping):
             for value in values:
                 yield (name, value)
 
-    def parse_line(self, line: str) -> None:
-        """Updates the dictionary with a single header line.
+    def parse_line(self, line: str, *, _chars_are_bytes: bool = True) -> None:
+        r"""Updates the dictionary with a single header line.
 
         >>> h = HTTPHeaders()
         >>> h.parse_line("Content-Type: text/html")
         >>> h.get('content-type')
         'text/html'
+        >>> h.parse_line("Content-Length: 42\r\n")
+        >>> h.get('content-type')
+        'text/html'
+
+        .. versionchanged:: 6.5
+            Now supports lines with or without the trailing CRLF, making it possible
+            to pass lines from AsyncHTTPClient's header_callback directly to this method.
+
+        .. deprecated:: 6.5
+           In Tornado 7.0, certain deprecated features of HTTP will become errors.
+           Specifically, line folding and the use of LF (with CR) as a line separator
+           will be removed.
         """
-        if line[0].isspace():
+        if m := re.search(r"\r?\n$", line):
+            # RFC 9112 section 2.2: a recipient MAY recognize a single LF as a line
+            # terminator and ignore any preceding CR.
+            # TODO(7.0): Remove this support for LF-only line endings.
+            line = line[: m.start()]
+        if not line:
+            # Empty line, or the final CRLF of a header block.
+            return
+        if line[0] in HTTP_WHITESPACE:
             # continuation of a multi-line header
+            # TODO(7.0): Remove support for line folding.
             if self._last_key is None:
                 raise HTTPInputError("first header line cannot start with whitespace")
-            new_part = " " + line.lstrip(HTTP_WHITESPACE)
+            new_part = " " + line.strip(HTTP_WHITESPACE)
+            if _chars_are_bytes:
+                if not _ABNF.field_value.fullmatch(new_part[1:]):
+                    raise HTTPInputError("Invalid header continuation %r" % new_part)
+            else:
+                if _FORBIDDEN_HEADER_CHARS_RE.search(new_part):
+                    raise HTTPInputError("Invalid header value %r" % new_part)
             self._as_list[self._last_key][-1] += new_part
             self._dict[self._last_key] += new_part
         else:
@@ -226,10 +284,12 @@ class HTTPHeaders(StrMutableMapping):
                 name, value = line.split(":", 1)
             except ValueError:
                 raise HTTPInputError("no colon in header line")
-            self.add(name, value.strip(HTTP_WHITESPACE))
+            self.add(
+                name, value.strip(HTTP_WHITESPACE), _chars_are_bytes=_chars_are_bytes
+            )
 
     @classmethod
-    def parse(cls, headers: str) -> "HTTPHeaders":
+    def parse(cls, headers: str, *, _chars_are_bytes: bool = True) -> "HTTPHeaders":
         """Returns a dictionary from HTTP header text.
 
         >>> h = HTTPHeaders.parse("Content-Type: text/html\\r\\nContent-Length: 42\\r\\n")
@@ -242,14 +302,31 @@ class HTTPHeaders(StrMutableMapping):
            mix of `KeyError`, and `ValueError`.
 
         """
+        # _chars_are_bytes is a hack. This method is used in two places, HTTP headers (in which
+        # non-ascii characters are to be interpreted as latin-1) and multipart/form-data (in which
+        # they are to be interpreted as utf-8). For historical reasons, this method handled this by
+        # expecting both callers to decode the headers to strings before parsing them. This wasn't a
+        # problem until we started doing stricter validation of the characters allowed in HTTP
+        # headers (using ABNF rules defined in terms of byte values), which inadvertently started
+        # disallowing non-latin1 characters in multipart/form-data filenames.
+        #
+        # This method should have accepted bytes and a desired encoding, but this change is being
+        # introduced in a patch release that shouldn't change the API. Instead, the _chars_are_bytes
+        # flag decides whether to use HTTP-style ABNF validation (treating the string as bytes
+        # smuggled through the latin1 encoding) or to accept any non-control unicode characters
+        # as required by multipart/form-data. This method will change to accept bytes in a future
+        # release.
         h = cls()
-        # RFC 7230 section 3.5: a recipient MAY recognize a single LF as a line
-        # terminator and ignore any preceding CR.
-        for line in headers.split("\n"):
-            if line.endswith("\r"):
-                line = line[:-1]
-            if line:
-                h.parse_line(line)
+
+        start = 0
+        while True:
+            lf = headers.find("\n", start)
+            if lf == -1:
+                h.parse_line(headers[start:], _chars_are_bytes=_chars_are_bytes)
+                break
+            line = headers[start : lf + 1]
+            start = lf + 1
+            h.parse_line(line, _chars_are_bytes=_chars_are_bytes)
         return h
 
     # MutableMapping abstract method implementations.
@@ -397,7 +474,7 @@ class HTTPServerRequest:
         version: str = "HTTP/1.0",
         headers: Optional[HTTPHeaders] = None,
         body: Optional[bytes] = None,
-        host: Optional[str] = None,
+        # host: Optional[str] = None,
         files: Optional[Dict[str, List["HTTPFile"]]] = None,
         connection: Optional["HTTPConnection"] = None,
         start_line: Optional["RequestStartLine"] = None,
@@ -416,7 +493,34 @@ class HTTPServerRequest:
         self.remote_ip = getattr(context, "remote_ip", None)
         self.protocol = getattr(context, "protocol", "http")
 
-        self.host = host or self.headers.get("Host") or "127.0.0.1"
+        try:
+            self.host = self.headers["Host"]
+        except KeyError:
+            if version == "HTTP/1.0":
+                # HTTP/1.0 does not require the Host header.
+                self.host = "127.0.0.1"
+            else:
+                raise HTTPInputError("Missing Host header")
+        if not _ABNF.host.fullmatch(self.host):
+            raise HTTPInputError("Invalid Host header: %r" % self.host)
+        if "," in self.host:
+            # https://www.rfc-editor.org/rfc/rfc9112.html#name-request-target
+            # Server MUST respond with 400 Bad Request if multiple
+            # Host headers are present.
+            #
+            # We test for the presence of a comma instead of the number of
+            # headers received because a proxy may have converted
+            # multiple headers into a single comma-separated value
+            # (per RFC 9110 section 5.3).
+            #
+            # This is technically a departure from the RFC since the ABNF
+            # does not forbid commas in the host header. However, since
+            # commas are not allowed in DNS names, it is appropriate to
+            # disallow them. (The same argument could be made for other special
+            # characters, but commas are the most problematic since they could
+            # be used to exploit differences between proxies when multiple headers
+            # are supplied).
+            raise HTTPInputError("Multiple host headers not allowed: %r" % self.host)
         self.host_name = split_host_and_port(self.host.lower())[0]
         self.files = files or {}
         self.connection = connection
@@ -806,25 +910,22 @@ def parse_body_arguments(
     """
     if content_type.startswith("application/x-www-form-urlencoded"):
         if headers and "Content-Encoding" in headers:
-            gen_log.warning(
-                "Unsupported Content-Encoding: %s", headers["Content-Encoding"]
+            raise HTTPInputError(
+                "Unsupported Content-Encoding: %s" % headers["Content-Encoding"]
             )
-            return
         try:
             # real charset decoding will happen in RequestHandler.decode_argument()
             uri_arguments = parse_qs_bytes(body, keep_blank_values=True)
         except Exception as e:
-            gen_log.warning("Invalid x-www-form-urlencoded body: %s", e)
-            uri_arguments = {}
+            raise HTTPInputError("Invalid x-www-form-urlencoded body: %s" % e) from e
         for name, values in uri_arguments.items():
             if values:
                 arguments.setdefault(name, []).extend(values)
     elif content_type.startswith("multipart/form-data"):
         if headers and "Content-Encoding" in headers:
-            gen_log.warning(
-                "Unsupported Content-Encoding: %s", headers["Content-Encoding"]
+            raise HTTPInputError(
+                "Unsupported Content-Encoding: %s" % headers["Content-Encoding"]
             )
-            return
         try:
             fields = content_type.split(";")
             for field in fields:
@@ -833,9 +934,9 @@ def parse_body_arguments(
                     parse_multipart_form_data(utf8(v), body, arguments, files)
                     break
             else:
-                raise ValueError("multipart boundary not found")
+                raise HTTPInputError("multipart boundary not found")
         except Exception as e:
-            gen_log.warning("Invalid multipart/form-data: %s", e)
+            raise HTTPInputError("Invalid multipart/form-data: %s" % e) from e
 
 
 def parse_multipart_form_data(
@@ -864,26 +965,22 @@ def parse_multipart_form_data(
         boundary = boundary[1:-1]
     final_boundary_index = data.rfind(b"--" + boundary + b"--")
     if final_boundary_index == -1:
-        gen_log.warning("Invalid multipart/form-data: no final boundary")
-        return
+        raise HTTPInputError("Invalid multipart/form-data: no final boundary found")
     parts = data[:final_boundary_index].split(b"--" + boundary + b"\r\n")
     for part in parts:
         if not part:
             continue
         eoh = part.find(b"\r\n\r\n")
         if eoh == -1:
-            gen_log.warning("multipart/form-data missing headers")
-            continue
-        headers = HTTPHeaders.parse(part[:eoh].decode("utf-8"))
+            raise HTTPInputError("multipart/form-data missing headers")
+        headers = HTTPHeaders.parse(part[:eoh].decode("utf-8"), _chars_are_bytes=False)
         disp_header = headers.get("Content-Disposition", "")
         disposition, disp_params = _parse_header(disp_header)
         if disposition != "form-data" or not part.endswith(b"\r\n"):
-            gen_log.warning("Invalid multipart/form-data")
-            continue
+            raise HTTPInputError("Invalid multipart/form-data")
         value = part[eoh + 4 : -2]
         if not disp_params.get("name"):
-            gen_log.warning("multipart/form-data value missing name")
-            continue
+            raise HTTPInputError("multipart/form-data missing name")
         name = disp_params["name"]
         if disp_params.get("filename"):
             ctype = headers.get("Content-Type", "application/unknown")

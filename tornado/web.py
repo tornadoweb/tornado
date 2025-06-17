@@ -284,7 +284,8 @@ class RequestHandler:
         """Called at the beginning of a request before  `get`/`post`/etc.
 
         Override this method to perform common initialization regardless
-        of the request method.
+        of the request method. There is no guarantee that ``prepare`` will
+        be called if an error occurs that is handled by the framework.
 
         Asynchronous support: Use ``async def`` or decorate this method with
         `.gen.coroutine` to make it asynchronous.
@@ -299,10 +300,14 @@ class RequestHandler:
     def on_finish(self) -> None:
         """Called after the end of a request.
 
-        Override this method to perform cleanup, logging, etc.
-        This method is a counterpart to `prepare`.  ``on_finish`` may
-        not produce any output, as it is called after the response
-        has been sent to the client.
+        Override this method to perform cleanup, logging, etc. This method is primarily intended as
+        a counterpart to `prepare`. However, there are a few error cases where ``on_finish`` may be
+        called when ``prepare`` has not. (These are considered bugs and may be fixed in the future,
+        but for now you may need to check to see if the initialization work done in ``prepare`` has
+        occurred)
+
+        ``on_finish`` may not produce any output, as it is called after the response has been sent
+        to the client.
         """
         pass
 
@@ -1796,6 +1801,14 @@ class RequestHandler:
         try:
             if self.request.method not in self.SUPPORTED_METHODS:
                 raise HTTPError(405)
+
+            # If we're not in stream_request_body mode, this is the place where we parse the body.
+            if not _has_stream_request_body(self.__class__):
+                try:
+                    self.request._parse_body()
+                except httputil.HTTPInputError as e:
+                    raise HTTPError(400, "Invalid body: %s" % e) from e
+
             self.path_args = [self.decode_argument(arg) for arg in args]
             self.path_kwargs = {
                 k: self.decode_argument(v, name=k) for (k, v) in kwargs.items()
@@ -1912,9 +1925,10 @@ class RequestHandler:
         .. versionadded:: 3.1
         """
         if isinstance(value, HTTPError):
-            if value.log_message:
-                format = "%d %s: " + value.log_message
-                args = [value.status_code, self._request_summary()] + list(value.args)
+            log_message = value.get_message()
+            if log_message:
+                format = "%d %s: %s"
+                args = [value.status_code, self._request_summary(), log_message]
                 gen_log.warning(format, *args)
         else:
             app_log.error(
@@ -1986,7 +2000,7 @@ def _has_stream_request_body(cls: Type[RequestHandler]) -> bool:
 
 
 def removeslash(
-    method: Callable[..., Optional[Awaitable[None]]]
+    method: Callable[..., Optional[Awaitable[None]]],
 ) -> Callable[..., Optional[Awaitable[None]]]:
     """Use this decorator to remove trailing slashes from the request path.
 
@@ -2015,7 +2029,7 @@ def removeslash(
 
 
 def addslash(
-    method: Callable[..., Optional[Awaitable[None]]]
+    method: Callable[..., Optional[Awaitable[None]]],
 ) -> Callable[..., Optional[Awaitable[None]]]:
     """Use this decorator to add a missing trailing slash to the request path.
 
@@ -2439,8 +2453,9 @@ class _HandlerDelegate(httputil.HTTPMessageDelegate):
         if self.stream_request_body:
             future_set_result_unless_cancelled(self.request._body_future, None)
         else:
+            # Note that the body gets parsed in RequestHandler._execute so it can be in
+            # the right exception handler scope.
             self.request.body = b"".join(self.chunks)
-            self.request._parse_body()
             self.execute()
 
     def on_connection_close(self) -> None:
@@ -2518,19 +2533,32 @@ class HTTPError(Exception):
         **kwargs: Any,
     ) -> None:
         self.status_code = status_code
-        self.log_message = log_message
+        self._log_message = log_message
         self.args = args
         self.reason = kwargs.get("reason", None)
-        if log_message and not args:
-            self.log_message = log_message.replace("%", "%%")
+
+    @property
+    def log_message(self) -> Optional[str]:
+        """
+        A backwards compatible way of accessing log_message.
+        """
+        if self._log_message and not self.args:
+            return self._log_message.replace("%", "%%")
+        return self._log_message
+
+    def get_message(self) -> Optional[str]:
+        if self._log_message and self.args:
+            return self._log_message % self.args
+        return self._log_message
 
     def __str__(self) -> str:
         message = "HTTP %d: %s" % (
             self.status_code,
             self.reason or httputil.responses.get(self.status_code, "Unknown"),
         )
-        if self.log_message:
-            return message + " (" + (self.log_message % self.args) + ")"
+        log_message = self.get_message()
+        if log_message:
+            return message + " (" + log_message + ")"
         else:
             return message
 
@@ -3313,7 +3341,7 @@ class GZipContentEncoding(OutputTransform):
 
 
 def authenticated(
-    method: Callable[..., Optional[Awaitable[None]]]
+    method: Callable[..., Optional[Awaitable[None]]],
 ) -> Callable[..., Optional[Awaitable[None]]]:
     """Decorate methods with this to require that the user be logged in.
 

@@ -53,7 +53,7 @@ import logging
 import os
 import re
 import socket
-import typing  # noqa: F401
+import typing
 import unittest
 import urllib.parse
 
@@ -111,10 +111,10 @@ class CookieTestRequestHandler(RequestHandler):
                 settings=dict(cookie_secret=cookie_secret, key_version=key_version)
             )
 
-    def get_cookie(self, name):
-        return self._cookies.get(name)
+    def get_cookie(self, name) -> typing.Optional[str]:  # type: ignore[override]
+        return to_unicode(self._cookies.get(name))
 
-    def set_cookie(self, name, value, expires_days=None):
+    def set_cookie(self, name, value, expires_days=None):  # type: ignore[override]
         self._cookies[name] = value
 
 
@@ -2362,7 +2362,7 @@ class StreamingRequestBodyTest(WebTestCase):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         s.connect(("127.0.0.1", self.get_http_port()))
         stream = IOStream(s)
-        stream.write(b"GET " + url + b" HTTP/1.1\r\n")
+        stream.write(b"GET " + url + b" HTTP/1.1\r\nHost: 127.0.0.1\r\n")
         if connection_close:
             stream.write(b"Connection: close\r\n")
         stream.write(b"Transfer-Encoding: chunked\r\n\r\n")

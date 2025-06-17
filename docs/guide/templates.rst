@@ -118,8 +118,25 @@ Consequently, if you write random stuff inside of your template
 expressions, you will get random Python errors when you execute the
 template.
 
-All template output is escaped by default, using the
-`tornado.escape.xhtml_escape` function. This behavior can be changed
+Security
+~~~~~~~~
+
+Inserting untrusted content into a web page can lead to security vulnerabilities such as cross-site
+scripting (XSS). All data that is passed to a template should be *escaped* to prevent these
+vulnerabilities. The correct form of escaping is context-dependent; Tornado's templates are not
+aware of the syntax of HTML, JavaScript, etc, and so the template developer must sometimes
+explicitly apply the correct escaping function.
+
+The default escaping function is `tornado.escape.xhtml_escape`, which is appropriate for HTML body
+content (but not attribute values). In other cases, other functions should be used. In JavaScript,
+use the `.json_encode` function, e.g. ``<script>var x = {{ json_encode(some_object) }};</script>``.
+`.json_encode` can be used to escape strings, numbers, lists, and dicts. In this example, the
+JavaScript variable ``x`` will be the corresponding JavaScript type (string, number, array, or
+object), and not the JSON-encoded string representation. Note that it is unsafe to use
+`.json_encode` in the context of a JavaScript string literal (including template strings), only in
+the top-level syntactic context.
+
+The automatic escaping behavior can be disabled
 globally by passing ``autoescape=None`` to the `.Application` or
 `.tornado.template.Loader` constructors, for a template file with the
 ``{% autoescape None %}`` directive, or for a single expression by

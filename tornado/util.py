@@ -145,7 +145,7 @@ def exec_in(
 
 
 def raise_exc_info(
-    exc_info: Tuple[Optional[type], Optional[BaseException], Optional["TracebackType"]]
+    exc_info: Tuple[Optional[type], Optional[BaseException], Optional["TracebackType"]],
 ) -> typing.NoReturn:
     try:
         if exc_info[1] is not None:

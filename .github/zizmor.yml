@@ -1,0 +1,14 @@
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        # Allow trusted repositories to use ref-pinning instead of hash-pinning.
+        #
+        # Defaults, from 
+        # https://github.com/woodruffw/zizmor/blob/7b4e76e94be2f4d7b455664ba5252b2b4458b91d/src/audit/unpinned_uses.rs#L172-L193
+        actions/*: ref-pin
+        github/*: ref-pin
+        dependabot/*: ref-pin
+        # Additional trusted repositories
+        pypa/*: ref-pin
+        astral-sh/setup-uv: ref-pin

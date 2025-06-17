@@ -1,0 +1,107 @@
+What's new in Tornado 6.5.0
+===========================
+
+May 15, 2025
+------------
+
+Security Improvements
+~~~~~~~~~~~~~~~~~~~~~
+
+- Previously, malformed ``multipart-form-data`` requests could log multiple warnings and
+  constitute a denial-of-service attack. Now an exception is raised at the first error, so there
+  is only one log message per request. This fixes
+  `CVE-2025-47287 <https://github.com/tornadoweb/tornado/security/advisories/GHSA-7cx3-6m66-7c5m>`_.
+
+General Changes
+~~~~~~~~~~~~~~~
+
+- Python 3.14 is now supported. Older versions of Tornado will work on Python 3.14 but may log
+  deprecation warnings.
+- The free-threading mode of Python 3.13 is now supported on an experimental basis. Prebuilt
+  wheels are not yet available for this configuration, but it can be built from source.
+- The minimum supported Python version is 3.9.
+
+Deprecation Notices
+~~~~~~~~~~~~~~~~~~~
+
+- Support for ``obs-fold`` continuation lines in HTTP headers is deprecated and will be removed in
+  Tornado 7.0, as is the use of carriage returns without line feeds as header separators.
+- The ``callback`` argument to `.websocket_connect` is deprecated and will be removed in
+  Tornado 7.0. Note that ``on_message_callback`` is not deprecated.
+- The ``log_message`` and ``args`` attributes of `tornado.web.HTTPError` are deprecated. Use the
+  new ``get_message`` method instead.
+
+Type Annotation Changes
+~~~~~~~~~~~~~~~~~~~~~~~
+
+- `tornado.concurrent.chain_future` is now typed as accepting both asyncio and concurrent Futures.
+- `tornado.gen.multi` and ``multi_future`` now take ``Sequences`` and ``Mappings`` instead of
+  ``List`` and ``Dict``.
+- `tornado.httputil.RequestStartLine` and `.ResponseStartLine` now have type annotations for
+  their attributes.
+- `.HTTPHeaders` now has type annotations for its elements.
+- The ``autoescape`` argument to `tornado.template.BaseLoader` is now marked as optional.
+- ``tornado.routing._RuleList`` is now a ``Sequence`` for more flexibility.
+- ``.RequestHandler.SUPPPORTED_METHODS`` is now typed to support overriding in a subclass.
+- Types for `.RequestHandler.get_body_argument` and ``get_query_argument`` are improved and now
+  match the ``get_argument`` method.
+- `.RequestHandler.get_cookie` now has more accurate types.
+- The return type of `.UIModule.render` may now be either `str` or `bytes`.
+
+`tornado.httputil`
+~~~~~~~~~~~~~~~~~~
+
+- Support for ``obs-fold`` continuation lines in HTTP headers is deprecated and will be removed in
+  Tornado 7.0, as is the use of carriage returns without line feeds as header separators.
+- Request start lines may no longer include control characters.
+- Method names containing invalid characters now return error code 400 instead of 405.
+- Header names are now restricted to the set of characters permitted by the RFCs.
+- Control characters are no longer allowed in (incoming) header values.
+- Handling of trailing whitespace in headers has been improved, especially with ``obs-fold``
+  continuation lines.
+- The ``Host`` header is now restricted to the set of characters permitted by the RFCs. It is now an
+  error to send more than one ``Host`` header, or to omit a ``Host`` header for a request that is
+  not using HTTP/1.0.
+
+`tornado.ioloop`
+~~~~~~~~~~~~~~~~
+
+- Fixed a bug in which `contextvars` that were set when the event loop was created were not
+  available inside the event loop on Windows.
+
+`tornado.netutil`
+~~~~~~~~~~~~~~~~~
+
+- `.bind_unix_socket` now supports the Linux abstract namespace.
+
+
+`tornado.platform.twisted`
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- ``TwistedResolver`` has been deleted. It was already deprecated and scheduled for removal
+  in Tornado 7.0, but due to the adoption of RFC 8482 it no longer works for most
+  domain names. This class was primarily intended to provide thread-free non-blocking
+  DNS resolution. If that is still required, ``tornado.platform.caresresolver`` is the
+  next best option, although it has its own limitations which differ from TwistedResolver,
+  and it is also deprecated. Most users should switch to the default resolver, which uses
+  threads.
+
+`tornado.web`
+~~~~~~~~~~~~~
+
+- The set of characters allowed in (outgoing) HTTP headers now matches the RFCs. Specifically, tab
+  characters are now allowed and DEL is not.
+- Invalid ``If-Modified-Since`` headers are now ignored instead of causing a 500 error.
+- ``%`` characters in the log message of `tornado.web.HTTPError` are no longer doubled when no
+  additional arguments are passed. This matches the behavior of `logging.LogRecord`. A new method
+  ``get_message`` has been added to ``HTTPError`` to allow access to the fully-substituted message;
+  directly accessing ``log_message`` and ``args`` is deprecated.
+
+`tornado.websocket`
+~~~~~~~~~~~~~~~~~~~
+
+- Some bugs involving ``ping_interval`` and ``ping_timeout`` have been fixed. Setting the
+  ``ping_timeout`` greater than the ``ping_interval`` is no longer supported. The default
+  ``ping_timeout`` is now equal to the ``ping_interval``. 
+- The ``callback`` argument to ``websocket_connect`` is deprecated and will be removed in
+  Tornado 7.0. Note that ``on_message_callback`` is not deprecated.

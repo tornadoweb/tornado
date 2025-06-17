@@ -11,6 +11,7 @@
 # under the License.
 
 import asyncio
+import contextvars
 import threading
 import time
 import unittest
@@ -25,8 +26,14 @@ from tornado.platform.asyncio import (
     to_asyncio_future,
     AddThreadSelectorEventLoop,
 )
-from tornado.testing import AsyncTestCase, gen_test, setup_with_context_manager
+from tornado.testing import (
+    AsyncTestCase,
+    gen_test,
+    setup_with_context_manager,
+    AsyncHTTPTestCase,
+)
 from tornado.test.util import ignore_deprecation
+from tornado.web import Application, RequestHandler
 
 
 class AsyncIOLoopTest(AsyncTestCase):
@@ -261,3 +268,31 @@ class AnyThreadEventLoopPolicyTest(unittest.TestCase):
             asyncio.set_event_loop_policy(self.AnyThreadEventLoopPolicy())
             self.assertIsInstance(self.executor.submit(IOLoop.current).result(), IOLoop)
             self.executor.submit(lambda: asyncio.get_event_loop().close()).result()  # type: ignore
+
+
+class SelectorThreadContextvarsTest(AsyncHTTPTestCase):
+    ctx_value = "foo"
+    test_endpoint = "/"
+    tornado_test_ctx = contextvars.ContextVar("tornado_test_ctx", default="default")
+    tornado_test_ctx.set(ctx_value)
+
+    def get_app(self) -> Application:
+        tornado_test_ctx = self.tornado_test_ctx
+
+        class Handler(RequestHandler):
+            async def get(self):
+                # On the Windows platform,
+                # when a asyncio.events.Handle is created
+                # in the SelectorThread without providing a context,
+                # it will copy the current thread's context,
+                # which can lead to the loss of the main thread's context
+                # when executing the handle.
+                # Therefore, it is necessary to
+                # save a copy of the main thread's context in the SelectorThread
+                # for creating the handle.
+                self.write(tornado_test_ctx.get())
+
+        return Application([(self.test_endpoint, Handler)])
+
+    def test_context_vars(self):
+        self.assertEqual(self.ctx_value, self.fetch(self.test_endpoint).body.decode())
