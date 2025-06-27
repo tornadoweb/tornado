@@ -1421,17 +1421,24 @@ class RequestHandler:
             locales = []
             for language in languages:
                 parts = language.strip().split(";")
-                if len(parts) > 1 and parts[1].strip().startswith("q="):
+                score = 1.0
+                for part in parts[1:]:
                     try:
-                        score = float(parts[1].strip()[2:])
+                        pname, part = part.split("=", 1)
+                    except ValueError:
+                        continue
+                    if pname.strip() != "q":
+                        continue
+                    part = part.strip()
+                    try:
+                        score = float(part)
                         if score < 0:
                             raise ValueError()
                     except (ValueError, TypeError):
                         score = 0.0
-                else:
-                    score = 1.0
+                    break
                 if score > 0:
-                    locales.append((parts[0], score))
+                    locales.append((parts[0].strip(), score))
             if locales:
                 locales.sort(key=lambda pair: pair[1], reverse=True)
                 codes = [loc[0] for loc in locales]
