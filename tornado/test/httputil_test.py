@@ -9,6 +9,8 @@ from tornado.httputil import (
     qs_to_qsl,
     HTTPInputError,
     HTTPFile,
+    StreamingMultipartFormDataParser,
+    AbstractFileDelegate,
 )
 from tornado.escape import utf8, native_str
 from tornado.log import gen_log
@@ -22,7 +24,7 @@ import time
 import urllib.parse
 import unittest
 
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, List, Optional
 
 
 def form_data_args() -> Tuple[Dict[str, List[bytes]], Dict[str, List[HTTPFile]]]:
@@ -278,6 +280,190 @@ Foo
         file = files["files"][0]
         self.assertEqual(file["filename"], "ab.txt")
         self.assertEqual(file["body"], b"Foo")
+
+
+MULTIPART_DATA = b"""----boundarything\r
+Content-Disposition: form-data; name="a.txt"\r
+\r
+a----boundarything\r
+Content-Disposition: form-data; name="b.csv"\r
+Content-Type: text/csv\r
+\r
+col1,col2
+a,b
+--boundarythin,thatwasclose
+----boundarything--\r
+"""
+
+
+class MemoryFileDelegate(AbstractFileDelegate):
+    """Basic File Delegate that stores its contents in memory."""
+
+    def __init__(self):
+        super().__init__()
+        self._file_mapping = {}
+
+        self._curr_file = None
+        self._buffer = bytearray()
+        self._headers = None
+
+    @property
+    def keys(self):
+        return list(self._file_mapping.keys())
+
+    def start_file(self, name: str, headers: HTTPHeaders):
+        self._curr_file = name
+        self._headers = headers
+        self._buffer = bytearray()
+
+    def file_data_received(self, name: str, data: bytes):
+        self._buffer.extend(data)
+
+    def finish_file(self, name: str):
+        content_type = self._headers.get("Content-Type", "application/octet-stream")
+        httpfile = HTTPFile(
+            filename=name, body=bytes(self._buffer), content_type=content_type
+        )
+        self._file_mapping[name] = httpfile
+
+    def get_file(self, name) -> Optional[HTTPFile]:
+        return self._file_mapping.get(name)
+
+
+class AsyncMemoryFileDelegate(AbstractFileDelegate):
+    """Basic File Delegate that stores its contents in memory."""
+
+    def __init__(self):
+        super().__init__()
+        self._file_mapping = {}
+
+        self._curr_file = None
+        self._buffer = bytearray()
+        self._headers = None
+
+    @property
+    def keys(self):
+        return list(self._file_mapping.keys())
+
+    async def start_file(self, name: str, headers: HTTPHeaders):
+        self._curr_file = name
+        self._headers = headers
+        self._buffer = bytearray()
+
+    async def file_data_received(self, name: str, data: bytes):
+        self._buffer.extend(data)
+
+    async def finish_file(self, name: str):
+        content_type = self._headers.get("Content-Type", "application/octet-stream")
+        httpfile = HTTPFile(
+            filename=name, body=bytes(self._buffer), content_type=content_type
+        )
+        self._file_mapping[name] = httpfile
+
+    def get_file(self, name) -> Optional[HTTPFile]:
+        return self._file_mapping.get(name)
+
+
+class StreamingMultipartFormDataTest(unittest.IsolatedAsyncioTestCase):
+
+    async def test_multipart_form_data(self):
+        boundary = b"--boundarything"
+
+        # Test all possible splits and chunks of the given data. This will
+        # verify the parser with all (?) possible corner cases.
+        for i in range(len(MULTIPART_DATA)):
+            delegate = MemoryFileDelegate()
+            parser = StreamingMultipartFormDataParser(delegate, boundary)
+            chunk1 = MULTIPART_DATA[:i]
+            chunk2 = MULTIPART_DATA[i:]
+            await parser.data_received(chunk1)
+            await parser.data_received(chunk2)
+
+            # Verify that the delegate contents are correct.
+            self.assertEqual(
+                set(["a.txt", "b.csv"]),
+                set(delegate.keys),
+                "Expected files not found for slicing at: {}".format(i),
+            )
+
+            http_file_a = delegate.get_file("a.txt")
+            self.assertIsNotNone(http_file_a)
+            self.assertEqual(
+                b"a",
+                http_file_a.body,
+                '"a.txt" file contents mismatch on slice: {}'.format(i),
+            )
+            http_file_b = delegate.get_file("b.csv")
+            self.assertIsNotNone(http_file_b)
+            self.assertEqual(
+                b"col1,col2\na,b\n--boundarythin,thatwasclose\n",
+                http_file_b.body,
+                '"b.csv" file contents mismatch on slice: {}'.format(i),
+            )
+
+    async def test_multipart_form_data_async(self):
+        # Same test as above, but with async methods for the delegate.
+        boundary = b"--boundarything"
+
+        # Test all possible splits and chunks of the given data. This will
+        # verify the parser with all possible corner cases.
+        for i in range(len(MULTIPART_DATA)):
+            delegate = AsyncMemoryFileDelegate()
+            parser = StreamingMultipartFormDataParser(delegate, boundary)
+            chunk1 = MULTIPART_DATA[:i]
+            chunk2 = MULTIPART_DATA[i:]
+            await parser.data_received(chunk1)
+            await parser.data_received(chunk2)
+
+            # Verify that the delegate contents are correct.
+            self.assertEqual(
+                set(["a.txt", "b.csv"]),
+                set(delegate.keys),
+                "Expected files not found for slicing at: {}".format(i),
+            )
+            # Assert that the file contents match what is expected.
+            http_file_a = delegate.get_file("a.txt")
+            self.assertIsNotNone(http_file_a)
+            self.assertEqual(
+                b"a",
+                http_file_a.body,
+                '"a.txt" file contents mismatch on slice: {}'.format(i),
+            )
+            http_file_b = delegate.get_file("b.csv")
+            self.assertIsNotNone(http_file_b)
+            self.assertEqual(
+                b"col1,col2\na,b\n--boundarythin,thatwasclose\n",
+                http_file_b.body,
+                # bytes(delegate.parsed_data['b.csv']),
+                '"b.csv" file contents mismatch on slice: {}'.format(i),
+            )
+
+    async def test_runaway_memory_parser(self):
+        # Same test as above, but with async methods for the delegate.
+        boundary = b"--boundarything"
+
+        # Parse the data.
+        BAD_DATA = b"""----boundarything\r
+Content-Disposition: form-data; name="a.txt"\r
+\r
+a----boundarything\r
+Content-Disposition: form-data; name="b.csv"\r
+Content-Type: text/csv\r
+""" + (b'a' * 10000) + b"""
+\r
+col1,col2
+a,b
+--boundarythin,thatwasclose
+----boundarything--\r
+"""
+        delegate = AsyncMemoryFileDelegate()
+        # Configure the parser, but set the header size to something small.
+        # This will check if the parser raises after high memory consumption.
+        parser = StreamingMultipartFormDataParser(
+            delegate, boundary, max_buffer_size=1024)
+        await parser.data_received(BAD_DATA[:5000])
+        with self.assertRaises(Exception):
+            await parser.data_received(BAD_DATA[5000:])
 
 
 class HTTPHeadersTest(unittest.TestCase):
