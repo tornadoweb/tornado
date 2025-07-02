@@ -1375,7 +1375,7 @@ class WebSocketProtocol13(WebSocketProtocol):
                 return
 
             # wait until the next scheduled ping
-            await asyncio.sleep(IOLoop.current().time() - ping_time + interval)
+            await asyncio.sleep(interval - (IOLoop.current().time() - ping_time))
 
 
 class WebSocketClientConnection(simple_httpclient._HTTPConnection):
