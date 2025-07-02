@@ -436,19 +436,20 @@ class WaitIterator:
             raise getattr(builtins, "StopAsyncIteration")()
         return self.next()
 
+
 @overload
 def multi(
     children: Sequence[_Yieldable],
     quiet_exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = (),
-) -> Future[List]:
-    ...
+) -> Future[List]: ...
+
 
 @overload
 def multi(
     children: Mapping[Any, _Yieldable],
     quiet_exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = (),
-) -> Future[Dict]:
-    ...
+) -> Future[Dict]: ...
+
 
 def multi(
     children: Union[Sequence[_Yieldable], Mapping[Any, _Yieldable]],
