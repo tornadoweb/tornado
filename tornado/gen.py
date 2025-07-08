@@ -437,6 +437,20 @@ class WaitIterator:
         return self.next()
 
 
+@overload
+def multi(
+    children: Sequence[_Yieldable],
+    quiet_exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = (),
+) -> Future[List]: ...
+
+
+@overload
+def multi(
+    children: Mapping[Any, _Yieldable],
+    quiet_exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = (),
+) -> Future[Dict]: ...
+
+
 def multi(
     children: Union[Sequence[_Yieldable], Mapping[Any, _Yieldable]],
     quiet_exceptions: "Union[Type[Exception], Tuple[Type[Exception], ...]]" = (),
