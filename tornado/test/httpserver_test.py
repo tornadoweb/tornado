@@ -462,6 +462,18 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
             self.io_loop.add_timeout(datetime.timedelta(seconds=0.05), self.stop)
             self.wait()
 
+    def test_invalid_host_header_with_whitespace(self):
+        with ExpectLog(
+            gen_log, ".*Malformed HTTP message.*Invalid Host header", level=logging.INFO
+        ):
+            self.stream.write(b"GET / HTTP/1.0\r\nHost: foo bar\r\n\r\n")
+            start_line, headers, response = self.io_loop.run_sync(
+                lambda: read_stream_body(self.stream)
+            )
+            self.assertEqual("HTTP/1.1", start_line.version)
+            self.assertEqual(400, start_line.code)
+            self.assertEqual("Bad Request", start_line.reason)
+
     def test_chunked_request_body(self):
         # Chunked requests are not widely supported and we don't have a way
         # to generate them in AsyncHTTPClient, but HTTPServer will read them.
