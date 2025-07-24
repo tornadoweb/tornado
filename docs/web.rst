@@ -224,14 +224,22 @@
            of `UIModule` or UI methods to be made available to templates.
            May be set to a module, dictionary, or a list of modules
            and/or dicts.  See :ref:`ui-modules` for more details.
-         * ``websocket_ping_interval``: If set to a number, all websockets will
-           be pinged every n seconds. This can help keep the connection alive
-           through certain proxy servers which close idle connections, and it
-           can detect if the websocket has failed without being properly closed.
-         * ``websocket_ping_timeout``: If the ping interval is set, and the
-           server doesn't receive a 'pong' in this many seconds, it will close
-           the websocket. The default is three times the ping interval, with a
-           minimum of 30 seconds. Ignored if the ping interval is not set.
+         * ``websocket_ping_interval``: If the ping interval has a non-zero
+           value, a ping will be sent periodically every
+           ``websocket_ping_interval`` seconds, and the connection will be
+           closed if a response is not received before the
+           ``websocket_ping_timeout``.
+           This can help keep the connection alive through certain proxy
+           servers which close idle connections, and it can detect if the
+           websocket has failed without being properly closed.
+         * ``websocket_ping_timeout``: For use with ``websocket_ping_interval``,
+           if the server does not receive a pong within this many seconds, it
+           will close the websocket_ping_timeout.
+           The default timeout is equal to the ping interval. The ping timeout
+           will be turned off if the ping interval is not set or if the
+           timeout is set to ``0``.
+           This can help to detect disconnected clients to avoid keeping
+           inactive connections open.
 
          Authentication and security settings:
 
