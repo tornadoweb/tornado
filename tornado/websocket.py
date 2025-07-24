@@ -1350,6 +1350,11 @@ class WebSocketProtocol13(WebSocketProtocol):
         ):
             self._ping_coroutine = asyncio.create_task(self.periodic_ping())
 
+    @staticmethod
+    def ping_sleep_time(*, last_ping_time: float, interval: float, now: float) -> float:
+        """Calculate the sleep time until the next ping should be sent."""
+        return max(0, last_ping_time + interval - now)
+
     async def periodic_ping(self) -> None:
         """Send a ping and wait for a pong if ping_timeout is configured.
 
@@ -1375,7 +1380,13 @@ class WebSocketProtocol13(WebSocketProtocol):
                 return
 
             # wait until the next scheduled ping
-            await asyncio.sleep(ping_time + interval - IOLoop.current().time())
+            await asyncio.sleep(
+                self.ping_sleep_time(
+                    last_ping_time=ping_time,
+                    interval=interval,
+                    now=IOLoop.current().time(),
+                )
+            )
 
 
 class WebSocketClientConnection(simple_httpclient._HTTPConnection):
