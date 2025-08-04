@@ -20,12 +20,12 @@ on:
 permissions: {}
 
 env:
-  python-version: '3.9'
+  python-version: '3.13'
 
 jobs:
   build_sdist:
     name: Build sdist
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,6 +35,8 @@ jobs:
         with:
           python-version: ${{ env.python-version }}
 
+      - name: Install dependencies
+        run: python -m pip install setuptools
       - name: Check metadata
         run: "python setup.py check"
       - name: Build sdist
@@ -51,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-22.04-arm, windows-2022, macos-15]
+        os: [ubuntu-24.04, ubuntu-24.04-arm, windows-2025, windows-11-arm, macos-15]
 
     steps:
       - uses: actions/checkout@v4
@@ -63,7 +65,7 @@ jobs:
           python-version: ${{ env.python-version }}
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.22
+        uses: pypa/cibuildwheel@v2.23
 
       - name: Audit ABI3 compliance
         # This may be moved into cibuildwheel itself in the future. See
@@ -78,7 +80,7 @@ jobs:
   upload_pypi_test:
     name: Upload to PyPI (test)
     needs: [build_wheels, build_sdist]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     if: github.repository == 'tornadoweb/tornado' && github.event_name == 'workflow_dispatch'
     permissions:
       # This permission is required for pypi's "trusted publisher" feature
@@ -98,7 +100,7 @@ jobs:
   upload_pypi:
     name: Upload to PyPI (prod)
     needs: [build_wheels, build_sdist]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     if: github.repository == 'tornadoweb/tornado' && github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
     permissions:
       # This permission is required for pypi's "trusted publisher" feature

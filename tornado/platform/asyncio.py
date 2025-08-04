@@ -25,6 +25,7 @@ the same event loop.
 import asyncio
 import atexit
 import concurrent.futures
+import contextvars
 import errno
 import functools
 import select
@@ -472,6 +473,8 @@ class SelectorThread:
     _closed = False
 
     def __init__(self, real_loop: asyncio.AbstractEventLoop) -> None:
+        self._main_thread_ctx = contextvars.copy_context()
+
         self._real_loop = real_loop
 
         self._select_cond = threading.Condition()
@@ -491,7 +494,8 @@ class SelectorThread:
         # clean up if we get to this point but the event loop is closed without
         # starting.
         self._real_loop.call_soon(
-            lambda: self._real_loop.create_task(thread_manager_anext())
+            lambda: self._real_loop.create_task(thread_manager_anext()),
+            context=self._main_thread_ctx,
         )
 
         self._readers: Dict[_FileDescriptorLike, Callable] = {}
@@ -618,7 +622,9 @@ class SelectorThread:
                     raise
 
             try:
-                self._real_loop.call_soon_threadsafe(self._handle_select, rs, ws)
+                self._real_loop.call_soon_threadsafe(
+                    self._handle_select, rs, ws, context=self._main_thread_ctx
+                )
             except RuntimeError:
                 # "Event loop is closed". Swallow the exception for
                 # consistency with PollIOLoop (and logical consistency

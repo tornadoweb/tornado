@@ -2,8 +2,6 @@ import os
 import sphinx.errors
 import sys
 
-import sphinx_rtd_theme
-
 # Ensure we get the local copy of tornado instead of what's on the standard path
 sys.path.insert(0, os.path.abspath(".."))
 import tornado
@@ -88,7 +86,6 @@ latex_documents = [
 intersphinx_mapping = {"python": ("https://docs.python.org/3/", None)}
 
 html_theme = "sphinx_rtd_theme"
-html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 
 # Suppress warnings about "class reference target not found" for these types.
 # In most cases these types come from type annotations and are for mypy's use.

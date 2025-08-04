@@ -53,7 +53,7 @@ import logging
 import os
 import re
 import socket
-import typing  # noqa: F401
+import typing
 import unittest
 import urllib.parse
 
@@ -111,10 +111,10 @@ class CookieTestRequestHandler(RequestHandler):
                 settings=dict(cookie_secret=cookie_secret, key_version=key_version)
             )
 
-    def get_cookie(self, name):
-        return self._cookies.get(name)
+    def get_cookie(self, name) -> typing.Optional[str]:  # type: ignore[override]
+        return to_unicode(self._cookies.get(name))
 
-    def set_cookie(self, name, value, expires_days=None):
+    def set_cookie(self, name, value, expires_days=None):  # type: ignore[override]
         self._cookies[name] = value
 
 

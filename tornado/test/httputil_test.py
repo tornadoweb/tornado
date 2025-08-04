@@ -12,7 +12,6 @@ from tornado.httputil import (
 )
 from tornado.escape import utf8, native_str
 from tornado.log import gen_log
-from tornado.testing import ExpectLog
 from tornado.test.util import ignore_deprecation
 
 import copy
@@ -156,7 +155,7 @@ Foo
             self.assertEqual(file["filename"], filename)
             self.assertEqual(file["body"], b"Foo")
 
-    def test_non_ascii_filename(self):
+    def test_non_ascii_filename_rfc5987(self):
         data = b"""\
 --1234
 Content-Disposition: form-data; name="files"; filename="ab.txt"; filename*=UTF-8''%C3%A1b.txt
@@ -169,6 +168,23 @@ Foo
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
         self.assertEqual(file["filename"], "áb.txt")
+        self.assertEqual(file["body"], b"Foo")
+
+    def test_non_ascii_filename_raw(self):
+        data = """\
+--1234
+Content-Disposition: form-data; name="files"; filename="测试.txt"
+
+Foo
+--1234--""".encode(
+            "utf-8"
+        ).replace(
+            b"\n", b"\r\n"
+        )
+        args, files = form_data_args()
+        parse_multipart_form_data(b"1234", data, args, files)
+        file = files["files"][0]
+        self.assertEqual(file["filename"], "测试.txt")
         self.assertEqual(file["body"], b"Foo")
 
     def test_boundary_starts_and_ends_with_quotes(self):
@@ -195,7 +211,9 @@ Foo
             b"\n", b"\r\n"
         )
         args, files = form_data_args()
-        with ExpectLog(gen_log, "multipart/form-data missing headers"):
+        with self.assertRaises(
+            HTTPInputError, msg="multipart/form-data missing headers"
+        ):
             parse_multipart_form_data(b"1234", data, args, files)
         self.assertEqual(files, {})
 
@@ -209,7 +227,7 @@ Foo
             b"\n", b"\r\n"
         )
         args, files = form_data_args()
-        with ExpectLog(gen_log, "Invalid multipart/form-data"):
+        with self.assertRaises(HTTPInputError, msg="Invalid multipart/form-data"):
             parse_multipart_form_data(b"1234", data, args, files)
         self.assertEqual(files, {})
 
@@ -222,7 +240,7 @@ Foo--1234--""".replace(
             b"\n", b"\r\n"
         )
         args, files = form_data_args()
-        with ExpectLog(gen_log, "Invalid multipart/form-data"):
+        with self.assertRaises(HTTPInputError, msg="Invalid multipart/form-data"):
             parse_multipart_form_data(b"1234", data, args, files)
         self.assertEqual(files, {})
 
@@ -236,7 +254,9 @@ Foo
             b"\n", b"\r\n"
         )
         args, files = form_data_args()
-        with ExpectLog(gen_log, "multipart/form-data value missing name"):
+        with self.assertRaises(
+            HTTPInputError, msg="multipart/form-data value missing name"
+        ):
             parse_multipart_form_data(b"1234", data, args, files)
         self.assertEqual(files, {})
 

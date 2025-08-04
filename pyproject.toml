@@ -11,14 +11,11 @@ enable = "cpython-freethreading"
 test-command = "python -m tornado.test"
 
 [tool.cibuildwheel.macos]
-archs = "x86_64 universal2"
+archs = "universal2"
 
 [tool.cibuildwheel.windows]
-archs = "AMD64 x86 ARM64"
 # TODO: figure out what's going on with these occasional log messages.
 test-command = "python -m tornado.test --fail-if-logs=false"
-# Arm builds are cross-compiled and cannot be tested on the x86 host
-test-skip = "*-win_arm64"
 
 [tool.cibuildwheel.linux]
 # This configuration has a bug which appears unrelated to Tornado:

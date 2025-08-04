@@ -442,7 +442,7 @@ Transfer-Encoding: chunked
         # test if client hangs on tricky invalid gzip
         # curl/simple httpclient have different behavior (exception, logging)
         with ExpectLog(
-            app_log, "(Uncaught exception|Exception in callback)", required=False
+            gen_log, ".*Malformed HTTP message.*unconsumed gzip data", required=False
         ):
             try:
                 response = self.fetch("/invalid_gzip")
