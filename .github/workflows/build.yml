@@ -70,7 +70,7 @@ jobs:
       - name: Audit ABI3 compliance
         # This may be moved into cibuildwheel itself in the future. See
         # https://github.com/pypa/cibuildwheel/issues/1342
-        run: "pip install abi3audit && abi3audit --verbose --summary ./wheelhouse/*abi3*.whl"
+        run: python -m pip install abi3audit && abi3audit --verbose --summary ./wheelhouse/*abi3*.whl
 
       - uses: actions/upload-artifact@v4
         with:
