@@ -61,6 +61,8 @@ jobs:
             tox_env: py313t
           - python: '3.14.0-rc.1 - 3.14'
             tox_env: py314-full
+          - python: '3.14t-dev'
+            tox_env: py314t
           - python: 'pypy-3.10'
             # Pypy is a lot slower due to jit warmup costs, so don't run the
             # "full" test config there.
