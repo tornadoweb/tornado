@@ -425,7 +425,7 @@ class CookieTest(WebTestCase):
 
     @unittest.skipIf(
         getattr(sys.flags, "context_aware_warnings", False),
-        "interaction with context-aware warnings is buggy"
+        "interaction with context-aware warnings is buggy",
     )
     def test_set_cookie_deprecated(self):
         with ignore_deprecation():
