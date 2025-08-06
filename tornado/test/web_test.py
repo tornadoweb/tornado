@@ -53,6 +53,7 @@ import logging
 import os
 import re
 import socket
+import sys
 import typing
 import unittest
 import urllib.parse
@@ -422,6 +423,10 @@ class CookieTest(WebTestCase):
         self.assertEqual(headers[2], "c=1; HttpOnly; Path=/")
         self.assertEqual(headers[3], "d=1; Path=/")
 
+    @unittest.skipIf(
+        getattr(sys.flags, "context_aware_warnings", False),
+        "interaction with context-aware warnings is buggy"
+    )
     def test_set_cookie_deprecated(self):
         with ignore_deprecation():
             response = self.fetch("/set_deprecated")
