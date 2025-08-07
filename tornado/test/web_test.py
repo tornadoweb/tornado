@@ -1177,6 +1177,29 @@ class StaticFileTest(WebTestCase):
             response.headers.get("Content-Type"), {"text/xml", "application/xml"}
         )
 
+    def test_static_windows_special_filenames(self):
+        # Windows has some magic filenames that are special and (in some ways) "exist"
+        # in every directory. These filenames are used to access stdio and hardware
+        # devices and so should not be served as static files.
+        filenames = [
+            "CON",
+            "PRN",
+            "AUX",
+            "NUL",
+            "COM1",
+            "LPT1",
+        ]
+        for filename in filenames:
+            with self.subTest(filename=filename):
+                response = self.fetch(f"/static/{filename}")
+                # The exact behavior of these filenames differs across versions of
+                # Windows and Python.
+                # https://github.com/python/cpython/issues/90520#issuecomment-1093942179
+                # This sometimes hits the "file not in static root directory" check (which
+                # returns 403) and sometimes the "file does not exist" check (which returns 404).
+                # Either outcome is fine as long as we don't actually try to serve the file.
+                self.assertIn(response.code, (404, 403))
+
     def test_static_url(self):
         response = self.fetch("/static_url/robots.txt")
         self.assertEqual(response.body, b"/static/robots.txt?v=" + self.robots_txt_hash)
