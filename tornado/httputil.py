@@ -459,6 +459,11 @@ class HTTPServerRequest:
 
     .. versionchanged:: 4.0
        Moved from ``tornado.httpserver.HTTPRequest``.
+
+    .. deprecated:: 6.5.2
+       The ``host`` argument to the ``HTTPServerRequest`` constructor is deprecated. Use
+       ``headers["Host"]`` instead. This argument was mistakenly removed in Tornado 6.5.0 and
+       temporarily restored in 6.5.2.
     """
 
     path = None  # type: str
@@ -474,7 +479,7 @@ class HTTPServerRequest:
         version: str = "HTTP/1.0",
         headers: Optional[HTTPHeaders] = None,
         body: Optional[bytes] = None,
-        # host: Optional[str] = None,
+        host: Optional[str] = None,
         files: Optional[Dict[str, List["HTTPFile"]]] = None,
         connection: Optional["HTTPConnection"] = None,
         start_line: Optional["RequestStartLine"] = None,
@@ -494,7 +499,7 @@ class HTTPServerRequest:
         self.protocol = getattr(context, "protocol", "http")
 
         try:
-            self.host = self.headers["Host"]
+            self.host = host or self.headers["Host"]
         except KeyError:
             if version == "HTTP/1.0":
                 # HTTP/1.0 does not require the Host header.
@@ -502,7 +507,6 @@ class HTTPServerRequest:
             else:
                 raise HTTPInputError("Missing Host header")
         if not _ABNF.host.fullmatch(self.host):
-            print(_ABNF.host.pattern)
             raise HTTPInputError("Invalid Host header: %r" % self.host)
         if "," in self.host:
             # https://www.rfc-editor.org/rfc/rfc9112.html#name-request-target
