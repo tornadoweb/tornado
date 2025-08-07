@@ -33,7 +33,7 @@ import time
 from io import BytesIO
 import urllib.parse
 
-from typing import Dict, Any, Callable, Optional, Type, Union
+from typing import Dict, Any, Callable, Optional, Type, Union, Awaitable
 from types import TracebackType
 import typing
 
@@ -687,14 +687,15 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
     def _on_end_request(self) -> None:
         self.stream.close()
 
-    def data_received(self, chunk: bytes) -> None:
+    def data_received(self, chunk: bytes) -> Optional[Awaitable[None]]:
         if self._should_follow_redirect():
             # We're going to follow a redirect so just discard the body.
-            return
+            return None
         if self.request.streaming_callback is not None:
-            self.request.streaming_callback(chunk)
+            return self.request.streaming_callback(chunk)
         else:
             self.chunks.append(chunk)
+            return None
 
 
 if __name__ == "__main__":
