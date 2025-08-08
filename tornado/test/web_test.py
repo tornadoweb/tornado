@@ -53,7 +53,6 @@ import logging
 import os
 import re
 import socket
-import sys
 import typing
 import unittest
 import urllib.parse
@@ -324,7 +323,8 @@ class CookieTest(WebTestCase):
         class SetCookieDeprecatedArgs(RequestHandler):
             def get(self):
                 # Mixed case is supported, but deprecated
-                self.set_cookie("a", "b", HttpOnly=True, pATH="/foo")
+                with ignore_deprecation():
+                    self.set_cookie("a", "b", HttpOnly=True, pATH="/foo")
 
         return [
             ("/set", SetCookieHandler),
@@ -423,13 +423,8 @@ class CookieTest(WebTestCase):
         self.assertEqual(headers[2], "c=1; HttpOnly; Path=/")
         self.assertEqual(headers[3], "d=1; Path=/")
 
-    @unittest.skipIf(
-        getattr(sys.flags, "context_aware_warnings", False),
-        "interaction with context-aware warnings is buggy",
-    )
     def test_set_cookie_deprecated(self):
-        with ignore_deprecation():
-            response = self.fetch("/set_deprecated")
+        response = self.fetch("/set_deprecated")
         header = response.headers.get("Set-Cookie")
         self.assertEqual(header, "a=b; HttpOnly; Path=/foo")
 
