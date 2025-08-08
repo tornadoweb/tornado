@@ -57,8 +57,10 @@ jobs:
             tox_env: py312-full
           - python: '3.13'
             tox_env: py313-full
-          - python: '3.14.0-beta.1 - 3.14'
+          - python: '3.14.0-rc.1 - 3.14'
             tox_env: py314-full
+          - python: '3.14t-dev'
+            tox_env: py314t
           - python: 'pypy-3.10'
             # Pypy is a lot slower due to jit warmup costs, so don't run the
             # "full" test config there.
@@ -140,13 +142,3 @@ jobs:
           # built here; the real build is defined in build.yml.
           CIBW_ARCHS: native
           CIBW_BUILD: cp313-manylinux*
-
-          # Alternatively, uncomment the following lines (and replace the previous CIBW_BUILD)
-          # to test a freethreading build of python.
-          #CIBW_BUILD: cp313t-manylinux*
-          #CIBW_ENABLE: cpython-freethreading
-          # I don't understand what this does but auditwheel seems to fail in this configuration.
-          # Since we're throwing away the wheels here, just skip it.
-          # TODO: When we no longer need to disable this, we can enable freethreading in
-          # build.yml.
-          #CIBW_REPAIR_WHEEL_COMMAND: ""
