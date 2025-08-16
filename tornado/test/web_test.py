@@ -252,21 +252,19 @@ class FinalReturnTest(WebTestCase):
     def get_app_kwargs(self):
         return dict(template_path="FinalReturnTest")
 
-    def test_finish_method_return_future(self):
+    def test_finish_method_return_none(self):
         response = self.fetch(self.get_url("/finish"))
         self.assertEqual(response.code, 200)
-        self.assertIsInstance(self.final_return, Future)
-        self.assertTrue(self.final_return.done())
+        self.assertTrue(self.final_return is None)
 
         response = self.fetch(self.get_url("/finish"), method="POST", body=b"")
         self.assertEqual(response.code, 200)
-        self.assertIsInstance(self.final_return, Future)
-        self.assertTrue(self.final_return.done())
+        self.assertTrue(self.final_return is None)
 
-    def test_render_method_return_future(self):
+    def test_render_method_return_none(self):
         response = self.fetch(self.get_url("/render"))
         self.assertEqual(response.code, 200)
-        self.assertIsInstance(self.final_return, Future)
+        self.assertTrue(self.final_return is None)
 
 
 class CookieTest(WebTestCase):
@@ -2584,8 +2582,11 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
         class TooHigh(RequestHandler):
             def get(self):
                 self.set_header("Content-Length", "42")
+                self.finish("ok")
+
+            def _real_finish(self) -> "Future[None]":
                 try:
-                    self.finish("ok")
+                    return super()._real_finish()
                 except Exception as e:
                     test.server_error = e
                     raise
@@ -2593,8 +2594,11 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
         class TooLow(RequestHandler):
             def get(self):
                 self.set_header("Content-Length", "2")
+                self.finish("hello")
+
+            def _real_finish(self) -> "Future[None]":
                 try:
-                    self.finish("hello")
+                    return super()._real_finish()
                 except Exception as e:
                     test.server_error = e
                     raise
@@ -2608,8 +2612,7 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
         with ExpectLog(app_log, "(Uncaught exception|Exception in callback)"):
             with ExpectLog(
                 gen_log,
-                "(Cannot send error response after headers written"
-                "|Failed to flush partial response)",
+                "Failed to flush response",
             ):
                 with self.assertRaises(HTTPClientError):
                     self.fetch("/high", raise_error=True)
@@ -2624,8 +2627,7 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
         with ExpectLog(app_log, "(Uncaught exception|Exception in callback)"):
             with ExpectLog(
                 gen_log,
-                "(Cannot send error response after headers written"
-                "|Failed to flush partial response)",
+                "Failed to flush response",
             ):
                 with self.assertRaises(HTTPClientError):
                     self.fetch("/low", raise_error=True)
