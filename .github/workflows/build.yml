@@ -20,7 +20,9 @@ on:
 permissions: {}
 
 env:
+  # [[[cog cog.outl(f"python-version: '3.{default_python_minor}'")]]]
   python-version: '3.13'
+  # [[[end]]]
 
 jobs:
   build_sdist:
