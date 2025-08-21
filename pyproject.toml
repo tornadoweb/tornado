@@ -3,10 +3,20 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.black]
-target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
+# [[[cog
+#    cog.outl(f"target-version = ['py3{min_python_minor}']")
+# ]]]
+target-version = ['py310']
+#[[[end]]]
 
 [tool.cibuildwheel]
-build = "cp39* cp310* cp311* cp312* cp313* cp314* cp314t*"
+# [[[cog
+#    versions = [f"cp3{m}*" for m in range(int(min_python_minor), int(max_python_minor) + 1)]
+#    versions += ["cp314t*"]
+#    cog.outl(f"build = \"{" ".join(versions)}\"")
+# ]]]
+build = "cp310* cp311* cp312* cp313* cp314* cp314t*"
+#[[[end]]]
 test-command = "python -m tornado.test"
 
 [tool.cibuildwheel.macos]
