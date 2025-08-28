@@ -221,7 +221,7 @@ def coroutine(
             result = ctx_run(func, *args, **kwargs)
         except (Return, StopIteration) as e:
             result = _value_from_stopiteration(e)
-        except Exception:
+        except (Exception, asyncio.CancelledError):
             future_set_exc_info(future, sys.exc_info())
             try:
                 return future
