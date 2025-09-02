@@ -241,7 +241,7 @@ def coroutine(
                     future_set_result_unless_cancelled(
                         future, _value_from_stopiteration(e)
                     )
-                except Exception:
+                except (Exception, asyncio.CancelledError):
                     future_set_exc_info(future, sys.exc_info())
                 else:
                     # Provide strong references to Runner objects as long
