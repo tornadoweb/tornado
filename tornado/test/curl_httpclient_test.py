@@ -5,6 +5,7 @@ from tornado.escape import utf8
 from tornado.testing import AsyncHTTPTestCase
 from tornado.test import httpclient_test
 from tornado.web import Application, RequestHandler
+from tornado import gen
 
 
 try:
@@ -123,3 +124,11 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
             auth_password="barユ£",
         )
         self.assertEqual(response.body, b"ok")
+
+    def test_streaming_callback_not_permitted(self):
+        @gen.coroutine
+        def _recv_chunk(chunk):
+            yield gen.moment
+
+        with self.assertRaises(TypeError):
+            self.fetch("/digest", streaming_callback=_recv_chunk)
