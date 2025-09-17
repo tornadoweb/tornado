@@ -132,3 +132,11 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
 
         with self.assertRaises(TypeError):
             self.fetch("/digest", streaming_callback=_recv_chunk)
+
+        import asyncio
+
+        async def _async_recv_chunk(chunk):
+            await asyncio.sleep(0)
+
+        with self.assertRaises(TypeError):
+            self.fetch("/digest", streaming_callback=_async_recv_chunk)
