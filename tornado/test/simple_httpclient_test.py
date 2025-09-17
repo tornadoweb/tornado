@@ -539,6 +539,27 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
         num_start_lines = len([h for h in headers if h.startswith("HTTP/")])
         self.assertEqual(num_start_lines, 1)
 
+    def test_streaming_callback_coroutine(self: typing.Any):
+        headers = []  # type: typing.List[str]
+        chunk_bytes = []  # type: typing.List[bytes]
+
+        import asyncio
+
+        async def _put_chunk(chunk):
+            await asyncio.sleep(0)
+            chunk_bytes.append(chunk)
+
+        self.fetch(
+            "/chunk",
+            header_callback=headers.append,
+            streaming_callback=_put_chunk,
+        )
+        chunks = list(map(to_unicode, chunk_bytes))
+        self.assertEqual("".join(chunks), "asdfqwer")
+        # Make sure we only got one set of headers.
+        num_start_lines = len([h for h in headers if h.startswith("HTTP/")])
+        self.assertEqual(num_start_lines, 1)
+
 
 class SimpleHTTPClientTestCase(AsyncHTTPTestCase, SimpleHTTPClientTestMixin):
     def setUp(self):

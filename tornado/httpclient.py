@@ -53,7 +53,7 @@ from tornado import gen, httputil
 from tornado.ioloop import IOLoop
 from tornado.util import Configurable
 
-from typing import Type, Any, Union, Dict, Callable, Optional, cast
+from typing import Type, Any, Union, Dict, Callable, Optional, Awaitable, cast
 
 
 class HTTPClient:
@@ -372,7 +372,9 @@ class HTTPRequest:
         user_agent: Optional[str] = None,
         use_gzip: Optional[bool] = None,
         network_interface: Optional[str] = None,
-        streaming_callback: Optional[Callable[[bytes], None]] = None,
+        streaming_callback: Optional[
+            Callable[[bytes], Optional[Awaitable[None]]]
+        ] = None,
         header_callback: Optional[Callable[[str], None]] = None,
         prepare_curl_callback: Optional[Callable[[Any], None]] = None,
         proxy_host: Optional[str] = None,

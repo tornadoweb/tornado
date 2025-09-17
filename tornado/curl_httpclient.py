@@ -22,8 +22,10 @@ import pycurl
 import re
 import threading
 import time
+import inspect
 from io import BytesIO
 
+from tornado import gen
 from tornado import httputil
 from tornado import ioloop
 
@@ -367,6 +369,13 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             ),
         )
         if request.streaming_callback:
+
+            if gen.is_coroutine_function(
+                request.streaming_callback
+            ) or inspect.iscoroutinefunction(request.streaming_callback):
+                raise TypeError(
+                    "'CurlAsyncHTTPClient' does not support async streaming_callbacks."
+                )
 
             def write_function(b: Union[bytes, bytearray]) -> int:
                 assert request.streaming_callback is not None
