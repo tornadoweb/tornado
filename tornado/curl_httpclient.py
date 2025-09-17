@@ -374,7 +374,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 request.streaming_callback
             ) or inspect.iscoroutinefunction(request.streaming_callback):
                 raise TypeError(
-                    "'CurlAsyncHTTPClient' does not support async callbacks."
+                    "'CurlAsyncHTTPClient' does not support async streaming_callbacks."
                 )
 
             def write_function(b: Union[bytes, bytearray]) -> int:
