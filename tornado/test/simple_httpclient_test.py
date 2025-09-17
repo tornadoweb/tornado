@@ -543,18 +543,19 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
         headers = []  # type: typing.List[str]
         chunk_bytes = []  # type: typing.List[bytes]
 
-        @gen.coroutine
-        def _put_chunk(chunk):
+        import asyncio
+
+        async def _put_chunk(chunk):
+            await asyncio.sleep(0)
             chunk_bytes.append(chunk)
-            yield gen.moment
 
         self.fetch(
-            "/hello",
+            "/chunk",
             header_callback=headers.append,
             streaming_callback=_put_chunk,
         )
         chunks = list(map(to_unicode, chunk_bytes))
-        self.assertEqual(chunks, ["Hello world!"])
+        self.assertEqual("".join(chunks), "asdfqwer")
         # Make sure we only got one set of headers.
         num_start_lines = len([h for h in headers if h.startswith("HTTP/")])
         self.assertEqual(num_start_lines, 1)
