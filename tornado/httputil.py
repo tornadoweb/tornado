@@ -101,7 +101,7 @@ class _ABNF:
     VCHAR = re.compile(r"[\x21-\x7E]")
 
     # RFC 9110 (HTTP Semantics)
-    obs_text = re.compile(r"[\x80-\xFF]")
+    obs_text = re.compile(r"[\x80-\xFF\r\n]")
     field_vchar = re.compile(rf"(?:{VCHAR.pattern}|{obs_text.pattern})")
     # Not exactly from the RFC to simplify and combine field-content and field-value.
     field_value = re.compile(
