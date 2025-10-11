@@ -694,13 +694,13 @@ class HTTP1Connection(httputil.HTTPConnection):
     async def _read_body_until_close(
         self, delegate: httputil.HTTPMessageDelegate
     ) -> None:
-        body = await self.stream.read_until_close()
-        if not self._write_finished or self.is_client:
-            with _ExceptionLoggingContext(app_log):
-                ret = delegate.data_received(body)
-                if ret is not None:
-                    await ret
-
+        while True:
+            chunk = await self.stream.read_bytes(self.params.chunk_size, partial=True)
+            if not self._write_finished or self.is_client:
+                with _ExceptionLoggingContext(app_log):
+                    ret = delegate.data_received(chunk)
+                    if ret is not None:
+                        await ret
 
 class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
     """Wraps an `HTTPMessageDelegate` to decode ``Content-Encoding: gzip``."""
