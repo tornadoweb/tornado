@@ -487,7 +487,9 @@ class HTTPServerRequest:
     ) -> None:
         if start_line is not None:
             method, uri, version = start_line
+        assert method
         self.method = method
+        assert uri
         self.uri = uri
         self.version = version
         self.headers = headers or HTTPHeaders()
