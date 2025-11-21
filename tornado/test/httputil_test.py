@@ -526,15 +526,15 @@ class HTTPServerRequestTest(unittest.TestCase):
         # All parameters are formally optional, but uri is required
         # (and has been for some time).  This test ensures that no
         # more required parameters slip in.
-        HTTPServerRequest(uri="/")
+        HTTPServerRequest(method="GET", uri="/")
 
     def test_body_is_a_byte_string(self):
-        request = HTTPServerRequest(uri="/")
+        request = HTTPServerRequest(method="GET", uri="/")
         self.assertIsInstance(request.body, bytes)
 
     def test_repr_does_not_contain_headers(self):
         request = HTTPServerRequest(
-            uri="/", headers=HTTPHeaders({"Canary": ["Coal Mine"]})
+            method="GET", uri="/", headers=HTTPHeaders({"Canary": ["Coal Mine"]})
         )
         self.assertNotIn("Canary", repr(request))
 
