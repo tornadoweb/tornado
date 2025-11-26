@@ -315,7 +315,7 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
 
     def test_request_timeout(self):
         timeout = 0.1
-        if os.name == "nt":
+        if os.name == "nt" or os.environ.get("EMULATION") == "1":
             timeout = 0.5
 
         with self.assertRaises(HTTPTimeoutError):
