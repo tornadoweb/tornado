@@ -117,7 +117,7 @@ types-pycurl==7.45.6.20250309
     # via -r requirements.in
 typing-extensions==4.13.2
     # via mypy
-urllib3==2.5.0
+urllib3==2.6.0
     # via requests
 virtualenv==20.31.2
     # via tox
