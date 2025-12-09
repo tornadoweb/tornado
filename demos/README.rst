@@ -14,7 +14,6 @@ Web Applications
 - ``websocket``: Similar to ``chat`` but with WebSockets instead of
   long polling.
 - ``helloworld``: The simplest possible Tornado web page.
-- ``s3server``: Implements a basic subset of the Amazon S3 API.
 
 Feature demos
 ~~~~~~~~~~~~~
