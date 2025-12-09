@@ -70,13 +70,7 @@ class MainHandler(BaseHandler, tornado.auth.FacebookGraphMixin):
 
 class AuthLoginHandler(BaseHandler, tornado.auth.FacebookGraphMixin):
     async def get(self):
-        my_url = (
-            self.request.protocol
-            + "://"
-            + self.request.host
-            + "/auth/login?next="
-            + tornado.escape.url_escape(self.get_argument("next", "/"))
-        )
+        my_url = self.request.protocol + "://" + self.request.host + "/auth/login"
         if self.get_argument("code", False):
             user = await self.get_authenticated_user(
                 redirect_uri=my_url,
@@ -85,7 +79,7 @@ class AuthLoginHandler(BaseHandler, tornado.auth.FacebookGraphMixin):
                 code=self.get_argument("code"),
             )
             self.set_signed_cookie("fbdemo_user", tornado.escape.json_encode(user))
-            self.redirect(self.get_argument("next", "/"))
+            self.redirect("/")
             return
         self.authorize_redirect(
             redirect_uri=my_url,
@@ -97,7 +91,7 @@ class AuthLoginHandler(BaseHandler, tornado.auth.FacebookGraphMixin):
 class AuthLogoutHandler(BaseHandler, tornado.auth.FacebookGraphMixin):
     def get(self):
         self.clear_cookie("fbdemo_user")
-        self.redirect(self.get_argument("next", "/"))
+        self.redirect("/")
 
 
 class PostModule(tornado.web.UIModule):
