@@ -71,8 +71,12 @@ class MessageNewHandler(tornado.web.RequestHandler):
         message["html"] = tornado.escape.to_unicode(
             self.render_string("message.html", message=message)
         )
-        if self.get_argument("next", None):
-            self.redirect(self.get_argument("next"))
+        if next := self.get_argument("next", None):
+            if next.startswith("//") or not next.startswith("/"):
+                # Absolute URLs are not allowed because this would be an open redirect
+                # vulnerability (https://cwe.mitre.org/data/definitions/601.html).
+                raise tornado.web.HTTPError(400)
+            self.redirect(next)
         else:
             self.write(message)
         global_message_buffer.add_message(message)
