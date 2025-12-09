@@ -471,6 +471,21 @@ Foo: even
             with self.assertRaises(HTTPInputError):
                 headers.add(name, "bar")
 
+    def test_linear_performance(self):
+        def f(n):
+            start = time.time()
+            headers = HTTPHeaders()
+            for i in range(n):
+                headers.add("X-Foo", "bar")
+            return time.time() - start
+
+        # This runs under 50ms on my laptop as of 2025-12-09.
+        d1 = f(10_000)
+        d2 = f(100_000)
+        if d2 / d1 > 20:
+            # d2 should be about 10x d1 but allow a wide margin for variability.
+            self.fail(f"HTTPHeaders.add() does not scale linearly: {d1=} vs {d2=}")
+
 
 class FormatTimestampTest(unittest.TestCase):
     # Make sure that all the input types are supported.
