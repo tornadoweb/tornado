@@ -3,11 +3,13 @@ from contextlib import closing
 import errno
 import logging
 import os
+import platform
 import re
 import socket
 import ssl
 import sys
 import typing  # noqa: F401
+import unittest
 
 from tornado.escape import to_unicode, utf8
 from tornado import gen, version
@@ -315,6 +317,7 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
         cleanup_event.set()
         yield gen.sleep(0.2)
 
+    @unittest.skipIf(platform.machine() == "riscv64", "Test has race conditions under QEMU emulation")
     def test_request_timeout(self):
         timeout = 0.1
         if os.name == "nt":

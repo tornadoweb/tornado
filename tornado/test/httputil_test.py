@@ -18,6 +18,7 @@ import copy
 import datetime
 import logging
 import pickle
+import platform
 import time
 import urllib.parse
 import unittest
@@ -648,6 +649,7 @@ class ParseCookieTest(unittest.TestCase):
                 c = parse_cookie(encoded)
                 self.assertEqual(c["a"], decoded)
 
+    @unittest.skipIf(platform.machine() == "riscv64", "Performance test unreliable under QEMU emulation")
     def test_unquote_large(self):
         # Adapted from
         # https://github.com/python/cpython/blob/dc7a2b6522ec7af41282bc34f405bee9b306d611/Lib/test/test_http_cookies.py#L87
