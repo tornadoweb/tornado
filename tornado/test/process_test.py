@@ -141,7 +141,7 @@ class SubprocessTest(AsyncTestCase):
     @gen_test
     def test_subprocess(self):
         subproc = Subprocess(
-            [sys.executable, "-u", "-i"],
+            [sys.executable, "-u", "-i", "-I"],
             stdin=Subprocess.STREAM,
             stdout=Subprocess.STREAM,
             stderr=subprocess.STDOUT,
@@ -163,7 +163,7 @@ class SubprocessTest(AsyncTestCase):
     def test_close_stdin(self):
         # Close the parent's stdin handle and see that the child recognizes it.
         subproc = Subprocess(
-            [sys.executable, "-u", "-i"],
+            [sys.executable, "-u", "-i", "-I"],
             stdin=Subprocess.STREAM,
             stdout=Subprocess.STREAM,
             stderr=subprocess.STDOUT,
