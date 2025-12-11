@@ -1,0 +1,33 @@
+What's new in Tornado 6.5.3
+===========================
+
+Dec 10, 2025
+------------
+
+Security fixes
+~~~~~~~~~~~~~~
+- Fixed a denial-of-service vulnerability involving quadratic computation when parsing
+  ``multipart/form-data`` request bodies.
+  `CVE-2025-67726 <https://github.com/tornadoweb/tornado/security/advisories/GHSA-jhmp-mqwm-3gq8>`_
+  Thanks to `Finder16 <https://github.com/Finder16>`_ for reporting this issue.
+- Fixed a denial-of-service vulnerability involving quadratic computation when parsing repeated HTTP
+  headers.
+  `CVE-2025-67725 <https://github.com/tornadoweb/tornado/security/advisories/GHSA-c98p-7wgm-6p64>`_.
+  Thanks to `Finder16 <https://github.com/Finder16>`_ for reporting this issue.
+- Fixed a header injection and XSS vulnerability involving the ``reason`` argument to
+  `.RequestHandler.set_status` and `tornado.web.HTTPError`.
+  `CVE-2025-67724 <https://github.com/tornadoweb/tornado/security/advisories/GHSA-pr2v-jx2c-wg9f>`_.
+  Thanks to `Finder16 <https://github.com/Finder16>`_ and
+  `Cheshire1225 <https://github.com/Cheshire1225>`_ for reporting this issue.
+
+Demo changes
+~~~~~~~~~~~~
+- Several demo applications bundled with the Tornado repo (``blog``, ``chat``, ``facebook``) had an
+  open redirect vulnerability which has been fixed. This is not covered by a CVE or security
+  advisory since the demo applications are not included as a part of the Tornado package when
+  installed, but developers who have copied code from these demos may which to review their own
+  applications for open redirects. Thanks to `J1vvoo <https://github.com/J1vvoo>`_ for reporting this
+  issue.
+- The ``s3server`` demo application contained some path traversal vulnerabilities. Since this demo
+  application was not demonstrating any interesting aspects of Tornado, it has been deleted rather
+  than being fixed. Thanks to `J1vvoo <https://github.com/J1vvoo>`_ for reporting this issue.
