@@ -187,8 +187,14 @@ class HTTPHeaders(StrMutableMapping):
         pass
 
     def __init__(self, *args: typing.Any, **kwargs: str) -> None:  # noqa: F811
-        self._dict = {}  # type: typing.Dict[str, str]
-        self._as_list = {}  # type: typing.Dict[str, typing.List[str]]
+        # Formally, HTTP headers are a mapping from a field name to a "combined field value",
+        # which may be constructed from multiple field lines by joining them with commas.
+        # In practice, however, some headers (notably Set-Cookie) do not follow this convention,
+        # so we maintain a mapping from field name to a list of field lines in self._as_list.
+        # self._combined_cache is a cache of the combined field values derived from self._as_list
+        # on demand (and cleared whenever the list is modified).
+        self._as_list: dict[str, list[str]] = {}
+        self._combined_cache: dict[str, str] = {}
         self._last_key = None  # type: Optional[str]
         if len(args) == 1 and len(kwargs) == 0 and isinstance(args[0], HTTPHeaders):
             # Copy constructor
@@ -215,9 +221,7 @@ class HTTPHeaders(StrMutableMapping):
         norm_name = _normalize_header(name)
         self._last_key = norm_name
         if norm_name in self:
-            self._dict[norm_name] = (
-                native_str(self[norm_name]) + "," + native_str(value)
-            )
+            self._combined_cache.pop(norm_name, None)
             self._as_list[norm_name].append(value)
         else:
             self[norm_name] = value
@@ -278,7 +282,7 @@ class HTTPHeaders(StrMutableMapping):
                 if _FORBIDDEN_HEADER_CHARS_RE.search(new_part):
                     raise HTTPInputError("Invalid header value %r" % new_part)
             self._as_list[self._last_key][-1] += new_part
-            self._dict[self._last_key] += new_part
+            self._combined_cache.pop(self._last_key, None)
         else:
             try:
                 name, value = line.split(":", 1)
@@ -333,22 +337,32 @@ class HTTPHeaders(StrMutableMapping):
 
     def __setitem__(self, name: str, value: str) -> None:
         norm_name = _normalize_header(name)
-        self._dict[norm_name] = value
+        self._combined_cache[norm_name] = value
         self._as_list[norm_name] = [value]
 
+    def __contains__(self, name: object) -> bool:
+        # This is an important optimization to avoid the expensive concatenation
+        # in __getitem__ when it's not needed.
+        if not isinstance(name, str):
+            return False
+        return name in self._as_list
+
     def __getitem__(self, name: str) -> str:
-        return self._dict[_normalize_header(name)]
+        header = _normalize_header(name)
+        if header not in self._combined_cache:
+            self._combined_cache[header] = ",".join(self._as_list[header])
+        return self._combined_cache[header]
 
     def __delitem__(self, name: str) -> None:
         norm_name = _normalize_header(name)
-        del self._dict[norm_name]
+        del self._combined_cache[norm_name]
         del self._as_list[norm_name]
 
     def __len__(self) -> int:
-        return len(self._dict)
+        return len(self._as_list)
 
     def __iter__(self) -> Iterator[typing.Any]:
-        return iter(self._dict)
+        return iter(self._as_list)
 
     def copy(self) -> "HTTPHeaders":
         # defined in dict but not in MutableMapping.
@@ -1080,19 +1094,34 @@ def parse_response_start_line(line: str) -> ResponseStartLine:
 # It has also been modified to support valueless parameters as seen in
 # websocket extension negotiations, and to support non-ascii values in
 # RFC 2231/5987 format.
+#
+# _parseparam has been further modified with the logic from
+# https://github.com/python/cpython/pull/136072/files
+# to avoid quadratic behavior when parsing semicolons in quoted strings.
+#
+# TODO: See if we can switch to email.message.Message for this functionality.
+# This is the suggested replacement for the cgi.py module now that cgi has
+# been removed from recent versions of Python.  We need to verify that
+# the email module is consistent with our existing behavior (and all relevant
+# RFCs for multipart/form-data) before making this change.
 
 
 def _parseparam(s: str) -> Generator[str, None, None]:
-    while s[:1] == ";":
-        s = s[1:]
-        end = s.find(";")
-        while end > 0 and (s.count('"', 0, end) - s.count('\\"', 0, end)) % 2:
-            end = s.find(";", end + 1)
+    start = 0
+    while s.find(";", start) == start:
+        start += 1
+        end = s.find(";", start)
+        ind, diff = start, 0
+        while end > 0:
+            diff += s.count('"', ind, end) - s.count('\\"', ind, end)
+            if diff % 2 == 0:
+                break
+            end, ind = ind, s.find(";", end + 1)
         if end < 0:
             end = len(s)
-        f = s[:end]
+        f = s[start:end]
         yield f.strip()
-        s = s[end:]
+        start = end
 
 
 def _parse_header(line: str) -> Tuple[str, Dict[str, str]]:
