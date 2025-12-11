@@ -284,7 +284,7 @@ Foo
         # to the content-disposition header, specifically for semicolons within
         # quoted strings.
         def f(n):
-            start = time.time()
+            start = time.perf_counter()
             message = (
                 b"--1234\r\nContent-Disposition: form-data; "
                 + b'x="'
@@ -295,7 +295,7 @@ Foo
             args: dict[str, list[bytes]] = {}
             files: dict[str, list[HTTPFile]] = {}
             parse_multipart_form_data(b"1234", message, args, files)
-            return time.time() - start
+            return time.perf_counter() - start
 
         d1 = f(1_000)
         d2 = f(10_000)
@@ -496,11 +496,11 @@ Foo: even
 
     def test_linear_performance(self):
         def f(n):
-            start = time.time()
+            start = time.perf_counter()
             headers = HTTPHeaders()
             for i in range(n):
                 headers.add("X-Foo", "bar")
-            return time.time() - start
+            return time.perf_counter() - start
 
         # This runs under 50ms on my laptop as of 2025-12-09.
         d1 = f(10_000)
