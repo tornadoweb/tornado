@@ -390,7 +390,28 @@ class _ProxyAdapter(httputil.HTTPMessageDelegate):
         # TODO: either make context an official part of the
         # HTTPConnection interface or figure out some other way to do this.
         self.connection.context._apply_xheaders(headers)  # type: ignore
+        start_line, headers = self.apply_forwarded_context(start_line, headers)
+
         return self.delegate.headers_received(start_line, headers)
+
+    def apply_forwarded_context(
+        self,
+        start_line: Union[httputil.RequestStartLine, httputil.ResponseStartLine],
+        headers: httputil.HTTPHeaders,
+    ) -> Tuple[
+        Union[httputil.RequestStartLine, httputil.ResponseStartLine],
+        httputil.HTTPHeaders,
+    ]:
+        """Apply X-Forwarded-Context header to requested uri"""
+        if isinstance(start_line, httputil.RequestStartLine):
+            # get path from X-Forwarded-Context
+            proxy_path = headers.get("X-Forwarded-Context", None)
+            if proxy_path:
+                # preserve only the path part
+                path = proxy_path.split("?", 1)[0]
+                start_line = start_line._replace(path=path)
+
+        return start_line, headers
 
     def data_received(self, chunk: bytes) -> Optional[Awaitable[None]]:
         return self.delegate.data_received(chunk)
