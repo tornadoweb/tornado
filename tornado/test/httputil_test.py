@@ -329,6 +329,9 @@ Foo: even
             sorted(list(headers.get_all())),
             [("Asdf", "qwer zxcv"), ("Foo", "bar baz"), ("Foo", "even more lines")],
         )
+        # Verify case insensitivity in-operator
+        self.assertTrue("asdf" in headers)
+        self.assertTrue("Asdf" in headers)
 
     def test_continuation(self):
         data = "Foo: bar\r\n\tasdf"
