@@ -345,7 +345,8 @@ class HTTPHeaders(StrMutableMapping):
         # in __getitem__ when it's not needed.
         if not isinstance(name, str):
             return False
-        return name in self._as_list
+        norm_name = _normalize_header(name)
+        return norm_name in self._as_list
 
     def __getitem__(self, name: str) -> str:
         header = _normalize_header(name)
