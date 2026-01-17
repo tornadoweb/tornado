@@ -106,8 +106,11 @@ class ASGIAdapter:
             ctx.remote_ip = client_addr[0]
 
         conn = ASGIHTTPConnection(send, ctx, self.task_holder)
+        req_target = scope['path']
+        if qs := scope['query_string']:
+            req_target += '?' + qs.decode('latin1')
         req_start_line = RequestStartLine(
-            scope['method'], scope['path'], scope['http_version']
+            scope['method'], req_target, scope['http_version']
         )
         req_headers = HTTPHeaders()
         for k, v in scope['headers']:
