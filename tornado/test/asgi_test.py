@@ -1,4 +1,9 @@
-from async_asgi_testclient import TestClient  # type: ignore
+import unittest
+
+try:
+    import async_asgi_testclient  # type: ignore
+except ImportError:
+    async_asgi_testclient = None
 
 from tornado.asgi import ASGIAdapter
 from tornado.web import Application, RequestHandler
@@ -33,13 +38,16 @@ class InspectHandler(RequestHandler):
         return self.make_response(path_var)
 
 
+@unittest.skipIf(
+    async_asgi_testclient is None, "async_asgi_testclient module not present"
+)
 class AsyncASGITestCase(AsyncTestCase):
     def setUp(self) -> None:
         super().setUp()
         self.asgi_app = ASGIAdapter(
             Application([(r"/", BasicHandler), (r"/inspect(/.*)", InspectHandler)])
         )
-        self.client = TestClient(self.asgi_app)
+        self.client = async_asgi_testclient.TestClient(self.asgi_app)
 
     @gen_test(timeout=10)
     async def test_basic_request(self):
