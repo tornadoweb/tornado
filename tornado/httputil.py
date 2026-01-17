@@ -762,7 +762,9 @@ class HTTPConnection:
         """Indicates that the last body data has been written."""
         raise NotImplementedError()
 
-    def set_close_callback(self, callback: Optional[collections.abc.Callable[[], None]]) -> None:
+    def set_close_callback(
+        self, callback: Optional[collections.abc.Callable[[], None]]
+    ) -> None:
         """Sets a callback that will be run when the connection is closed.
 
         Note that this callback is slightly different from

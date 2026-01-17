@@ -3,25 +3,36 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Optional, Union
 
-from tornado.httputil import HTTPConnection, HTTPHeaders, RequestStartLine, ResponseStartLine
+from tornado.httputil import (
+    HTTPConnection,
+    HTTPHeaders,
+    RequestStartLine,
+    ResponseStartLine,
+)
 from tornado.web import Application
 
 ReceiveCallable = Callable[[], Awaitable[dict]]
 SendCallable = Callable[[dict], Awaitable[None]]
 
+
 @dataclass
 class ASGIHTTPRequestContext:
     """To convey connection details to the HTTPServerRequest object"""
+
     protocol: str
     address: Optional[tuple] = None
     remote_ip: str = "0.0.0.0"
+
 
 class ASGIHTTPConnection(HTTPConnection):
     """Represents the connection for 1 request/response pair
 
     This provides the API for sending the response.
     """
-    def __init__(self, send_cb: SendCallable, context: ASGIHTTPRequestContext, task_holder: set):
+
+    def __init__(
+        self, send_cb: SendCallable, context: ASGIHTTPRequestContext, task_holder: set
+    ):
         self.send_cb = send_cb
         self.context = context
         self.task_holder = task_holder
@@ -44,12 +55,16 @@ class ASGIHTTPConnection(HTTPConnection):
         headers: HTTPHeaders,
         chunk: Optional[bytes] = None,
     ):
-        await self.send_cb({
-            "type": "http.response.start",
-            "status": start_line.code,
-            "headers": [[k.lower().encode('latin1'), v.encode('latin1')]
-                        for k, v in headers.get_all()]
-        })
+        await self.send_cb(
+            {
+                "type": "http.response.start",
+                "status": start_line.code,
+                "headers": [
+                    [k.lower().encode("latin1"), v.encode("latin1")]
+                    for k, v in headers.get_all()
+                ],
+            }
+        )
         if chunk is not None:
             await self._write(chunk)
 
@@ -62,20 +77,22 @@ class ASGIHTTPConnection(HTTPConnection):
         return self._bg_task(self._write_headers(start_line, headers, chunk))
 
     async def _write(self, chunk: bytes):
-        await self.send_cb({
-            "type": "http.response.body",
-            "body": chunk,
-            "more_body": True
-        })
+        await self.send_cb(
+            {"type": "http.response.body", "body": chunk, "more_body": True}
+        )
 
     def write(self, chunk: bytes) -> "Future[None]":
         return self._bg_task(self._write(chunk))
 
     def finish(self) -> None:
-        self._bg_task(self.send_cb({
-            "type": "http.response.body",
-            "more_body": False,
-        }))
+        self._bg_task(
+            self.send_cb(
+                {
+                    "type": "http.response.body",
+                    "more_body": False,
+                }
+            )
+        )
 
     def set_close_callback(self, callback: Optional[Callable[[], None]]):
         self._close_callback = callback
@@ -89,14 +106,15 @@ class ASGIHTTPConnection(HTTPConnection):
 
 class ASGIAdapter:
     """Wrap a tornado application object to use with an ASGI server"""
+
     def __init__(self, application: Application):
         self.application = application
         self.task_holder = set()
 
     async def __call__(self, scope, receive: ReceiveCallable, send: SendCallable):
-        if scope['type'] == 'http':
+        if scope["type"] == "http":
             return await self.http_scope(scope, receive, send)
-        raise KeyError(scope['type'])
+        raise KeyError(scope["type"])
 
     async def http_scope(self, scope, receive: ReceiveCallable, send: SendCallable):
         """Handles one HTTP request"""
@@ -106,15 +124,15 @@ class ASGIAdapter:
             ctx.remote_ip = client_addr[0]
 
         conn = ASGIHTTPConnection(send, ctx, self.task_holder)
-        req_target = scope['path']
-        if qs := scope['query_string']:
-            req_target += '?' + qs.decode('latin1')
+        req_target = scope["path"]
+        if qs := scope["query_string"]:
+            req_target += "?" + qs.decode("latin1")
         req_start_line = RequestStartLine(
-            scope['method'], req_target, scope['http_version']
+            scope["method"], req_target, scope["http_version"]
         )
         req_headers = HTTPHeaders()
-        for k, v in scope['headers']:
-            req_headers.add(k.decode('latin1'), v.decode('latin1'))
+        for k, v in scope["headers"]:
+            req_headers.add(k.decode("latin1"), v.decode("latin1"))
         msg_delegate = self.application.start_request(None, conn)
         fut = msg_delegate.headers_received(req_start_line, req_headers)
         if fut is not None:
