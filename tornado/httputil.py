@@ -762,6 +762,20 @@ class HTTPConnection:
         """Indicates that the last body data has been written."""
         raise NotImplementedError()
 
+    def set_close_callback(self, callback: Optional[collections.abc.Callable[[], None]]) -> None:
+        """Sets a callback that will be run when the connection is closed.
+
+        Note that this callback is slightly different from
+        `.HTTPMessageDelegate.on_connection_close`: The
+        `.HTTPMessageDelegate` method is called when the connection is
+        closed while receiving a message. This callback is used when
+        there is not an active delegate (for example, on the server
+        side this callback is used if the client closes the connection
+        after sending its request but before receiving all the
+        response.
+        """
+        raise NotImplementedError()
+
 
 def url_concat(
     url: str,
