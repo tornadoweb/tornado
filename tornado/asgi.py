@@ -1,4 +1,4 @@
-from asyncio import create_task, Future
+from asyncio import create_task, Future, Task
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Optional, Union
@@ -36,14 +36,14 @@ class ASGIHTTPConnection(HTTPConnection):
         self.send_cb = send_cb
         self.context = context
         self.task_holder = task_holder
-        self._close_callback = None
+        self._close_callback: Callable[[], None] | None = None
 
     # Various tornado APIs (e.g. RequestHandler.flush()) return a Future which
     # application code does not need to await. The operations these represent
     # are expected to complete even if the Future is discarded. ASGI is based
     # on 'awaitable callables', which do not guarantee this. So we need to hold
     # references to tasks until they complete
-    def _bg_task(self, coro):
+    def _bg_task(self, coro) -> Future:  # type: ignore
         task = create_task(coro)
         self.task_holder.add(task)
         task.add_done_callback(self.task_holder.discard)
@@ -51,10 +51,11 @@ class ASGIHTTPConnection(HTTPConnection):
 
     async def _write_headers(
         self,
-        start_line: ResponseStartLine,
+        start_line: Union["RequestStartLine", "ResponseStartLine"],
         headers: HTTPHeaders,
         chunk: Optional[bytes] = None,
-    ):
+    ) -> None:
+        assert isinstance(start_line, ResponseStartLine)
         await self.send_cb(
             {
                 "type": "http.response.start",
@@ -76,7 +77,7 @@ class ASGIHTTPConnection(HTTPConnection):
     ) -> "Future[None]":
         return self._bg_task(self._write_headers(start_line, headers, chunk))
 
-    async def _write(self, chunk: bytes):
+    async def _write(self, chunk: bytes) -> None:
         await self.send_cb(
             {"type": "http.response.body", "body": chunk, "more_body": True}
         )
@@ -94,7 +95,7 @@ class ASGIHTTPConnection(HTTPConnection):
             )
         )
 
-    def set_close_callback(self, callback: Optional[Callable[[], None]]):
+    def set_close_callback(self, callback: Optional[Callable[[], None]]) -> None:
         self._close_callback = callback
 
     def _on_connection_close(self) -> None:
@@ -109,14 +110,18 @@ class ASGIAdapter:
 
     def __init__(self, application: Application):
         self.application = application
-        self.task_holder = set()
+        self.task_holder: set[Task] = set()
 
-    async def __call__(self, scope, receive: ReceiveCallable, send: SendCallable):
+    async def __call__(
+        self, scope: dict, receive: ReceiveCallable, send: SendCallable
+    ) -> None:
         if scope["type"] == "http":
             return await self.http_scope(scope, receive, send)
         raise KeyError(scope["type"])
 
-    async def http_scope(self, scope, receive: ReceiveCallable, send: SendCallable):
+    async def http_scope(
+        self, scope: dict, receive: ReceiveCallable, send: SendCallable
+    ) -> None:
         """Handles one HTTP request"""
         ctx = ASGIHTTPRequestContext(scope["scheme"])
         if client_addr := scope.get("client", None):
