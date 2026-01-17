@@ -1,4 +1,4 @@
-from asyncio import create_task, Future, Task
+from asyncio import create_task, Future, Task, wait
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Optional, Union
@@ -30,13 +30,12 @@ class ASGIHTTPConnection(HTTPConnection):
     This provides the API for sending the response.
     """
 
-    def __init__(
-        self, send_cb: SendCallable, context: ASGIHTTPRequestContext, task_holder: set
-    ):
+    def __init__(self, send_cb: SendCallable, context: ASGIHTTPRequestContext):
         self.send_cb = send_cb
         self.context = context
-        self.task_holder = task_holder
+        self.task_holder: set[Task] = set()
         self._close_callback: Callable[[], None] | None = None
+        self._request_finished: Future[None] = Future()
 
     # Various tornado APIs (e.g. RequestHandler.flush()) return a Future which
     # application code does not need to await. The operations these represent
@@ -90,10 +89,12 @@ class ASGIHTTPConnection(HTTPConnection):
             self.send_cb(
                 {
                     "type": "http.response.body",
+                    "body": b"",
                     "more_body": False,
                 }
             )
         )
+        self._request_finished.set_result(None)
 
     def set_close_callback(self, callback: Optional[Callable[[], None]]) -> None:
         self._close_callback = callback
@@ -103,6 +104,12 @@ class ASGIHTTPConnection(HTTPConnection):
             callback = self._close_callback
             self._close_callback = None
             callback()
+        self._request_finished.set_result(None)
+
+    async def wait_finish(self) -> None:
+        """For the ASGI interface: wait for all input & output to finish"""
+        await self._request_finished
+        await wait(self.task_holder)
 
 
 class ASGIAdapter:
@@ -110,7 +117,6 @@ class ASGIAdapter:
 
     def __init__(self, application: Application):
         self.application = application
-        self.task_holder: set[Task] = set()
 
     async def __call__(
         self, scope: dict, receive: ReceiveCallable, send: SendCallable
@@ -128,7 +134,7 @@ class ASGIAdapter:
             ctx.address = tuple(client_addr)
             ctx.remote_ip = client_addr[0]
 
-        conn = ASGIHTTPConnection(send, ctx, self.task_holder)
+        conn = ASGIHTTPConnection(send, ctx)
         req_target = scope["path"]
         if qs := scope["query_string"]:
             req_target += "?" + qs.decode("latin1")
@@ -156,3 +162,5 @@ class ASGIAdapter:
                 msg_delegate.on_connection_close()
                 conn._on_connection_close()
                 break
+
+        await conn.wait_finish()
