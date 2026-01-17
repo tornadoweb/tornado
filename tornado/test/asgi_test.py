@@ -1,4 +1,4 @@
-from async_asgi_testclient import TestClient
+from async_asgi_testclient import TestClient  # type: ignore
 
 from tornado.asgi import ASGIAdapter
 from tornado.web import Application, RequestHandler
