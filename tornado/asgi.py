@@ -135,18 +135,9 @@ class ASGIAdapter:
             ctx.remote_ip = client_addr[0]
 
         conn = ASGIHTTPConnection(send, ctx)
-        req_target = scope["path"]
-        if qs := scope["query_string"]:
-            req_target += "?" + qs.decode("latin1")
-        req_start_line = RequestStartLine(
-            scope["method"], req_target, scope["http_version"]
-        )
-        req_headers = HTTPHeaders()
-        for k, v in scope["headers"]:
-            req_headers.add(k.decode("latin1"), v.decode("latin1"))
         msg_delegate = self.application.start_request(None, conn)
-        fut = msg_delegate.headers_received(req_start_line, req_headers)
-        if fut is not None:
+        start_line, req_headers = self._http_convert_req(scope)
+        if (fut := msg_delegate.headers_received(start_line, req_headers)) is not None:
             await fut
 
         while True:
@@ -164,3 +155,17 @@ class ASGIAdapter:
                 break
 
         await conn.wait_finish()
+
+    @staticmethod
+    def _http_convert_req(scope: dict) -> tuple[RequestStartLine, HTTPHeaders]:
+        req_target = scope["path"]
+        if qs := scope["query_string"]:
+            req_target += "?" + qs.decode("latin1")
+        req_start_line = RequestStartLine(
+            scope["method"], req_target, scope["http_version"]
+        )
+        req_headers = HTTPHeaders()
+        for k, v in scope["headers"]:
+            req_headers.add(k.decode("latin1"), v.decode("latin1"))
+
+        return req_start_line, req_headers
