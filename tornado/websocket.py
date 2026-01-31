@@ -834,7 +834,7 @@ class WebSocketProtocol13(WebSocketProtocol):
     RSV_MASK = RSV1 | RSV2 | RSV3
     OPCODE_MASK = 0x0F
 
-    stream = None  # type: IOStream
+    stream: IOStream
 
     def __init__(
         self,
@@ -1396,7 +1396,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
     `websocket_connect` function instead.
     """
 
-    protocol = None  # type: WebSocketProtocol
+    protocol: WebSocketProtocol
 
     def __init__(
         self,

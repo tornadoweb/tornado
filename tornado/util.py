@@ -237,7 +237,7 @@ class Configurable:
     # precise types (i.e. for a particular Configurable subclass T,
     # all the types are subclasses of T, not just Configurable).
     __impl_class = None  # type: Optional[Type[Configurable]]
-    __impl_kwargs = None  # type: Dict[str, Any]
+    __impl_kwargs: Dict[str, Any]
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Any:
         base = cls.configurable_base()

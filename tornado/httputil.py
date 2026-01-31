@@ -475,11 +475,11 @@ class HTTPServerRequest:
        temporarily restored in 6.5.2.
     """
 
-    path = None  # type: str
-    query = None  # type: str
+    path: str
+    query: str
 
     # HACK: Used for stream_request_body
-    _body_future = None  # type: Future[None]
+    _body_future: Future[None]
 
     def __init__(
         self,
