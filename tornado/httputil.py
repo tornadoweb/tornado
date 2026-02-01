@@ -479,7 +479,7 @@ class HTTPServerRequest:
     query: str
 
     # HACK: Used for stream_request_body
-    _body_future: Future[None]
+    _body_future: "Future[None]"
 
     def __init__(
         self,

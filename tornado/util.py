@@ -236,8 +236,8 @@ class Configurable:
     # There may be a clever way to use generics here to get more
     # precise types (i.e. for a particular Configurable subclass T,
     # all the types are subclasses of T, not just Configurable).
-    __impl_class = None  # type: Optional[Type[Configurable]]
-    __impl_kwargs: Dict[str, Any]
+    __impl_class: Optional[Type["Configurable"]] = None
+    __impl_kwargs: Optional[Dict[str, Any]] = None
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Any:
         base = cls.configurable_base()
@@ -324,13 +324,13 @@ class Configurable:
 
     @classmethod
     def _save_configuration(cls):
-        # type: () -> Tuple[Optional[Type[Configurable]], Dict[str, Any]]
+        # type: () -> Tuple[Optional[Type[Configurable]], Optional[Dict[str, Any]]]
         base = cls.configurable_base()
         return (base.__impl_class, base.__impl_kwargs)
 
     @classmethod
     def _restore_configuration(cls, saved):
-        # type: (Tuple[Optional[Type[Configurable]], Dict[str, Any]]) -> None
+        # type: (Tuple[Optional[Type[Configurable]], Optional[Dict[str, Any]]]) -> None
         base = cls.configurable_base()
         base.__impl_class = saved[0]
         base.__impl_kwargs = saved[1]

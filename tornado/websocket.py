@@ -1396,7 +1396,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
     `websocket_connect` function instead.
     """
 
-    protocol: WebSocketProtocol
+    protocol: Optional[WebSocketProtocol] = None
 
     def __init__(
         self,
@@ -1620,6 +1620,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
 
         .. versionadded:: 5.1
         """
+        assert self.protocol is not None
         return self.protocol.selected_subprotocol
 
     def log_exception(
