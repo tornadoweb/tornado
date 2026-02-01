@@ -1690,6 +1690,25 @@ class RequestHandler:
             + '"/>'
         )
 
+    def check_same_origin(self) -> None:
+        """Verify that non-safe methods come from a same-origin request"""
+        headers = self.request.headers
+        if (sfs := headers.get("Sec-Fetch-Site")) is not None:
+            # All major browsers send the Sec-Fetch-Site header since ~2023
+            # for 'potentially trustworthy' URLs (roughly, HTTPS or localhost)
+            if sfs not in ('same-origin', 'none'):
+                raise HTTPError(403, "Cross-origin request with unsafe method")
+
+        else:
+            # Fallback: The Origin or Referrer header gives the domain
+            # the request came from, Host should tell us where we're running.
+            src_origin = headers.get("Origin") or headers.get("Referrer")
+            if src_origin is None:
+                raise HTTPError(403, "No Origin/Referrer header with unsafe method")
+            src_scheme, src_netloc = urllib.parse.urlsplit(src_origin)[:2]
+            if src_scheme != self.request.protocol or src_netloc != self.request.host:
+                raise HTTPError(403, "Cross-origin request with unsafe method")
+
     def static_url(
         self, path: str, include_host: Optional[bool] = None, **kwargs: Any
     ) -> str:
@@ -1826,12 +1845,11 @@ class RequestHandler:
             }
             # If XSRF cookies are turned on, reject form submissions without
             # the proper cookie
-            if self.request.method not in (
-                "GET",
-                "HEAD",
-                "OPTIONS",
-            ) and self.application.settings.get("xsrf_cookies"):
-                self.check_xsrf_cookie()
+            if self.request.method not in ("GET", "HEAD", "OPTIONS"):
+                if self.application.settings.get("xsrf_cookies"):
+                    self.check_xsrf_cookie()
+                if self.application.settings.get("check_same_origin"):
+                    self.check_same_origin()
 
             result = self.prepare()
             if result is not None:

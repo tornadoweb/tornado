@@ -3130,6 +3130,45 @@ class XSRFCookieKwargsTest(SimpleHandlerTestCase):
         self.assertTrue(abs((expires - header_expires).total_seconds()) < 10)
 
 
+class CheckSameOriginTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def post(self):
+            self.write("ok")
+
+    def get_app_kwargs(self):
+        return dict(check_same_origin=True)
+
+    def _post(self, headers):
+        return self.fetch("/", method="POST", body="x=1", headers=headers)
+
+    def test_sec_fetch_site_success(self):
+        response = self._post({"Sec-Fetch-Site": "same-origin"})
+        self.assertEqual(response.code, 200)
+
+    def test_sec_fetch_site_fail(self):
+        with ExpectLog(gen_log, ".*Cross-origin request"):
+            response = self._post({"Sec-Fetch-Site": "cross-site"})
+        self.assertEqual(response.code, 403)
+
+    def test_fallback_success(self):
+        response = self._post({"Origin": self.get_url("")})
+        self.assertEqual(response.code, 200)
+
+    def test_fallback_referrer_success(self):
+        response = self._post({"Referrer": self.get_url("/foo/bar")})
+        self.assertEqual(response.code, 200)
+
+    def test_fallback_fail(self):
+        with ExpectLog(gen_log, ".*Cross-origin request"):
+            response = self._post({"Origin": "https://evil.example.com/"})
+        self.assertEqual(response.code, 403)
+
+    def test_fallback_no_origin(self):
+        with ExpectLog(gen_log, ".*No Origin/Referrer"):
+            response = self._post({})
+        self.assertEqual(response.code, 403)
+
+
 class FinishExceptionTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):
