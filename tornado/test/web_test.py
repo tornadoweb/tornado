@@ -3136,7 +3136,7 @@ class CheckSameOriginTest(SimpleHandlerTestCase):
             self.write("ok")
 
     def get_app_kwargs(self):
-        return dict(check_same_origin=True)
+        return dict(check_fetch_header=True, check_origin=self.get_url(""))
 
     def _post(self, headers):
         return self.fetch("/", method="POST", body="x=1", headers=headers)
@@ -3164,9 +3164,8 @@ class CheckSameOriginTest(SimpleHandlerTestCase):
         self.assertEqual(response.code, 403)
 
     def test_fallback_no_origin(self):
-        with ExpectLog(gen_log, ".*No Origin/Referrer"):
-            response = self._post({})
-        self.assertEqual(response.code, 403)
+        response = self._post({})
+        self.assertEqual(response.code, 200)
 
 
 class FinishExceptionTest(SimpleHandlerTestCase):

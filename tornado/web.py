@@ -1690,24 +1690,27 @@ class RequestHandler:
             + '"/>'
         )
 
-    def check_same_origin(self) -> None:
+    def check_fetch_header(self) -> bool:
         """Verify that non-safe methods come from a same-origin request"""
-        headers = self.request.headers
-        if (sfs := headers.get("Sec-Fetch-Site")) is not None:
+        if (sfs := self.request.headers.get("Sec-Fetch-Site")) is not None:
             # All major browsers send the Sec-Fetch-Site header since ~2023
             # for 'potentially trustworthy' URLs (roughly, HTTPS or localhost)
-            if sfs not in ('same-origin', 'none'):
+            if sfs not in ("same-origin", "none"):
                 raise HTTPError(403, "Cross-origin request with unsafe method")
+            return True
+        return False
 
-        else:
-            # Fallback: The Origin or Referrer header gives the domain
-            # the request came from, Host should tell us where we're running.
-            src_origin = headers.get("Origin") or headers.get("Referrer")
-            if src_origin is None:
-                raise HTTPError(403, "No Origin/Referrer header with unsafe method")
-            src_scheme, src_netloc = urllib.parse.urlsplit(src_origin)[:2]
-            if src_scheme != self.request.protocol or src_netloc != self.request.host:
-                raise HTTPError(403, "Cross-origin request with unsafe method")
+    def check_request_origin(self) -> None:
+        # Fallback: The Origin or Referrer header gives the domain
+        # the request came from, Host should tell us where we're running.
+        headers = self.request.headers
+        src_origin = headers.get("Origin") or headers.get("Referrer")
+        if src_origin is None:
+            return  # Probably non-browser request
+        src_scheme, src_netloc = urllib.parse.urlsplit(src_origin)[:2]
+        target_origin = self.application.settings["check_origin"]
+        if f"{src_scheme}://{src_netloc}" != target_origin:
+            raise HTTPError(403, "Cross-origin request with unsafe method")
 
     def static_url(
         self, path: str, include_host: Optional[bool] = None, **kwargs: Any
@@ -1848,8 +1851,10 @@ class RequestHandler:
             if self.request.method not in ("GET", "HEAD", "OPTIONS"):
                 if self.application.settings.get("xsrf_cookies"):
                     self.check_xsrf_cookie()
-                if self.application.settings.get("check_same_origin"):
-                    self.check_same_origin()
+                if self.application.settings.get("check_fetch_header"):
+                    checked = self.check_fetch_header()
+                    if not checked and self.application.settings.get("check_origin"):
+                        self.check_request_origin()
 
             result = self.prepare()
             if result is not None:
