@@ -70,6 +70,7 @@ class GzipDecompressor:
         # http://stackoverflow.com/questions/1838699/how-can-i-decompress-a-gzip-stream-with-zlib
         # This works on cpython and pypy, but not jython.
         self.decompressobj = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        self._flushed = False
 
     def decompress(self, value: bytes, max_length: int = 0) -> bytes:
         """Decompress a chunk, returning newly-available data.
@@ -82,7 +83,36 @@ class GzipDecompressor:
         in ``unconsumed_tail``; you must retrieve this value and pass
         it back to a future call to `decompress` if it is not empty.
         """
-        return self.decompressobj.decompress(value, max_length)
+        if self._flushed:
+            raise RuntimeError("Cannot call decompress() after flush()")
+
+        data = value
+        out = bytearray()
+        remaining = max_length
+
+        while True:
+            if remaining:
+                chunk = self.decompressobj.decompress(data, remaining)
+            else:
+                chunk = self.decompressobj.decompress(data)
+
+            out.extend(chunk)
+
+            if remaining:
+                remaining = max(0, max_length - len(out))
+                if remaining == 0:
+                    break
+
+            # Handle concatenated gzip members
+            unused = getattr(self.decompressobj, "unused_data", b"")
+            if unused:
+                data = unused
+                self.decompressobj = zlib.decompressobj(16 + zlib.MAX_WBITS)
+                continue
+
+            break
+
+        return bytes(out)
 
     @property
     def unconsumed_tail(self) -> bytes:
@@ -95,7 +125,9 @@ class GzipDecompressor:
         Also checks for errors such as truncated input.
         No other methods may be called on this object after `flush`.
         """
-        return self.decompressobj.flush()
+        result = self.decompressobj.flush()
+        self._flushed = True
+        return result
 
 
 def import_object(name: str) -> Any:
