@@ -390,7 +390,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             if username is not None:
                 assert password is not None
                 if self.request.auth_mode not in (None, "basic"):
-                    raise ValueError("unsupported auth_mode %s", self.request.auth_mode)
+                    raise ValueError("unsupported auth_mode %s" % self.request.auth_mode)
                 self.request.headers["Authorization"] = "Basic " + _unicode(
                     base64.b64encode(
                         httputil.encode_username_password(username, password)
