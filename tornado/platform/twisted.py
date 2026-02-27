@@ -57,7 +57,7 @@ if hasattr(gen.convert_yielded, "register"):
                 failure.raiseException()
                 # Should never happen, but just in case
                 raise Exception("errback called without error")
-            except:
+            except Exception:
                 future_set_exc_info(f, sys.exc_info())
 
         d.addCallbacks(f.set_result, errback)

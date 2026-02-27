@@ -2,7 +2,7 @@ from setuptools import setup
 
 try:
     import Cython.Build
-except:
+except Exception:
     Cython = None
 
 if Cython is None:

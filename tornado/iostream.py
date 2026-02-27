@@ -355,7 +355,7 @@ class BaseIOStream:
             gen_log.info("Unsatisfiable read, closing connection: %s" % e)
             self.close(exc_info=e)
             return future
-        except:
+        except Exception:
             # Ensure that the future doesn't log an error because its
             # failure was never examined.
             future.add_done_callback(lambda f: f.exception())
@@ -392,7 +392,7 @@ class BaseIOStream:
             gen_log.info("Unsatisfiable read, closing connection: %s" % e)
             self.close(exc_info=e)
             return future
-        except:
+        except Exception:
             future.add_done_callback(lambda f: f.exception())
             raise
         return future
@@ -420,7 +420,7 @@ class BaseIOStream:
         self._read_partial = partial
         try:
             self._try_inline_read()
-        except:
+        except Exception:
             future.add_done_callback(lambda f: f.exception())
             raise
         return future
@@ -465,7 +465,7 @@ class BaseIOStream:
 
         try:
             self._try_inline_read()
-        except:
+        except Exception:
             future.add_done_callback(lambda f: f.exception())
             raise
         return future
@@ -495,7 +495,7 @@ class BaseIOStream:
         self._read_until_close = True
         try:
             self._try_inline_read()
-        except:
+        except Exception:
             future.add_done_callback(lambda f: f.exception())
             raise
         return future

@@ -236,7 +236,7 @@ class Subprocess:
             self.stderr = PipeIOStream(err_r)
         try:
             self.proc = subprocess.Popen(*args, **kwargs)
-        except:
+        except Exception:
             for fd in pipe_fds:
                 os.close(fd)
             raise
