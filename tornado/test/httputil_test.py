@@ -9,6 +9,7 @@ from tornado.httputil import (
     qs_to_qsl,
     HTTPInputError,
     HTTPFile,
+    ParseMultipartConfig,
 )
 from tornado.escape import utf8, native_str
 from tornado.log import gen_log
@@ -298,9 +299,44 @@ Foo
             return time.perf_counter() - start
 
         d1 = f(1_000)
+        # Note that headers larger than this are blocked by the default configuration.
         d2 = f(10_000)
         if d2 / d1 > 20:
             self.fail(f"Disposition param parsing is not linear: {d1=} vs {d2=}")
+
+    def test_multipart_config(self):
+        boundary = b"1234"
+        body = b"""--1234
+Content-Disposition: form-data; name="files"; filename="ab.txt"
+
+--1234--""".replace(
+            b"\n", b"\r\n"
+        )
+        config = ParseMultipartConfig()
+        args, files = form_data_args()
+        parse_multipart_form_data(boundary, body, args, files, config=config)
+        self.assertEqual(files["files"][0]["filename"], "ab.txt")
+
+        config_no_parts = ParseMultipartConfig(max_parts=0)
+        with self.assertRaises(HTTPInputError) as cm:
+            parse_multipart_form_data(
+                boundary, body, args, files, config=config_no_parts
+            )
+        self.assertIn("too many parts", str(cm.exception))
+
+        config_small_headers = ParseMultipartConfig(max_part_header_size=10)
+        with self.assertRaises(HTTPInputError) as cm:
+            parse_multipart_form_data(
+                boundary, body, args, files, config=config_small_headers
+            )
+        self.assertIn("header too large", str(cm.exception))
+
+        config_disabled = ParseMultipartConfig(enabled=False)
+        with self.assertRaises(HTTPInputError) as cm:
+            parse_multipart_form_data(
+                boundary, body, args, files, config=config_disabled
+            )
+        self.assertIn("multipart/form-data parsing is disabled", str(cm.exception))
 
 
 class HTTPHeadersTest(unittest.TestCase):
