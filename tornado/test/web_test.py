@@ -1,3 +1,5 @@
+import http
+
 from tornado.concurrent import Future
 from tornado import gen
 from tornado.escape import (
@@ -292,10 +294,66 @@ class CookieTest(WebTestCase):
                 self.set_cookie("unicode_args", "blah", domain="foo.com", path="/foo")
 
         class SetCookieSpecialCharHandler(RequestHandler):
+            # "Special" characters are allowed in cookie values, but trigger special quoting.
             def get(self):
                 self.set_cookie("equals", "a=b")
                 self.set_cookie("semicolon", "a;b")
                 self.set_cookie("quote", 'a"b')
+
+        class SetCookieForbiddenCharHandler(RequestHandler):
+            def get(self):
+                # Control characters and semicolons raise errors in cookie names and attributes
+                # (but not values, which are tested in SetCookieSpecialCharHandler)
+                for char in list(map(chr, range(0x20))) + [chr(0x7F), ";"]:
+                    try:
+                        self.set_cookie("foo" + char, "bar")
+                        self.write(
+                            "Didn't get expected exception for char %r in name\n" % char
+                        )
+                    except http.cookies.CookieError as e:
+                        if "Invalid cookie attribute name" not in str(e):
+                            self.write(
+                                "unexpected exception for char %r in name: %s\n"
+                                % (char, e)
+                            )
+
+                    try:
+                        self.set_cookie("foo", "bar", domain="example" + char + ".com")
+                        self.write(
+                            "Didn't get expected exception for char %r in domain\n"
+                            % char
+                        )
+                    except http.cookies.CookieError as e:
+                        if "Invalid cookie attribute domain" not in str(e):
+                            self.write(
+                                "unexpected exception for char %r in domain: %s\n"
+                                % (char, e)
+                            )
+
+                    try:
+                        self.set_cookie("foo", "bar", path="/" + char)
+                        self.write(
+                            "Didn't get expected exception for char %r in path\n" % char
+                        )
+                    except http.cookies.CookieError as e:
+                        if "Invalid cookie attribute path" not in str(e):
+                            self.write(
+                                "unexpected exception for char %r in path: %s\n"
+                                % (char, e)
+                            )
+
+                    try:
+                        self.set_cookie("foo", "bar", samesite="a" + char)
+                        self.write(
+                            "Didn't get expected exception for char %r in samesite\n"
+                            % char
+                        )
+                    except http.cookies.CookieError as e:
+                        if "Invalid cookie attribute samesite" not in str(e):
+                            self.write(
+                                "unexpected exception for char %r in samesite: %s\n"
+                                % (char, e)
+                            )
 
         class SetCookieOverwriteHandler(RequestHandler):
             def get(self):
@@ -330,6 +388,7 @@ class CookieTest(WebTestCase):
             ("/get", GetCookieHandler),
             ("/set_domain", SetCookieDomainHandler),
             ("/special_char", SetCookieSpecialCharHandler),
+            ("/forbidden_char", SetCookieForbiddenCharHandler),
             ("/set_overwrite", SetCookieOverwriteHandler),
             ("/set_max_age", SetCookieMaxAgeHandler),
             ("/set_expires_days", SetCookieExpiresDaysHandler),
@@ -386,6 +445,12 @@ class CookieTest(WebTestCase):
             logging.debug("trying %r", header)
             response = self.fetch("/get", headers={"Cookie": header})
             self.assertEqual(response.body, utf8(expected))
+
+    def test_set_cookie_forbidden_char(self):
+        response = self.fetch("/forbidden_char")
+        self.assertEqual(response.code, 200)
+        self.maxDiff = 10000
+        self.assertMultiLineEqual(to_unicode(response.body), "")
 
     def test_set_cookie_overwrite(self):
         response = self.fetch("/set_overwrite")
