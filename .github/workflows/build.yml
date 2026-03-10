@@ -63,7 +63,7 @@ jobs:
           python-version: ${{ env.python-version }}
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.22
+        uses: pypa/cibuildwheel@v3.4.0
 
       - name: Audit ABI3 compliance
         # This may be moved into cibuildwheel itself in the future. See
