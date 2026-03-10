@@ -136,6 +136,8 @@ Foo
             'a";";.txt',
             'a\\"b.txt',
             "a\\b.txt",
+            "a b.txt",
+            "a\tb.txt",
         ]
         for filename in filenames:
             logging.debug("trying filename %r", filename)
@@ -155,6 +157,29 @@ Foo
             file = files["files"][0]
             self.assertEqual(file["filename"], filename)
             self.assertEqual(file["body"], b"Foo")
+
+    def test_invalid_chars(self):
+        filenames = [
+            "a\rb.txt",
+            "a\0b.txt",
+            "a\x08b.txt",
+        ]
+        for filename in filenames:
+            str_data = """\
+--1234
+Content-Disposition: form-data; name="files"; filename="%s"
+
+Foo
+--1234--""" % filename.replace(
+                "\\", "\\\\"
+            ).replace(
+                '"', '\\"'
+            )
+            data = utf8(str_data.replace("\n", "\r\n"))
+            args, files = form_data_args()
+            with self.assertRaises(HTTPInputError) as cm:
+                parse_multipart_form_data(b"1234", data, args, files)
+            self.assertIn("Invalid header value", str(cm.exception))
 
     def test_non_ascii_filename_rfc5987(self):
         data = b"""\

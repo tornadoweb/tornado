@@ -73,7 +73,7 @@ HTTP_WHITESPACE = " \t"
 
 # Roughly the inverse of RequestHandler._VALID_HEADER_CHARS, but permits
 # chars greater than \xFF (which may appear after decoding utf8).
-_FORBIDDEN_HEADER_CHARS_RE = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]")
+_FORBIDDEN_HEADER_CHARS_RE = re.compile(r"[\x00-\x08\x0A-\x1F\x7F]")
 
 
 class _ABNF:
