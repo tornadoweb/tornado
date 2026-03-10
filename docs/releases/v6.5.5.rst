@@ -1,0 +1,19 @@
+What's new in Tornado 6.5.5
+===========================
+
+Mar 10, 2026
+------------
+
+Security fixes
+~~~~~~~~~~~~~~
+
+- ``multipart/form-data`` requests are now limited to 100 parts by default, to prevent a
+  denial-of-service attack via very large requests with many parts. This limit is configurable
+  via `tornado.httputil.ParseMultipartConfig`. Multipart parsing can also be disabled completely
+  if not required for the application. Thanks to [0x-Apollyon](https://github.com/0x-Apollyon) and
+  [bekkaze](https://github.com/bekkaze) for reporting this issue.
+- The ``domain``, ``path``, and ``samesite`` arguments to `.RequestHandler.set_cookie` are now
+  validated for illegal characters, which could be abused to inject other attributes on the cookie.
+  Thanks to Dhiral Vyas (Praetorian) for reporting this issue.
+- Carriage return characters are no longer accepted in ``multipart/form-data`` headers. Thanks to 
+  [sergeykochanov](https://github.com/sergeykochanov) for reporting this issue.

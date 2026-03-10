@@ -693,9 +693,30 @@ class RequestHandler:
         # The cookie library only accepts type str, in both python 2 and 3
         name = escape.native_str(name)
         value = escape.native_str(value)
-        if re.search(r"[\x00-\x20]", name + value):
-            # Don't let us accidentally inject bad stuff
+        if re.search(r"[\x00-\x20]", value):
+            # Legacy check for control characters in cookie values. This check is no longer needed
+            # since the cookie library escapes these characters correctly now. It will be removed
+            # in the next feature release.
             raise ValueError(f"Invalid cookie {name!r}: {value!r}")
+        for attr_name, attr_value in [
+            ("name", name),
+            ("domain", domain),
+            ("path", path),
+            ("samesite", samesite),
+        ]:
+            # Cookie attributes may not contain control characters or semicolons (except when
+            # escaped in the value). A check for control characters was added to the http.cookies
+            # library in a Feb 2026 security release; as of March it still does not check for
+            # semicolons.
+            #
+            # When a semicolon check is added to the standard library (and the release has had time
+            # for adoption), this check may be removed, but be mindful of the fact that this may
+            # change the timing of the exception (to the generation of the Set-Cookie header in
+            # flush()). We m
+            if attr_value is not None and re.search(r"[\x00-\x20\x3b\x7f]", attr_value):
+                raise http.cookies.CookieError(
+                    f"Invalid cookie attribute {attr_name}={attr_value!r} for cookie {name!r}"
+                )
         if not hasattr(self, "_new_cookie"):
             self._new_cookie = (
                 http.cookies.SimpleCookie()
