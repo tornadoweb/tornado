@@ -219,22 +219,18 @@ class ExecInTest(unittest.TestCase):
         #
         # The annotations future became available in python 3.7 but has been replaced by PEP 649, so
         # it should remain supported but off-by-default for the foreseeable future.
-        code1 = textwrap.dedent(
-            """
+        code1 = textwrap.dedent("""
             from __future__ import annotations
             from tornado.util import exec_in
 
             exec_in(code2, globals())
-            """
-        )
+            """)
 
-        code2 = textwrap.dedent(
-            """
+        code2 = textwrap.dedent("""
             def f(x: int) -> int:
                 return x + 1
             output[0] = f.__annotations__
-            """
-        )
+            """)
 
         # Make a mutable container to pass the result back to the caller
         output = [None]

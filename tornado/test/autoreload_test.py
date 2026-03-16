@@ -23,9 +23,7 @@ class AutoreloadTest(unittest.TestCase):
         #
         # The last line of each such test's "main" program should be
         #     exec(open("run_twice_magic.py").read())
-        self.write_files(
-            {
-                "run_twice_magic.py": """
+        self.write_files({"run_twice_magic.py": """
                     import os
                     import sys
 
@@ -38,9 +36,7 @@ class AutoreloadTest(unittest.TestCase):
                         tornado.autoreload._reload()
                     else:
                         os._exit(0)
-                """
-            }
-        )
+                """})
 
     def tearDown(self):
         try:

@@ -126,16 +126,12 @@ class TemplateTest(unittest.TestCase):
         self.assertEqual(template.generate(), b"")
 
     def test_try(self):
-        template = Template(
-            utf8(
-                """{% try %}
+        template = Template(utf8("""{% try %}
 try{% set y = 1/x %}
 {% except %}-except
 {% else %}-else
 {% finally %}-finally
-{% end %}"""
-            )
-        )
+{% end %}"""))
         self.assertEqual(template.generate(x=1), b"\ntry\n-else\n-finally\n")
         self.assertEqual(template.generate(x=0), b"\ntry-except\n-finally\n")
 
@@ -144,9 +140,7 @@ try{% set y = 1/x %}
         self.assertEqual(template.generate(), b"foo")
 
     def test_break_continue(self):
-        template = Template(
-            utf8(
-                """\
+        template = Template(utf8("""\
 {% for i in range(10) %}
     {% if i == 2 %}
         {% continue %}
@@ -155,9 +149,7 @@ try{% set y = 1/x %}
     {% if i == 6 %}
         {% break %}
     {% end %}
-{% end %}"""
-            )
-        )
+{% end %}"""))
         result = template.generate()
         # remove extraneous whitespace
         result = b"".join(result.split())
@@ -194,14 +186,10 @@ try{% set y = 1/x %}
 
 class StackTraceTest(unittest.TestCase):
     def test_error_line_number_expression(self):
-        loader = DictLoader(
-            {
-                "test.html": """one
+        loader = DictLoader({"test.html": """one
 two{{1/0}}
 three
-        """
-            }
-        )
+        """})
         try:
             loader.load("test.html").generate()
             self.fail("did not get expected exception")
@@ -209,14 +197,10 @@ three
             self.assertTrue("# test.html:2" in traceback.format_exc())
 
     def test_error_line_number_directive(self):
-        loader = DictLoader(
-            {
-                "test.html": """one
+        loader = DictLoader({"test.html": """one
 two{%if 1/0%}
 three{%end%}
-        """
-            }
-        )
+        """})
         try:
             loader.load("test.html").generate()
             self.fail("did not get expected exception")
@@ -449,16 +433,12 @@ raw: {% raw name %}""",
         # Whitespace including newlines is allowed within template tags
         # and directives, and this is one way to avoid long lines while
         # keeping extra whitespace out of the rendered output.
-        loader = DictLoader(
-            {
-                "foo.txt": """\
+        loader = DictLoader({"foo.txt": """\
 {% for i in items
   %}{% if i > 0 %}, {% end %}{#
   #}{{i
   }}{% end
-%}"""
-            }
-        )
+%}"""})
         self.assertEqual(
             loader.load("foo.txt").generate(items=range(5)), b"0, 1, 2, 3, 4"
         )
@@ -501,18 +481,14 @@ raw: {% raw name %}""",
         self.assertEqual(loader.load("bar.txt").generate(), b" bar ")
 
     def test_whitespace_directive(self):
-        loader = DictLoader(
-            {
-                "foo.html": """\
+        loader = DictLoader({"foo.html": """\
 {% whitespace oneline %}
     {% for i in range(3) %}
         {{ i }}
     {% end %}
 {% whitespace all %}
     pre\tformatted
-"""
-            }
-        )
+"""})
         self.assertEqual(
             loader.load("foo.html").generate(), b"  0  1  2  \n    pre\tformatted\n"
         )

@@ -102,9 +102,7 @@ class MultipartFormDataTest(unittest.TestCase):
 Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 Foo
---1234--""".replace(
-            b"\n", b"\r\n"
-        )
+--1234--""".replace(b"\n", b"\r\n")
         args, files = form_data_args()
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
@@ -118,9 +116,7 @@ Foo
 Content-Disposition: form-data; name=files; filename=ab.txt
 
 Foo
---1234--""".replace(
-            b"\n", b"\r\n"
-        )
+--1234--""".replace(b"\n", b"\r\n")
         args, files = form_data_args()
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
@@ -146,11 +142,7 @@ Foo
 Content-Disposition: form-data; name="files"; filename="%s"
 
 Foo
---1234--""" % filename.replace(
-                "\\", "\\\\"
-            ).replace(
-                '"', '\\"'
-            )
+--1234--""" % filename.replace("\\", "\\\\").replace('"', '\\"')
             data = utf8(str_data.replace("\n", "\r\n"))
             args, files = form_data_args()
             parse_multipart_form_data(b"1234", data, args, files)
@@ -170,11 +162,7 @@ Foo
 Content-Disposition: form-data; name="files"; filename="%s"
 
 Foo
---1234--""" % filename.replace(
-                "\\", "\\\\"
-            ).replace(
-                '"', '\\"'
-            )
+--1234--""" % filename.replace("\\", "\\\\").replace('"', '\\"')
             data = utf8(str_data.replace("\n", "\r\n"))
             args, files = form_data_args()
             with self.assertRaises(HTTPInputError) as cm:
@@ -187,9 +175,7 @@ Foo
 Content-Disposition: form-data; name="files"; filename="ab.txt"; filename*=UTF-8''%C3%A1b.txt
 
 Foo
---1234--""".replace(
-            b"\n", b"\r\n"
-        )
+--1234--""".replace(b"\n", b"\r\n")
         args, files = form_data_args()
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
@@ -202,11 +188,7 @@ Foo
 Content-Disposition: form-data; name="files"; filename="测试.txt"
 
 Foo
---1234--""".encode(
-            "utf-8"
-        ).replace(
-            b"\n", b"\r\n"
-        )
+--1234--""".encode("utf-8").replace(b"\n", b"\r\n")
         args, files = form_data_args()
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
@@ -219,9 +201,7 @@ Foo
 Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 Foo
---1234--""".replace(
-            b"\n", b"\r\n"
-        )
+--1234--""".replace(b"\n", b"\r\n")
         args, files = form_data_args()
         parse_multipart_form_data(b'"1234"', data, args, files)
         file = files["files"][0]
@@ -233,9 +213,7 @@ Foo
 --1234
 
 Foo
---1234--""".replace(
-            b"\n", b"\r\n"
-        )
+--1234--""".replace(b"\n", b"\r\n")
         args, files = form_data_args()
         with self.assertRaises(
             HTTPInputError, msg="multipart/form-data missing headers"
@@ -249,9 +227,7 @@ Foo
 Content-Disposition: invalid; name="files"; filename="ab.txt"
 
 Foo
---1234--""".replace(
-            b"\n", b"\r\n"
-        )
+--1234--""".replace(b"\n", b"\r\n")
         args, files = form_data_args()
         with self.assertRaises(HTTPInputError, msg="Invalid multipart/form-data"):
             parse_multipart_form_data(b"1234", data, args, files)
@@ -262,9 +238,7 @@ Foo
 --1234
 Content-Disposition: form-data; name="files"; filename="ab.txt"
 
-Foo--1234--""".replace(
-            b"\n", b"\r\n"
-        )
+Foo--1234--""".replace(b"\n", b"\r\n")
         args, files = form_data_args()
         with self.assertRaises(HTTPInputError, msg="Invalid multipart/form-data"):
             parse_multipart_form_data(b"1234", data, args, files)
@@ -276,9 +250,7 @@ Foo--1234--""".replace(
 Content-Disposition: form-data; filename="ab.txt"
 
 Foo
---1234--""".replace(
-            b"\n", b"\r\n"
-        )
+--1234--""".replace(b"\n", b"\r\n")
         args, files = form_data_args()
         with self.assertRaises(
             HTTPInputError, msg="multipart/form-data value missing name"
@@ -296,9 +268,7 @@ Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 Foo
 --1234--
-""".replace(
-            b"\n", b"\r\n"
-        )
+""".replace(b"\n", b"\r\n")
         args, files = form_data_args()
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
@@ -334,9 +304,7 @@ Foo
         body = b"""--1234
 Content-Disposition: form-data; name="files"; filename="ab.txt"
 
---1234--""".replace(
-            b"\n", b"\r\n"
-        )
+--1234--""".replace(b"\n", b"\r\n")
         config = ParseMultipartConfig()
         args, files = form_data_args()
         parse_multipart_form_data(boundary, body, args, files, config=config)
@@ -378,9 +346,7 @@ Asdf: qwer
 Foo: even
      more
      lines
-""".replace(
-            "\n", "\r\n"
-        )
+""".replace("\n", "\r\n")
         headers = HTTPHeaders.parse(data)
         self.assertEqual(headers["asdf"], "qwer zxcv")
         self.assertEqual(headers.get_list("asdf"), ["qwer zxcv"])
