@@ -7,7 +7,6 @@ from tornado.test import httpclient_test
 from tornado.web import Application, RequestHandler
 from tornado import gen
 
-
 try:
     import pycurl
 except ImportError:

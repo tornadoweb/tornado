@@ -37,7 +37,6 @@ from urllib.parse import urlencode, urlparse, urlunparse, parse_qsl
 from tornado.escape import native_str, parse_qs_bytes, utf8, to_unicode
 from tornado.util import ObjectDict, unicode_type
 
-
 # responses is unused in this file, but we re-export it to other files.
 # Reference it so pyflakes doesn't complain.
 responses

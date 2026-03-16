@@ -238,8 +238,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
                 request_data = yield stream.read_until(b"\r\n\r\n")
                 if b"HTTP/1." not in request_data:
                     self.skipTest("requires HTTP/1.x")
-                yield stream.write(
-                    b"""\
+                yield stream.write(b"""\
 HTTP/1.1 200 OK
 Transfer-Encoding: chunked
 
@@ -249,10 +248,7 @@ Transfer-Encoding: chunked
 2
 0
 
-""".replace(
-                        b"\n", b"\r\n"
-                    )
-                )
+""".replace(b"\n", b"\r\n"))
                 stream.close()
 
             netutil.add_accept_handler(sock, accept_callback)  # type: ignore
@@ -539,16 +535,12 @@ Transfer-Encoding: chunked
                 request_data = yield stream.read_until(b"\r\n\r\n")
                 if b"HTTP/1." not in request_data:
                     self.skipTest("requires HTTP/1.x")
-                yield stream.write(
-                    b"""\
+                yield stream.write(b"""\
 HTTP/1.1 200 OK
 X-XSS-Protection: 1;
 \tmode=block
 
-""".replace(
-                        b"\n", b"\r\n"
-                    )
-                )
+""".replace(b"\n", b"\r\n"))
                 stream.close()
 
             netutil.add_accept_handler(sock, accept_callback)  # type: ignore

@@ -224,7 +224,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             while self._free_list and self._requests:
                 started += 1
                 curl = self._free_list.pop()
-                (request, callback, queue_start_time) = self._requests.popleft()
+                request, callback, queue_start_time = self._requests.popleft()
                 # TODO: Don't smuggle extra data on an attribute of the Curl object.
                 curl.info = {  # type: ignore
                     "headers": httputil.HTTPHeaders(),
@@ -565,7 +565,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if header_line.startswith("HTTP/"):
             headers.clear()
             try:
-                (_version, _code, reason) = httputil.parse_response_start_line(
+                _version, _code, reason = httputil.parse_response_start_line(
                     header_line
                 )
                 header_line = "X-Http-Reason: %s" % reason

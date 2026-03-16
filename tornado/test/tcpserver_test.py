@@ -141,8 +141,7 @@ class TestMultiprocess(unittest.TestCase):
     def test_listen_single(self):
         # As a sanity check, run the single-process version through this test
         # harness too.
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import asyncio
             from tornado.tcpserver import TCPServer
 
@@ -152,15 +151,13 @@ class TestMultiprocess(unittest.TestCase):
 
             asyncio.run(main())
             print('012', end='')
-        """
-        )
+        """)
         out, err = self.run_subproc(code)
         self.assertEqual("".join(sorted(out)), "012")
         self.assertEqual(err, "")
 
     def test_bind_start(self):
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import warnings
 
             from tornado.ioloop import IOLoop
@@ -174,15 +171,13 @@ class TestMultiprocess(unittest.TestCase):
             server.start(3)
             IOLoop.current().run_sync(lambda: None)
             print(task_id(), end='')
-        """
-        )
+        """)
         out, err = self.run_subproc(code)
         self.assertEqual("".join(sorted(out)), "012")
         self.assertEqual(err, "")
 
     def test_add_sockets(self):
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import asyncio
             from tornado.netutil import bind_sockets
             from tornado.process import fork_processes, task_id
@@ -196,15 +191,13 @@ class TestMultiprocess(unittest.TestCase):
                 server.add_sockets(sockets)
             asyncio.run(post_fork_main())
             print(task_id(), end='')
-        """
-        )
+        """)
         out, err = self.run_subproc(code)
         self.assertEqual("".join(sorted(out)), "012")
         self.assertEqual(err, "")
 
     def test_listen_multi_reuse_port(self):
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import asyncio
             import socket
             from tornado.netutil import bind_sockets
@@ -223,8 +216,7 @@ class TestMultiprocess(unittest.TestCase):
                 server.listen(port, address='127.0.0.1', reuse_port=True)
             asyncio.run(main())
             print(task_id(), end='')
-            """
-        )
+            """)
         out, err = self.run_subproc(code)
         self.assertEqual("".join(sorted(out)), "012")
         self.assertEqual(err, "")

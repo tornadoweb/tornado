@@ -15,7 +15,6 @@ from tornado.netutil import Resolver
 from tornado.options import define, add_parse_callback, options
 from tornado.test.util import ABT_SKIP_MESSAGE
 
-
 TEST_MODULES = [
     "tornado.httputil.doctests",
     "tornado.iostream.doctests",
