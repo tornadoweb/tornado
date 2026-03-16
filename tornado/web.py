@@ -712,7 +712,8 @@ class RequestHandler:
             # When a semicolon check is added to the standard library (and the release has had time
             # for adoption), this check may be removed, but be mindful of the fact that this may
             # change the timing of the exception (to the generation of the Set-Cookie header in
-            # flush()). We m
+            # flush()). We may want to add a call to self._new_cookie.output() at the end of this
+            # method to ensure that exceptions are raised when they will be most useful.
             if attr_value is not None and re.search(r"[\x00-\x20\x3b\x7f]", attr_value):
                 raise http.cookies.CookieError(
                     f"Invalid cookie attribute {attr_name}={attr_value!r} for cookie {name!r}"
