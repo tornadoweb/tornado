@@ -91,20 +91,16 @@ class GzipDecompressor:
         remaining = max_length
 
         while True:
-            if remaining:
-                chunk = self.decompressobj.decompress(data, remaining)
-            else:
-                chunk = self.decompressobj.decompress(data)
-
+            chunk = self.decompressobj.decompress(data, remaining)
             out.extend(chunk)
 
-            if remaining:
-                remaining = max(0, max_length - len(out))
-                if remaining == 0:
+            if max_length:
+                remaining = max_length - len(out)
+                if remaining <= 0:
                     break
 
             # Handle concatenated gzip members
-            unused = getattr(self.decompressobj, "unused_data", b"")
+            unused = self.decompressobj.unused_data
             if unused:
                 data = unused
                 self.decompressobj = zlib.decompressobj(16 + zlib.MAX_WBITS)
