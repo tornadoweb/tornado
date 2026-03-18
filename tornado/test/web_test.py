@@ -223,7 +223,7 @@ class SecureCookieV2Test(unittest.TestCase):
 
 
 class FinalReturnTest(WebTestCase):
-    final_return = None  # type: Future
+    final_return: Future
 
     def get_handlers(self):
         test = self

@@ -176,7 +176,7 @@ class AsyncHTTPClient(Configurable):
 
     """
 
-    _instance_cache = None  # type: Dict[IOLoop, AsyncHTTPClient]
+    _instance_cache: Dict[IOLoop, "AsyncHTTPClient"]
 
     @classmethod
     def configurable_base(cls) -> Type[Configurable]:
@@ -339,7 +339,7 @@ class AsyncHTTPClient(Configurable):
 class HTTPRequest:
     """HTTP client request object."""
 
-    _headers = None  # type: Union[Dict[str, str], httputil.HTTPHeaders]
+    _headers: Union[Dict[str, str], httputil.HTTPHeaders]
 
     # Default values for HTTPRequest parameters.
     # Merged with the values on the request object by AsyncHTTPClient
@@ -626,7 +626,7 @@ class HTTPResponse:
     # I'm not sure why these don't get type-inferred from the references in __init__.
     error = None  # type: Optional[BaseException]
     _error_is_response_code = False
-    request = None  # type: HTTPRequest
+    request: HTTPRequest
 
     def __init__(
         self,
