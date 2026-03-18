@@ -150,7 +150,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         self._read_finished = False
         # _finish_future resolves when all data has been written and flushed
         # to the IOStream.
-        self._finish_future = Future()  # type: Future[None]
+        self._finish_future: Future[None] = Future()
         # If true, the connection should be closed after this request
         # (after the response has been written in the server side,
         # and after it has been read in the client)
@@ -159,16 +159,16 @@ class HTTP1Connection(httputil.HTTPConnection):
         # Save the start lines after we read or write them; they
         # affect later processing (e.g. 304 responses and HEAD methods
         # have content-length but no bodies)
-        self._request_start_line = None  # type: Optional[httputil.RequestStartLine]
-        self._response_start_line = None  # type: Optional[httputil.ResponseStartLine]
-        self._request_headers = None  # type: Optional[httputil.HTTPHeaders]
+        self._request_start_line: Optional[httputil.RequestStartLine] = None
+        self._response_start_line: Optional[httputil.ResponseStartLine] = None
+        self._request_headers: Optional[httputil.HTTPHeaders] = None
         # True if we are writing output with chunked encoding.
         self._chunking_output = False
         # While reading a body with a content-length, this is the
         # amount left to read.
-        self._expected_content_remaining = None  # type: Optional[int]
+        self._expected_content_remaining: Optional[int] = None
         # A Future for our outgoing writes, returned by IOStream.write.
-        self._pending_write = None  # type: Optional[Future[None]]
+        self._pending_write: Optional[Future[None]] = None
 
     def read_response(self, delegate: httputil.HTTPMessageDelegate) -> Awaitable[bool]:
         """Read a single HTTP response.
@@ -207,9 +207,9 @@ class HTTP1Connection(httputil.HTTPConnection):
             if self.is_client:
                 resp_start_line = httputil.parse_response_start_line(start_line_str)
                 self._response_start_line = resp_start_line
-                start_line = (
-                    resp_start_line
-                )  # type: Union[httputil.RequestStartLine, httputil.ResponseStartLine]
+                start_line: Union[
+                    httputil.RequestStartLine, httputil.ResponseStartLine
+                ] = resp_start_line
                 # TODO: this will need to change to support client-side keepalive
                 self._disconnect_on_finish = False
             else:
@@ -314,8 +314,8 @@ class HTTP1Connection(httputil.HTTPConnection):
         quickly in CPython by breaking up reference cycles.
         """
         self._write_callback = None
-        self._write_future = None  # type: Optional[Future[None]]
-        self._close_callback = None  # type: Optional[Callable[[], None]]
+        self._write_future: Optional[Future[None]] = None
+        self._close_callback: Optional[Callable[[], None]] = None
         if self.stream is not None:
             self.stream.set_close_callback(None)
 
@@ -708,7 +708,7 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
     def __init__(self, delegate: httputil.HTTPMessageDelegate, chunk_size: int) -> None:
         self._delegate = delegate
         self._chunk_size = chunk_size
-        self._decompressor = None  # type: Optional[GzipDecompressor]
+        self._decompressor: Optional[GzipDecompressor] = None
 
     def headers_received(
         self,
@@ -784,7 +784,7 @@ class HTTP1ServerConnection:
             params = HTTP1ConnectionParameters()
         self.params = params
         self.context = context
-        self._serving_future = None  # type: Optional[Future[None]]
+        self._serving_future: Optional[Future[None]] = None
 
     async def close(self) -> None:
         """Closes the connection.

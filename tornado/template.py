@@ -307,7 +307,7 @@ class Template:
         filter_whitespace(whitespace, "")
 
         if not isinstance(autoescape, _UnsetMarker):
-            self.autoescape = autoescape  # type: Optional[str]
+            self.autoescape: Optional[str] = autoescape
         elif loader:
             self.autoescape = loader.autoescape
         else:
@@ -365,7 +365,7 @@ class Template:
         buffer = StringIO()
         try:
             # named_blocks maps from names to _NamedBlock objects
-            named_blocks = {}  # type: Dict[str, _NamedBlock]
+            named_blocks: Dict[str, _NamedBlock] = {}
             ancestors = self._get_ancestors(loader)
             ancestors.reverse()
             for ancestor in ancestors:
@@ -421,7 +421,7 @@ class BaseLoader:
         self.autoescape = autoescape
         self.namespace = namespace or {}
         self.whitespace = whitespace
-        self.templates = {}  # type: Dict[str, Template]
+        self.templates: Dict[str, Template] = {}
         # self.lock protects self.templates.  It's a reentrant lock
         # because templates may load other templates via `include` or
         # `extends`.  Note that thanks to the GIL this code would be safe
@@ -733,7 +733,7 @@ class _CodeWriter:
         self.loader = loader
         self.current_template = current_template
         self.apply_counter = 0
-        self.include_stack = []  # type: List[Tuple[Template, int]]
+        self.include_stack: List[Tuple[Template, int]] = []
         self._indent = 0
 
     def indent_size(self) -> int:
@@ -976,7 +976,7 @@ def _parse(
                 suffix = suffix.strip('"').strip("'")
                 if not suffix:
                     reader.raise_parse_error("extends missing file path")
-                block = _ExtendsBlock(suffix)  # type: _Node
+                block: _Node = _ExtendsBlock(suffix)
             elif operator in ("import", "from"):
                 if not suffix:
                     reader.raise_parse_error("import missing statement")
@@ -991,7 +991,7 @@ def _parse(
                     reader.raise_parse_error("set missing statement")
                 block = _Statement(suffix, line)
             elif operator == "autoescape":
-                fn = suffix.strip()  # type: Optional[str]
+                fn: Optional[str] = suffix.strip()
                 if fn == "None":
                     fn = None
                 template.autoescape = fn

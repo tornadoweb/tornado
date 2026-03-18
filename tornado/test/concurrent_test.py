@@ -33,7 +33,7 @@ from tornado.testing import AsyncTestCase, bind_unused_port, gen_test
 
 class MiscFutureTest(AsyncTestCase):
     def test_future_set_result_unless_cancelled(self):
-        fut = Future()  # type: Future[int]
+        fut: Future[int] = Future()
         future_set_result_unless_cancelled(fut, 42)
         self.assertEqual(fut.result(), 42)
         self.assertFalse(fut.cancelled())

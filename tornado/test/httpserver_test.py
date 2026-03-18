@@ -297,7 +297,7 @@ class EchoHandler(RequestHandler):
 
 class TypeCheckHandler(RequestHandler):
     def prepare(self):
-        self.errors = {}  # type: Dict[str, str]
+        self.errors: Dict[str, str] = {}
         fields = [
             ("method", str),
             ("uri", str),
@@ -1159,7 +1159,7 @@ class StreamingChunkSizeTest(AsyncHTTPTestCase):
             self.connection = connection
 
         def headers_received(self, start_line, headers):
-            self.chunk_lengths = []  # type: List[int]
+            self.chunk_lengths: List[int] = []
 
         def data_received(self, chunk):
             self.chunk_lengths.append(len(chunk))
@@ -1310,7 +1310,7 @@ class IdleTimeoutTest(AsyncHTTPTestCase):
 
     def setUp(self):
         super().setUp()
-        self.streams = []  # type: List[IOStream]
+        self.streams: List[IOStream] = []
 
     def tearDown(self):
         super().tearDown()

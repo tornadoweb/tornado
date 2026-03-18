@@ -127,15 +127,15 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     ) -> None:
         super().initialize(defaults=defaults)
         self.max_clients = max_clients
-        self.queue = (
-            collections.deque()
-        )  # type: Deque[Tuple[object, HTTPRequest, Callable[[HTTPResponse], None]]]
-        self.active = (
-            {}
-        )  # type: Dict[object, Tuple[HTTPRequest, Callable[[HTTPResponse], None]]]
-        self.waiting = (
-            {}
-        )  # type: Dict[object, Tuple[HTTPRequest, Callable[[HTTPResponse], None], object]]
+        self.queue: Deque[
+            Tuple[object, HTTPRequest, Callable[[HTTPResponse], None]]
+        ] = collections.deque()
+        self.active: Dict[
+            object, Tuple[HTTPRequest, Callable[[HTTPResponse], None]]
+        ] = {}
+        self.waiting: Dict[
+            object, Tuple[HTTPRequest, Callable[[HTTPResponse], None], object]
+        ] = {}
         self.max_buffer_size = max_buffer_size
         self.max_header_size = max_header_size
         self.max_body_size = max_body_size
@@ -274,12 +274,12 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self.tcp_client = tcp_client
         self.max_header_size = max_header_size
         self.max_body_size = max_body_size
-        self.code = None  # type: Optional[int]
-        self.headers = None  # type: Optional[httputil.HTTPHeaders]
-        self.chunks = []  # type: List[bytes]
+        self.code: Optional[int] = None
+        self.headers: Optional[httputil.HTTPHeaders] = None
+        self.chunks: List[bytes] = []
         self._decompressor = None
         # Timeout handle returned by IOLoop.add_timeout
-        self._timeout = None  # type: object
+        self._timeout: object = None
         self._sockaddr = None
         IOLoop.current().add_future(
             gen.convert_yielded(self.run()), lambda f: f.result()

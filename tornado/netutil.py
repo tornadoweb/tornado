@@ -100,7 +100,7 @@ def bind_sockets(
     if flags is None:
         flags = socket.AI_PASSIVE
     bound_port = None
-    unique_addresses = set()  # type: set
+    unique_addresses: set = set()
     for res in sorted(
         socket.getaddrinfo(address, port, family, socket.SOCK_STREAM, 0, flags),
         key=lambda x: x[0],

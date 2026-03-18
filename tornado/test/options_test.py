@@ -119,7 +119,7 @@ class OptionsTest(unittest.TestCase):
             options.foo = "2"
 
     def test_setattr_with_callback(self):
-        values = []  # type: List[int]
+        values: List[int] = []
         options = OptionParser()
         options.define("foo", default=1, type=int, callback=values.append)
         options.foo = 2

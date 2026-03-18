@@ -128,9 +128,9 @@ class TCPServer:
         read_chunk_size: Optional[int] = None,
     ) -> None:
         self.ssl_options = ssl_options
-        self._sockets = {}  # type: Dict[int, socket.socket]
-        self._handlers = {}  # type: Dict[int, Callable[[], None]]
-        self._pending_sockets = []  # type: List[socket.socket]
+        self._sockets: Dict[int, socket.socket] = {}
+        self._handlers: Dict[int, Callable[[], None]] = {}
+        self._pending_sockets: List[socket.socket] = []
         self._started = False
         self._stopped = False
         self.max_buffer_size = max_buffer_size
@@ -369,11 +369,11 @@ class TCPServer:
                     raise
         try:
             if self.ssl_options is not None:
-                stream = SSLIOStream(
+                stream: IOStream = SSLIOStream(
                     connection,
                     max_buffer_size=self.max_buffer_size,
                     read_chunk_size=self.read_chunk_size,
-                )  # type: IOStream
+                )
             else:
                 stream = IOStream(
                     connection,

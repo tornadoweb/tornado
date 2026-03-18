@@ -527,7 +527,7 @@ class GenCoroutineTest(AsyncTestCase):
 
         # First, confirm the behavior without moment: each coroutine
         # monopolizes the event loop until it finishes.
-        immediate = Future()  # type: Future[None]
+        immediate: Future[None] = Future()
         immediate.set_result(None)
         yield [f("a", immediate), f("b", immediate)]
         self.assertEqual("".join(calls), "aaaaabbbbb")
@@ -659,7 +659,7 @@ class GenCoroutineUnfinishedSequenceHandler(RequestHandler):
 class UndecoratedCoroutinesHandler(RequestHandler):
     @gen.coroutine
     def prepare(self):
-        self.chunks = []  # type: List[str]
+        self.chunks: List[str] = []
         yield gen.moment
         self.chunks.append("1")
 
@@ -733,7 +733,7 @@ class WithTimeoutTest(AsyncTestCase):
 
     @gen_test
     def test_completes_before_timeout(self):
-        future = Future()  # type: Future[str]
+        future: Future[str] = Future()
         self.io_loop.add_timeout(
             datetime.timedelta(seconds=0.1), lambda: future.set_result("asdf")
         )
@@ -742,7 +742,7 @@ class WithTimeoutTest(AsyncTestCase):
 
     @gen_test
     def test_fails_before_timeout(self):
-        future = Future()  # type: Future[str]
+        future: Future[str] = Future()
         self.io_loop.add_timeout(
             datetime.timedelta(seconds=0.1),
             lambda: future.set_exception(ZeroDivisionError()),
@@ -752,7 +752,7 @@ class WithTimeoutTest(AsyncTestCase):
 
     @gen_test
     def test_already_resolved(self):
-        future = Future()  # type: Future[str]
+        future: Future[str] = Future()
         future.set_result("asdf")
         result = yield gen.with_timeout(datetime.timedelta(seconds=3600), future)
         self.assertEqual(result, "asdf")
@@ -803,9 +803,9 @@ class WaitIteratorTest(AsyncTestCase):
 
     @gen_test
     def test_already_done(self):
-        f1 = Future()  # type: Future[int]
-        f2 = Future()  # type: Future[int]
-        f3 = Future()  # type: Future[int]
+        f1: Future[int] = Future()
+        f2: Future[int] = Future()
+        f3: Future[int] = Future()
         f1.set_result(24)
         f2.set_result(42)
         f3.set_result(84)
@@ -868,7 +868,7 @@ class WaitIteratorTest(AsyncTestCase):
 
     @gen_test
     def test_iterator(self):
-        futures = [Future(), Future(), Future(), Future()]  # type: List[Future[int]]
+        futures: List[Future[int]] = [Future(), Future(), Future(), Future()]
 
         self.finish_coroutines(0, futures)
 
@@ -897,7 +897,7 @@ class WaitIteratorTest(AsyncTestCase):
         # Recreate the previous test with py35 syntax. It's a little clunky
         # because of the way the previous test handles an exception on
         # a single iteration.
-        futures = [Future(), Future(), Future(), Future()]  # type: List[Future[int]]
+        futures: List[Future[int]] = [Future(), Future(), Future(), Future()]
         self.finish_coroutines(0, futures)
         self.finished = False
 
@@ -948,7 +948,7 @@ class RunnerGCTest(AsyncTestCase):
     def test_gc(self):
         # GitHub issue 1769: Runner objects can get GCed unexpectedly
         # while their future is alive.
-        weakref_scope = [None]  # type: List[Optional[weakref.ReferenceType]]
+        weakref_scope: List[Optional[weakref.ReferenceType]] = [None]
 
         def callback():
             gc.collect(2)
@@ -956,7 +956,7 @@ class RunnerGCTest(AsyncTestCase):
 
         @gen.coroutine
         def tester():
-            fut = Future()  # type: Future[int]
+            fut: Future[int] = Future()
             weakref_scope[0] = weakref.ref(fut)
             self.io_loop.add_callback(callback)
             yield fut
@@ -968,7 +968,7 @@ class RunnerGCTest(AsyncTestCase):
         # their loop is closed, even if they're involved in a reference
         # cycle.
         loop = self.get_new_ioloop()
-        result = []  # type: List[Optional[bool]]
+        result: List[Optional[bool]] = []
         wfut = []
 
         @gen.coroutine
@@ -1013,7 +1013,7 @@ class RunnerGCTest(AsyncTestCase):
                 result.append(None)
 
         loop = self.get_new_ioloop()
-        result = []  # type: List[Optional[bool]]
+        result: List[Optional[bool]] = []
         wfut = []
 
         @gen.coroutine
@@ -1049,7 +1049,7 @@ class RunnerGCTest(AsyncTestCase):
 
 
 if contextvars is not None:
-    ctx_var = contextvars.ContextVar("ctx_var")  # type: contextvars.ContextVar[int]
+    ctx_var: contextvars.ContextVar[int] = contextvars.ContextVar("ctx_var")
 
 
 @unittest.skipIf(contextvars is None, "contextvars module not present")

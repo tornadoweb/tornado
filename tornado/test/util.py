@@ -80,7 +80,7 @@ def exec_test(caller_globals, caller_locals, s):
     # globals: it's all global from the perspective of code defined
     # in s.
     global_namespace = dict(caller_globals, **caller_locals)  # type: ignore
-    local_namespace = {}  # type: typing.Dict[str, typing.Any]
+    local_namespace: typing.Dict[str, typing.Any] = {}
     exec(textwrap.dedent(s), global_namespace, local_namespace)
     return local_namespace
 

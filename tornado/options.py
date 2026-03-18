@@ -296,7 +296,7 @@ class OptionParser:
             else:
                 type = str
         if group:
-            group_name = group  # type: Optional[str]
+            group_name: Optional[str] = group
         else:
             group_name = file_name
         option = _Option(
@@ -338,7 +338,7 @@ class OptionParser:
         """
         if args is None:
             args = sys.argv
-        remaining = []  # type: List[str]
+        remaining: List[str] = []
         for i in range(1, len(args)):
             # All things after the last option are command line arguments
             if not args[i].startswith("-"):
@@ -443,7 +443,7 @@ class OptionParser:
             file = sys.stderr
         print("Usage: %s [OPTIONS]" % sys.argv[0], file=file)
         print("\nOptions:\n", file=file)
-        by_group = {}  # type: Dict[str, List[_Option]]
+        by_group: Dict[str, List[_Option]] = {}
         for option in self._options.values():
             by_group.setdefault(option.group_name, []).append(option)
 
@@ -555,20 +555,18 @@ class _Option:
         self.group_name = group_name
         self.callback = callback
         self.default = default
-        self._value = _Option.UNSET  # type: Any
+        self._value: Any = _Option.UNSET
 
     def value(self) -> Any:
         return self.default if self._value is _Option.UNSET else self._value
 
     def parse(self, value: str) -> Any:
-        _parse = {
+        _parse: Callable[[str], Any] = {
             datetime.datetime: self._parse_datetime,
             datetime.timedelta: self._parse_timedelta,
             bool: self._parse_bool,
             basestring_type: self._parse_string,
-        }.get(
-            self.type, self.type
-        )  # type: Callable[[str], Any]
+        }.get(self.type, self.type)
         if self.multiple:
             self._value = []
             for part in value.split(","):

@@ -243,8 +243,8 @@ class _RoutingDelegate(httputil.HTTPMessageDelegate):
     ) -> None:
         self.server_conn = server_conn
         self.request_conn = request_conn
-        self.delegate = None  # type: Optional[httputil.HTTPMessageDelegate]
-        self.router = router  # type: Router
+        self.delegate: Optional[httputil.HTTPMessageDelegate] = None
+        self.router: Router = router
 
     def headers_received(
         self,
@@ -338,7 +338,7 @@ class RuleRouter(Router):
         :arg rules: a list of `Rule` instances or tuples of `Rule`
             constructor arguments.
         """
-        self.rules = []  # type: List[Rule]
+        self.rules: List[Rule] = []
         if rules:
             self.add_rules(rules)
 
@@ -421,7 +421,7 @@ class ReversibleRuleRouter(ReversibleRouter, RuleRouter):
     """
 
     def __init__(self, rules: Optional[_RuleList] = None) -> None:
-        self.named_rules = {}  # type: Dict[str, Any]
+        self.named_rules: Dict[str, Any] = {}
         super().__init__(rules)
 
     def process_rule(self, rule: "Rule") -> "Rule":
@@ -480,7 +480,7 @@ class Rule:
             # Must be a fully qualified name (module.ClassName)
             target = import_object(target)
 
-        self.matcher = matcher  # type: Matcher
+        self.matcher: Matcher = matcher
         self.target = target
         self.target_kwargs = target_kwargs if target_kwargs else {}
         self.name = name
@@ -585,8 +585,8 @@ class PathMatches(Matcher):
         if not self.regex.groups:
             return {}
 
-        path_args = []  # type: List[bytes]
-        path_kwargs = {}  # type: Dict[str, bytes]
+        path_args: List[bytes] = []
+        path_kwargs: Dict[str, bytes] = {}
 
         # Pass matched groups to the handler.  Since
         # match.groups() includes both named and

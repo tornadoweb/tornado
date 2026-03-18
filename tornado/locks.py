@@ -39,7 +39,7 @@ class _TimeoutGarbageCollector:
     """
 
     def __init__(self) -> None:
-        self._waiters = collections.deque()  # type: Deque[Future]
+        self._waiters: Deque[Future] = collections.deque()
         self._timeouts = 0
 
     def _garbage_collect(self) -> None:
@@ -124,7 +124,7 @@ class Condition(_TimeoutGarbageCollector):
         Returns a `.Future` that resolves ``True`` if the condition is notified,
         or ``False`` after a timeout.
         """
-        waiter = Future()  # type: Future[bool]
+        waiter: Future[bool] = Future()
         self._waiters.append(waiter)
         if timeout:
 
@@ -197,7 +197,7 @@ class Event:
 
     def __init__(self) -> None:
         self._value = False
-        self._waiters = set()  # type: Set[Future[None]]
+        self._waiters: Set[Future[None]] = set()
 
     def __repr__(self) -> str:
         return "<{} {}>".format(
@@ -236,7 +236,7 @@ class Event:
         Returns an awaitable, which raises `tornado.util.TimeoutError` after a
         timeout.
         """
-        fut = Future()  # type: Future[None]
+        fut: Future[None] = Future()
         if self._value:
             fut.set_result(None)
             return fut
@@ -419,7 +419,7 @@ class Semaphore(_TimeoutGarbageCollector):
         Block if the counter is zero and wait for a `.release`. The awaitable
         raises `.TimeoutError` after the deadline.
         """
-        waiter = Future()  # type: Future[_ReleasingContextManager]
+        waiter: Future[_ReleasingContextManager] = Future()
         if self._value > 0:
             self._value -= 1
             waiter.set_result(_ReleasingContextManager(self))

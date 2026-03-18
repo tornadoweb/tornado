@@ -173,9 +173,7 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
 
     def mixin_get_app(self):
         # callable objects to finish pending /trigger requests
-        self.triggers = (
-            collections.deque()
-        )  # type: typing.Deque[typing.Callable[[], None]]
+        self.triggers: typing.Deque[typing.Callable[[], None]] = collections.deque()
         return Application(
             [
                 url(
@@ -526,8 +524,8 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
         # simple_httpclient_test, but it fails with the version of libcurl
         # available on travis-ci. Move it when that has been upgraded
         # or we have a better framework to skip tests based on curl version.
-        headers = []  # type: typing.List[str]
-        chunk_bytes = []  # type: typing.List[bytes]
+        headers: typing.List[str] = []
+        chunk_bytes: typing.List[bytes] = []
         self.fetch(
             "/redirect?url=/hello",
             header_callback=headers.append,
@@ -540,8 +538,8 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
         self.assertEqual(num_start_lines, 1)
 
     def test_streaming_callback_coroutine(self: typing.Any):
-        headers = []  # type: typing.List[str]
-        chunk_bytes = []  # type: typing.List[bytes]
+        headers: typing.List[str] = []
+        chunk_bytes: typing.List[bytes] = []
 
         import asyncio
 

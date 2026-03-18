@@ -28,7 +28,7 @@ else:
 
 @abstract_base_test
 class _ResolverTestMixin(AsyncTestCase):
-    resolver = None  # type: typing.Any
+    resolver: typing.Any = None
 
     @gen_test
     def test_localhost(self):
@@ -47,7 +47,7 @@ class _ResolverTestMixin(AsyncTestCase):
 # resolution, so test this case separately, using mocks as needed.
 @abstract_base_test
 class _ResolverErrorTestMixin(AsyncTestCase):
-    resolver = None  # type: typing.Any
+    resolver: typing.Any = None
 
     @gen_test
     def test_bad_host(self):

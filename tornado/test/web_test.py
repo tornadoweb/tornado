@@ -103,7 +103,7 @@ class CookieTestRequestHandler(RequestHandler):
     # stub out enough methods to make the signed_cookie functions work
     def __init__(self, cookie_secret="0123456789", key_version=None):
         # don't call super.__init__
-        self._cookies = {}  # type: typing.Dict[str, bytes]
+        self._cookies: typing.Dict[str, bytes] = {}
         if key_version is None:
             self.application = ObjectDict(  # type: ignore
                 settings=dict(cookie_secret=cookie_secret)
@@ -649,7 +649,7 @@ class RequestEncodingTest(WebTestCase):
 
 class TypeCheckHandler(RequestHandler):
     def prepare(self):
-        self.errors = {}  # type: typing.Dict[str, str]
+        self.errors: typing.Dict[str, str] = {}
 
         self.check_type("status", self.get_status(), int)
 
@@ -2471,9 +2471,9 @@ class StreamingRequestBodyTest(WebTestCase):
 
     @gen_test
     def test_streaming_body(self):
-        self.prepared = Future()  # type: Future[None]
-        self.data = Future()  # type: Future[bytes]
-        self.finished = Future()  # type: Future[None]
+        self.prepared: Future[None] = Future()
+        self.data: Future[bytes] = Future()
+        self.finished: Future[None] = Future()
 
         stream = self.connect(b"/stream_body", connection_close=True)
         yield self.prepared
@@ -2507,7 +2507,7 @@ class StreamingRequestBodyTest(WebTestCase):
 
     @gen_test
     def test_close_during_upload(self):
-        self.close_future = Future()  # type: Future[None]
+        self.close_future: Future[None] = Future()
         stream = self.connect(b"/close_detection", connection_close=False)
         stream.close()
         yield self.close_future
@@ -2522,7 +2522,7 @@ class BaseFlowControlHandler(RequestHandler):
     def initialize(self, test):
         self.test = test
         self.method = None
-        self.methods = []  # type: typing.List[str]
+        self.methods: typing.List[str] = []
 
     @contextlib.contextmanager
     def in_method(self, method):

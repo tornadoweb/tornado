@@ -50,7 +50,7 @@ if hasattr(gen.convert_yielded, "register"):
 
     @gen.convert_yielded.register(Deferred)
     def _(d: Deferred) -> Future:
-        f = Future()  # type: Future[typing.Any]
+        f: Future[typing.Any] = Future()
 
         def errback(failure: failure.Failure) -> None:
             try:
