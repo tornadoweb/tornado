@@ -65,15 +65,13 @@ class _Connector:
         self.io_loop = IOLoop.current()
         self.connect = connect
 
-        self.future = (
-            Future()
-        )  # type: Future[Tuple[socket.AddressFamily, Any, IOStream]]
-        self.timeout = None  # type: Optional[object]
-        self.connect_timeout = None  # type: Optional[object]
-        self.last_error = None  # type: Optional[Exception]
+        self.future: Future[Tuple[socket.AddressFamily, Any, IOStream]] = Future()
+        self.timeout: Optional[object] = None
+        self.connect_timeout: Optional[object] = None
+        self.last_error: Optional[Exception] = None
         self.remaining = len(addrinfo)
         self.primary_addrs, self.secondary_addrs = self.split(addrinfo)
-        self.streams = set()  # type: Set[IOStream]
+        self.streams: Set[IOStream] = set()
 
     @staticmethod
     def split(
@@ -324,7 +322,7 @@ class TCPClient:
         try:
             stream = IOStream(socket_obj, max_buffer_size=max_buffer_size)
         except OSError as e:
-            fu = Future()  # type: Future[IOStream]
+            fu: Future[IOStream] = Future()
             fu.set_exception(e)
             return stream, fu
         else:

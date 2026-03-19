@@ -19,6 +19,8 @@ This module also defines the `HTTPServerRequest` class which is exposed
 via `tornado.web.RequestHandler.request`.
 """
 
+from __future__ import annotations
+
 import calendar
 import collections.abc
 import copy
@@ -189,7 +191,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
         # on demand (and cleared whenever the list is modified).
         self._as_list: dict[str, list[str]] = {}
         self._combined_cache: dict[str, str] = {}
-        self._last_key = None  # type: Optional[str]
+        self._last_key: Optional[str] = None
         if len(args) == 1 and len(kwargs) == 0 and isinstance(args[0], HTTPHeaders):
             # Copy constructor
             for k, v in args[0].get_all():
@@ -548,15 +550,13 @@ class HTTPServerRequest:
             self.path, sep, self.query = uri.partition("?")
         self.arguments = parse_qs_bytes(self.query, keep_blank_values=True)
         self.query_arguments = copy.deepcopy(self.arguments)
-        self.body_arguments = {}  # type: Dict[str, List[bytes]]
+        self.body_arguments: Dict[str, List[bytes]] = {}
 
     @property
     def cookies(self) -> Dict[str, http.cookies.Morsel]:
         """A dictionary of ``http.cookies.Morsel`` objects."""
         if not hasattr(self, "_cookies"):
-            self._cookies = (
-                http.cookies.SimpleCookie()
-            )  # type: http.cookies.SimpleCookie
+            self._cookies: http.cookies.SimpleCookie = http.cookies.SimpleCookie()
             if "Cookie" in self.headers:
                 try:
                     parsed = parse_cookie(self.headers["Cookie"])
@@ -1287,8 +1287,7 @@ def encode_username_password(
     return utf8(username) + b":" + utf8(password)
 
 
-def doctests():
-    # type: () -> unittest.TestSuite
+def doctests() -> unittest.TestSuite:
     import doctest
 
     return doctest.DocTestSuite(optionflags=doctest.ELLIPSIS)
@@ -1307,7 +1306,7 @@ def split_host_and_port(netloc: str) -> Tuple[str, Optional[int]]:
     match = _netloc_re.match(netloc)
     if match:
         host = match.group(1)
-        port = int(match.group(2))  # type: Optional[int]
+        port: Optional[int] = int(match.group(2))
     else:
         host = netloc
         port = None

@@ -25,6 +25,8 @@ to those provided in the standard library's `asyncio package
 
 """
 
+from __future__ import annotations
+
 import collections
 import datetime
 import heapq
@@ -148,7 +150,7 @@ class Queue(Generic[_T]):
 
     # Exact type depends on subclass. Could be another generic
     # parameter and use protocols to be more precise here.
-    _queue = None  # type: Any
+    _queue: Any = None
 
     def __init__(self, maxsize: int = 0) -> None:
         if maxsize is None:
@@ -159,8 +161,8 @@ class Queue(Generic[_T]):
 
         self._maxsize = maxsize
         self._init()
-        self._getters = collections.deque([])  # type: Deque[Future[_T]]
-        self._putters = collections.deque([])  # type: Deque[Tuple[_T, Future[None]]]
+        self._getters: Deque[Future[_T]] = collections.deque([])
+        self._putters: Deque[Tuple[_T, Future[None]]] = collections.deque([])
         self._unfinished_tasks = 0
         self._finished = Event()
         self._finished.set()
@@ -196,7 +198,7 @@ class Queue(Generic[_T]):
         `datetime.timedelta` object for a deadline relative to the
         current time.
         """
-        future = Future()  # type: Future[None]
+        future: Future[None] = Future()
         try:
             self.put_nowait(item)
         except QueueFull:
@@ -245,7 +247,7 @@ class Queue(Generic[_T]):
            with other timeouts in Tornado).
 
         """
-        future = Future()  # type: Future[_T]
+        future: Future[_T] = Future()
         try:
             future.set_result(self.get_nowait())
         except QueueEmpty:

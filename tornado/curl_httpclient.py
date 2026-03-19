@@ -56,16 +56,16 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
     ) -> None:
         super().initialize(defaults=defaults)
         # Typeshed is incomplete for CurlMulti, so just use Any for now.
-        self._multi = pycurl.CurlMulti()  # type: Any
+        self._multi: Any = pycurl.CurlMulti()
         self._multi.setopt(pycurl.M_TIMERFUNCTION, self._set_timeout)
         self._multi.setopt(pycurl.M_SOCKETFUNCTION, self._handle_socket)
         self._curls = [self._curl_create() for i in range(max_clients)]
         self._free_list = self._curls[:]
-        self._requests = (
-            collections.deque()
-        )  # type: Deque[Tuple[HTTPRequest, Callable[[HTTPResponse], None], float]]
-        self._fds = {}  # type: Dict[int, int]
-        self._timeout = None  # type: Optional[object]
+        self._requests: Deque[
+            Tuple[HTTPRequest, Callable[[HTTPResponse], None], float]
+        ] = collections.deque()
+        self._fds: Dict[int, int] = {}
+        self._timeout: Optional[object] = None
 
         # libcurl has bugs that sometimes cause it to not report all
         # relevant file descriptors and timeouts to TIMERFUNCTION/
@@ -272,7 +272,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         buffer = info["buffer"]
         if curl_error:
             assert curl_message is not None
-            error = CurlError(curl_error, curl_message)  # type: Optional[CurlError]
+            error: Optional[CurlError] = CurlError(curl_error, curl_message)
             assert error is not None
             code = error.code
             effective_url = None

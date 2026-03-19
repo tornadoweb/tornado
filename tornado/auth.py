@@ -147,9 +147,9 @@ class OpenIdMixin:
         """
         handler = cast(RequestHandler, self)
         # Verify the OpenID response via direct request to the OP
-        args = {
+        args: Dict[str, Union[str, bytes]] = {
             k: v[-1] for k, v in handler.request.arguments.items()
-        }  # type: Dict[str, Union[str, bytes]]
+        }
         args["openid.mode"] = "check_authentication"
         url = self._OPENID_ENDPOINT  # type: ignore
         if http_client is None:
@@ -183,7 +183,7 @@ class OpenIdMixin:
                 }
             )
             ax_attrs = set(ax_attrs)
-            required = []  # type: List[str]
+            required: List[str] = []
             if "name" in ax_attrs:
                 ax_attrs -= {"name", "firstname", "fullname", "lastname"}
                 required += ["firstname", "fullname", "lastname"]
@@ -380,9 +380,7 @@ class OAuthMixin:
         )
         if cookie_key != request_key:
             raise AuthError("Request token does not match cookie")
-        token = dict(
-            key=cookie_key, secret=cookie_secret
-        )  # type: Dict[str, Union[str, bytes]]
+        token: Dict[str, Union[str, bytes]] = dict(key=cookie_key, secret=cookie_secret)
         if oauth_verifier:
             token["verifier"] = oauth_verifier
         if http_client is None:
@@ -614,7 +612,7 @@ class OAuth2Mixin:
         extra_params: Optional[Dict[str, Any]] = None,
     ) -> str:
         url = self._OAUTH_ACCESS_TOKEN_URL  # type: ignore
-        args = {}  # type: Dict[str, str]
+        args: Dict[str, str] = {}
         if redirect_uri is not None:
             args["redirect_uri"] = redirect_uri
         if code is not None:

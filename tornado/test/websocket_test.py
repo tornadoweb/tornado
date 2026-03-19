@@ -236,7 +236,7 @@ class WebSocketBaseTestCase(AsyncHTTPTestCase):
 
 class WebSocketTest(WebSocketBaseTestCase):
     def get_app(self):
-        self.close_future = Future()  # type: Future[None]
+        self.close_future: Future[None] = Future()
         return Application(
             [
                 ("/echo", EchoHandler, dict(close_future=self.close_future)),

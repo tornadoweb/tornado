@@ -151,7 +151,7 @@ def _value_from_stopiteration(e: Union[StopIteration, "Return"]) -> Any:
 
 
 def _create_future() -> Future:
-    future = Future()  # type: Future
+    future: Future = Future()
     # Fixup asyncio debug info by removing extraneous stack entries
     source_traceback = getattr(future, "_source_traceback", ())
     while source_traceback:
@@ -208,13 +208,12 @@ def coroutine(
     """
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        # type: (*Any, **Any) -> Future[_T]
+    def wrapper(*args: Any, **kwargs: Any) -> Future[_T]:
         # This function is type-annotated with a comment to work around
         # https://bitbucket.org/pypy/pypy/issues/2868/segfault-with-args-type-annotation-in
         future = _create_future()
         if contextvars is not None:
-            ctx_run = contextvars.copy_context().run  # type: Callable
+            ctx_run: Callable = contextvars.copy_context().run
         else:
             ctx_run = _fake_ctx_run
         try:
@@ -364,7 +363,7 @@ class WaitIterator:
 
     """
 
-    _unfinished = {}  # type: Dict[Future, Union[int, str]]
+    _unfinished: Dict[Future, Union[int, str]] = {}
 
     def __init__(self, *args: Future, **kwargs: Future) -> None:
         if args and kwargs:
@@ -372,15 +371,15 @@ class WaitIterator:
 
         if kwargs:
             self._unfinished = {f: k for (k, f) in kwargs.items()}
-            futures = list(kwargs.values())  # type: Sequence[Future]
+            futures: Sequence[Future] = list(kwargs.values())
         else:
             self._unfinished = {f: i for (i, f) in enumerate(args)}
             futures = args
 
-        self._finished = collections.deque()  # type: Deque[Future]
-        self.current_index = None  # type: Optional[Union[str, int]]
-        self.current_future = None  # type: Optional[Future]
-        self._running_future = None  # type: Optional[Future]
+        self._finished: Deque[Future] = collections.deque()
+        self.current_index: Optional[Union[str, int]] = None
+        self.current_future: Optional[Future] = None
+        self._running_future: Optional[Future] = None
 
         for future in futures:
             future_add_done_callback(future, self._done_callback)
@@ -524,8 +523,8 @@ def multi_future(
        Use `multi` instead.
     """
     if isinstance(children, dict):
-        keys = list(children.keys())  # type: Optional[List]
-        children_seq = children.values()  # type: Iterable
+        keys: Optional[List] = list(children.keys())
+        children_seq: Iterable = children.values()
     else:
         keys = None
         children_seq = children
@@ -560,7 +559,7 @@ def multi_future(
                 else:
                     future_set_result_unless_cancelled(future, result_list)
 
-    listening = set()  # type: Set[Future]
+    listening: Set[Future] = set()
     for f in children_futs:
         if f not in listening:
             listening.add(f)
@@ -755,7 +754,7 @@ class Runner:
         self.ctx_run = ctx_run
         self.gen = gen
         self.result_future = result_future
-        self.future = _null_future  # type: Union[None, Future]
+        self.future: Union[None, Future] = _null_future
         self.running = False
         self.finished = False
         self.io_loop = IOLoop.current()

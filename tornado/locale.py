@@ -37,6 +37,8 @@ supported by `gettext` and related tools).  If neither method is called,
 the `Locale.translate` method will simply return the original string.
 """
 
+from __future__ import annotations
+
 import codecs
 import csv
 import datetime
@@ -53,7 +55,7 @@ from tornado._locale_data import LOCALE_NAMES
 from typing import Iterable, Any, Union, Dict, Optional
 
 _default_locale = "en_US"
-_translations = {}  # type: Dict[str, Any]
+_translations: Dict[str, Any] = {}
 _supported_locales = frozenset([_default_locale])
 _use_gettext = False
 CONTEXT_SEPARATOR = "\x04"
@@ -228,7 +230,7 @@ class Locale:
     call `get` or `get_closest` to get a Locale object.
     """
 
-    _cache = {}  # type: Dict[str, Locale]
+    _cache: Dict[str, Locale] = {}
 
     @classmethod
     def get_closest(cls, *locale_codes: str) -> "Locale":
@@ -258,7 +260,7 @@ class Locale:
             assert code in _supported_locales
             translations = _translations.get(code, None)
             if translations is None:
-                locale = CSVLocale(code, {})  # type: Locale
+                locale: Locale = CSVLocale(code, {})
             elif _use_gettext:
                 locale = GettextLocale(code, translations)
             else:

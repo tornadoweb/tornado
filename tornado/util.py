@@ -10,6 +10,8 @@ interface of its subclasses, including `.AsyncHTTPClient`, `.IOLoop`,
 and `.Resolver`.
 """
 
+from __future__ import annotations
+
 import array
 import asyncio
 from inspect import getfullargspec
@@ -241,7 +243,7 @@ class Configurable:
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Any:
         base = cls.configurable_base()
-        init_kwargs = {}  # type: Dict[str, Any]
+        init_kwargs: Dict[str, Any] = {}
         if cls is base:
             impl = cls.configured_class()
             if base.__impl_kwargs:
@@ -260,8 +262,7 @@ class Configurable:
         return instance
 
     @classmethod
-    def configurable_base(cls):
-        # type: () -> Type[Configurable]
+    def configurable_base(cls) -> Type[Configurable]:
         """Returns the base class of a configurable hierarchy.
 
         This will normally return the class in which it is defined.
@@ -272,15 +273,14 @@ class Configurable:
         raise NotImplementedError()
 
     @classmethod
-    def configurable_default(cls):
-        # type: () -> Type[Configurable]
+    def configurable_default(cls) -> Type[Configurable]:
         """Returns the implementation class to be used if none is configured."""
         raise NotImplementedError()
 
     def _initialize(self) -> None:
         pass
 
-    initialize = _initialize  # type: Callable[..., None]
+    initialize: Callable[..., None] = _initialize
     """Initialize a `Configurable` subclass instance.
 
     Configurable classes should use `initialize` instead of ``__init__``.
@@ -290,8 +290,9 @@ class Configurable:
     """
 
     @classmethod
-    def configure(cls, impl, **kwargs):
-        # type: (Union[None, str, Type[Configurable]], Any) -> None
+    def configure(
+        cls, impl: Union[None, str, Type[Configurable]], **kwargs: Any
+    ) -> None:
         """Sets the class to use when the base class is instantiated.
 
         Keyword arguments will be saved and added to the arguments passed
@@ -307,8 +308,7 @@ class Configurable:
         base.__impl_kwargs = kwargs
 
     @classmethod
-    def configured_class(cls):
-        # type: () -> Type[Configurable]
+    def configured_class(cls) -> Type[Configurable]:
         """Returns the currently configured class."""
         base = cls.configurable_base()
         # Manually mangle the private name to see whether this base
@@ -323,14 +323,16 @@ class Configurable:
             raise ValueError("configured class not found")
 
     @classmethod
-    def _save_configuration(cls):
-        # type: () -> Tuple[Optional[Type[Configurable]], Optional[Dict[str, Any]]]
+    def _save_configuration(
+        cls,
+    ) -> Tuple[Optional[Type[Configurable]], Optional[Dict[str, Any]]]:
         base = cls.configurable_base()
         return (base.__impl_class, base.__impl_kwargs)
 
     @classmethod
-    def _restore_configuration(cls, saved):
-        # type: (Tuple[Optional[Type[Configurable]], Optional[Dict[str, Any]]]) -> None
+    def _restore_configuration(
+        cls, saved: Tuple[Optional[Type[Configurable]], Optional[Dict[str, Any]]]
+    ) -> None:
         base = cls.configurable_base()
         base.__impl_class = saved[0]
         base.__impl_kwargs = saved[1]
@@ -347,7 +349,7 @@ class ArgReplacer:
     def __init__(self, func: Callable, name: str) -> None:
         self.name = name
         try:
-            self.arg_pos = self._getargnames(func).index(name)  # type: Optional[int]
+            self.arg_pos: Optional[int] = self._getargnames(func).index(name)
         except ValueError:
             # Not a positional parameter
             self.arg_pos = None
@@ -403,8 +405,7 @@ class ArgReplacer:
         return old_value, args, kwargs
 
 
-def timedelta_to_seconds(td):
-    # type: (datetime.timedelta) -> float
+def timedelta_to_seconds(td: datetime.timedelta) -> float:
     """Equivalent to ``td.total_seconds()`` (introduced in Python 2.7)."""
     return td.total_seconds()
 
@@ -438,8 +439,7 @@ else:
         _websocket_mask = _websocket_mask_python
 
 
-def doctests():
-    # type: () -> unittest.TestSuite
+def doctests() -> unittest.TestSuite:
     import doctest
 
     return doctest.DocTestSuite()

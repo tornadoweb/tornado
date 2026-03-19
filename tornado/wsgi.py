@@ -134,8 +134,8 @@ class WSGIContainer:
         IOLoop.current().spawn_callback(self.handle_request, request)
 
     async def handle_request(self, request: httputil.HTTPServerRequest) -> None:
-        data = {}  # type: Dict[str, Any]
-        response = []  # type: List[bytes]
+        data: Dict[str, Any] = {}
+        response: List[bytes] = []
 
         def start_response(
             status: str,
@@ -184,7 +184,7 @@ class WSGIContainer:
 
         status_code_str, reason = data["status"].split(" ", 1)
         status_code = int(status_code_str)
-        headers = data["headers"]  # type: List[Tuple[str, str]]
+        headers: List[Tuple[str, str]] = data["headers"]
         header_set = {k.lower() for (k, v) in headers}
         body = escape.utf8(body)
         if status_code != 304:

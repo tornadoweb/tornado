@@ -225,7 +225,7 @@ class TestIOLoop(AsyncTestCase):
 
     def test_timeout_with_arguments(self):
         # This tests that all the timeout methods pass through *args correctly.
-        results = []  # type: List[int]
+        results: List[int] = []
         self.io_loop.add_timeout(self.io_loop.time(), results.append, 1)
         self.io_loop.add_timeout(datetime.timedelta(seconds=0), results.append, 2)
         self.io_loop.call_at(self.io_loop.time(), results.append, 3)
@@ -447,7 +447,7 @@ class TestIOLoop(AsyncTestCase):
 class TestIOLoopCurrent(unittest.TestCase):
     def setUp(self):
         setup_with_context_manager(self, ignore_deprecation())
-        self.io_loop = None  # type: typing.Optional[IOLoop]
+        self.io_loop: typing.Optional[IOLoop] = None
         IOLoop.clear_current()
 
     def tearDown(self):

@@ -122,9 +122,9 @@ class _StreamBuffer:
 
     def __init__(self) -> None:
         # A sequence of (False, bytearray) and (True, memoryview) objects
-        self._buffers = (
+        self._buffers: Deque[Tuple[bool, Union[bytearray, memoryview]]] = (
             collections.deque()
-        )  # type: Deque[Tuple[bool, Union[bytearray, memoryview]]]
+        )
         # Position in the first buffer
         self._first_pos = 0
         self._size = 0
@@ -250,33 +250,31 @@ class BaseIOStream:
         # spurious failures.
         self.read_chunk_size = min(read_chunk_size or 65536, self.max_buffer_size // 2)
         self.max_write_buffer_size = max_write_buffer_size
-        self.error = None  # type: Optional[BaseException]
+        self.error: Optional[BaseException] = None
         self._read_buffer = bytearray()
         self._read_buffer_size = 0
         self._user_read_buffer = False
-        self._after_user_read_buffer = None  # type: Optional[bytearray]
+        self._after_user_read_buffer: Optional[bytearray] = None
         self._write_buffer = _StreamBuffer()
         self._total_write_index = 0
         self._total_write_done_index = 0
-        self._read_delimiter = None  # type: Optional[bytes]
-        self._read_regex = None  # type: Optional[Pattern]
-        self._read_max_bytes = None  # type: Optional[int]
-        self._read_bytes = None  # type: Optional[int]
+        self._read_delimiter: Optional[bytes] = None
+        self._read_regex: Optional[Pattern] = None
+        self._read_max_bytes: Optional[int] = None
+        self._read_bytes: Optional[int] = None
         self._read_partial = False
         self._read_until_close = False
-        self._read_future = None  # type: Optional[Future]
-        self._write_futures = (
-            collections.deque()
-        )  # type: Deque[Tuple[int, Future[None]]]
-        self._close_callback = None  # type: Optional[Callable[[], None]]
-        self._connect_future = None  # type: Optional[Future[IOStream]]
+        self._read_future: Optional[Future] = None
+        self._write_futures: Deque[Tuple[int, Future[None]]] = collections.deque()
+        self._close_callback: Optional[Callable[[], None]] = None
+        self._connect_future: Optional[Future[IOStream]] = None
         # _ssl_connect_future should be defined in SSLIOStream
         # but it's here so we can clean it up in _signal_closed
         # TODO: refactor that so subclasses can add additional futures
         # to be cancelled.
-        self._ssl_connect_future = None  # type: Optional[Future[SSLIOStream]]
+        self._ssl_connect_future: Optional[Future[SSLIOStream]] = None
         self._connecting = False
-        self._state = None  # type: Optional[int]
+        self._state: Optional[int] = None
         self._closed = False
 
     def fileno(self) -> Union[int, ioloop._Selectable]:
@@ -532,7 +530,7 @@ class BaseIOStream:
                 raise StreamBufferFullError("Reached maximum write buffer size")
             self._write_buffer.append(data)
             self._total_write_index += len(data)
-        future = Future()  # type: Future[None]
+        future: Future[None] = Future()
         future.add_done_callback(lambda f: f.exception())
         self._write_futures.append((self._total_write_index, future))
         if not self._connecting:
@@ -606,7 +604,7 @@ class BaseIOStream:
         self._signal_closed()
 
     def _signal_closed(self) -> None:
-        futures = []  # type: List[Future]
+        futures: List[Future] = []
         if self._read_future is not None:
             futures.append(self._read_future)
             self._read_future = None
@@ -730,7 +728,7 @@ class BaseIOStream:
     def _read_to_buffer_loop(self) -> Optional[int]:
         # This method is called from _handle_read and _try_inline_read.
         if self._read_bytes is not None:
-            target_bytes = self._read_bytes  # type: Optional[int]
+            target_bytes: Optional[int] = self._read_bytes
         elif self._read_max_bytes is not None:
             target_bytes = self._read_max_bytes
         elif self.reading():
@@ -811,7 +809,7 @@ class BaseIOStream:
             self._after_user_read_buffer = None
             self._read_buffer_size = len(self._read_buffer)
             self._user_read_buffer = False
-            result = size  # type: Union[int, bytes]
+            result: Union[int, bytes] = size
         else:
             result = self._consume(size)
         if self._read_future is not None:
@@ -853,9 +851,9 @@ class BaseIOStream:
             while True:
                 try:
                     if self._user_read_buffer:
-                        buf = memoryview(self._read_buffer)[
-                            self._read_buffer_size :
-                        ]  # type: Union[memoryview, bytearray]
+                        buf: Union[memoryview, bytearray] = memoryview(
+                            self._read_buffer
+                        )[self._read_buffer_size :]
                     else:
                         buf = bytearray(self.read_chunk_size)
                     bytes_read = self.read_from_fd(buf)
@@ -1171,7 +1169,7 @@ class IOStream(BaseIOStream):
 
         """
         self._connecting = True
-        future = Future()  # type: Future[_IOStreamType]
+        future: Future[_IOStreamType] = Future()
         self._connect_future = typing.cast("Future[IOStream]", future)
         try:
             self.socket.connect(address)
@@ -1259,7 +1257,7 @@ class IOStream(BaseIOStream):
         orig_close_callback = self._close_callback
         self._close_callback = None
 
-        future = Future()  # type: Future[SSLIOStream]
+        future: Future[SSLIOStream] = Future()
         ssl_stream = SSLIOStream(socket, ssl_options=ssl_options)
         ssl_stream.set_close_callback(orig_close_callback)
         ssl_stream._ssl_connect_future = future
@@ -1336,7 +1334,7 @@ class SSLIOStream(IOStream):
         self._ssl_accepting = True
         self._handshake_reading = False
         self._handshake_writing = False
-        self._server_hostname = None  # type: Optional[str]
+        self._server_hostname: Optional[str] = None
 
         # If the socket is already connected, attempt to start the handshake.
         try:

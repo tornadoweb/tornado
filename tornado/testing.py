@@ -136,12 +136,12 @@ class AsyncTestCase(unittest.TestCase):
         super().__init__(methodName)
         self.__stopped = False
         self.__running = False
-        self.__failure = None  # type: Optional[_ExcInfoTuple]
-        self.__stop_args = None  # type: Any
-        self.__timeout = None  # type: Optional[object]
+        self.__failure: Optional[_ExcInfoTuple] = None
+        self.__stop_args: Any = None
+        self.__timeout: Optional[object] = None
 
         # Not used in this class itself, but used by @gen_test
-        self._test_generator = None  # type: Optional[Union[Generator, Coroutine]]
+        self._test_generator: Optional[Union[Generator, Coroutine]] = None
 
     def setUp(self) -> None:
         py_ver = sys.version_info
@@ -582,8 +582,9 @@ def gen_test(  # noqa: F811
         # This is a good case study arguing for either some sort of
         # extensibility in the gen decorators or cancellation support.
         @functools.wraps(f)
-        def pre_coroutine(self, *args, **kwargs):
-            # type: (AsyncTestCase, *Any, **Any) -> Union[Generator, Coroutine]
+        def pre_coroutine(
+            self: AsyncTestCase, *args: Any, **kwargs: Any
+        ) -> Union[Generator, Coroutine]:
             # Type comments used to avoid pypy3 bug.
             result = f(self, *args, **kwargs)
             if isinstance(result, Generator) or inspect.iscoroutine(result):
@@ -598,8 +599,7 @@ def gen_test(  # noqa: F811
             coro = gen.coroutine(pre_coroutine)  # type: ignore[assignment]
 
         @functools.wraps(coro)
-        def post_coroutine(self, *args, **kwargs):
-            # type: (AsyncTestCase, *Any, **Any) -> None
+        def post_coroutine(self: AsyncTestCase, *args: Any, **kwargs: Any) -> None:
             try:
                 return self.io_loop.run_sync(
                     functools.partial(coro, self, *args, **kwargs), timeout=timeout
@@ -699,7 +699,7 @@ class ExpectLog(logging.Filter):
         self.deprecated_level_matched = 0
         self.logged_stack = False
         self.level = level
-        self.orig_level = None  # type: Optional[int]
+        self.orig_level: Optional[int] = None
 
     def filter(self, record: logging.LogRecord) -> bool:
         if record.exc_info:

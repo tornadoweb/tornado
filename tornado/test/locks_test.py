@@ -23,7 +23,7 @@ from tornado.testing import gen_test, AsyncTestCase
 class ConditionTest(AsyncTestCase):
     def setUp(self):
         super().setUp()
-        self.history = []  # type: typing.List[typing.Union[int, str]]
+        self.history: typing.List[typing.Union[int, str]] = []
 
     def record_done(self, future, key):
         """Record the resolution of a Future returned by Condition.wait."""

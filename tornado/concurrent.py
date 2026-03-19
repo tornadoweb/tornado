@@ -57,7 +57,7 @@ class DummyExecutor(futures.Executor):
     def submit(  # type: ignore[override]
         self, fn: Callable[..., _T], *args: Any, **kwargs: Any
     ) -> "futures.Future[_T]":
-        future = futures.Future()  # type: futures.Future[_T]
+        future: futures.Future[_T] = futures.Future()
         try:
             future_set_result_unless_cancelled(future, fn(*args, **kwargs))
         except Exception:
@@ -119,7 +119,7 @@ def run_on_executor(*args: Any, **kwargs: Any) -> Callable:
 
         @functools.wraps(fn)
         def wrapper(self: Any, *args: Any, **kwargs: Any) -> Future:
-            async_future = Future()  # type: Future
+            async_future: Future = Future()
             conc_future = getattr(self, executor).submit(fn, self, *args, **kwargs)
             chain_future(conc_future, async_future)
             return async_future

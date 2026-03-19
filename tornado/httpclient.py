@@ -294,7 +294,7 @@ class AsyncHTTPClient(Configurable):
         # where normal dicts get converted to HTTPHeaders objects.
         request.headers = httputil.HTTPHeaders(request.headers)
         request_proxy = _RequestProxy(request, self.defaults)
-        future = Future()  # type: Future[HTTPResponse]
+        future: Future[HTTPResponse] = Future()
 
         def handle_response(response: "HTTPResponse") -> None:
             if response.error:
@@ -533,7 +533,7 @@ class HTTPRequest:
         self.max_redirects = max_redirects
         self.user_agent = user_agent
         if decompress_response is not None:
-            self.decompress_response = decompress_response  # type: Optional[bool]
+            self.decompress_response: Optional[bool] = decompress_response
         else:
             self.decompress_response = use_gzip
         self.network_interface = network_interface
@@ -624,7 +624,7 @@ class HTTPResponse:
     """
 
     # I'm not sure why these don't get type-inferred from the references in __init__.
-    error = None  # type: Optional[BaseException]
+    error: Optional[BaseException] = None
     _error_is_response_code = False
     request: HTTPRequest
 
@@ -652,7 +652,7 @@ class HTTPResponse:
         else:
             self.headers = httputil.HTTPHeaders()
         self.buffer = buffer
-        self._body = None  # type: Optional[bytes]
+        self._body: Optional[bytes] = None
         if effective_url is None:
             self.effective_url = request.url
         else:

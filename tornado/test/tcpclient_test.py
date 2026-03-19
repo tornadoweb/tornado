@@ -40,8 +40,8 @@ AF1, AF2 = 1, 2
 class TestTCPServer(TCPServer):
     def __init__(self, family):
         super().__init__()
-        self.streams = []  # type: List[IOStream]
-        self.queue = Queue()  # type: Queue[IOStream]
+        self.streams: List[IOStream] = []
+        self.queue: Queue[IOStream] = Queue()
         sockets = bind_sockets(0, "localhost", family)
         self.add_sockets(sockets)
         self.port = sockets[0].getsockname()[1]
@@ -203,10 +203,10 @@ class ConnectorTest(AsyncTestCase):
 
     def setUp(self):
         super().setUp()
-        self.connect_futures = (
-            {}
-        )  # type: Dict[Tuple[int, typing.Any], Future[ConnectorTest.FakeStream]]
-        self.streams = {}  # type: Dict[typing.Any, ConnectorTest.FakeStream]
+        self.connect_futures: Dict[
+            Tuple[int, typing.Any], Future[ConnectorTest.FakeStream]
+        ] = {}
+        self.streams: Dict[typing.Any, ConnectorTest.FakeStream] = {}
         self.addrinfo = [(AF1, "a"), (AF1, "b"), (AF2, "c"), (AF2, "d")]
 
     def tearDown(self):
@@ -219,7 +219,7 @@ class ConnectorTest(AsyncTestCase):
     def create_stream(self, af, addr):
         stream = ConnectorTest.FakeStream()
         self.streams[addr] = stream
-        future = Future()  # type: Future[ConnectorTest.FakeStream]
+        future: Future[ConnectorTest.FakeStream] = Future()
         self.connect_futures[(af, addr)] = future
         return stream, future
 

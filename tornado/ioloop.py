@@ -23,6 +23,8 @@ loop interface directly. The `IOLoop.current` class method provides the
 
 """
 
+from __future__ import annotations
+
 import asyncio
 import concurrent.futures
 import datetime
@@ -154,7 +156,7 @@ class IOLoop(Configurable):
     ERROR = 0x018
 
     # In Python 3, _ioloop_for_asyncio maps from asyncio loops to IOLoops.
-    _ioloop_for_asyncio = dict()  # type: Dict[asyncio.AbstractEventLoop, IOLoop]
+    _ioloop_for_asyncio: Dict[asyncio.AbstractEventLoop, IOLoop] = dict()
 
     # Maintain a set of all pending tasks to follow the warning in the docs
     # of asyncio.create_tasks:
@@ -166,7 +168,7 @@ class IOLoop(Configurable):
     # https://github.com/python/cpython/issues/91887
     # If that change is accepted, this can eventually be removed.
     # If it is not, we will consider the rationale and may remove this.
-    _pending_tasks = set()  # type: Set[Future]
+    _pending_tasks: Set[Future] = set()
 
     @classmethod
     def configure(
@@ -282,7 +284,7 @@ class IOLoop(Configurable):
             if instance:
                 from tornado.platform.asyncio import AsyncIOMainLoop
 
-                current = AsyncIOMainLoop()  # type: Optional[IOLoop]
+                current: Optional[IOLoop] = AsyncIOMainLoop()
             else:
                 current = None
         return current
@@ -495,7 +497,7 @@ class IOLoop(Configurable):
             FutureCell = TypedDict(  # noqa: F841
                 "FutureCell", {"future": Optional[Future], "timeout_called": bool}
             )
-        future_cell = {"future": None, "timeout_called": False}  # type: FutureCell
+        future_cell: FutureCell = {"future": None, "timeout_called": False}
 
         def run() -> None:
             try:
@@ -505,7 +507,7 @@ class IOLoop(Configurable):
 
                     result = convert_yielded(result)
             except Exception:
-                fut = Future()  # type: Future[Any]
+                fut: Future[Any] = Future()
                 future_cell["future"] = fut
                 future_set_exc_info(fut, sys.exc_info())
             else:
@@ -729,14 +731,14 @@ class IOLoop(Configurable):
             if not hasattr(self, "_executor"):
                 from tornado.process import cpu_count
 
-                self._executor = concurrent.futures.ThreadPoolExecutor(
-                    max_workers=(cpu_count() * 5)
-                )  # type: concurrent.futures.Executor
+                self._executor: concurrent.futures.Executor = (
+                    concurrent.futures.ThreadPoolExecutor(max_workers=(cpu_count() * 5))
+                )
             executor = self._executor
         c_future = executor.submit(func, *args)
         # Concurrent Futures are not usable with await. Wrap this in a
         # Tornado Future instead, using self.add_future for thread-safety.
-        t_future = Future()  # type: Future[_T]
+        t_future: Future[_T] = Future()
         self.add_future(c_future, lambda f: chain_future(f, t_future))
         return t_future
 
@@ -843,10 +845,10 @@ class _Timeout:
             raise TypeError("Unsupported deadline %r" % deadline)
         self.deadline = deadline
         self.callback = callback
-        self.tdeadline = (
+        self.tdeadline: Tuple[float, int] = (
             deadline,
             next(io_loop._timeout_counter),
-        )  # type: Tuple[float, int]
+        )
 
     # Comparison methods to sort by deadline, with object id as a tiebreaker
     # to guarantee a consistent ordering.  The heapq module uses __le__
@@ -912,7 +914,7 @@ class PeriodicCallback:
             self.callback_time = callback_time
         self.jitter = jitter
         self._running = False
-        self._timeout = None  # type: object
+        self._timeout: object = None
 
     def start(self) -> None:
         """Starts the timer."""

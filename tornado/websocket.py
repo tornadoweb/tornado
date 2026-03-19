@@ -224,9 +224,9 @@ class WebSocketHandler(tornado.web.RequestHandler):
         **kwargs: Any,
     ) -> None:
         super().__init__(application, request, **kwargs)
-        self.ws_connection = None  # type: Optional[WebSocketProtocol]
-        self.close_code = None  # type: Optional[int]
-        self.close_reason = None  # type: Optional[str]
+        self.ws_connection: Optional[WebSocketProtocol] = None
+        self.close_code: Optional[int] = None
+        self.close_reason: Optional[str] = None
         self._on_close_called = False
 
     async def get(self, *args: Any, **kwargs: Any) -> None:
@@ -425,7 +425,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
     def _open(self, *args: str, **kwargs: str) -> Optional[Awaitable[None]]:
         pass
 
-    open = _open  # type: Callable[..., Optional[Awaitable[None]]]
+    open: Callable[..., Optional[Awaitable[None]]] = _open
     """Invoked when a new WebSocket is opened.
 
     The arguments to `open` are extracted from the `tornado.web.URLSpec`
@@ -647,7 +647,7 @@ class WebSocketProtocol(abc.ABC):
 
     def __init__(self, handler: "_WebSocketDelegate") -> None:
         self.handler = handler
-        self.stream = None  # type: Optional[IOStream]
+        self.stream: Optional[IOStream] = None
         self.client_terminated = False
         self.server_terminated = False
 
@@ -765,7 +765,7 @@ class _PerMessageDeflateCompressor:
             self._mem_level = compression_options["mem_level"]
 
         if persistent:
-            self._compressor = self._create_compressor()  # type: Optional[_Compressor]
+            self._compressor: Optional[_Compressor] = self._create_compressor()
         else:
             self._compressor = None
 
@@ -800,9 +800,7 @@ class _PerMessageDeflateDecompressor:
             )
         self._max_wbits = max_wbits
         if persistent:
-            self._decompressor = (
-                self._create_decompressor()
-            )  # type: Optional[_Decompressor]
+            self._decompressor: Optional[_Decompressor] = self._create_decompressor()
         else:
             self._decompressor = None
 
@@ -848,15 +846,15 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._final_frame = False
         self._frame_opcode = None
         self._masked_frame = None
-        self._frame_mask = None  # type: Optional[bytes]
+        self._frame_mask: Optional[bytes] = None
         self._frame_length = None
-        self._fragmented_message_buffer = None  # type: Optional[bytearray]
+        self._fragmented_message_buffer: Optional[bytearray] = None
         self._fragmented_message_opcode = None
-        self._waiting = None  # type: object
+        self._waiting: object = None
         self._compression_options = params.compression_options
-        self._decompressor = None  # type: Optional[_PerMessageDeflateDecompressor]
-        self._compressor = None  # type: Optional[_PerMessageDeflateCompressor]
-        self._frame_compressed = None  # type: Optional[bool]
+        self._decompressor: Optional[_PerMessageDeflateDecompressor] = None
+        self._compressor: Optional[_PerMessageDeflateCompressor] = None
+        self._frame_compressed: Optional[bool] = None
         # The total uncompressed size of all messages received or sent.
         # Unicode messages are encoded to utf8.
         # Only for testing; subject to change.
@@ -866,10 +864,10 @@ class WebSocketProtocol13(WebSocketProtocol):
         # the effect of compression, frame overhead, and control frames.
         self._wire_bytes_in = 0
         self._wire_bytes_out = 0
-        self._received_pong = False  # type: bool
-        self.close_code = None  # type: Optional[int]
-        self.close_reason = None  # type: Optional[str]
-        self._ping_coroutine = None  # type: Optional[asyncio.Task]
+        self._received_pong: bool = False
+        self.close_code: Optional[int] = None
+        self.close_reason: Optional[str] = None
+        self._ping_coroutine: Optional[asyncio.Task] = None
 
     # Use a property for this to satisfy the abc.
     @property
@@ -1014,9 +1012,9 @@ class WebSocketProtocol13(WebSocketProtocol):
         """Converts a websocket agreed_parameters set to keyword arguments
         for our compressor objects.
         """
-        options = dict(
+        options: Dict[str, Any] = dict(
             persistent=(side + "_no_context_takeover") not in agreed_parameters
-        )  # type: Dict[str, Any]
+        )
         wbits_header = agreed_parameters.get(side + "_max_window_bits", None)
         if wbits_header is None:
             options["max_wbits"] = zlib.MAX_WBITS
@@ -1409,12 +1407,12 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         subprotocols: Optional[List[str]] = None,
         resolver: Optional[Resolver] = None,
     ) -> None:
-        self.connect_future = Future()  # type: Future[WebSocketClientConnection]
-        self.read_queue = Queue(1)  # type: Queue[Union[None, str, bytes]]
+        self.connect_future: Future[WebSocketClientConnection] = Future()
+        self.read_queue: Queue[Union[None, str, bytes]] = Queue(1)
         self.key = base64.b64encode(os.urandom(16))
         self._on_message_callback = on_message_callback
-        self.close_code = None  # type: Optional[int]
-        self.close_reason = None  # type: Optional[str]
+        self.close_code: Optional[int] = None
+        self.close_reason: Optional[str] = None
         self.params = _WebSocketParams(
             ping_interval=ping_interval,
             ping_timeout=ping_timeout,
