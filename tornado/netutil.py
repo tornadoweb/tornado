@@ -28,7 +28,8 @@ from tornado.concurrent import dummy_executor, run_on_executor
 from tornado.ioloop import IOLoop
 from tornado.util import Configurable, errno_from_exception
 
-from typing import Callable, Any
+from typing import Any
+from collections.abc import Callable
 from collections.abc import Awaitable
 
 # Note that the naming of ssl.Purpose is confusing; the purpose

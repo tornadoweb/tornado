@@ -93,7 +93,7 @@ try:
 except ImportError:
     signal = None  # type: ignore
 
-from typing import Callable
+from collections.abc import Callable
 
 # os.execv is broken on Windows and can't properly parse command line
 # arguments and executable name if they contain whitespaces. subprocess

@@ -94,13 +94,13 @@ import typing
 from typing import (
     Union,
     Any,
-    Callable,
     List,
     Type,
     Tuple,
     Dict,
     overload,
 )
+from collections.abc import Callable
 from collections.abc import Mapping, Awaitable, Sequence
 
 if typing.TYPE_CHECKING:

@@ -34,7 +34,8 @@ import types
 from tornado.log import app_log
 
 import typing
-from typing import Any, Callable, Union
+from typing import Any, Union
+from collections.abc import Callable
 
 _T = typing.TypeVar("_T")
 

@@ -43,10 +43,10 @@ from tornado.util import errno_from_exception
 import typing
 from typing import (
     Optional,
-    Callable,
     Any,
     TypeVar,
 )
+from collections.abc import Callable
 from collections.abc import Awaitable
 from re import Pattern
 from types import TracebackType

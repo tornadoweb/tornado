@@ -22,8 +22,8 @@ import zlib
 
 from typing import (
     Any,
-    Callable,
 )
+from collections.abc import Callable
 from collections.abc import Mapping, Sequence
 from re import Match
 

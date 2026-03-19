@@ -39,7 +39,8 @@ from tornado.httpclient import (
 )
 from tornado.log import app_log
 
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 import typing
 
 if typing.TYPE_CHECKING:

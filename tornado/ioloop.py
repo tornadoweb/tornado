@@ -49,7 +49,8 @@ from tornado.log import app_log
 from tornado.util import Configurable, TimeoutError, import_object
 
 import typing
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
+from collections.abc import Callable
 from collections.abc import Awaitable
 
 if typing.TYPE_CHECKING:

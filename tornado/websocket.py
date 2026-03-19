@@ -43,9 +43,9 @@ from typing import (
     Any,
     Optional,
     Union,
-    Callable,
     Type,
 )
+from collections.abc import Callable
 from collections.abc import Awaitable
 from types import TracebackType
 

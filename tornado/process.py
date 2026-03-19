@@ -37,7 +37,8 @@ from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
 
 import typing
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 if typing.TYPE_CHECKING:
     from typing import List  # noqa: F401

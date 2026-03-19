@@ -36,7 +36,8 @@ from tornado.log import gen_log, app_log
 from tornado.util import GzipDecompressor
 
 
-from typing import cast, Optional, Type, Callable
+from typing import cast, Optional, Type
+from collections.abc import Callable
 from collections.abc import Awaitable
 
 CR_OR_LF_RE = re.compile(b"\r|\n")

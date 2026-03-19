@@ -38,7 +38,8 @@ from tornado import httputil
 from tornado.ioloop import IOLoop
 from tornado.log import access_log
 
-from typing import Optional, Callable, Any
+from typing import Optional, Any
+from collections.abc import Callable
 from types import TracebackType
 import typing
 

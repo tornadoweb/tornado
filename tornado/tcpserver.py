@@ -38,7 +38,8 @@ from typing import Any
 from collections.abc import Iterable, Awaitable
 
 if typing.TYPE_CHECKING:
-    from typing import Callable, List  # noqa: F401
+    from typing import List  # noqa: F401
+    from collections.abc import Callable
 
 
 class TCPServer:

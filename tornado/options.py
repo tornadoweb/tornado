@@ -112,9 +112,9 @@ from tornado.util import basestring_type, exec_in
 
 from typing import (
     Any,
-    Callable,
     TextIO,
 )
+from collections.abc import Callable
 from collections.abc import Iterator, Iterable
 
 

@@ -39,11 +39,11 @@ from tornado.ioloop import IOLoop, _Selectable
 
 from typing import (
     Any,
-    Callable,
     Protocol,
     TypeVar,
     Union,
 )
+from collections.abc import Callable
 
 if typing.TYPE_CHECKING:
     from typing_extensions import TypeVarTuple, Unpack

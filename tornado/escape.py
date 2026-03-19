@@ -33,7 +33,8 @@ import urllib.parse
 from tornado.util import unicode_type
 
 import typing
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 
 def xhtml_escape(value: str | bytes) -> str:
