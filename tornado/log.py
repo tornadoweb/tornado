@@ -45,7 +45,7 @@ try:
 except ImportError:
     curses = None  # type: ignore
 
-from typing import Dict, Any, cast, Optional
+from typing import Any, cast, Optional
 
 # Logger objects for internal tornado use
 access_log = logging.getLogger("tornado.access")
@@ -120,7 +120,7 @@ class LogFormatter(logging.Formatter):
         datefmt: str = DEFAULT_DATE_FORMAT,
         style: str = "%",
         color: bool = True,
-        colors: Dict[int, int] = DEFAULT_COLORS,
+        colors: dict[int, int] = DEFAULT_COLORS,
     ) -> None:
         r"""
         :arg bool color: Enables color support.
@@ -140,7 +140,7 @@ class LogFormatter(logging.Formatter):
         logging.Formatter.__init__(self, datefmt=datefmt)
         self._fmt = fmt
 
-        self._colors: Dict[int, str] = {}
+        self._colors: dict[int, str] = {}
         if color and _stderr_supports_color():
             if curses is not None:
                 fg_color = curses.tigetstr("setaf") or curses.tigetstr("setf") or b""

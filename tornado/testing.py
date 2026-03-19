@@ -34,12 +34,12 @@ from tornado.util import raise_exc_info, basestring_type
 from tornado.web import Application
 
 import typing
-from typing import Tuple, Any, Callable, Type, Dict, Union, Optional, Coroutine
+from typing import Any, Callable, Type, Union, Optional, Coroutine
 from types import TracebackType
 
 if typing.TYPE_CHECKING:
-    _ExcInfoTuple = Tuple[
-        Optional[Type[BaseException]], Optional[BaseException], Optional[TracebackType]
+    _ExcInfoTuple = tuple[
+        Optional[type[BaseException]], Optional[BaseException], Optional[TracebackType]
     ]
 
 
@@ -48,7 +48,7 @@ _NON_OWNED_IOLOOPS = AsyncIOMainLoop
 
 def bind_unused_port(
     reuse_port: bool = False, address: str = "127.0.0.1"
-) -> Tuple[socket.socket, int]:
+) -> tuple[socket.socket, int]:
     """Binds a server socket to an available port on localhost.
 
     Returns a tuple (socket, port).
@@ -222,7 +222,7 @@ class AsyncTestCase(unittest.TestCase):
         return IOLoop(make_current=False)
 
     def _handle_exception(
-        self, typ: Type[Exception], value: Exception, tb: TracebackType
+        self, typ: type[Exception], value: Exception, tb: TracebackType
     ) -> bool:
         if self.__failure is None:
             self.__failure = (typ, value, tb)
@@ -448,7 +448,7 @@ class AsyncHTTPTestCase(AsyncTestCase):
             timeout=get_async_test_timeout(),
         )
 
-    def get_httpserver_options(self) -> Dict[str, Any]:
+    def get_httpserver_options(self) -> dict[str, Any]:
         """May be overridden by subclasses to return additional
         keyword arguments for the server.
         """
@@ -488,10 +488,10 @@ class AsyncHTTPSTestCase(AsyncHTTPTestCase):
     def get_http_client(self) -> AsyncHTTPClient:
         return AsyncHTTPClient(force_instance=True, defaults=dict(validate_cert=False))
 
-    def get_httpserver_options(self) -> Dict[str, Any]:
+    def get_httpserver_options(self) -> dict[str, Any]:
         return dict(ssl_options=self.get_ssl_options())
 
-    def get_ssl_options(self) -> Dict[str, Any]:
+    def get_ssl_options(self) -> dict[str, Any]:
         """May be overridden by subclasses to select SSL options.
 
         By default includes a self-signed testing certificate.
@@ -499,7 +499,7 @@ class AsyncHTTPSTestCase(AsyncHTTPTestCase):
         return AsyncHTTPSTestCase.default_ssl_options()
 
     @staticmethod
-    def default_ssl_options() -> Dict[str, Any]:
+    def default_ssl_options() -> dict[str, Any]:
         # Testing keys were generated with:
         # openssl req -new -keyout tornado/test/test.key \
         #     -out tornado/test/test.crt \

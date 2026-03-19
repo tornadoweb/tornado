@@ -33,7 +33,7 @@ import urllib.parse
 from tornado.util import unicode_type
 
 import typing
-from typing import Union, Any, Optional, Dict, List, Callable
+from typing import Union, Any, Optional, Callable
 
 
 def xhtml_escape(value: Union[str, bytes]) -> str:
@@ -172,7 +172,7 @@ def url_unescape(
 
 def parse_qs_bytes(
     qs: Union[str, bytes], keep_blank_values: bool = False, strict_parsing: bool = False
-) -> Dict[str, List[bytes]]:
+) -> dict[str, list[bytes]]:
     """Parses a query string like urlparse.parse_qs,
     but takes bytes and returns the values as byte strings.
 
@@ -301,7 +301,7 @@ def linkify(
     shorten: bool = False,
     extra_params: Union[str, Callable[[str], str]] = "",
     require_protocol: bool = False,
-    permitted_protocols: List[str] = ["http", "https"],
+    permitted_protocols: list[str] = ["http", "https"],
 ) -> str:
     """Converts plain text into HTML with links.
 

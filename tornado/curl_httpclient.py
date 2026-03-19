@@ -39,7 +39,7 @@ from tornado.httpclient import (
 )
 from tornado.log import app_log
 
-from typing import Dict, Any, Callable, Union, Optional
+from typing import Any, Callable, Union, Optional
 import typing
 
 if typing.TYPE_CHECKING:
@@ -52,7 +52,7 @@ CR_OR_LF_RE = re.compile(b"\r|\n")
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):
     def initialize(  # type: ignore
-        self, max_clients: int = 10, defaults: Optional[Dict[str, Any]] = None
+        self, max_clients: int = 10, defaults: Optional[dict[str, Any]] = None
     ) -> None:
         super().initialize(defaults=defaults)
         # Typeshed is incomplete for CurlMulti, so just use Any for now.
@@ -62,9 +62,9 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         self._curls = [self._curl_create() for i in range(max_clients)]
         self._free_list = self._curls[:]
         self._requests: Deque[
-            Tuple[HTTPRequest, Callable[[HTTPResponse], None], float]
+            tuple[HTTPRequest, Callable[[HTTPResponse], None], float]
         ] = collections.deque()
-        self._fds: Dict[int, int] = {}
+        self._fds: dict[int, int] = {}
         self._timeout: Optional[object] = None
 
         # libcurl has bugs that sometimes cause it to not report all

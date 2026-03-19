@@ -197,7 +197,7 @@ class Event:
 
     def __init__(self) -> None:
         self._value = False
-        self._waiters: Set[Future[None]] = set()
+        self._waiters: set[Future[None]] = set()
 
     def __repr__(self) -> str:
         return "<{} {}>".format(

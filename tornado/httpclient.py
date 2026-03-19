@@ -53,7 +53,7 @@ from tornado import gen, httputil
 from tornado.ioloop import IOLoop
 from tornado.util import Configurable
 
-from typing import Type, Any, Union, Dict, Callable, Optional, Awaitable, cast
+from typing import Type, Any, Union, Callable, Optional, Awaitable, cast
 
 
 class HTTPClient:
@@ -176,20 +176,20 @@ class AsyncHTTPClient(Configurable):
 
     """
 
-    _instance_cache: Dict[IOLoop, "AsyncHTTPClient"]
+    _instance_cache: dict[IOLoop, "AsyncHTTPClient"]
 
     @classmethod
-    def configurable_base(cls) -> Type[Configurable]:
+    def configurable_base(cls) -> type[Configurable]:
         return AsyncHTTPClient
 
     @classmethod
-    def configurable_default(cls) -> Type[Configurable]:
+    def configurable_default(cls) -> type[Configurable]:
         from tornado.simple_httpclient import SimpleAsyncHTTPClient
 
         return SimpleAsyncHTTPClient
 
     @classmethod
-    def _async_clients(cls) -> Dict[IOLoop, "AsyncHTTPClient"]:
+    def _async_clients(cls) -> dict[IOLoop, "AsyncHTTPClient"]:
         attr_name = "_async_client_dict_" + cls.__name__
         if not hasattr(cls, attr_name):
             setattr(cls, attr_name, weakref.WeakKeyDictionary())
@@ -213,7 +213,7 @@ class AsyncHTTPClient(Configurable):
             instance_cache[instance.io_loop] = instance
         return instance
 
-    def initialize(self, defaults: Optional[Dict[str, Any]] = None) -> None:
+    def initialize(self, defaults: Optional[dict[str, Any]] = None) -> None:
         self.io_loop = IOLoop.current()
         self.defaults = dict(HTTPRequest._DEFAULTS)
         if defaults is not None:
@@ -339,7 +339,7 @@ class AsyncHTTPClient(Configurable):
 class HTTPRequest:
     """HTTP client request object."""
 
-    _headers: Union[Dict[str, str], httputil.HTTPHeaders]
+    _headers: Union[dict[str, str], httputil.HTTPHeaders]
 
     # Default values for HTTPRequest parameters.
     # Merged with the values on the request object by AsyncHTTPClient
@@ -359,7 +359,7 @@ class HTTPRequest:
         self,
         url: str,
         method: str = "GET",
-        headers: Optional[Union[Dict[str, str], httputil.HTTPHeaders]] = None,
+        headers: Optional[Union[dict[str, str], httputil.HTTPHeaders]] = None,
         body: Optional[Union[bytes, str]] = None,
         auth_username: Optional[str] = None,
         auth_password: Optional[str] = None,
@@ -393,7 +393,7 @@ class HTTPRequest:
         ] = None,
         expect_100_continue: bool = False,
         decompress_response: Optional[bool] = None,
-        ssl_options: Optional[Union[Dict[str, Any], ssl.SSLContext]] = None,
+        ssl_options: Optional[Union[dict[str, Any], ssl.SSLContext]] = None,
     ) -> None:
         r"""All parameters except ``url`` are optional.
 
@@ -558,7 +558,7 @@ class HTTPRequest:
         return self._headers  # type: ignore
 
     @headers.setter
-    def headers(self, value: Union[Dict[str, str], httputil.HTTPHeaders]) -> None:
+    def headers(self, value: Union[dict[str, str], httputil.HTTPHeaders]) -> None:
         if value is None:
             self._headers = httputil.HTTPHeaders()
         else:
@@ -637,7 +637,7 @@ class HTTPResponse:
         effective_url: Optional[str] = None,
         error: Optional[BaseException] = None,
         request_time: Optional[float] = None,
-        time_info: Optional[Dict[str, float]] = None,
+        time_info: Optional[dict[str, float]] = None,
         reason: Optional[str] = None,
         start_time: Optional[float] = None,
     ) -> None:
@@ -741,7 +741,7 @@ class _RequestProxy:
     """
 
     def __init__(
-        self, request: HTTPRequest, defaults: Optional[Dict[str, Any]]
+        self, request: HTTPRequest, defaults: Optional[dict[str, Any]]
     ) -> None:
         self.request = request
         self.defaults = defaults

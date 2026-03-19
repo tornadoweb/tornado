@@ -22,11 +22,9 @@ import zlib
 
 from typing import (
     Any,
-    Dict,
     Mapping,
     Match,
     Callable,
-    Type,
     Sequence,
 )
 
@@ -51,7 +49,7 @@ basestring_type = str
 TimeoutError = asyncio.TimeoutError
 
 
-class ObjectDict(Dict[str, Any]):
+class ObjectDict(dict[str, Any]):
     """Makes a dictionary behave like an object, with attribute-style access."""
 
     def __getattr__(self, name: str) -> Any:
@@ -296,7 +294,7 @@ class Configurable:
         """
         base = cls.configurable_base()
         if isinstance(impl, str):
-            impl = typing.cast(Type[Configurable], import_object(impl))
+            impl = typing.cast(type[Configurable], import_object(impl))
         if impl is not None and not issubclass(impl, cls):
             raise ValueError("Invalid subclass of %s" % cls)
         base.__impl_class = impl

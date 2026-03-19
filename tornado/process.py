@@ -214,8 +214,8 @@ class Subprocess:
         self.io_loop = ioloop.IOLoop.current()
         # All FDs we create should be closed on error; those in to_close
         # should be closed in the parent process on success.
-        pipe_fds: List[int] = []
-        to_close: List[int] = []
+        pipe_fds: list[int] = []
+        to_close: list[int] = []
         if kwargs.get("stdin") is Subprocess.STREAM:
             in_r, in_w = os.pipe()
             kwargs["stdin"] = in_r

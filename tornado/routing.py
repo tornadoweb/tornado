@@ -189,10 +189,7 @@ from typing import (
     Union,
     Optional,
     Awaitable,
-    List,
-    Dict,
     Pattern,
-    Tuple,
     overload,
     Sequence,
 )
@@ -300,10 +297,10 @@ class _DefaultMessageDelegate(httputil.HTTPMessageDelegate):
 _RuleList = Sequence[
     Union[
         "Rule",
-        List[Any],  # Can't do detailed typechecking of lists.
-        Tuple[Union[str, "Matcher"], Any],
-        Tuple[Union[str, "Matcher"], Any, Dict[str, Any]],
-        Tuple[Union[str, "Matcher"], Any, Dict[str, Any], str],
+        list[Any],  # Can't do detailed typechecking of lists.
+        tuple[Union[str, "Matcher"], Any],
+        tuple[Union[str, "Matcher"], Any, dict[str, Any]],
+        tuple[Union[str, "Matcher"], Any, dict[str, Any], str],
     ]
 ]
 
@@ -338,7 +335,7 @@ class RuleRouter(Router):
         :arg rules: a list of `Rule` instances or tuples of `Rule`
             constructor arguments.
         """
-        self.rules: List[Rule] = []
+        self.rules: list[Rule] = []
         if rules:
             self.add_rules(rules)
 
@@ -421,7 +418,7 @@ class ReversibleRuleRouter(ReversibleRouter, RuleRouter):
     """
 
     def __init__(self, rules: Optional[_RuleList] = None) -> None:
-        self.named_rules: Dict[str, Any] = {}
+        self.named_rules: dict[str, Any] = {}
         super().__init__(rules)
 
     def process_rule(self, rule: "Rule") -> "Rule":
@@ -456,7 +453,7 @@ class Rule:
         self,
         matcher: "Matcher",
         target: Any,
-        target_kwargs: Optional[Dict[str, Any]] = None,
+        target_kwargs: Optional[dict[str, Any]] = None,
         name: Optional[str] = None,
     ) -> None:
         """Constructs a Rule instance.
@@ -501,7 +498,7 @@ class Rule:
 class Matcher:
     """Represents a matcher for request features."""
 
-    def match(self, request: httputil.HTTPServerRequest) -> Optional[Dict[str, Any]]:
+    def match(self, request: httputil.HTTPServerRequest) -> Optional[dict[str, Any]]:
         """Matches current instance against the request.
 
         :arg httputil.HTTPServerRequest request: current HTTP request
@@ -521,7 +518,7 @@ class Matcher:
 class AnyMatches(Matcher):
     """Matches any request."""
 
-    def match(self, request: httputil.HTTPServerRequest) -> Optional[Dict[str, Any]]:
+    def match(self, request: httputil.HTTPServerRequest) -> Optional[dict[str, Any]]:
         return {}
 
 
@@ -536,7 +533,7 @@ class HostMatches(Matcher):
         else:
             self.host_pattern = host_pattern
 
-    def match(self, request: httputil.HTTPServerRequest) -> Optional[Dict[str, Any]]:
+    def match(self, request: httputil.HTTPServerRequest) -> Optional[dict[str, Any]]:
         if self.host_pattern.match(request.host_name):
             return {}
 
@@ -552,7 +549,7 @@ class DefaultHostMatches(Matcher):
         self.application = application
         self.host_pattern = host_pattern
 
-    def match(self, request: httputil.HTTPServerRequest) -> Optional[Dict[str, Any]]:
+    def match(self, request: httputil.HTTPServerRequest) -> Optional[dict[str, Any]]:
         # Look for default host if not behind load balancer (for debugging)
         if "X-Real-Ip" not in request.headers:
             if self.host_pattern.match(self.application.default_host):
@@ -578,15 +575,15 @@ class PathMatches(Matcher):
 
         self._path, self._group_count = self._find_groups()
 
-    def match(self, request: httputil.HTTPServerRequest) -> Optional[Dict[str, Any]]:
+    def match(self, request: httputil.HTTPServerRequest) -> Optional[dict[str, Any]]:
         match = self.regex.match(request.path)
         if match is None:
             return None
         if not self.regex.groups:
             return {}
 
-        path_args: List[bytes] = []
-        path_kwargs: Dict[str, bytes] = {}
+        path_args: list[bytes] = []
+        path_kwargs: dict[str, bytes] = {}
 
         # Pass matched groups to the handler.  Since
         # match.groups() includes both named and
@@ -616,7 +613,7 @@ class PathMatches(Matcher):
             converted_args.append(url_escape(utf8(a), plus=False))
         return self._path % tuple(converted_args)
 
-    def _find_groups(self) -> Tuple[Optional[str], Optional[int]]:
+    def _find_groups(self) -> tuple[Optional[str], Optional[int]]:
         """Returns a tuple (reverse string, group count) for a url.
 
         For example: Given the url pattern /([0-9]{4})/([a-z-]+)/, this method
@@ -669,7 +666,7 @@ class URLSpec(Rule):
         self,
         pattern: Union[str, Pattern],
         handler: Any,
-        kwargs: Optional[Dict[str, Any]] = None,
+        kwargs: Optional[dict[str, Any]] = None,
         name: Optional[str] = None,
     ) -> None:
         """Parameters:

@@ -107,13 +107,10 @@ from tornado.util import ObjectDict, unicode_type, _websocket_mask
 url = URLSpec
 
 from typing import (
-    Dict,
     Any,
     Union,
     Optional,
     Awaitable,
-    Tuple,
-    List,
     Callable,
     Iterable,
     Generator,
@@ -133,7 +130,7 @@ if typing.TYPE_CHECKING:
 # and related methods.
 _HeaderTypes = Union[bytes, unicode_type, int, numbers.Integral, datetime.datetime]
 
-_CookieSecretTypes = Union[str, bytes, Dict[int, str], Dict[int, bytes]]
+_CookieSecretTypes = Union[str, bytes, dict[int, str], dict[int, bytes]]
 
 
 MIN_SUPPORTED_SIGNED_VALUE_VERSION = 1
@@ -188,7 +185,7 @@ class RequestHandler:
 
     """
 
-    SUPPORTED_METHODS: Tuple[str, ...] = (
+    SUPPORTED_METHODS: tuple[str, ...] = (
         "GET",
         "HEAD",
         "POST",
@@ -198,16 +195,16 @@ class RequestHandler:
         "OPTIONS",
     )
 
-    _template_loaders: Dict[str, template.BaseLoader] = {}
+    _template_loaders: dict[str, template.BaseLoader] = {}
     _template_loader_lock = threading.Lock()
     _remove_control_chars_regex = re.compile(r"[\x00-\x08\x0e-\x1f]")
 
     _stream_request_body = False
 
     # Will be set in _execute.
-    _transforms: List["OutputTransform"]
-    path_args: List[str]
-    path_kwargs: Dict[str, str]
+    _transforms: list["OutputTransform"]
+    path_args: list[str]
+    path_kwargs: dict[str, str]
 
     def __init__(
         self,
@@ -265,7 +262,7 @@ class RequestHandler:
     """
 
     @property
-    def settings(self) -> Dict[str, Any]:
+    def settings(self) -> dict[str, Any]:
         """An alias for `self.application.settings <Application.settings>`."""
         return self.application.settings
 
@@ -340,7 +337,7 @@ class RequestHandler:
             }
         )
         self.set_default_headers()
-        self._write_buffer: List[bytes] = []
+        self._write_buffer: list[bytes] = []
         self._status_code = 200
         self._reason = httputil.responses[200]
 
@@ -475,7 +472,7 @@ class RequestHandler:
         """
         return self._get_argument(name, default, self.request.arguments, strip)
 
-    def get_arguments(self, name: str, strip: bool = True) -> List[str]:
+    def get_arguments(self, name: str, strip: bool = True) -> list[str]:
         """Returns a list of the arguments with the given name.
 
         If the argument is not present, returns an empty list.
@@ -525,7 +522,7 @@ class RequestHandler:
         """
         return self._get_argument(name, default, self.request.body_arguments, strip)
 
-    def get_body_arguments(self, name: str, strip: bool = True) -> List[str]:
+    def get_body_arguments(self, name: str, strip: bool = True) -> list[str]:
         """Returns a list of the body arguments with the given name.
 
         If the argument is not present, returns an empty list.
@@ -569,7 +566,7 @@ class RequestHandler:
         """
         return self._get_argument(name, default, self.request.query_arguments, strip)
 
-    def get_query_arguments(self, name: str, strip: bool = True) -> List[str]:
+    def get_query_arguments(self, name: str, strip: bool = True) -> list[str]:
         """Returns a list of the query arguments with the given name.
 
         If the argument is not present, returns an empty list.
@@ -582,7 +579,7 @@ class RequestHandler:
         self,
         name: str,
         default: Union[None, str, _ArgDefaultMarker],
-        source: Dict[str, List[bytes]],
+        source: dict[str, list[bytes]],
         strip: bool = True,
     ) -> Optional[str]:
         args = self._get_arguments(name, source, strip=strip)
@@ -593,8 +590,8 @@ class RequestHandler:
         return args[-1]
 
     def _get_arguments(
-        self, name: str, source: Dict[str, List[bytes]], strip: bool = True
-    ) -> List[str]:
+        self, name: str, source: dict[str, list[bytes]], strip: bool = True
+    ) -> list[str]:
         values = []
         for v in source.get(name, []):
             s = self.decode_argument(v, name=name)
@@ -628,7 +625,7 @@ class RequestHandler:
             )
 
     @property
-    def cookies(self) -> Dict[str, http.cookies.Morsel]:
+    def cookies(self) -> dict[str, http.cookies.Morsel]:
         """An alias for
         `self.request.cookies <.httputil.HTTPServerRequest.cookies>`."""
         return self.request.cookies
@@ -659,7 +656,7 @@ class RequestHandler:
         name: str,
         value: Union[str, bytes],
         domain: Optional[str] = None,
-        expires: Optional[Union[float, Tuple, datetime.datetime]] = None,
+        expires: Optional[Union[float, tuple, datetime.datetime]] = None,
         path: str = "/",
         expires_days: Optional[float] = None,
         # Keyword-only args start here for historical reasons.
@@ -1088,7 +1085,7 @@ class RequestHandler:
         Override this method in a sub-classed controller to change the output.
         """
         paths = []
-        unique_paths: Set[str] = set()
+        unique_paths: set[str] = set()
 
         for path in js_files:
             if not is_absolute(path):
@@ -1123,7 +1120,7 @@ class RequestHandler:
         Override this method in a sub-classed controller to change the output.
         """
         paths = []
-        unique_paths: Set[str] = set()
+        unique_paths: set[str] = set()
 
         for path in css_files:
             if not is_absolute(path):
@@ -1172,7 +1169,7 @@ class RequestHandler:
         namespace.update(kwargs)
         return t.generate(**namespace)
 
-    def get_template_namespace(self) -> Dict[str, Any]:
+    def get_template_namespace(self) -> dict[str, Any]:
         """Returns a dictionary to be used as the default template namespace.
 
         May be overridden by subclasses to add or modify values.
@@ -1590,7 +1587,7 @@ class RequestHandler:
                 self.set_cookie(cookie_name, self._xsrf_token, **cookie_kwargs)
         return self._xsrf_token
 
-    def _get_raw_xsrf_token(self) -> Tuple[Optional[int], bytes, float]:
+    def _get_raw_xsrf_token(self) -> tuple[Optional[int], bytes, float]:
         """Read or generate the xsrf token in its raw form.
 
         The raw_xsrf_token is a tuple containing:
@@ -1619,7 +1616,7 @@ class RequestHandler:
 
     def _decode_xsrf_token(
         self, cookie: str
-    ) -> Tuple[Optional[int], Optional[bytes], Optional[float]]:
+    ) -> tuple[Optional[int], Optional[bytes], Optional[float]]:
         """Convert a cookie string into a the tuple form returned by
         _get_raw_xsrf_token.
         """
@@ -1825,7 +1822,7 @@ class RequestHandler:
         return match
 
     async def _execute(
-        self, transforms: List["OutputTransform"], *args: bytes, **kwargs: bytes
+        self, transforms: list["OutputTransform"], *args: bytes, **kwargs: bytes
     ) -> None:
         """Executes this request with the given output transforms."""
         self._transforms = transforms
@@ -1969,10 +1966,10 @@ class RequestHandler:
                 exc_info=(typ, value, tb),  # type: ignore
             )
 
-    def _ui_module(self, name: str, module: Type["UIModule"]) -> Callable[..., str]:
+    def _ui_module(self, name: str, module: type["UIModule"]) -> Callable[..., str]:
         def render(*args, **kwargs) -> str:  # type: ignore
             if not hasattr(self, "_active_modules"):
-                self._active_modules: Dict[str, UIModule] = {}
+                self._active_modules: dict[str, UIModule] = {}
             if name not in self._active_modules:
                 self._active_modules[name] = module(self)
             rendered = self._active_modules[name].render(*args, **kwargs)
@@ -1997,7 +1994,7 @@ class RequestHandler:
 _RequestHandlerType = TypeVar("_RequestHandlerType", bound=RequestHandler)
 
 
-def stream_request_body(cls: Type[_RequestHandlerType]) -> Type[_RequestHandlerType]:
+def stream_request_body(cls: type[_RequestHandlerType]) -> type[_RequestHandlerType]:
     """Apply to `RequestHandler` subclasses to enable streaming body support.
 
     This decorator implies the following changes:
@@ -2024,7 +2021,7 @@ def stream_request_body(cls: Type[_RequestHandlerType]) -> Type[_RequestHandlerT
     return cls
 
 
-def _has_stream_request_body(cls: Type[RequestHandler]) -> bool:
+def _has_stream_request_body(cls: type[RequestHandler]) -> bool:
     if not issubclass(cls, RequestHandler):
         raise TypeError("expected subclass of RequestHandler, got %r", cls)
     return cls._stream_request_body
@@ -2212,11 +2209,11 @@ class Application(ReversibleRouter):
         self,
         handlers: Optional[_RuleList] = None,
         default_host: Optional[str] = None,
-        transforms: Optional[List[Type["OutputTransform"]]] = None,
+        transforms: Optional[list[type["OutputTransform"]]] = None,
         **settings: Any,
     ) -> None:
         if transforms is None:
-            self.transforms: List[Type[OutputTransform]] = []
+            self.transforms: list[type[OutputTransform]] = []
             if settings.get("compress_response") or settings.get("gzip"):
                 self.transforms.append(GZipContentEncoding)
         else:
@@ -2228,7 +2225,7 @@ class Application(ReversibleRouter):
             "xsrf_form_html": _xsrf_form_html,
             "Template": TemplateModule,
         }
-        self.ui_methods: Dict[str, Callable[..., str]] = {}
+        self.ui_methods: dict[str, Callable[..., str]] = {}
         self._load_ui_modules(settings.get("ui_modules", {}))
         self._load_ui_methods(settings.get("ui_methods", {}))
         if self.settings.get("static_path"):
@@ -2324,7 +2321,7 @@ class Application(ReversibleRouter):
                 [(DefaultHostMatches(self, host_matcher.host_pattern), host_handlers)]
             )
 
-    def add_transform(self, transform_class: Type["OutputTransform"]) -> None:
+    def add_transform(self, transform_class: type["OutputTransform"]) -> None:
         self.transforms.append(transform_class)
 
     def _load_ui_methods(self, methods: Any) -> None:
@@ -2383,10 +2380,10 @@ class Application(ReversibleRouter):
     def get_handler_delegate(
         self,
         request: httputil.HTTPServerRequest,
-        target_class: Type[RequestHandler],
-        target_kwargs: Optional[Dict[str, Any]] = None,
-        path_args: Optional[List[bytes]] = None,
-        path_kwargs: Optional[Dict[str, bytes]] = None,
+        target_class: type[RequestHandler],
+        target_kwargs: Optional[dict[str, Any]] = None,
+        path_args: Optional[list[bytes]] = None,
+        path_kwargs: Optional[dict[str, bytes]] = None,
     ) -> "_HandlerDelegate":
         """Returns `~.httputil.HTTPMessageDelegate` that can serve a request
         for application and `RequestHandler` subclass.
@@ -2448,10 +2445,10 @@ class _HandlerDelegate(httputil.HTTPMessageDelegate):
         self,
         application: Application,
         request: httputil.HTTPServerRequest,
-        handler_class: Type[RequestHandler],
-        handler_kwargs: Optional[Dict[str, Any]],
-        path_args: Optional[List[bytes]],
-        path_kwargs: Optional[Dict[str, bytes]],
+        handler_class: type[RequestHandler],
+        handler_kwargs: Optional[dict[str, Any]],
+        path_args: Optional[list[bytes]],
+        path_kwargs: Optional[dict[str, bytes]],
     ) -> None:
         self.application = application
         self.connection = request.connection
@@ -2460,7 +2457,7 @@ class _HandlerDelegate(httputil.HTTPMessageDelegate):
         self.handler_kwargs = handler_kwargs or {}
         self.path_args = path_args or []
         self.path_kwargs = path_kwargs or {}
-        self.chunks: List[bytes] = []
+        self.chunks: list[bytes] = []
         self.stream_request_body = _has_stream_request_body(self.handler_class)
 
     def headers_received(
@@ -2771,7 +2768,7 @@ class StaticFileHandler(RequestHandler):
 
     CACHE_MAX_AGE = 86400 * 365 * 10  # 10 years
 
-    _static_hashes: Dict[str, Optional[str]] = {}
+    _static_hashes: dict[str, Optional[str]] = {}
     _lock = threading.Lock()  # protects _static_hashes
 
     def initialize(self, path: str, default_filename: Optional[str] = None) -> None:
@@ -3156,7 +3153,7 @@ class StaticFileHandler(RequestHandler):
 
     @classmethod
     def make_static_url(
-        cls, settings: Dict[str, Any], path: str, include_version: bool = True
+        cls, settings: dict[str, Any], path: str, include_version: bool = True
     ) -> str:
         """Constructs a versioned url for the given path.
 
@@ -3200,7 +3197,7 @@ class StaticFileHandler(RequestHandler):
         return url_path
 
     @classmethod
-    def get_version(cls, settings: Dict[str, Any], path: str) -> Optional[str]:
+    def get_version(cls, settings: dict[str, Any], path: str) -> Optional[str]:
         """Generate the version string to be used in static URLs.
 
         ``settings`` is the `Application.settings` dictionary and ``path``
@@ -3277,7 +3274,7 @@ class OutputTransform:
         headers: httputil.HTTPHeaders,
         chunk: bytes,
         finishing: bool,
-    ) -> Tuple[int, httputil.HTTPHeaders, bytes]:
+    ) -> tuple[int, httputil.HTTPHeaders, bytes]:
         return status_code, headers, chunk
 
     def transform_chunk(self, chunk: bytes, finishing: bool) -> bytes:
@@ -3329,7 +3326,7 @@ class GZipContentEncoding(OutputTransform):
         headers: httputil.HTTPHeaders,
         chunk: bytes,
         finishing: bool,
-    ) -> Tuple[int, httputil.HTTPHeaders, bytes]:
+    ) -> tuple[int, httputil.HTTPHeaders, bytes]:
         # TODO: can/should this type be inherited from the superclass?
         if "Vary" in headers:
             headers["Vary"] += ", Accept-Encoding"
@@ -3506,8 +3503,8 @@ class TemplateModule(UIModule):
     def __init__(self, handler: RequestHandler) -> None:
         super().__init__(handler)
         # keep resources in both a list and a dict to preserve order
-        self._resource_list: List[Dict[str, Any]] = []
-        self._resource_dict: Dict[str, Dict[str, Any]] = {}
+        self._resource_list: list[dict[str, Any]] = []
+        self._resource_dict: dict[str, dict[str, Any]] = {}
 
     def render(self, path: str, **kwargs: Any) -> bytes:
         def set_resources(**kwargs) -> str:  # type: ignore
@@ -3562,7 +3559,7 @@ class _UIModuleNamespace:
     """Lazy namespace which creates UIModule proxies bound to a handler."""
 
     def __init__(
-        self, handler: RequestHandler, ui_modules: Dict[str, Type[UIModule]]
+        self, handler: RequestHandler, ui_modules: dict[str, type[UIModule]]
     ) -> None:
         self.handler = handler
         self.ui_modules = ui_modules
@@ -3733,8 +3730,8 @@ def _decode_signed_value_v1(
         return None
 
 
-def _decode_fields_v2(value: bytes) -> Tuple[int, bytes, bytes, bytes, bytes]:
-    def _consume_field(s: bytes) -> Tuple[bytes, bytes]:
+def _decode_fields_v2(value: bytes) -> tuple[int, bytes, bytes, bytes, bytes]:
+    def _consume_field(s: bytes) -> tuple[bytes, bytes]:
         length, _, rest = s.partition(b":")
         n = int(length)
         field_value = rest[:n]

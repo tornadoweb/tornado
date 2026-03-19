@@ -16,7 +16,7 @@ from tornado.util import (
     re_unescape,
 )
 
-from typing import cast, Dict, Any
+from typing import cast, Any
 
 
 class RaiseExcInfoTest(unittest.TestCase):
@@ -249,7 +249,7 @@ class ArgReplacerTest(unittest.TestCase):
 
     def test_omitted(self):
         args = (1, 2)
-        kwargs: Dict[str, Any] = dict()
+        kwargs: dict[str, Any] = dict()
         self.assertIsNone(self.replacer.get_old_value(args, kwargs))
         self.assertEqual(
             self.replacer.replace("new", args, kwargs),
@@ -258,7 +258,7 @@ class ArgReplacerTest(unittest.TestCase):
 
     def test_position(self):
         args = (1, 2, "old", 3)
-        kwargs: Dict[str, Any] = dict()
+        kwargs: dict[str, Any] = dict()
         self.assertEqual(self.replacer.get_old_value(args, kwargs), "old")
         self.assertEqual(
             self.replacer.replace("new", args, kwargs),

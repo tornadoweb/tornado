@@ -42,12 +42,9 @@ from typing import (
     cast,
     Any,
     Optional,
-    Dict,
     Union,
-    List,
     Awaitable,
     Callable,
-    Tuple,
     Type,
 )
 from types import TracebackType
@@ -92,7 +89,7 @@ if TYPE_CHECKING:
 
         def log_exception(
             self,
-            typ: Optional[Type[BaseException]],
+            typ: Optional[type[BaseException]],
             value: Optional[BaseException],
             tb: Optional[TracebackType],
         ) -> None:
@@ -128,7 +125,7 @@ class _WebSocketParams:
         ping_interval: Optional[float] = None,
         ping_timeout: Optional[float] = None,
         max_message_size: int = _default_max_message_size,
-        compression_options: Optional[Dict[str, Any]] = None,
+        compression_options: Optional[dict[str, Any]] = None,
     ) -> None:
         self.ping_interval = ping_interval
         self.ping_timeout = ping_timeout
@@ -335,7 +332,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         )
 
     def write_message(
-        self, message: Union[bytes, str, Dict[str, Any]], binary: bool = False
+        self, message: Union[bytes, str, dict[str, Any]], binary: bool = False
     ) -> "Future[None]":
         """Sends the given message to the client of this Web Socket.
 
@@ -364,7 +361,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
             message = tornado.escape.json_encode(message)
         return self.ws_connection.write_message(message, binary=binary)
 
-    def select_subprotocol(self, subprotocols: List[str]) -> Optional[str]:
+    def select_subprotocol(self, subprotocols: list[str]) -> Optional[str]:
         """Override to implement subprotocol negotiation.
 
         ``subprotocols`` is a list of strings identifying the
@@ -398,7 +395,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         assert self.ws_connection is not None
         return self.ws_connection.selected_subprotocol
 
-    def get_compression_options(self) -> Optional[Dict[str, Any]]:
+    def get_compression_options(self) -> Optional[dict[str, Any]]:
         """Override to return compression options for the connection.
 
         If this method returns None (the default), compression will
@@ -697,7 +694,7 @@ class WebSocketProtocol(abc.ABC):
 
     @abc.abstractmethod
     def write_message(
-        self, message: Union[str, bytes, Dict[str, Any]], binary: bool = False
+        self, message: Union[str, bytes, dict[str, Any]], binary: bool = False
     ) -> "Future[None]":
         raise NotImplementedError()
 
@@ -738,7 +735,7 @@ class _PerMessageDeflateCompressor:
         self,
         persistent: bool,
         max_wbits: Optional[int],
-        compression_options: Optional[Dict[str, Any]] = None,
+        compression_options: Optional[dict[str, Any]] = None,
     ) -> None:
         if max_wbits is None:
             max_wbits = zlib.MAX_WBITS
@@ -787,7 +784,7 @@ class _PerMessageDeflateDecompressor:
         persistent: bool,
         max_wbits: Optional[int],
         max_message_size: int,
-        compression_options: Optional[Dict[str, Any]] = None,
+        compression_options: Optional[dict[str, Any]] = None,
     ) -> None:
         self._max_message_size = max_message_size
         if max_wbits is None:
@@ -976,7 +973,7 @@ class WebSocketProtocol13(WebSocketProtocol):
 
     def _parse_extensions_header(
         self, headers: httputil.HTTPHeaders
-    ) -> List[Tuple[str, Dict[str, str]]]:
+    ) -> list[tuple[str, dict[str, str]]]:
         extensions = headers.get("Sec-WebSocket-Extensions", "")
         if extensions:
             return [httputil._parse_header(e.strip()) for e in extensions.split(",")]
@@ -1006,13 +1003,13 @@ class WebSocketProtocol13(WebSocketProtocol):
     def _get_compressor_options(
         self,
         side: str,
-        agreed_parameters: Dict[str, Any],
-        compression_options: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        agreed_parameters: dict[str, Any],
+        compression_options: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
         """Converts a websocket agreed_parameters set to keyword arguments
         for our compressor objects.
         """
-        options: Dict[str, Any] = dict(
+        options: dict[str, Any] = dict(
             persistent=(side + "_no_context_takeover") not in agreed_parameters
         )
         wbits_header = agreed_parameters.get(side + "_max_window_bits", None)
@@ -1026,8 +1023,8 @@ class WebSocketProtocol13(WebSocketProtocol):
     def _create_compressors(
         self,
         side: str,
-        agreed_parameters: Dict[str, Any],
-        compression_options: Optional[Dict[str, Any]] = None,
+        agreed_parameters: dict[str, Any],
+        compression_options: Optional[dict[str, Any]] = None,
     ) -> None:
         # TODO: handle invalid parameters gracefully
         allowed_keys = {
@@ -1084,7 +1081,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         return self.stream.write(frame)
 
     def write_message(
-        self, message: Union[str, bytes, Dict[str, Any]], binary: bool = False
+        self, message: Union[str, bytes, dict[str, Any]], binary: bool = False
     ) -> "Future[None]":
         """Sends the given message to the client of this Web Socket."""
         if binary:
@@ -1400,11 +1397,11 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         self,
         request: httpclient.HTTPRequest,
         on_message_callback: Optional[Callable[[Union[None, str, bytes]], None]] = None,
-        compression_options: Optional[Dict[str, Any]] = None,
+        compression_options: Optional[dict[str, Any]] = None,
         ping_interval: Optional[float] = None,
         ping_timeout: Optional[float] = None,
         max_message_size: int = _default_max_message_size,
-        subprotocols: Optional[List[str]] = None,
+        subprotocols: Optional[list[str]] = None,
         resolver: Optional[Resolver] = None,
     ) -> None:
         self.connect_future: Future[WebSocketClientConnection] = Future()
@@ -1537,7 +1534,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         future_set_result_unless_cancelled(self.connect_future, self)
 
     def write_message(
-        self, message: Union[str, bytes, Dict[str, Any]], binary: bool = False
+        self, message: Union[str, bytes, dict[str, Any]], binary: bool = False
     ) -> "Future[None]":
         """Sends a message to the WebSocket server.
 
@@ -1637,11 +1634,11 @@ def websocket_connect(
     callback: Optional[Callable[["Future[WebSocketClientConnection]"], None]] = None,
     connect_timeout: Optional[float] = None,
     on_message_callback: Optional[Callable[[Union[None, str, bytes]], None]] = None,
-    compression_options: Optional[Dict[str, Any]] = None,
+    compression_options: Optional[dict[str, Any]] = None,
     ping_interval: Optional[float] = None,
     ping_timeout: Optional[float] = None,
     max_message_size: int = _default_max_message_size,
-    subprotocols: Optional[List[str]] = None,
+    subprotocols: Optional[list[str]] = None,
     resolver: Optional[Resolver] = None,
 ) -> "Awaitable[WebSocketClientConnection]":
     """Client-side websocket support.

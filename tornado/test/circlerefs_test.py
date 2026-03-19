@@ -51,7 +51,7 @@ def find_circular_references(garbage):
             stack_ids.remove(item_id)
             visited_ids.add(item_id)
 
-    found: typing.List[object] = []
+    found: list[object] = []
     stack = []
     stack_ids = set()
     garbage_ids = set(map(id, garbage))

@@ -114,11 +114,7 @@ from typing import (
     Any,
     Iterator,
     Iterable,
-    Tuple,
-    Set,
-    Dict,
     Callable,
-    List,
     TextIO,
     Optional,
 )
@@ -176,21 +172,21 @@ class OptionParser:
     def __setitem__(self, name: str, value: Any) -> None:
         return self.__setattr__(name, value)
 
-    def items(self) -> Iterable[Tuple[str, Any]]:
+    def items(self) -> Iterable[tuple[str, Any]]:
         """An iterable of (name, value) pairs.
 
         .. versionadded:: 3.1
         """
         return [(opt.name, opt.value()) for name, opt in self._options.items()]
 
-    def groups(self) -> Set[str]:
+    def groups(self) -> set[str]:
         """The set of option-groups created by ``define``.
 
         .. versionadded:: 3.1
         """
         return {opt.group_name for opt in self._options.values()}
 
-    def group_dict(self, group: str) -> Dict[str, Any]:
+    def group_dict(self, group: str) -> dict[str, Any]:
         """The names and values of options in a group.
 
         Useful for copying options into Application settings::
@@ -213,7 +209,7 @@ class OptionParser:
             if not group or group == opt.group_name
         }
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         """The names and values of all options.
 
         .. versionadded:: 3.1
@@ -313,8 +309,8 @@ class OptionParser:
         self._options[normalized] = option
 
     def parse_command_line(
-        self, args: Optional[List[str]] = None, final: bool = True
-    ) -> List[str]:
+        self, args: Optional[list[str]] = None, final: bool = True
+    ) -> list[str]:
         """Parses all options given on the command line (defaults to
         `sys.argv`).
 
@@ -338,7 +334,7 @@ class OptionParser:
         """
         if args is None:
             args = sys.argv
-        remaining: List[str] = []
+        remaining: list[str] = []
         for i in range(1, len(args)):
             # All things after the last option are command line arguments
             if not args[i].startswith("-"):
@@ -443,7 +439,7 @@ class OptionParser:
             file = sys.stderr
         print("Usage: %s [OPTIONS]" % sys.argv[0], file=file)
         print("\nOptions:\n", file=file)
-        by_group: Dict[str, List[_Option]] = {}
+        by_group: dict[str, list[_Option]] = {}
         for option in self._options.values():
             by_group.setdefault(option.group_name, []).append(option)
 
@@ -706,8 +702,8 @@ def define(
 
 
 def parse_command_line(
-    args: Optional[List[str]] = None, final: bool = True
-) -> List[str]:
+    args: Optional[list[str]] = None, final: bool = True
+) -> list[str]:
     """Parses global options from the command line.
 
     See `OptionParser.parse_command_line`.

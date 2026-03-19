@@ -37,7 +37,7 @@ from tornado.tcpserver import TCPServer
 from tornado.util import Configurable
 
 import typing
-from typing import Union, Any, Dict, Callable, List, Type, Tuple, Optional, Awaitable
+from typing import Union, Any, Callable, Optional, Awaitable
 
 if typing.TYPE_CHECKING:
     from typing import Set  # noqa: F401
@@ -169,7 +169,7 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
         ],
         no_keep_alive: bool = False,
         xheaders: bool = False,
-        ssl_options: Optional[Union[Dict[str, Any], ssl.SSLContext]] = None,
+        ssl_options: Optional[Union[dict[str, Any], ssl.SSLContext]] = None,
         protocol: Optional[str] = None,
         decompress_request: bool = False,
         chunk_size: Optional[int] = None,
@@ -178,7 +178,7 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
         body_timeout: Optional[float] = None,
         max_body_size: Optional[int] = None,
         max_buffer_size: Optional[int] = None,
-        trusted_downstream: Optional[List[str]] = None,
+        trusted_downstream: Optional[list[str]] = None,
     ) -> None:
         # This method's signature is not extracted with autodoc
         # because we want its arguments to appear on the class
@@ -202,15 +202,15 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
             max_buffer_size=max_buffer_size,
             read_chunk_size=chunk_size,
         )
-        self._connections: Set[HTTP1ServerConnection] = set()
+        self._connections: set[HTTP1ServerConnection] = set()
         self.trusted_downstream = trusted_downstream
 
     @classmethod
-    def configurable_base(cls) -> Type[Configurable]:
+    def configurable_base(cls) -> type[Configurable]:
         return HTTPServer
 
     @classmethod
-    def configurable_default(cls) -> Type[Configurable]:
+    def configurable_default(cls) -> type[Configurable]:
         return HTTPServer
 
     async def close_all_connections(self) -> None:
@@ -232,7 +232,7 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
             conn = next(iter(self._connections))
             await conn.close()
 
-    def handle_stream(self, stream: iostream.IOStream, address: Tuple) -> None:
+    def handle_stream(self, stream: iostream.IOStream, address: tuple) -> None:
         context = _HTTPRequestContext(
             stream, address, self.protocol, self.trusted_downstream
         )
@@ -267,7 +267,7 @@ class _CallableAdapter(httputil.HTTPMessageDelegate):
         self.request_callback = request_callback
         self.request: Optional[httputil.HTTPServerRequest] = None
         self.delegate = None
-        self._chunks: List[bytes] = []
+        self._chunks: list[bytes] = []
 
     def headers_received(
         self,
@@ -299,9 +299,9 @@ class _HTTPRequestContext:
     def __init__(
         self,
         stream: iostream.IOStream,
-        address: Tuple,
+        address: tuple,
         protocol: Optional[str],
-        trusted_downstream: Optional[List[str]] = None,
+        trusted_downstream: Optional[list[str]] = None,
     ) -> None:
         self.address = address
         # Save the socket's address family now so we know how to

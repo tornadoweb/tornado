@@ -33,7 +33,7 @@ import time
 from io import BytesIO
 import urllib.parse
 
-from typing import Dict, Any, Callable, Optional, Type, Union, Awaitable
+from typing import Any, Callable, Optional, Type, Union, Awaitable
 from types import TracebackType
 import typing
 
@@ -118,23 +118,23 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     def initialize(  # type: ignore
         self,
         max_clients: int = 10,
-        hostname_mapping: Optional[Dict[str, str]] = None,
+        hostname_mapping: Optional[dict[str, str]] = None,
         max_buffer_size: int = 104857600,
         resolver: Optional[Resolver] = None,
-        defaults: Optional[Dict[str, Any]] = None,
+        defaults: Optional[dict[str, Any]] = None,
         max_header_size: Optional[int] = None,
         max_body_size: Optional[int] = None,
     ) -> None:
         super().initialize(defaults=defaults)
         self.max_clients = max_clients
         self.queue: Deque[
-            Tuple[object, HTTPRequest, Callable[[HTTPResponse], None]]
+            tuple[object, HTTPRequest, Callable[[HTTPResponse], None]]
         ] = collections.deque()
-        self.active: Dict[
-            object, Tuple[HTTPRequest, Callable[[HTTPResponse], None]]
+        self.active: dict[
+            object, tuple[HTTPRequest, Callable[[HTTPResponse], None]]
         ] = {}
-        self.waiting: Dict[
-            object, Tuple[HTTPRequest, Callable[[HTTPResponse], None], object]
+        self.waiting: dict[
+            object, tuple[HTTPRequest, Callable[[HTTPResponse], None], object]
         ] = {}
         self.max_buffer_size = max_buffer_size
         self.max_header_size = max_header_size
@@ -276,7 +276,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self.max_body_size = max_body_size
         self.code: Optional[int] = None
         self.headers: Optional[httputil.HTTPHeaders] = None
-        self.chunks: List[bytes] = []
+        self.chunks: list[bytes] = []
         self._decompressor = None
         # Timeout handle returned by IOLoop.add_timeout
         self._timeout: object = None
@@ -448,7 +448,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
     def _get_ssl_options(
         self, scheme: str
-    ) -> Union[None, Dict[str, Any], ssl.SSLContext]:
+    ) -> Union[None, dict[str, Any], ssl.SSLContext]:
         if scheme == "https":
             if self.request.ssl_options is not None:
                 return self.request.ssl_options

@@ -57,7 +57,7 @@ class BasicRouterTestCase(AsyncHTTPTestCase):
         self.assertEqual(response.body, b"OK")
 
 
-resources: typing.Dict[str, bytes] = {}
+resources: dict[str, bytes] = {}
 
 
 class GetResource(RequestHandler):
@@ -116,7 +116,7 @@ SecondHandler = _get_named_handler("second_handler")
 class CustomRouter(ReversibleRouter):
     def __init__(self):
         super().__init__()
-        self.routes: typing.Dict[str, typing.Any] = {}
+        self.routes: dict[str, typing.Any] = {}
 
     def add_routes(self, routes):
         self.routes.update(routes)

@@ -48,9 +48,7 @@ from typing import (
     Callable,
     Pattern,
     Any,
-    Dict,
     TypeVar,
-    Tuple,
 )
 from types import TracebackType
 
@@ -122,7 +120,7 @@ class _StreamBuffer:
 
     def __init__(self) -> None:
         # A sequence of (False, bytearray) and (True, memoryview) objects
-        self._buffers: Deque[Tuple[bool, Union[bytearray, memoryview]]] = (
+        self._buffers: Deque[tuple[bool, Union[bytearray, memoryview]]] = (
             collections.deque()
         )
         # Position in the first buffer
@@ -265,7 +263,7 @@ class BaseIOStream:
         self._read_partial = False
         self._read_until_close = False
         self._read_future: Optional[Future] = None
-        self._write_futures: Deque[Tuple[int, Future[None]]] = collections.deque()
+        self._write_futures: Deque[tuple[int, Future[None]]] = collections.deque()
         self._close_callback: Optional[Callable[[], None]] = None
         self._connect_future: Optional[Future[IOStream]] = None
         # _ssl_connect_future should be defined in SSLIOStream
@@ -561,7 +559,7 @@ class BaseIOStream:
             None,
             bool,
             BaseException,
-            Tuple[
+            tuple[
                 "Optional[Type[BaseException]]",
                 Optional[BaseException],
                 Optional[TracebackType],
@@ -604,7 +602,7 @@ class BaseIOStream:
         self._signal_closed()
 
     def _signal_closed(self) -> None:
-        futures: List[Future] = []
+        futures: list[Future] = []
         if self._read_future is not None:
             futures.append(self._read_future)
             self._read_future = None
@@ -1192,7 +1190,7 @@ class IOStream(BaseIOStream):
     def start_tls(
         self,
         server_side: bool,
-        ssl_options: Optional[Union[Dict[str, Any], ssl.SSLContext]] = None,
+        ssl_options: Optional[Union[dict[str, Any], ssl.SSLContext]] = None,
         server_hostname: Optional[str] = None,
     ) -> Awaitable["SSLIOStream"]:
         """Convert this `IOStream` to an `SSLIOStream`.
@@ -1423,7 +1421,7 @@ class SSLIOStream(IOStream):
         super()._handle_write()
 
     def connect(
-        self, address: Tuple, server_hostname: Optional[str] = None
+        self, address: tuple, server_hostname: Optional[str] = None
     ) -> "Future[SSLIOStream]":
         self._server_hostname = server_hostname
         # Ignore the result of connect(). If it fails,

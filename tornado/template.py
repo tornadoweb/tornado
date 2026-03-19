@@ -208,7 +208,7 @@ from tornado import escape
 from tornado.log import app_log
 from tornado.util import ObjectDict, exec_in, unicode_type
 
-from typing import Any, Union, Callable, List, Dict, Iterable, Optional, TextIO
+from typing import Any, Union, Callable, Iterable, Optional, TextIO
 import typing
 
 if typing.TYPE_CHECKING:
@@ -365,7 +365,7 @@ class Template:
         buffer = StringIO()
         try:
             # named_blocks maps from names to _NamedBlock objects
-            named_blocks: Dict[str, _NamedBlock] = {}
+            named_blocks: dict[str, _NamedBlock] = {}
             ancestors = self._get_ancestors(loader)
             ancestors.reverse()
             for ancestor in ancestors:
@@ -376,7 +376,7 @@ class Template:
         finally:
             buffer.close()
 
-    def _get_ancestors(self, loader: Optional["BaseLoader"]) -> List["_File"]:
+    def _get_ancestors(self, loader: Optional["BaseLoader"]) -> list["_File"]:
         ancestors = [self.file]
         for chunk in self.file.body.chunks:
             if isinstance(chunk, _ExtendsBlock):
@@ -400,7 +400,7 @@ class BaseLoader:
     def __init__(
         self,
         autoescape: Optional[str] = _DEFAULT_AUTOESCAPE,
-        namespace: Optional[Dict[str, Any]] = None,
+        namespace: Optional[dict[str, Any]] = None,
         whitespace: Optional[str] = None,
     ) -> None:
         """Construct a template loader.
@@ -421,7 +421,7 @@ class BaseLoader:
         self.autoescape = autoescape
         self.namespace = namespace or {}
         self.whitespace = whitespace
-        self.templates: Dict[str, Template] = {}
+        self.templates: dict[str, Template] = {}
         # self.lock protects self.templates.  It's a reentrant lock
         # because templates may load other templates via `include` or
         # `extends`.  Note that thanks to the GIL this code would be safe
@@ -481,7 +481,7 @@ class Loader(BaseLoader):
 class DictLoader(BaseLoader):
     """A template loader that loads from a dictionary."""
 
-    def __init__(self, dict: Dict[str, str], **kwargs: Any) -> None:
+    def __init__(self, dict: dict[str, str], **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.dict = dict
 
@@ -508,7 +508,7 @@ class _Node:
         raise NotImplementedError()
 
     def find_named_blocks(
-        self, loader: Optional[BaseLoader], named_blocks: Dict[str, "_NamedBlock"]
+        self, loader: Optional[BaseLoader], named_blocks: dict[str, "_NamedBlock"]
     ) -> None:
         for child in self.each_child():
             child.find_named_blocks(loader, named_blocks)
@@ -533,7 +533,7 @@ class _File(_Node):
 
 
 class _ChunkList(_Node):
-    def __init__(self, chunks: List[_Node]) -> None:
+    def __init__(self, chunks: list[_Node]) -> None:
         self.chunks = chunks
 
     def generate(self, writer: "_CodeWriter") -> None:
@@ -560,7 +560,7 @@ class _NamedBlock(_Node):
             block.body.generate(writer)
 
     def find_named_blocks(
-        self, loader: Optional[BaseLoader], named_blocks: Dict[str, "_NamedBlock"]
+        self, loader: Optional[BaseLoader], named_blocks: dict[str, "_NamedBlock"]
     ) -> None:
         named_blocks[self.name] = self
         _Node.find_named_blocks(self, loader, named_blocks)
@@ -578,7 +578,7 @@ class _IncludeBlock(_Node):
         self.line = line
 
     def find_named_blocks(
-        self, loader: Optional[BaseLoader], named_blocks: Dict[str, _NamedBlock]
+        self, loader: Optional[BaseLoader], named_blocks: dict[str, _NamedBlock]
     ) -> None:
         assert loader is not None
         included = loader.load(self.name, self.template_name)
@@ -724,7 +724,7 @@ class _CodeWriter:
     def __init__(
         self,
         file: TextIO,
-        named_blocks: Dict[str, _NamedBlock],
+        named_blocks: dict[str, _NamedBlock],
         loader: Optional[BaseLoader],
         current_template: Template,
     ) -> None:
@@ -733,7 +733,7 @@ class _CodeWriter:
         self.loader = loader
         self.current_template = current_template
         self.apply_counter = 0
-        self.include_stack: List[Tuple[Template, int]] = []
+        self.include_stack: list[tuple[Template, int]] = []
         self._indent = 0
 
     def indent_size(self) -> int:

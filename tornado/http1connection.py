@@ -36,7 +36,7 @@ from tornado.log import gen_log, app_log
 from tornado.util import GzipDecompressor
 
 
-from typing import cast, Optional, Type, Awaitable, Callable, Union, Tuple
+from typing import cast, Optional, Type, Awaitable, Callable, Union
 
 CR_OR_LF_RE = re.compile(b"\r|\n")
 
@@ -578,7 +578,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         if not self._finish_future.done():
             future_set_result_unless_cancelled(self._finish_future, None)
 
-    def _parse_headers(self, data: bytes) -> Tuple[str, httputil.HTTPHeaders]:
+    def _parse_headers(self, data: bytes) -> tuple[str, httputil.HTTPHeaders]:
         # The lstrip removes newlines that some implementations sometimes
         # insert between messages of a reused connection.  Per RFC 7230,
         # we SHOULD ignore at least one empty line before the request.

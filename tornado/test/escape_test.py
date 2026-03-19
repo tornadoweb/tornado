@@ -17,7 +17,7 @@ from tornado.util import unicode_type
 
 from typing import List, Tuple, Union, Dict, Any  # noqa: F401
 
-linkify_tests: List[Tuple[Union[str, bytes], Dict[str, Any], str]] = [
+linkify_tests: list[tuple[Union[str, bytes], dict[str, Any], str]] = [
     # (input, linkify_kwargs, expected_output)
     (
         "hello http://world.com/!",
@@ -218,7 +218,7 @@ class EscapeTestCase(unittest.TestCase):
             self.assertEqual(linked, html)
 
     def test_xhtml_escape(self):
-        tests: List[Tuple[Union[str, bytes], Union[str, bytes]]] = [
+        tests: list[tuple[Union[str, bytes], Union[str, bytes]]] = [
             ("<foo>", "&lt;foo&gt;"),
             ("<foo>", "&lt;foo&gt;"),
             (b"<foo>", b"&lt;foo&gt;"),
@@ -245,7 +245,7 @@ class EscapeTestCase(unittest.TestCase):
             self.assertEqual(unescaped, xhtml_unescape(escaped))
 
     def test_url_escape_unicode(self):
-        tests: List[Tuple[Union[str, bytes], str]] = [
+        tests: list[tuple[Union[str, bytes], str]] = [
             # byte strings are passed through as-is
             ("\u00e9".encode(), "%C3%A9"),
             ("\u00e9".encode("latin1"), "%E9"),

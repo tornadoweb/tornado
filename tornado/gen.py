@@ -111,7 +111,7 @@ if typing.TYPE_CHECKING:
 _T = typing.TypeVar("_T")
 
 _Yieldable = Union[
-    None, Awaitable, List[Awaitable], Dict[Any, Awaitable], concurrent.futures.Future
+    None, Awaitable, list[Awaitable], dict[Any, Awaitable], concurrent.futures.Future
 ]
 
 
@@ -363,7 +363,7 @@ class WaitIterator:
 
     """
 
-    _unfinished: Dict[Future, Union[int, str]] = {}
+    _unfinished: dict[Future, Union[int, str]] = {}
 
     def __init__(self, *args: Future, **kwargs: Future) -> None:
         if args and kwargs:
@@ -439,15 +439,15 @@ class WaitIterator:
 @overload
 def multi(
     children: Sequence[_Yieldable],
-    quiet_exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = (),
-) -> Future[List]: ...
+    quiet_exceptions: Union[type[Exception], tuple[type[Exception], ...]] = (),
+) -> Future[list]: ...
 
 
 @overload
 def multi(
     children: Mapping[Any, _Yieldable],
-    quiet_exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = (),
-) -> Future[Dict]: ...
+    quiet_exceptions: Union[type[Exception], tuple[type[Exception], ...]] = (),
+) -> Future[dict]: ...
 
 
 def multi(
@@ -523,7 +523,7 @@ def multi_future(
        Use `multi` instead.
     """
     if isinstance(children, dict):
-        keys: Optional[List] = list(children.keys())
+        keys: Optional[list] = list(children.keys())
         children_seq: Iterable = children.values()
     else:
         keys = None
@@ -559,7 +559,7 @@ def multi_future(
                 else:
                     future_set_result_unless_cancelled(future, result_list)
 
-    listening: Set[Future] = set()
+    listening: set[Future] = set()
     for f in children_futs:
         if f not in listening:
             listening.add(f)
@@ -844,7 +844,7 @@ class Runner:
         return True
 
     def handle_exception(
-        self, typ: Type[Exception], value: Exception, tb: types.TracebackType
+        self, typ: type[Exception], value: Exception, tb: types.TracebackType
     ) -> bool:
         if not self.running and not self.finished:
             self.future = Future()

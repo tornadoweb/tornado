@@ -29,7 +29,7 @@ from tornado import gen
 from tornado.netutil import Resolver
 from tornado.gen import TimeoutError
 
-from typing import Any, Union, Dict, Tuple, List, Callable, Iterator, Optional
+from typing import Any, Union, Tuple, Callable, Iterator, Optional
 
 if typing.TYPE_CHECKING:
     from typing import Set  # noqa(F401)
@@ -57,28 +57,28 @@ class _Connector:
 
     def __init__(
         self,
-        addrinfo: List[Tuple],
+        addrinfo: list[tuple],
         connect: Callable[
-            [socket.AddressFamily, Tuple], Tuple[IOStream, "Future[IOStream]"]
+            [socket.AddressFamily, tuple], tuple[IOStream, "Future[IOStream]"]
         ],
     ) -> None:
         self.io_loop = IOLoop.current()
         self.connect = connect
 
-        self.future: Future[Tuple[socket.AddressFamily, Any, IOStream]] = Future()
+        self.future: Future[tuple[socket.AddressFamily, Any, IOStream]] = Future()
         self.timeout: Optional[object] = None
         self.connect_timeout: Optional[object] = None
         self.last_error: Optional[Exception] = None
         self.remaining = len(addrinfo)
         self.primary_addrs, self.secondary_addrs = self.split(addrinfo)
-        self.streams: Set[IOStream] = set()
+        self.streams: set[IOStream] = set()
 
     @staticmethod
     def split(
-        addrinfo: List[Tuple],
-    ) -> Tuple[
-        List[Tuple[socket.AddressFamily, Tuple]],
-        List[Tuple[socket.AddressFamily, Tuple]],
+        addrinfo: list[tuple],
+    ) -> tuple[
+        list[tuple[socket.AddressFamily, tuple]],
+        list[tuple[socket.AddressFamily, tuple]],
     ]:
         """Partition the ``addrinfo`` list by address family.
 
@@ -109,7 +109,7 @@ class _Connector:
             self.set_connect_timeout(connect_timeout)
         return self.future
 
-    def try_connect(self, addrs: Iterator[Tuple[socket.AddressFamily, Tuple]]) -> None:
+    def try_connect(self, addrs: Iterator[tuple[socket.AddressFamily, tuple]]) -> None:
         try:
             af, addr = next(addrs)
         except StopIteration:
@@ -129,9 +129,9 @@ class _Connector:
 
     def on_connect_done(
         self,
-        addrs: Iterator[Tuple[socket.AddressFamily, Tuple]],
+        addrs: Iterator[tuple[socket.AddressFamily, tuple]],
         af: socket.AddressFamily,
-        addr: Tuple,
+        addr: tuple,
         future: "Future[IOStream]",
     ) -> None:
         self.remaining -= 1
@@ -220,7 +220,7 @@ class TCPClient:
         host: str,
         port: int,
         af: socket.AddressFamily = socket.AF_UNSPEC,
-        ssl_options: Optional[Union[Dict[str, Any], ssl.SSLContext]] = None,
+        ssl_options: Optional[Union[dict[str, Any], ssl.SSLContext]] = None,
         max_buffer_size: Optional[int] = None,
         source_ip: Optional[str] = None,
         source_port: Optional[int] = None,
@@ -295,10 +295,10 @@ class TCPClient:
         self,
         max_buffer_size: Optional[int],
         af: socket.AddressFamily,
-        addr: Tuple,
+        addr: tuple,
         source_ip: Optional[str] = None,
         source_port: Optional[int] = None,
-    ) -> Tuple[IOStream, "Future[IOStream]"]:
+    ) -> tuple[IOStream, "Future[IOStream]"]:
         # Always connect in plaintext; we'll convert to ssl if necessary
         # after one connection has completed.
         source_port_bind = source_port if isinstance(source_port, int) else 0

@@ -659,7 +659,7 @@ class GenCoroutineUnfinishedSequenceHandler(RequestHandler):
 class UndecoratedCoroutinesHandler(RequestHandler):
     @gen.coroutine
     def prepare(self):
-        self.chunks: List[str] = []
+        self.chunks: list[str] = []
         yield gen.moment
         self.chunks.append("1")
 
@@ -868,7 +868,7 @@ class WaitIteratorTest(AsyncTestCase):
 
     @gen_test
     def test_iterator(self):
-        futures: List[Future[int]] = [Future(), Future(), Future(), Future()]
+        futures: list[Future[int]] = [Future(), Future(), Future(), Future()]
 
         self.finish_coroutines(0, futures)
 
@@ -897,7 +897,7 @@ class WaitIteratorTest(AsyncTestCase):
         # Recreate the previous test with py35 syntax. It's a little clunky
         # because of the way the previous test handles an exception on
         # a single iteration.
-        futures: List[Future[int]] = [Future(), Future(), Future(), Future()]
+        futures: list[Future[int]] = [Future(), Future(), Future(), Future()]
         self.finish_coroutines(0, futures)
         self.finished = False
 
@@ -948,7 +948,7 @@ class RunnerGCTest(AsyncTestCase):
     def test_gc(self):
         # GitHub issue 1769: Runner objects can get GCed unexpectedly
         # while their future is alive.
-        weakref_scope: List[Optional[weakref.ReferenceType]] = [None]
+        weakref_scope: list[Optional[weakref.ReferenceType]] = [None]
 
         def callback():
             gc.collect(2)
@@ -968,7 +968,7 @@ class RunnerGCTest(AsyncTestCase):
         # their loop is closed, even if they're involved in a reference
         # cycle.
         loop = self.get_new_ioloop()
-        result: List[Optional[bool]] = []
+        result: list[Optional[bool]] = []
         wfut = []
 
         @gen.coroutine
@@ -1013,7 +1013,7 @@ class RunnerGCTest(AsyncTestCase):
                 result.append(None)
 
         loop = self.get_new_ioloop()
-        result: List[Optional[bool]] = []
+        result: list[Optional[bool]] = []
         wfut = []
 
         @gen.coroutine

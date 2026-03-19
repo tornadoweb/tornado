@@ -225,7 +225,7 @@ class TestIOLoop(AsyncTestCase):
 
     def test_timeout_with_arguments(self):
         # This tests that all the timeout methods pass through *args correctly.
-        results: List[int] = []
+        results: list[int] = []
         self.io_loop.add_timeout(self.io_loop.time(), results.append, 1)
         self.io_loop.add_timeout(datetime.timedelta(seconds=0), results.append, 2)
         self.io_loop.call_at(self.io_loop.time(), results.append, 3)

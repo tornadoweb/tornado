@@ -34,7 +34,7 @@ from tornado import process
 from tornado.util import errno_from_exception
 
 import typing
-from typing import Union, Dict, Any, Iterable, Optional, Awaitable
+from typing import Union, Any, Iterable, Optional, Awaitable
 
 if typing.TYPE_CHECKING:
     from typing import Callable, List  # noqa: F401
@@ -123,14 +123,14 @@ class TCPServer:
 
     def __init__(
         self,
-        ssl_options: Optional[Union[Dict[str, Any], ssl.SSLContext]] = None,
+        ssl_options: Optional[Union[dict[str, Any], ssl.SSLContext]] = None,
         max_buffer_size: Optional[int] = None,
         read_chunk_size: Optional[int] = None,
     ) -> None:
         self.ssl_options = ssl_options
-        self._sockets: Dict[int, socket.socket] = {}
-        self._handlers: Dict[int, Callable[[], None]] = {}
-        self._pending_sockets: List[socket.socket] = []
+        self._sockets: dict[int, socket.socket] = {}
+        self._handlers: dict[int, Callable[[], None]] = {}
+        self._pending_sockets: list[socket.socket] = []
         self._started = False
         self._stopped = False
         self.max_buffer_size = max_buffer_size

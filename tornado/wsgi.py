@@ -38,7 +38,7 @@ from tornado import httputil
 from tornado.ioloop import IOLoop
 from tornado.log import access_log
 
-from typing import List, Tuple, Optional, Callable, Any, Dict
+from typing import Optional, Callable, Any
 from types import TracebackType
 import typing
 
@@ -134,14 +134,14 @@ class WSGIContainer:
         IOLoop.current().spawn_callback(self.handle_request, request)
 
     async def handle_request(self, request: httputil.HTTPServerRequest) -> None:
-        data: Dict[str, Any] = {}
-        response: List[bytes] = []
+        data: dict[str, Any] = {}
+        response: list[bytes] = []
 
         def start_response(
             status: str,
-            headers: List[Tuple[str, str]],
+            headers: list[tuple[str, str]],
             exc_info: Optional[
-                Tuple[
+                tuple[
                     "Optional[Type[BaseException]]",
                     Optional[BaseException],
                     Optional[TracebackType],
@@ -184,7 +184,7 @@ class WSGIContainer:
 
         status_code_str, reason = data["status"].split(" ", 1)
         status_code = int(status_code_str)
-        headers: List[Tuple[str, str]] = data["headers"]
+        headers: list[tuple[str, str]] = data["headers"]
         header_set = {k.lower() for (k, v) in headers}
         body = escape.utf8(body)
         if status_code != 304:
@@ -204,7 +204,7 @@ class WSGIContainer:
         request.connection.finish()
         self._log(status_code, request)
 
-    def environ(self, request: httputil.HTTPServerRequest) -> Dict[str, Any]:
+    def environ(self, request: httputil.HTTPServerRequest) -> dict[str, Any]:
         """Converts a `tornado.httputil.HTTPServerRequest` to a WSGI environment.
 
         .. versionchanged:: 6.3
