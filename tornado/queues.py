@@ -35,7 +35,8 @@ from tornado import gen, ioloop
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado.locks import Event
 
-from typing import TypeVar, Generic, Awaitable
+from typing import TypeVar, Generic
+from collections.abc import Awaitable
 import typing
 
 if typing.TYPE_CHECKING:

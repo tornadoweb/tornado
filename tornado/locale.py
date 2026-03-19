@@ -52,7 +52,8 @@ from tornado.log import gen_log
 
 from tornado._locale_data import LOCALE_NAMES
 
-from typing import Iterable, Any
+from typing import Any
+from collections.abc import Iterable
 
 _default_locale = "en_US"
 _translations: dict[str, Any] = {}

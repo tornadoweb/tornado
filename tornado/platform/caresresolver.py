@@ -9,7 +9,8 @@ from tornado.netutil import Resolver, is_valid_ip
 import typing
 
 if typing.TYPE_CHECKING:
-    from typing import Generator, Any, List, Tuple, Dict  # noqa: F401
+    from typing import Any, List, Tuple, Dict  # noqa: F401
+    from collections.abc import Generator
 
 
 class CaresResolver(Resolver):

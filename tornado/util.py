@@ -22,11 +22,10 @@ import zlib
 
 from typing import (
     Any,
-    Mapping,
-    Match,
     Callable,
-    Sequence,
 )
+from collections.abc import Mapping, Sequence
+from re import Match
 
 if typing.TYPE_CHECKING:
     # Additional imports only used in type comments.

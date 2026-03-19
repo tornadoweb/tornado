@@ -53,7 +53,8 @@ from tornado import gen, httputil
 from tornado.ioloop import IOLoop
 from tornado.util import Configurable
 
-from typing import Type, Any, Union, Callable, Optional, Awaitable, cast
+from typing import Type, Any, Union, Callable, Optional, cast
+from collections.abc import Awaitable
 
 
 class HTTPClient:

@@ -208,7 +208,8 @@ from tornado import escape
 from tornado.log import app_log
 from tornado.util import ObjectDict, exec_in, unicode_type
 
-from typing import Any, Union, Callable, Iterable, Optional, TextIO
+from typing import Any, Union, Callable, Optional, TextIO
+from collections.abc import Iterable
 import typing
 
 if typing.TYPE_CHECKING:

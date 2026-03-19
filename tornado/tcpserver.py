@@ -34,7 +34,8 @@ from tornado import process
 from tornado.util import errno_from_exception
 
 import typing
-from typing import Union, Any, Iterable, Optional, Awaitable
+from typing import Union, Any, Optional
+from collections.abc import Iterable, Awaitable
 
 if typing.TYPE_CHECKING:
     from typing import Callable, List  # noqa: F401

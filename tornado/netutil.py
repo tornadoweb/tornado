@@ -28,7 +28,8 @@ from tornado.concurrent import dummy_executor, run_on_executor
 from tornado.ioloop import IOLoop
 from tornado.util import Configurable, errno_from_exception
 
-from typing import Callable, Any, Union, Awaitable, Optional
+from typing import Callable, Any, Union, Optional
+from collections.abc import Awaitable
 
 # Note that the naming of ssl.Purpose is confusing; the purpose
 # of a context is to authenticate the opposite side of the connection.

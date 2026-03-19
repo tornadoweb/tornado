@@ -84,7 +84,8 @@ from tornado.httputil import url_concat
 from tornado.util import unicode_type
 from tornado.web import RequestHandler
 
-from typing import Any, cast, Iterable, Union, Optional
+from typing import Any, cast, Union, Optional
+from collections.abc import Iterable
 
 
 class AuthError(Exception):

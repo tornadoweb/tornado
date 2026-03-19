@@ -37,7 +37,8 @@ from tornado.tcpserver import TCPServer
 from tornado.util import Configurable
 
 import typing
-from typing import Union, Any, Callable, Optional, Awaitable
+from typing import Union, Any, Callable, Optional
+from collections.abc import Awaitable
 
 if typing.TYPE_CHECKING:
     from typing import Set  # noqa: F401

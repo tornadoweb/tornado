@@ -188,11 +188,10 @@ from typing import (
     Any,
     Union,
     Optional,
-    Awaitable,
-    Pattern,
     overload,
-    Sequence,
 )
+from collections.abc import Awaitable, Sequence
+from re import Pattern
 
 
 class Router(httputil.HTTPServerConnectionDelegate):

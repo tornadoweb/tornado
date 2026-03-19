@@ -33,7 +33,8 @@ import time
 from io import BytesIO
 import urllib.parse
 
-from typing import Any, Callable, Optional, Type, Union, Awaitable
+from typing import Any, Callable, Optional, Type, Union
+from collections.abc import Awaitable
 from types import TracebackType
 import typing
 

@@ -110,15 +110,13 @@ from typing import (
     Any,
     Union,
     Optional,
-    Awaitable,
     Callable,
-    Iterable,
-    Generator,
     Type,
     TypeVar,
     cast,
     overload,
 )
+from collections.abc import Awaitable, Iterable, Generator
 from types import TracebackType
 import typing
 

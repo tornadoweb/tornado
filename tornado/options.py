@@ -112,12 +112,11 @@ from tornado.util import basestring_type, exec_in
 
 from typing import (
     Any,
-    Iterator,
-    Iterable,
     Callable,
     TextIO,
     Optional,
 )
+from collections.abc import Iterator, Iterable
 
 
 class Error(Exception):

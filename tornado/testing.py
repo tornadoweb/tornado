@@ -34,7 +34,8 @@ from tornado.util import raise_exc_info, basestring_type
 from tornado.web import Application
 
 import typing
-from typing import Any, Callable, Type, Union, Optional, Coroutine
+from typing import Any, Callable, Type, Union, Optional
+from collections.abc import Coroutine
 from types import TracebackType
 
 if typing.TYPE_CHECKING:

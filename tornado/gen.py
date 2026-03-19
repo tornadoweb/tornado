@@ -92,21 +92,20 @@ except ImportError:
 
 import typing
 from typing import (
-    Mapping,
     Union,
     Any,
     Callable,
     List,
     Type,
     Tuple,
-    Awaitable,
     Dict,
-    Sequence,
     overload,
 )
+from collections.abc import Mapping, Awaitable, Sequence
 
 if typing.TYPE_CHECKING:
-    from typing import Deque, Optional, Set, Iterable  # noqa: F401
+    from typing import Deque, Optional, Set  # noqa: F401
+    from collections.abc import Iterable
 
 _T = typing.TypeVar("_T")
 

@@ -45,13 +45,9 @@ responses
 
 import typing
 from typing import (
-    Iterable,
-    Mapping,
-    Iterator,
-    Awaitable,
-    Generator,
     AnyStr,
 )
+from collections.abc import Iterable, Mapping, Iterator, Awaitable, Generator
 
 if typing.TYPE_CHECKING:
     from typing import Deque  # noqa: F401

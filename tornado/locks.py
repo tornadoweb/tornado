@@ -19,7 +19,8 @@ import types
 from tornado import gen, ioloop
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 
-from typing import Union, Optional, Type, Any, Awaitable
+from typing import Union, Optional, Type, Any
+from collections.abc import Awaitable
 import typing
 
 if typing.TYPE_CHECKING:

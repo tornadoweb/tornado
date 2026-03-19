@@ -43,10 +43,10 @@ from typing import (
     Any,
     Optional,
     Union,
-    Awaitable,
     Callable,
     Type,
 )
+from collections.abc import Awaitable
 from types import TracebackType
 
 if TYPE_CHECKING:

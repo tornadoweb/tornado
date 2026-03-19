@@ -29,7 +29,8 @@ from tornado import gen
 from tornado.netutil import Resolver
 from tornado.gen import TimeoutError
 
-from typing import Any, Union, Tuple, Callable, Iterator, Optional
+from typing import Any, Union, Tuple, Callable, Optional
+from collections.abc import Iterator
 
 if typing.TYPE_CHECKING:
     from typing import Set  # noqa(F401)

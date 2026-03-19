@@ -44,12 +44,12 @@ import typing
 from typing import (
     Union,
     Optional,
-    Awaitable,
     Callable,
-    Pattern,
     Any,
     TypeVar,
 )
+from collections.abc import Awaitable
+from re import Pattern
 from types import TracebackType
 
 if typing.TYPE_CHECKING:
