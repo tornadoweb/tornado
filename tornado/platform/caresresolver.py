@@ -7,10 +7,8 @@ from tornado.ioloop import IOLoop
 from tornado.netutil import Resolver, is_valid_ip
 
 import typing
-
-if typing.TYPE_CHECKING:
-    from typing import Any, List, Tuple, Dict  # noqa: F401
-    from collections.abc import Generator
+from typing import Any
+from collections.abc import Generator
 
 
 class CaresResolver(Resolver):
@@ -63,7 +61,7 @@ class CaresResolver(Resolver):
     @gen.coroutine
     def resolve(
         self, host: str, port: int, family: int = 0
-    ) -> "Generator[Any, Any, List[Tuple[int, Any]]]":
+    ) -> "Generator[Any, Any, list[tuple[int, Any]]]":
         if is_valid_ip(host):
             addresses = [host]
         else:

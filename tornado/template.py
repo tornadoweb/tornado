@@ -208,13 +208,10 @@ from tornado import escape
 from tornado.log import app_log
 from tornado.util import ObjectDict, exec_in, unicode_type
 
-from typing import Any, Optional, TextIO
+from typing import Any, Optional, TextIO, ContextManager
 from collections.abc import Callable
 from collections.abc import Iterable
 import typing
-
-if typing.TYPE_CHECKING:
-    from typing import Tuple, ContextManager  # noqa: F401
 
 _DEFAULT_AUTOESCAPE = "xhtml_escape"
 

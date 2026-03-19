@@ -118,11 +118,6 @@ from typing import (
 from collections.abc import Callable
 from collections.abc import Awaitable, Iterable, Generator
 from types import TracebackType
-import typing
-
-if typing.TYPE_CHECKING:
-    from typing import Set  # noqa: F401
-
 
 # The following types are accepted by RequestHandler.set_header
 # and related methods.

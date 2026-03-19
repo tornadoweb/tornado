@@ -49,16 +49,9 @@ from tornado.log import app_log
 from tornado.util import Configurable, TimeoutError, import_object
 
 import typing
-from typing import Any, TypeVar
+from typing import Any, TypeVar, TypedDict, Protocol
 from collections.abc import Callable
 from collections.abc import Awaitable
-
-if typing.TYPE_CHECKING:
-    from typing import Dict, List, Set, TypedDict  # noqa: F401
-
-    from typing_extensions import Protocol
-else:
-    Protocol = object
 
 
 class _Selectable(Protocol):
@@ -493,12 +486,11 @@ class IOLoop(Configurable):
         .. versionchanged:: 6.2
            ``tornado.util.TimeoutError`` is now an alias to ``asyncio.TimeoutError``.
         """
-        if typing.TYPE_CHECKING:
 
-            class FutureCell(TypedDict):
-                # noqa: F841
-                future: Future | None
-                timeout_called: bool
+        class FutureCell(TypedDict):
+            # noqa: F841
+            future: Future | None
+            timeout_called: bool
 
         future_cell: FutureCell = {"future": None, "timeout_called": False}
 

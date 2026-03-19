@@ -8,11 +8,6 @@ import unittest
 from tornado.options import OptionParser, Error
 from tornado.util import basestring_type
 
-import typing
-
-if typing.TYPE_CHECKING:
-    from typing import List  # noqa: F401
-
 
 class Email:
     def __init__(self, value):

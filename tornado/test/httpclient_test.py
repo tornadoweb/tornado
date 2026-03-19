@@ -9,7 +9,6 @@ from io import BytesIO
 import subprocess
 import sys
 import time
-import typing  # noqa: F401
 import unicodedata
 import unittest
 

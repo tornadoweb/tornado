@@ -100,12 +100,8 @@ from typing import (
     Dict,
     overload,
 )
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from collections.abc import Mapping, Awaitable, Sequence
-
-if typing.TYPE_CHECKING:
-    from typing import Deque, Optional, Set  # noqa: F401
-    from collections.abc import Iterable
 
 _T = typing.TypeVar("_T")
 
@@ -375,7 +371,7 @@ class WaitIterator:
             self._unfinished = {f: i for (i, f) in enumerate(args)}
             futures = args
 
-        self._finished: Deque[Future] = collections.deque()
+        self._finished: collections.deque[Future] = collections.deque()
         self.current_index: str | int | None = None
         self.current_future: Future | None = None
         self._running_future: Future | None = None

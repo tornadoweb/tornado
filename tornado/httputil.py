@@ -50,9 +50,10 @@ from typing import (
 from collections.abc import Iterable, Mapping, Iterator, Awaitable, Generator
 
 if typing.TYPE_CHECKING:
-    from typing import Deque  # noqa: F401
-    from asyncio import Future  # noqa: F401
-    import unittest  # noqa: F401
+    # These are relatively heavy imports and aren't needed in this file
+    # unless we're type-checking.
+    from asyncio import Future
+    import unittest
 
 # To be used with str.strip() and related methods.
 HTTP_WHITESPACE = " \t"

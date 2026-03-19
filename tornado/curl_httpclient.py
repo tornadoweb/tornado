@@ -41,10 +41,6 @@ from tornado.log import app_log
 
 from typing import Any
 from collections.abc import Callable
-import typing
-
-if typing.TYPE_CHECKING:
-    from typing import Deque, Tuple  # noqa: F401
 
 curl_log = logging.getLogger("tornado.curl_httpclient")
 
@@ -62,7 +58,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         self._multi.setopt(pycurl.M_SOCKETFUNCTION, self._handle_socket)
         self._curls = [self._curl_create() for i in range(max_clients)]
         self._free_list = self._curls[:]
-        self._requests: Deque[
+        self._requests: collections.deque[
             tuple[HTTPRequest, Callable[[HTTPResponse], None], float]
         ] = collections.deque()
         self._fds: dict[int, int] = {}

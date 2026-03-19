@@ -31,11 +31,6 @@ from tornado.test.util import (
 )
 from tornado.concurrent import Future
 
-import typing
-
-if typing.TYPE_CHECKING:
-    from typing import List  # noqa: F401
-
 
 class TestIOLoop(AsyncTestCase):
     def test_add_callback_return_sequence(self):

@@ -39,10 +39,9 @@ from collections.abc import Callable
 from collections.abc import Coroutine
 from types import TracebackType
 
-if typing.TYPE_CHECKING:
-    _ExcInfoTuple = tuple[
-        Optional[type[BaseException]], Optional[BaseException], Optional[TracebackType]
-    ]
+_ExcInfoTuple = tuple[
+    type[BaseException] | None, BaseException | None, TracebackType | None
+]
 
 
 _NON_OWNED_IOLOOPS = AsyncIOMainLoop

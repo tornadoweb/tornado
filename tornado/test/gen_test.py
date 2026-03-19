@@ -21,11 +21,6 @@ try:
 except ImportError:
     contextvars = None  # type: ignore
 
-import typing
-
-if typing.TYPE_CHECKING:
-    from typing import List, Optional  # noqa: F401
-
 
 class GenBasicTest(AsyncTestCase):
     @gen.coroutine

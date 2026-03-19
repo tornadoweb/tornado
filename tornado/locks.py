@@ -21,10 +21,6 @@ from tornado.concurrent import Future, future_set_result_unless_cancelled
 
 from typing import Optional, Type, Any
 from collections.abc import Awaitable
-import typing
-
-if typing.TYPE_CHECKING:
-    from typing import Deque, Set  # noqa: F401
 
 __all__ = ["Condition", "Event", "Semaphore", "BoundedSemaphore", "Lock"]
 
@@ -40,7 +36,7 @@ class _TimeoutGarbageCollector:
     """
 
     def __init__(self) -> None:
-        self._waiters: Deque[Future] = collections.deque()
+        self._waiters: collections.deque[Future] = collections.deque()
         self._timeouts = 0
 
     def _garbage_collect(self) -> None:

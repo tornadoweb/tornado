@@ -19,7 +19,7 @@ from twisted.python import failure  # type: ignore
 from tornado.concurrent import Future, future_set_exc_info
 from tornado import gen
 
-import typing  # noqa: F401
+import typing
 
 
 def install() -> None:

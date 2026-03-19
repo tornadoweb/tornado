@@ -36,12 +36,8 @@ from tornado import ioloop
 from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
 
-import typing
 from typing import Any
 from collections.abc import Callable
-
-if typing.TYPE_CHECKING:
-    from typing import List  # noqa: F401
 
 # Re-export this exception for convenience.
 CalledProcessError = subprocess.CalledProcessError

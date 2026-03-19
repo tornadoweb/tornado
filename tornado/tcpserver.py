@@ -33,13 +33,8 @@ from tornado.netutil import (
 from tornado import process
 from tornado.util import errno_from_exception
 
-import typing
 from typing import Any
-from collections.abc import Iterable, Awaitable
-
-if typing.TYPE_CHECKING:
-    from typing import List  # noqa: F401
-    from collections.abc import Callable
+from collections.abc import Iterable, Awaitable, Callable
 
 
 class TCPServer:

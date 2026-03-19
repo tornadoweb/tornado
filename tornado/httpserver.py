@@ -41,9 +41,6 @@ from typing import Any
 from collections.abc import Callable
 from collections.abc import Awaitable
 
-if typing.TYPE_CHECKING:
-    from typing import Set  # noqa: F401
-
 
 class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate):
     r"""A non-blocking, single-threaded HTTP server.

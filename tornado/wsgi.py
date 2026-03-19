@@ -38,14 +38,13 @@ from tornado import httputil
 from tornado.ioloop import IOLoop
 from tornado.log import access_log
 
-from typing import Optional, Any
+from typing import Any
 from collections.abc import Callable
 from types import TracebackType
 import typing
 
 if typing.TYPE_CHECKING:
-    from typing import Type  # noqa: F401
-    from _typeshed.wsgi import WSGIApplication as WSGIAppType  # noqa: F401
+    from _typeshed.wsgi import WSGIApplication as WSGIAppType
 
 
 # PEP 3333 specifies that WSGI on python 3 generally deals with byte strings
@@ -143,7 +142,7 @@ class WSGIContainer:
             headers: list[tuple[str, str]],
             exc_info: None | (
                 tuple[
-                    "Optional[Type[BaseException]]",
+                    type[BaseException] | None,
                     BaseException | None,
                     TracebackType | None,
                 ]

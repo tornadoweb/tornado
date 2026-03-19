@@ -38,62 +38,62 @@ from tornado.tcpclient import TCPClient
 from tornado.util import _websocket_mask
 
 from typing import (
-    TYPE_CHECKING,
     cast,
     Any,
     Optional,
     Union,
     Type,
+    Protocol,
 )
 from collections.abc import Callable
 from collections.abc import Awaitable
 from types import TracebackType
 
-if TYPE_CHECKING:
-    from typing_extensions import Protocol
 
-    # The zlib compressor types aren't actually exposed anywhere
-    # publicly, so declare protocols for the portions we use.
-    class _Compressor(Protocol):
-        def compress(self, data: bytes) -> bytes:
-            pass
+# The zlib compressor types aren't actually exposed anywhere
+# publicly, so declare protocols for the portions we use.
+class _Compressor(Protocol):
+    def compress(self, data: bytes) -> bytes:
+        pass
 
-        def flush(self, mode: int) -> bytes:
-            pass
+    def flush(self, mode: int) -> bytes:
+        pass
 
-    class _Decompressor(Protocol):
-        @property
-        def unconsumed_tail(self) -> bytes:
-            pass
 
-        def decompress(self, data: bytes, max_length: int) -> bytes:
-            pass
+class _Decompressor(Protocol):
+    @property
+    def unconsumed_tail(self) -> bytes:
+        pass
 
-    class _WebSocketDelegate(Protocol):
-        # The common base interface implemented by WebSocketHandler on
-        # the server side and WebSocketClientConnection on the client
-        # side.
-        def on_ws_connection_close(
-            self, close_code: int | None = None, close_reason: str | None = None
-        ) -> None:
-            pass
+    def decompress(self, data: bytes, max_length: int) -> bytes:
+        pass
 
-        def on_message(self, message: str | bytes) -> Optional["Awaitable[None]"]:
-            pass
 
-        def on_ping(self, data: bytes) -> None:
-            pass
+class _WebSocketDelegate(Protocol):
+    # The common base interface implemented by WebSocketHandler on
+    # the server side and WebSocketClientConnection on the client
+    # side.
+    def on_ws_connection_close(
+        self, close_code: int | None = None, close_reason: str | None = None
+    ) -> None:
+        pass
 
-        def on_pong(self, data: bytes) -> None:
-            pass
+    def on_message(self, message: str | bytes) -> Optional["Awaitable[None]"]:
+        pass
 
-        def log_exception(
-            self,
-            typ: type[BaseException] | None,
-            value: BaseException | None,
-            tb: TracebackType | None,
-        ) -> None:
-            pass
+    def on_ping(self, data: bytes) -> None:
+        pass
+
+    def on_pong(self, data: bytes) -> None:
+        pass
+
+    def log_exception(
+        self,
+        typ: type[BaseException] | None,
+        value: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        pass
 
 
 _default_max_message_size = 10 * 1024 * 1024
