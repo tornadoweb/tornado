@@ -22,11 +22,8 @@ import zlib
 
 from typing import (
     Any,
-    Optional,
     Dict,
     Mapping,
-    List,
-    Tuple,
     Match,
     Callable,
     Type,
@@ -137,7 +134,7 @@ def import_object(name: str) -> Any:
 
 
 def exec_in(
-    code: Any, glob: Dict[str, Any], loc: Optional[Optional[Mapping[str, Any]]] = None
+    code: Any, glob: dict[str, Any], loc: Mapping[str, Any] | None | None = None
 ) -> None:
     if isinstance(code, str):
         # exec(string) inherits the caller's future imports; compile
@@ -147,7 +144,7 @@ def exec_in(
 
 
 def raise_exc_info(
-    exc_info: Tuple[Optional[type], Optional[BaseException], Optional["TracebackType"]],
+    exc_info: tuple[type | None, BaseException | None, TracebackType | None],
 ) -> typing.NoReturn:
     try:
         if exc_info[1] is not None:
@@ -160,7 +157,7 @@ def raise_exc_info(
         exc_info = (None, None, None)
 
 
-def errno_from_exception(e: BaseException) -> Optional[int]:
+def errno_from_exception(e: BaseException) -> int | None:
     """Provides the errno from an Exception object.
 
     There are cases that the errno attribute was not set so we pull
@@ -238,12 +235,12 @@ class Configurable:
     # There may be a clever way to use generics here to get more
     # precise types (i.e. for a particular Configurable subclass T,
     # all the types are subclasses of T, not just Configurable).
-    __impl_class: Optional[Type["Configurable"]] = None
-    __impl_kwargs: Optional[Dict[str, Any]] = None
+    __impl_class: type[Configurable] | None = None
+    __impl_kwargs: dict[str, Any] | None = None
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Any:
         base = cls.configurable_base()
-        init_kwargs: Dict[str, Any] = {}
+        init_kwargs: dict[str, Any] = {}
         if cls is base:
             impl = cls.configured_class()
             if base.__impl_kwargs:
@@ -262,7 +259,7 @@ class Configurable:
         return instance
 
     @classmethod
-    def configurable_base(cls) -> Type[Configurable]:
+    def configurable_base(cls) -> type[Configurable]:
         """Returns the base class of a configurable hierarchy.
 
         This will normally return the class in which it is defined.
@@ -273,7 +270,7 @@ class Configurable:
         raise NotImplementedError()
 
     @classmethod
-    def configurable_default(cls) -> Type[Configurable]:
+    def configurable_default(cls) -> type[Configurable]:
         """Returns the implementation class to be used if none is configured."""
         raise NotImplementedError()
 
@@ -290,9 +287,7 @@ class Configurable:
     """
 
     @classmethod
-    def configure(
-        cls, impl: Union[None, str, Type[Configurable]], **kwargs: Any
-    ) -> None:
+    def configure(cls, impl: None | str | type[Configurable], **kwargs: Any) -> None:
         """Sets the class to use when the base class is instantiated.
 
         Keyword arguments will be saved and added to the arguments passed
@@ -308,7 +303,7 @@ class Configurable:
         base.__impl_kwargs = kwargs
 
     @classmethod
-    def configured_class(cls) -> Type[Configurable]:
+    def configured_class(cls) -> type[Configurable]:
         """Returns the currently configured class."""
         base = cls.configurable_base()
         # Manually mangle the private name to see whether this base
@@ -325,13 +320,13 @@ class Configurable:
     @classmethod
     def _save_configuration(
         cls,
-    ) -> Tuple[Optional[Type[Configurable]], Optional[Dict[str, Any]]]:
+    ) -> tuple[type[Configurable] | None, dict[str, Any] | None]:
         base = cls.configurable_base()
         return (base.__impl_class, base.__impl_kwargs)
 
     @classmethod
     def _restore_configuration(
-        cls, saved: Tuple[Optional[Type[Configurable]], Optional[Dict[str, Any]]]
+        cls, saved: tuple[type[Configurable] | None, dict[str, Any] | None]
     ) -> None:
         base = cls.configurable_base()
         base.__impl_class = saved[0]
@@ -349,12 +344,12 @@ class ArgReplacer:
     def __init__(self, func: Callable, name: str) -> None:
         self.name = name
         try:
-            self.arg_pos: Optional[int] = self._getargnames(func).index(name)
+            self.arg_pos: int | None = self._getargnames(func).index(name)
         except ValueError:
             # Not a positional parameter
             self.arg_pos = None
 
-    def _getargnames(self, func: Callable) -> List[str]:
+    def _getargnames(self, func: Callable) -> list[str]:
         try:
             return getfullargspec(func).args
         except TypeError:
@@ -370,7 +365,7 @@ class ArgReplacer:
             raise
 
     def get_old_value(
-        self, args: Sequence[Any], kwargs: Dict[str, Any], default: Any = None
+        self, args: Sequence[Any], kwargs: dict[str, Any], default: Any = None
     ) -> Any:
         """Returns the old value of the named argument without replacing it.
 
@@ -382,8 +377,8 @@ class ArgReplacer:
             return kwargs.get(self.name, default)
 
     def replace(
-        self, new_value: Any, args: Sequence[Any], kwargs: Dict[str, Any]
-    ) -> Tuple[Any, Sequence[Any], Dict[str, Any]]:
+        self, new_value: Any, args: Sequence[Any], kwargs: dict[str, Any]
+    ) -> tuple[Any, Sequence[Any], dict[str, Any]]:
         """Replace the named argument in ``args, kwargs`` with ``new_value``.
 
         Returns ``(old_value, args, kwargs)``.  The returned ``args`` and

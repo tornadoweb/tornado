@@ -45,14 +45,9 @@ responses
 
 import typing
 from typing import (
-    Tuple,
     Iterable,
-    List,
     Mapping,
     Iterator,
-    Dict,
-    Union,
-    Optional,
     Awaitable,
     Generator,
     AnyStr,
@@ -167,7 +162,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
     """
 
     @typing.overload
-    def __init__(self, __arg: Mapping[str, List[str]]) -> None:
+    def __init__(self, __arg: Mapping[str, list[str]]) -> None:
         pass
 
     @typing.overload  # noqa: F811
@@ -175,7 +170,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
         pass
 
     @typing.overload  # noqa: F811
-    def __init__(self, *args: Tuple[str, str]) -> None:
+    def __init__(self, *args: tuple[str, str]) -> None:
         pass
 
     @typing.overload  # noqa: F811
@@ -191,7 +186,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
         # on demand (and cleared whenever the list is modified).
         self._as_list: dict[str, list[str]] = {}
         self._combined_cache: dict[str, str] = {}
-        self._last_key: Optional[str] = None
+        self._last_key: str | None = None
         if len(args) == 1 and len(kwargs) == 0 and isinstance(args[0], HTTPHeaders):
             # Copy constructor
             for k, v in args[0].get_all():
@@ -222,12 +217,12 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
         else:
             self[norm_name] = value
 
-    def get_list(self, name: str) -> List[str]:
+    def get_list(self, name: str) -> list[str]:
         """Returns all values for the given header as a list."""
         norm_name = _normalize_header(name)
         return self._as_list.get(norm_name, [])
 
-    def get_all(self) -> Iterable[Tuple[str, str]]:
+    def get_all(self) -> Iterable[tuple[str, str]]:
         """Returns an iterable of all (name, value) pairs.
 
         If a header has multiple values, multiple pairs will be
@@ -289,7 +284,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
             )
 
     @classmethod
-    def parse(cls, headers: str, *, _chars_are_bytes: bool = True) -> "HTTPHeaders":
+    def parse(cls, headers: str, *, _chars_are_bytes: bool = True) -> HTTPHeaders:
         """Returns a dictionary from HTTP header text.
 
         >>> h = HTTPHeaders.parse("Content-Type: text/html\\r\\nContent-Length: 42\\r\\n")
@@ -361,7 +356,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
     def __iter__(self) -> Iterator[typing.Any]:
         return iter(self._as_list)
 
-    def copy(self) -> "HTTPHeaders":
+    def copy(self) -> HTTPHeaders:
         # defined in dict but not in MutableMapping.
         return HTTPHeaders(self)
 
@@ -481,20 +476,20 @@ class HTTPServerRequest:
     query: str
 
     # HACK: Used for stream_request_body
-    _body_future: "Future[None]"
+    _body_future: Future[None]
 
     def __init__(
         self,
-        method: Optional[str] = None,
-        uri: Optional[str] = None,
+        method: str | None = None,
+        uri: str | None = None,
         version: str = "HTTP/1.0",
-        headers: Optional[HTTPHeaders] = None,
-        body: Optional[bytes] = None,
-        host: Optional[str] = None,
-        files: Optional[Dict[str, List["HTTPFile"]]] = None,
-        connection: Optional["HTTPConnection"] = None,
-        start_line: Optional["RequestStartLine"] = None,
-        server_connection: Optional[object] = None,
+        headers: HTTPHeaders | None = None,
+        body: bytes | None = None,
+        host: str | None = None,
+        files: dict[str, list[HTTPFile]] | None = None,
+        connection: HTTPConnection | None = None,
+        start_line: RequestStartLine | None = None,
+        server_connection: object | None = None,
     ) -> None:
         if start_line is not None:
             method, uri, version = start_line
@@ -550,10 +545,10 @@ class HTTPServerRequest:
             self.path, sep, self.query = uri.partition("?")
         self.arguments = parse_qs_bytes(self.query, keep_blank_values=True)
         self.query_arguments = copy.deepcopy(self.arguments)
-        self.body_arguments: Dict[str, List[bytes]] = {}
+        self.body_arguments: dict[str, list[bytes]] = {}
 
     @property
-    def cookies(self) -> Dict[str, http.cookies.Morsel]:
+    def cookies(self) -> dict[str, http.cookies.Morsel]:
         """A dictionary of ``http.cookies.Morsel`` objects."""
         if not hasattr(self, "_cookies"):
             self._cookies: http.cookies.SimpleCookie = http.cookies.SimpleCookie()
@@ -584,9 +579,7 @@ class HTTPServerRequest:
         else:
             return self._finish_time - self._start_time
 
-    def get_ssl_certificate(
-        self, binary_form: bool = False
-    ) -> Union[None, Dict, bytes]:
+    def get_ssl_certificate(self, binary_form: bool = False) -> None | dict | bytes:
         """Returns the client's SSL certificate, if any.
 
         To use client certificates, the HTTPServer's
@@ -659,8 +652,8 @@ class HTTPServerConnectionDelegate:
     """
 
     def start_request(
-        self, server_conn: object, request_conn: "HTTPConnection"
-    ) -> "HTTPMessageDelegate":
+        self, server_conn: object, request_conn: HTTPConnection
+    ) -> HTTPMessageDelegate:
         """This method is called by the server when a new request has started.
 
         :arg server_conn: is an opaque object representing the long-lived
@@ -690,9 +683,9 @@ class HTTPMessageDelegate:
     # TODO: genericize this class to avoid exposing the Union.
     def headers_received(
         self,
-        start_line: Union["RequestStartLine", "ResponseStartLine"],
+        start_line: RequestStartLine | ResponseStartLine,
         headers: HTTPHeaders,
-    ) -> Optional[Awaitable[None]]:
+    ) -> Awaitable[None] | None:
         """Called when the HTTP headers have been received and parsed.
 
         :arg start_line: a `.RequestStartLine` or `.ResponseStartLine`
@@ -707,7 +700,7 @@ class HTTPMessageDelegate:
         """
         pass
 
-    def data_received(self, chunk: bytes) -> Optional[Awaitable[None]]:
+    def data_received(self, chunk: bytes) -> Awaitable[None] | None:
         """Called when a chunk of data has been received.
 
         May return a `.Future` for flow control.
@@ -735,10 +728,10 @@ class HTTPConnection:
 
     def write_headers(
         self,
-        start_line: Union["RequestStartLine", "ResponseStartLine"],
+        start_line: RequestStartLine | ResponseStartLine,
         headers: HTTPHeaders,
-        chunk: Optional[bytes] = None,
-    ) -> "Future[None]":
+        chunk: bytes | None = None,
+    ) -> Future[None]:
         """Write an HTTP header block.
 
         :arg start_line: a `.RequestStartLine` or `.ResponseStartLine`.
@@ -757,7 +750,7 @@ class HTTPConnection:
         """
         raise NotImplementedError()
 
-    def write(self, chunk: bytes) -> "Future[None]":
+    def write(self, chunk: bytes) -> Future[None]:
         """Writes a chunk of body data.
 
         Returns a future for flow control.
@@ -775,9 +768,7 @@ class HTTPConnection:
 
 def url_concat(
     url: str,
-    args: Union[
-        None, Dict[str, str], List[Tuple[str, str]], Tuple[Tuple[str, str], ...]
-    ],
+    args: None | dict[str, str] | list[tuple[str, str]] | tuple[tuple[str, str], ...],
 ) -> str:
     """Concatenate url and arguments regardless of whether
     url has existing query parameters.
@@ -838,7 +829,7 @@ class HTTPFile(ObjectDict):
 
 def _parse_request_range(
     range_header: str,
-) -> Optional[Tuple[Optional[int], Optional[int]]]:
+) -> tuple[int | None, int | None] | None:
     """Parses a Range header.
 
     Returns either ``None`` or tuple ``(start, end)``.
@@ -887,7 +878,7 @@ def _parse_request_range(
     return (start, end)
 
 
-def _get_content_range(start: Optional[int], end: Optional[int], total: int) -> str:
+def _get_content_range(start: int | None, end: int | None, total: int) -> str:
     """Returns a suitable Content-Range header:
 
     >>> print(_get_content_range(None, 1, 4))
@@ -902,7 +893,7 @@ def _get_content_range(start: Optional[int], end: Optional[int], total: int) -> 
     return f"bytes {start}-{end}/{total}"
 
 
-def _int_or_none(val: str) -> Optional[int]:
+def _int_or_none(val: str) -> int | None:
     val = val.strip()
     if val == "":
         return None
@@ -988,11 +979,11 @@ def set_parse_body_config(config: ParseBodyConfig) -> None:
 def parse_body_arguments(
     content_type: str,
     body: bytes,
-    arguments: Dict[str, List[bytes]],
-    files: Dict[str, List[HTTPFile]],
-    headers: Optional[HTTPHeaders] = None,
+    arguments: dict[str, list[bytes]],
+    files: dict[str, list[HTTPFile]],
+    headers: HTTPHeaders | None = None,
     *,
-    config: Optional[ParseBodyConfig] = None,
+    config: ParseBodyConfig | None = None,
 ) -> None:
     """Parses a form request body.
 
@@ -1043,10 +1034,10 @@ def parse_body_arguments(
 def parse_multipart_form_data(
     boundary: bytes,
     data: bytes,
-    arguments: Dict[str, List[bytes]],
-    files: Dict[str, List[HTTPFile]],
+    arguments: dict[str, list[bytes]],
+    files: dict[str, list[HTTPFile]],
     *,
-    config: Optional[ParseMultipartConfig] = None,
+    config: ParseMultipartConfig | None = None,
 ) -> None:
     """Parses a ``multipart/form-data`` body.
 
@@ -1105,7 +1096,7 @@ def parse_multipart_form_data(
 
 
 def format_timestamp(
-    ts: Union[int, float, tuple, time.struct_time, datetime.datetime],
+    ts: int | float | tuple | time.struct_time | datetime.datetime,
 ) -> str:
     """Formats a timestamp in the format used by HTTP.
 
@@ -1198,7 +1189,7 @@ def parse_response_start_line(line: str) -> ResponseStartLine:
 # RFCs for multipart/form-data) before making this change.
 
 
-def _parseparam(s: str) -> Generator[str, None, None]:
+def _parseparam(s: str) -> Generator[str]:
     start = 0
     while s.find(";", start) == start:
         start += 1
@@ -1216,7 +1207,7 @@ def _parseparam(s: str) -> Generator[str, None, None]:
         start = end
 
 
-def _parse_header(line: str) -> Tuple[str, Dict[str, str]]:
+def _parse_header(line: str) -> tuple[str, dict[str, str]]:
     r"""Parse a Content-type like header.
 
     Return the main content-type and a dictionary of options.
@@ -1251,7 +1242,7 @@ def _parse_header(line: str) -> Tuple[str, Dict[str, str]]:
     return key, pdict
 
 
-def _encode_header(key: str, pdict: Dict[str, str]) -> str:
+def _encode_header(key: str, pdict: dict[str, str]) -> str:
     """Inverse of _parse_header.
 
     >>> _encode_header('permessage-deflate',
@@ -1271,9 +1262,7 @@ def _encode_header(key: str, pdict: Dict[str, str]) -> str:
     return "; ".join(out)
 
 
-def encode_username_password(
-    username: Union[str, bytes], password: Union[str, bytes]
-) -> bytes:
+def encode_username_password(username: str | bytes, password: str | bytes) -> bytes:
     """Encodes a username/password pair in the format used by HTTP auth.
 
     The return value is a byte string in the form ``username:password``.
@@ -1296,7 +1285,7 @@ def doctests() -> unittest.TestSuite:
 _netloc_re = re.compile(r"^(.+):(\d+)$")
 
 
-def split_host_and_port(netloc: str) -> Tuple[str, Optional[int]]:
+def split_host_and_port(netloc: str) -> tuple[str, int | None]:
     """Returns ``(host, port)`` tuple from ``netloc``.
 
     Returned ``port`` will be ``None`` if not present.
@@ -1306,14 +1295,14 @@ def split_host_and_port(netloc: str) -> Tuple[str, Optional[int]]:
     match = _netloc_re.match(netloc)
     if match:
         host = match.group(1)
-        port: Optional[int] = int(match.group(2))
+        port: int | None = int(match.group(2))
     else:
         host = netloc
         port = None
     return (host, port)
 
 
-def qs_to_qsl(qs: Dict[str, List[AnyStr]]) -> Iterable[Tuple[str, AnyStr]]:
+def qs_to_qsl(qs: dict[str, list[AnyStr]]) -> Iterable[tuple[str, AnyStr]]:
     """Generator converting a result of ``parse_qs`` back to name-value pairs.
 
     .. versionadded:: 5.0
@@ -1360,7 +1349,7 @@ def _unquote_cookie(s: str) -> str:
     return _unquote_sub(_unquote_replace, s)
 
 
-def parse_cookie(cookie: str) -> Dict[str, str]:
+def parse_cookie(cookie: str) -> dict[str, str]:
     """Parse a ``Cookie`` HTTP header into a dict of name/value pairs.
 
     This function attempts to mimic browser cookie parsing behavior;
