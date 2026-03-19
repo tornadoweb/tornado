@@ -114,7 +114,6 @@ from typing import (
     Any,
     Callable,
     TextIO,
-    Optional,
 )
 from collections.abc import Iterator, Iterable
 
@@ -219,12 +218,12 @@ class OptionParser:
         self,
         name: str,
         default: Any = None,
-        type: Optional[type] = None,
-        help: Optional[str] = None,
-        metavar: Optional[str] = None,
+        type: type | None = None,
+        help: str | None = None,
+        metavar: str | None = None,
         multiple: bool = False,
-        group: Optional[str] = None,
-        callback: Optional[Callable[[Any], None]] = None,
+        group: str | None = None,
+        callback: Callable[[Any], None] | None = None,
     ) -> None:
         """Defines a new command line option.
 
@@ -291,7 +290,7 @@ class OptionParser:
             else:
                 type = str
         if group:
-            group_name: Optional[str] = group
+            group_name: str | None = group
         else:
             group_name = file_name
         option = _Option(
@@ -308,7 +307,7 @@ class OptionParser:
         self._options[normalized] = option
 
     def parse_command_line(
-        self, args: Optional[list[str]] = None, final: bool = True
+        self, args: list[str] | None = None, final: bool = True
     ) -> list[str]:
         """Parses all options given on the command line (defaults to
         `sys.argv`).
@@ -432,7 +431,7 @@ class OptionParser:
         if final:
             self.run_parse_callbacks()
 
-    def print_help(self, file: Optional[TextIO] = None) -> None:
+    def print_help(self, file: TextIO | None = None) -> None:
         """Prints all the command line options to stderr (or another file)."""
         if file is None:
             file = sys.stderr
@@ -529,13 +528,13 @@ class _Option:
         self,
         name: str,
         default: Any = None,
-        type: Optional[type] = None,
-        help: Optional[str] = None,
-        metavar: Optional[str] = None,
+        type: type | None = None,
+        help: str | None = None,
+        metavar: str | None = None,
         multiple: bool = False,
-        file_name: Optional[str] = None,
-        group_name: Optional[str] = None,
-        callback: Optional[Callable[[Any], None]] = None,
+        file_name: str | None = None,
+        group_name: str | None = None,
+        callback: Callable[[Any], None] | None = None,
     ) -> None:
         if default is None and multiple:
             default = []
@@ -677,12 +676,12 @@ All defined options are available as attributes on this object.
 def define(
     name: str,
     default: Any = None,
-    type: Optional[type] = None,
-    help: Optional[str] = None,
-    metavar: Optional[str] = None,
+    type: type | None = None,
+    help: str | None = None,
+    metavar: str | None = None,
     multiple: bool = False,
-    group: Optional[str] = None,
-    callback: Optional[Callable[[Any], None]] = None,
+    group: str | None = None,
+    callback: Callable[[Any], None] | None = None,
 ) -> None:
     """Defines an option in the global namespace.
 
@@ -700,9 +699,7 @@ def define(
     )
 
 
-def parse_command_line(
-    args: Optional[list[str]] = None, final: bool = True
-) -> list[str]:
+def parse_command_line(args: list[str] | None = None, final: bool = True) -> list[str]:
     """Parses global options from the command line.
 
     See `OptionParser.parse_command_line`.
@@ -718,7 +715,7 @@ def parse_config_file(path: str, final: bool = True) -> None:
     return options.parse_config_file(path, final=final)
 
 
-def print_help(file: Optional[TextIO] = None) -> None:
+def print_help(file: TextIO | None = None) -> None:
     """Prints all the command line options to stderr (or another file).
 
     See `OptionParser.print_help`.

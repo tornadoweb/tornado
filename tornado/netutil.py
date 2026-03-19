@@ -28,7 +28,7 @@ from tornado.concurrent import dummy_executor, run_on_executor
 from tornado.ioloop import IOLoop
 from tornado.util import Configurable, errno_from_exception
 
-from typing import Callable, Any, Union, Optional
+from typing import Callable, Any
 from collections.abc import Awaitable
 
 # Note that the naming of ssl.Purpose is confusing; the purpose
@@ -56,10 +56,10 @@ _DEFAULT_BACKLOG = 128
 
 def bind_sockets(
     port: int,
-    address: Optional[str] = None,
+    address: str | None = None,
     family: socket.AddressFamily = socket.AF_UNSPEC,
     backlog: int = _DEFAULT_BACKLOG,
-    flags: Optional[int] = None,
+    flags: int | None = None,
     reuse_port: bool = False,
 ) -> list[socket.socket]:
     """Creates listening sockets bound to the given port and address.
@@ -462,7 +462,7 @@ class ExecutorResolver(Resolver):
 
     def initialize(
         self,
-        executor: Optional[concurrent.futures.Executor] = None,
+        executor: concurrent.futures.Executor | None = None,
         close_executor: bool = True,
     ) -> None:
         if executor is not None:
@@ -516,8 +516,8 @@ class ThreadedResolver(ExecutorResolver):
        of this class.
     """
 
-    _threadpool: Optional[concurrent.futures.ThreadPoolExecutor] = None
-    _threadpool_pid: Optional[int] = None
+    _threadpool: concurrent.futures.ThreadPoolExecutor | None = None
+    _threadpool_pid: int | None = None
 
     def initialize(self, num_threads: int = 10) -> None:  # type: ignore
         threadpool = ThreadedResolver._create_threadpool(num_threads)
@@ -589,8 +589,8 @@ _SSL_CONTEXT_KEYWORDS = frozenset(
 
 
 def ssl_options_to_context(
-    ssl_options: Union[dict[str, Any], ssl.SSLContext],
-    server_side: Optional[bool] = None,
+    ssl_options: dict[str, Any] | ssl.SSLContext,
+    server_side: bool | None = None,
 ) -> ssl.SSLContext:
     """Try to convert an ``ssl_options`` dictionary to an
     `~ssl.SSLContext` object.
@@ -643,9 +643,9 @@ def ssl_options_to_context(
 
 def ssl_wrap_socket(
     socket: socket.socket,
-    ssl_options: Union[dict[str, Any], ssl.SSLContext],
-    server_hostname: Optional[str] = None,
-    server_side: Optional[bool] = None,
+    ssl_options: dict[str, Any] | ssl.SSLContext,
+    server_hostname: str | None = None,
+    server_side: bool | None = None,
     **kwargs: Any,
 ) -> ssl.SSLSocket:
     """Returns an ``ssl.SSLSocket`` wrapping the given socket.

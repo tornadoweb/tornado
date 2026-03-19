@@ -10,7 +10,7 @@ from tornado.testing import AsyncTestCase, bind_unused_port, gen_test
 
 
 class HTTP1ConnectionTest(AsyncTestCase):
-    code: typing.Optional[int] = None
+    code: int | None = None
 
     def setUp(self):
         super().setUp()

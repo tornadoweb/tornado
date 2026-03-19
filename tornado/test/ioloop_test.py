@@ -447,7 +447,7 @@ class TestIOLoop(AsyncTestCase):
 class TestIOLoopCurrent(unittest.TestCase):
     def setUp(self):
         setup_with_context_manager(self, ignore_deprecation())
-        self.io_loop: typing.Optional[IOLoop] = None
+        self.io_loop: IOLoop | None = None
         IOLoop.clear_current()
 
     def tearDown(self):

@@ -93,7 +93,7 @@ try:
 except ImportError:
     signal = None  # type: ignore
 
-from typing import Callable, Optional, Union
+from typing import Callable
 
 # os.execv is broken on Windows and can't properly parse command line
 # arguments and executable name if they contain whitespaces. subprocess
@@ -107,7 +107,7 @@ _io_loops: "weakref.WeakKeyDictionary[ioloop.IOLoop, bool]" = (
     weakref.WeakKeyDictionary()
 )
 _autoreload_is_main = False
-_original_argv: Optional[list[str]] = None
+_original_argv: list[str] | None = None
 _original_spec = None
 
 
@@ -300,7 +300,7 @@ def main() -> None:
 
     # SystemExit.code is typed funny: https://github.com/python/typeshed/issues/8513
     # All we care about is truthiness
-    exit_status: Union[int, str, None] = 1
+    exit_status: int | str | None = 1
     try:
         import runpy
 

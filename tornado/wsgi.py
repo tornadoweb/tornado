@@ -125,7 +125,7 @@ class WSGIContainer:
     def __init__(
         self,
         wsgi_application: "WSGIAppType",
-        executor: Optional[concurrent.futures.Executor] = None,
+        executor: concurrent.futures.Executor | None = None,
     ) -> None:
         self.wsgi_application = wsgi_application
         self.executor = dummy_executor if executor is None else executor
@@ -140,13 +140,13 @@ class WSGIContainer:
         def start_response(
             status: str,
             headers: list[tuple[str, str]],
-            exc_info: Optional[
+            exc_info: None | (
                 tuple[
                     "Optional[Type[BaseException]]",
-                    Optional[BaseException],
-                    Optional[TracebackType],
+                    BaseException | None,
+                    TracebackType | None,
                 ]
-            ] = None,
+            ) = None,
         ) -> Callable[[bytes], Any]:
             data["status"] = status
             data["headers"] = headers
@@ -162,7 +162,7 @@ class WSGIContainer:
         try:
             app_response_iter = iter(app_response)
 
-            def next_chunk() -> Optional[bytes]:
+            def next_chunk() -> bytes | None:
                 try:
                     return next(app_response_iter)
                 except StopIteration:

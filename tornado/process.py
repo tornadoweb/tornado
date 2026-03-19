@@ -37,7 +37,7 @@ from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
 
 import typing
-from typing import Optional, Any, Callable
+from typing import Any, Callable
 
 if typing.TYPE_CHECKING:
     from typing import List  # noqa: F401
@@ -80,9 +80,7 @@ def _reseed_random() -> None:
 _task_id = None
 
 
-def fork_processes(
-    num_processes: Optional[int], max_restarts: Optional[int] = None
-) -> int:
+def fork_processes(num_processes: int | None, max_restarts: int | None = None) -> int:
     """Starts multiple worker processes.
 
     If ``num_processes`` is None or <= 0, we detect the number of cores
@@ -123,7 +121,7 @@ def fork_processes(
     gen_log.info("Starting %d processes", num_processes)
     children = {}
 
-    def start_child(i: int) -> Optional[int]:
+    def start_child(i: int) -> int | None:
         pid = os.fork()
         if pid == 0:
             # child process
@@ -175,7 +173,7 @@ def fork_processes(
     sys.exit(0)
 
 
-def task_id() -> Optional[int]:
+def task_id() -> int | None:
     """Returns the current task id, if any.
 
     Returns None if this process was not created by `fork_processes`.
@@ -246,8 +244,8 @@ class Subprocess:
         for attr in ["stdin", "stdout", "stderr"]:
             if not hasattr(self, attr):  # don't clobber streams set above
                 setattr(self, attr, getattr(self.proc, attr))
-        self._exit_callback: Optional[Callable[[int], None]] = None
-        self.returncode: Optional[int] = None
+        self._exit_callback: Callable[[int], None] | None = None
+        self.returncode: int | None = None
 
     def set_exit_callback(self, callback: Callable[[int], None]) -> None:
         """Runs ``callback`` when this process exits.

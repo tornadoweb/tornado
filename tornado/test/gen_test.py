@@ -948,7 +948,7 @@ class RunnerGCTest(AsyncTestCase):
     def test_gc(self):
         # GitHub issue 1769: Runner objects can get GCed unexpectedly
         # while their future is alive.
-        weakref_scope: list[Optional[weakref.ReferenceType]] = [None]
+        weakref_scope: list[weakref.ReferenceType | None] = [None]
 
         def callback():
             gc.collect(2)
@@ -968,7 +968,7 @@ class RunnerGCTest(AsyncTestCase):
         # their loop is closed, even if they're involved in a reference
         # cycle.
         loop = self.get_new_ioloop()
-        result: list[Optional[bool]] = []
+        result: list[bool | None] = []
         wfut = []
 
         @gen.coroutine
@@ -1013,7 +1013,7 @@ class RunnerGCTest(AsyncTestCase):
                 result.append(None)
 
         loop = self.get_new_ioloop()
-        result: list[Optional[bool]] = []
+        result: list[bool | None] = []
         wfut = []
 
         @gen.coroutine

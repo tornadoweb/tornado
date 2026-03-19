@@ -34,7 +34,7 @@ from tornado import process
 from tornado.util import errno_from_exception
 
 import typing
-from typing import Union, Any, Optional
+from typing import Any
 from collections.abc import Iterable, Awaitable
 
 if typing.TYPE_CHECKING:
@@ -124,9 +124,9 @@ class TCPServer:
 
     def __init__(
         self,
-        ssl_options: Optional[Union[dict[str, Any], ssl.SSLContext]] = None,
-        max_buffer_size: Optional[int] = None,
-        read_chunk_size: Optional[int] = None,
+        ssl_options: dict[str, Any] | ssl.SSLContext | None = None,
+        max_buffer_size: int | None = None,
+        read_chunk_size: int | None = None,
     ) -> None:
         self.ssl_options = ssl_options
         self._sockets: dict[int, socket.socket] = {}
@@ -160,10 +160,10 @@ class TCPServer:
     def listen(
         self,
         port: int,
-        address: Optional[str] = None,
+        address: str | None = None,
         family: socket.AddressFamily = socket.AF_UNSPEC,
         backlog: int = _DEFAULT_BACKLOG,
-        flags: Optional[int] = None,
+        flags: int | None = None,
         reuse_port: bool = False,
     ) -> None:
         """Starts accepting connections on the given port.
@@ -213,10 +213,10 @@ class TCPServer:
     def bind(
         self,
         port: int,
-        address: Optional[str] = None,
+        address: str | None = None,
         family: socket.AddressFamily = socket.AF_UNSPEC,
         backlog: int = _DEFAULT_BACKLOG,
-        flags: Optional[int] = None,
+        flags: int | None = None,
         reuse_port: bool = False,
     ) -> None:
         """Binds this server to the given port on the given address.
@@ -263,7 +263,7 @@ class TCPServer:
             self._pending_sockets.extend(sockets)
 
     def start(
-        self, num_processes: Optional[int] = 1, max_restarts: Optional[int] = None
+        self, num_processes: int | None = 1, max_restarts: int | None = None
     ) -> None:
         """Starts this server in the `.IOLoop`.
 
@@ -319,9 +319,7 @@ class TCPServer:
             self._handlers.pop(fd)()
             sock.close()
 
-    def handle_stream(
-        self, stream: IOStream, address: tuple
-    ) -> Optional[Awaitable[None]]:
+    def handle_stream(self, stream: IOStream, address: tuple) -> Awaitable[None] | None:
         """Override to handle a new `.IOStream` from an incoming connection.
 
         This method may be a coroutine; if so any exceptions it raises

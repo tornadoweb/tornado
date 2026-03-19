@@ -14,7 +14,6 @@ import io
 import sys
 import traceback
 import types
-import typing
 import unittest
 
 import tornado
@@ -108,9 +107,9 @@ class CircleRefsTest(unittest.TestCase):
         class C:
             def __init__(self, name):
                 self.name = name
-                self.a: typing.Optional[C] = None
-                self.b: typing.Optional[C] = None
-                self.c: typing.Optional[C] = None
+                self.a: C | None = None
+                self.b: C | None = None
+                self.c: C | None = None
 
             def __repr__(self):
                 return f"name={self.name}"

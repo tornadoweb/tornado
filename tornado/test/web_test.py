@@ -113,7 +113,7 @@ class CookieTestRequestHandler(RequestHandler):
                 settings=dict(cookie_secret=cookie_secret, key_version=key_version)
             )
 
-    def get_cookie(self, name) -> typing.Optional[str]:  # type: ignore[override]
+    def get_cookie(self, name) -> str | None:  # type: ignore[override]
         return to_unicode(self._cookies.get(name))
 
     def set_cookie(self, name, value, expires_days=None):  # type: ignore[override]

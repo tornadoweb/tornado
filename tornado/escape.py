@@ -33,10 +33,10 @@ import urllib.parse
 from tornado.util import unicode_type
 
 import typing
-from typing import Union, Any, Optional, Callable
+from typing import Any, Callable
 
 
-def xhtml_escape(value: Union[str, bytes]) -> str:
+def xhtml_escape(value: str | bytes) -> str:
     """Escapes a string so it is valid within HTML or XML.
 
     Escapes the characters ``<``, ``>``, ``"``, ``'``, and ``&``.
@@ -59,7 +59,7 @@ def xhtml_escape(value: Union[str, bytes]) -> str:
     return html.escape(to_unicode(value))
 
 
-def xhtml_unescape(value: Union[str, bytes]) -> str:
+def xhtml_unescape(value: str | bytes) -> str:
     """Un-escapes an XML-escaped string.
 
     Equivalent to `html.unescape` except that this function always returns
@@ -96,7 +96,7 @@ def json_encode(value: Any) -> str:
     return json.dumps(value).replace("</", "<\\/")
 
 
-def json_decode(value: Union[str, bytes]) -> Any:
+def json_decode(value: str | bytes) -> Any:
     """Returns Python objects for the given JSON string.
 
     Supports both `str` and `bytes` inputs. Equvalent to `json.loads`.
@@ -109,7 +109,7 @@ def squeeze(value: str) -> str:
     return re.sub(r"[\x00-\x20]+", " ", value).strip()
 
 
-def url_escape(value: Union[str, bytes], plus: bool = True) -> str:
+def url_escape(value: str | bytes, plus: bool = True) -> str:
     """Returns a URL-encoded version of the given value.
 
     Equivalent to either `urllib.parse.quote_plus` or `urllib.parse.quote` depending on the ``plus``
@@ -129,20 +129,18 @@ def url_escape(value: Union[str, bytes], plus: bool = True) -> str:
 
 
 @typing.overload
-def url_unescape(value: Union[str, bytes], encoding: None, plus: bool = True) -> bytes:
+def url_unescape(value: str | bytes, encoding: None, plus: bool = True) -> bytes:
     pass
 
 
 @typing.overload
-def url_unescape(
-    value: Union[str, bytes], encoding: str = "utf-8", plus: bool = True
-) -> str:
+def url_unescape(value: str | bytes, encoding: str = "utf-8", plus: bool = True) -> str:
     pass
 
 
 def url_unescape(
-    value: Union[str, bytes], encoding: Optional[str] = "utf-8", plus: bool = True
-) -> Union[str, bytes]:
+    value: str | bytes, encoding: str | None = "utf-8", plus: bool = True
+) -> str | bytes:
     """Decodes the given value from a URL.
 
     The argument may be either a byte or unicode string.
@@ -171,7 +169,7 @@ def url_unescape(
 
 
 def parse_qs_bytes(
-    qs: Union[str, bytes], keep_blank_values: bool = False, strict_parsing: bool = False
+    qs: str | bytes, keep_blank_values: bool = False, strict_parsing: bool = False
 ) -> dict[str, list[bytes]]:
     """Parses a query string like urlparse.parse_qs,
     but takes bytes and returns the values as byte strings.
@@ -211,7 +209,7 @@ def utf8(value: None) -> None:
     pass
 
 
-def utf8(value: Union[None, str, bytes]) -> Optional[bytes]:
+def utf8(value: None | str | bytes) -> bytes | None:
     """Converts a string argument to a byte string.
 
     If the argument is already a byte string or None, it is returned unchanged.
@@ -242,7 +240,7 @@ def to_unicode(value: None) -> None:
     pass
 
 
-def to_unicode(value: Union[None, str, bytes]) -> Optional[str]:
+def to_unicode(value: None | str | bytes) -> str | None:
     """Converts a string argument to a unicode string.
 
     If the argument is already a unicode string or None, it is returned
@@ -297,9 +295,9 @@ _URL_RE = re.compile(
 
 
 def linkify(
-    text: Union[str, bytes],
+    text: str | bytes,
     shorten: bool = False,
-    extra_params: Union[str, Callable[[str], str]] = "",
+    extra_params: str | Callable[[str], str] = "",
     require_protocol: bool = False,
     permitted_protocols: list[str] = ["http", "https"],
 ) -> str:

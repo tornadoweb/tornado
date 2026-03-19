@@ -29,7 +29,7 @@ from tornado import gen
 from tornado.netutil import Resolver
 from tornado.gen import TimeoutError
 
-from typing import Any, Union, Tuple, Callable, Optional
+from typing import Any, Tuple, Callable
 from collections.abc import Iterator
 
 if typing.TYPE_CHECKING:
@@ -67,9 +67,9 @@ class _Connector:
         self.connect = connect
 
         self.future: Future[tuple[socket.AddressFamily, Any, IOStream]] = Future()
-        self.timeout: Optional[object] = None
-        self.connect_timeout: Optional[object] = None
-        self.last_error: Optional[Exception] = None
+        self.timeout: object | None = None
+        self.connect_timeout: object | None = None
+        self.last_error: Exception | None = None
         self.remaining = len(addrinfo)
         self.primary_addrs, self.secondary_addrs = self.split(addrinfo)
         self.streams: set[IOStream] = set()
@@ -102,7 +102,7 @@ class _Connector:
     def start(
         self,
         timeout: float = _INITIAL_CONNECT_TIMEOUT,
-        connect_timeout: Optional[Union[float, datetime.timedelta]] = None,
+        connect_timeout: float | datetime.timedelta | None = None,
     ) -> "Future[Tuple[socket.AddressFamily, Any, IOStream]]":
         self.try_connect(iter(self.primary_addrs))
         self.set_timeout(timeout)
@@ -174,9 +174,7 @@ class _Connector:
         if self.timeout is not None:
             self.io_loop.remove_timeout(self.timeout)
 
-    def set_connect_timeout(
-        self, connect_timeout: Union[float, datetime.timedelta]
-    ) -> None:
+    def set_connect_timeout(self, connect_timeout: float | datetime.timedelta) -> None:
         self.connect_timeout = self.io_loop.add_timeout(
             connect_timeout, self.on_connect_timeout
         )
@@ -204,7 +202,7 @@ class TCPClient:
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
     """
 
-    def __init__(self, resolver: Optional[Resolver] = None) -> None:
+    def __init__(self, resolver: Resolver | None = None) -> None:
         if resolver is not None:
             self.resolver = resolver
             self._own_resolver = False
@@ -221,11 +219,11 @@ class TCPClient:
         host: str,
         port: int,
         af: socket.AddressFamily = socket.AF_UNSPEC,
-        ssl_options: Optional[Union[dict[str, Any], ssl.SSLContext]] = None,
-        max_buffer_size: Optional[int] = None,
-        source_ip: Optional[str] = None,
-        source_port: Optional[int] = None,
-        timeout: Optional[Union[float, datetime.timedelta]] = None,
+        ssl_options: dict[str, Any] | ssl.SSLContext | None = None,
+        max_buffer_size: int | None = None,
+        source_ip: str | None = None,
+        source_port: int | None = None,
+        timeout: float | datetime.timedelta | None = None,
     ) -> IOStream:
         """Connect to the given host and port.
 
@@ -294,11 +292,11 @@ class TCPClient:
 
     def _create_stream(
         self,
-        max_buffer_size: Optional[int],
+        max_buffer_size: int | None,
         af: socket.AddressFamily,
         addr: tuple,
-        source_ip: Optional[str] = None,
-        source_port: Optional[int] = None,
+        source_ip: str | None = None,
+        source_port: int | None = None,
     ) -> tuple[IOStream, "Future[IOStream]"]:
         # Always connect in plaintext; we'll convert to ssl if necessary
         # after one connection has completed.

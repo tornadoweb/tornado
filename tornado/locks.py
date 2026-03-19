@@ -19,7 +19,7 @@ import types
 from tornado import gen, ioloop
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 
-from typing import Union, Optional, Type, Any
+from typing import Optional, Type, Any
 from collections.abc import Awaitable
 import typing
 
@@ -118,7 +118,7 @@ class Condition(_TimeoutGarbageCollector):
         return result + ">"
 
     def wait(
-        self, timeout: Optional[Union[float, datetime.timedelta]] = None
+        self, timeout: float | datetime.timedelta | None = None
     ) -> Awaitable[bool]:
         """Wait for `.notify`.
 
@@ -230,7 +230,7 @@ class Event:
         self._value = False
 
     def wait(
-        self, timeout: Optional[Union[float, datetime.timedelta]] = None
+        self, timeout: float | datetime.timedelta | None = None
     ) -> Awaitable[None]:
         """Block until the internal flag is true.
 
@@ -274,8 +274,8 @@ class _ReleasingContextManager:
     def __exit__(
         self,
         exc_type: "Optional[Type[BaseException]]",
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[types.TracebackType],
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
     ) -> None:
         self._obj.release()
 
@@ -413,7 +413,7 @@ class Semaphore(_TimeoutGarbageCollector):
                 break
 
     def acquire(
-        self, timeout: Optional[Union[float, datetime.timedelta]] = None
+        self, timeout: float | datetime.timedelta | None = None
     ) -> Awaitable[_ReleasingContextManager]:
         """Decrement the counter. Returns an awaitable.
 
@@ -446,8 +446,8 @@ class Semaphore(_TimeoutGarbageCollector):
     def __exit__(
         self,
         typ: "Optional[Type[BaseException]]",
-        value: Optional[BaseException],
-        traceback: Optional[types.TracebackType],
+        value: BaseException | None,
+        traceback: types.TracebackType | None,
     ) -> None:
         self.__enter__()
 
@@ -457,8 +457,8 @@ class Semaphore(_TimeoutGarbageCollector):
     async def __aexit__(
         self,
         typ: "Optional[Type[BaseException]]",
-        value: Optional[BaseException],
-        tb: Optional[types.TracebackType],
+        value: BaseException | None,
+        tb: types.TracebackType | None,
     ) -> None:
         self.release()
 
@@ -527,7 +527,7 @@ class Lock:
         return f"<{self.__class__.__name__} _block={self._block}>"
 
     def acquire(
-        self, timeout: Optional[Union[float, datetime.timedelta]] = None
+        self, timeout: float | datetime.timedelta | None = None
     ) -> Awaitable[_ReleasingContextManager]:
         """Attempt to lock. Returns an awaitable.
 
@@ -554,8 +554,8 @@ class Lock:
     def __exit__(
         self,
         typ: "Optional[Type[BaseException]]",
-        value: Optional[BaseException],
-        tb: Optional[types.TracebackType],
+        value: BaseException | None,
+        tb: types.TracebackType | None,
     ) -> None:
         self.__enter__()
 
@@ -565,7 +565,7 @@ class Lock:
     async def __aexit__(
         self,
         typ: "Optional[Type[BaseException]]",
-        value: Optional[BaseException],
-        tb: Optional[types.TracebackType],
+        value: BaseException | None,
+        tb: types.TracebackType | None,
     ) -> None:
         self.release()

@@ -987,7 +987,7 @@ class TestIOStreamStartTLS(AsyncTestCase):
             self.server_stream = None
             self.server_accepted: Future[None] = Future()
             netutil.add_accept_handler(self.listener, self.accept)
-            self.client_stream: typing.Optional[IOStream] = IOStream(socket.socket())
+            self.client_stream: IOStream | None = IOStream(socket.socket())
             self.io_loop.add_future(
                 self.client_stream.connect(("127.0.0.1", self.port)), self.stop
             )

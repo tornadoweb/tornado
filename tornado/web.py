@@ -267,15 +267,15 @@ class RequestHandler:
     def _unimplemented_method(self, *args: str, **kwargs: str) -> None:
         raise HTTPError(405)
 
-    head: Callable[..., Optional[Awaitable[None]]] = _unimplemented_method
-    get: Callable[..., Optional[Awaitable[None]]] = _unimplemented_method
-    post: Callable[..., Optional[Awaitable[None]]] = _unimplemented_method
-    delete: Callable[..., Optional[Awaitable[None]]] = _unimplemented_method
-    patch: Callable[..., Optional[Awaitable[None]]] = _unimplemented_method
-    put: Callable[..., Optional[Awaitable[None]]] = _unimplemented_method
-    options: Callable[..., Optional[Awaitable[None]]] = _unimplemented_method
+    head: Callable[..., Awaitable[None] | None] = _unimplemented_method
+    get: Callable[..., Awaitable[None] | None] = _unimplemented_method
+    post: Callable[..., Awaitable[None] | None] = _unimplemented_method
+    delete: Callable[..., Awaitable[None] | None] = _unimplemented_method
+    patch: Callable[..., Awaitable[None] | None] = _unimplemented_method
+    put: Callable[..., Awaitable[None] | None] = _unimplemented_method
+    options: Callable[..., Awaitable[None] | None] = _unimplemented_method
 
-    def prepare(self) -> Optional[Awaitable[None]]:
+    def prepare(self) -> Awaitable[None] | None:
         """Called at the beginning of a request before  `get`/`post`/etc.
 
         Override this method to perform common initialization regardless
@@ -349,7 +349,7 @@ class RequestHandler:
         """
         pass
 
-    def set_status(self, status_code: int, reason: Optional[str] = None) -> None:
+    def set_status(self, status_code: int, reason: str | None = None) -> None:
         """Sets the status code for our response.
 
         :arg int status_code: Response status code.
@@ -449,15 +449,15 @@ class RequestHandler:
     @overload
     def get_argument(  # noqa: F811
         self, name: str, default: None, strip: bool = True
-    ) -> Optional[str]:
+    ) -> str | None:
         pass
 
     def get_argument(  # noqa: F811
         self,
         name: str,
-        default: Union[None, str, _ArgDefaultMarker] = _ARG_DEFAULT,
+        default: None | str | _ArgDefaultMarker = _ARG_DEFAULT,
         strip: bool = True,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Returns the value of the argument with the given name.
 
         If default is not provided, the argument is considered to be
@@ -498,15 +498,15 @@ class RequestHandler:
     @overload
     def get_body_argument(  # noqa: F811
         self, name: str, default: None, strip: bool = True
-    ) -> Optional[str]:
+    ) -> str | None:
         pass
 
     def get_body_argument(  # noqa: F811
         self,
         name: str,
-        default: Union[None, str, _ArgDefaultMarker] = _ARG_DEFAULT,
+        default: None | str | _ArgDefaultMarker = _ARG_DEFAULT,
         strip: bool = True,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Returns the value of the argument with the given name
         from the request body.
 
@@ -542,15 +542,15 @@ class RequestHandler:
     @overload
     def get_query_argument(  # noqa: F811
         self, name: str, default: None, strip: bool = True
-    ) -> Optional[str]:
+    ) -> str | None:
         pass
 
     def get_query_argument(  # noqa: F811
         self,
         name: str,
-        default: Union[None, str, _ArgDefaultMarker] = _ARG_DEFAULT,
+        default: None | str | _ArgDefaultMarker = _ARG_DEFAULT,
         strip: bool = True,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Returns the value of the argument with the given name
         from the request query string.
 
@@ -576,10 +576,10 @@ class RequestHandler:
     def _get_argument(
         self,
         name: str,
-        default: Union[None, str, _ArgDefaultMarker],
+        default: None | str | _ArgDefaultMarker,
         source: dict[str, list[bytes]],
         strip: bool = True,
-    ) -> Optional[str]:
+    ) -> str | None:
         args = self._get_arguments(name, source, strip=strip)
         if not args:
             if isinstance(default, _ArgDefaultMarker):
@@ -602,7 +602,7 @@ class RequestHandler:
             values.append(s)
         return values
 
-    def decode_argument(self, value: bytes, name: Optional[str] = None) -> str:
+    def decode_argument(self, value: bytes, name: str | None = None) -> str:
         """Decodes an argument from the request.
 
         The argument has been percent-decoded and is now a byte string.
@@ -633,10 +633,10 @@ class RequestHandler:
         pass
 
     @overload
-    def get_cookie(self, name: str, default: None = None) -> Optional[str]:
+    def get_cookie(self, name: str, default: None = None) -> str | None:
         pass
 
-    def get_cookie(self, name: str, default: Optional[str] = None) -> Optional[str]:
+    def get_cookie(self, name: str, default: str | None = None) -> str | None:
         """Returns the value of the request cookie with the given name.
 
         If the named cookie is not present, returns ``default``.
@@ -652,17 +652,17 @@ class RequestHandler:
     def set_cookie(
         self,
         name: str,
-        value: Union[str, bytes],
-        domain: Optional[str] = None,
-        expires: Optional[Union[float, tuple, datetime.datetime]] = None,
+        value: str | bytes,
+        domain: str | None = None,
+        expires: float | tuple | datetime.datetime | None = None,
         path: str = "/",
-        expires_days: Optional[float] = None,
+        expires_days: float | None = None,
         # Keyword-only args start here for historical reasons.
         *,
-        max_age: Optional[int] = None,
+        max_age: int | None = None,
         httponly: bool = False,
         secure: bool = False,
-        samesite: Optional[str] = None,
+        samesite: str | None = None,
         **kwargs: Any,
     ) -> None:
         """Sets an outgoing cookie name/value with the given options.
@@ -814,9 +814,9 @@ class RequestHandler:
     def set_signed_cookie(
         self,
         name: str,
-        value: Union[str, bytes],
-        expires_days: Optional[float] = 30,
-        version: Optional[int] = None,
+        value: str | bytes,
+        expires_days: float | None = 30,
+        version: int | None = None,
         **kwargs: Any,
     ) -> None:
         """Signs and timestamps a cookie so it cannot be forged.
@@ -859,7 +859,7 @@ class RequestHandler:
     set_secure_cookie = set_signed_cookie
 
     def create_signed_value(
-        self, name: str, value: Union[str, bytes], version: Optional[int] = None
+        self, name: str, value: str | bytes, version: int | None = None
     ) -> bytes:
         """Signs and timestamps a string so it cannot be forged.
 
@@ -887,10 +887,10 @@ class RequestHandler:
     def get_signed_cookie(
         self,
         name: str,
-        value: Optional[str] = None,
+        value: str | None = None,
         max_age_days: float = 31,
-        min_version: Optional[int] = None,
-    ) -> Optional[bytes]:
+        min_version: int | None = None,
+    ) -> bytes | None:
         """Returns the given signed cookie if it validates, or None.
 
         The decoded cookie value is returned as a byte string (unlike
@@ -926,8 +926,8 @@ class RequestHandler:
     get_secure_cookie = get_signed_cookie
 
     def get_signed_cookie_key_version(
-        self, name: str, value: Optional[str] = None
-    ) -> Optional[int]:
+        self, name: str, value: str | None = None
+    ) -> int | None:
         """Returns the signing key version of the secure cookie.
 
         The version is returned as int.
@@ -950,7 +950,7 @@ class RequestHandler:
     get_secure_cookie_key_version = get_signed_cookie_key_version
 
     def redirect(
-        self, url: str, permanent: bool = False, status: Optional[int] = None
+        self, url: str, permanent: bool = False, status: int | None = None
     ) -> None:
         """Sends a redirect to the given (optionally relative) URL.
 
@@ -969,7 +969,7 @@ class RequestHandler:
         self.set_header("Location", utf8(url))
         self.finish()
 
-    def write(self, chunk: Union[str, bytes, dict]) -> None:
+    def write(self, chunk: str | bytes | dict) -> None:
         """Writes the given chunk to the output buffer.
 
         To write the output to the network, use the `flush()` method below.
@@ -1261,7 +1261,7 @@ class RequestHandler:
                 future.set_result(None)
                 return future
 
-    def finish(self, chunk: Optional[Union[str, bytes, dict]] = None) -> "Future[None]":
+    def finish(self, chunk: str | bytes | dict | None = None) -> "Future[None]":
         """Finishes this response, ending the HTTP request.
 
         Passing a ``chunk`` to ``finish()`` is equivalent to passing that
@@ -1427,7 +1427,7 @@ class RequestHandler:
     def locale(self, value: tornado.locale.Locale) -> None:
         self._locale = value
 
-    def get_user_locale(self) -> Optional[tornado.locale.Locale]:
+    def get_user_locale(self) -> tornado.locale.Locale | None:
         """Override to determine the locale from the authenticated user.
 
         If None is returned, we fall back to `get_browser_locale()`.
@@ -1519,7 +1519,7 @@ class RequestHandler:
         self.require_setting("login_url", "@tornado.web.authenticated")
         return self.application.settings["login_url"]
 
-    def get_template_path(self) -> Optional[str]:
+    def get_template_path(self) -> str | None:
         """Override to customize template path for each handler.
 
         By default, we use the ``template_path`` application setting.
@@ -1585,7 +1585,7 @@ class RequestHandler:
                 self.set_cookie(cookie_name, self._xsrf_token, **cookie_kwargs)
         return self._xsrf_token
 
-    def _get_raw_xsrf_token(self) -> tuple[Optional[int], bytes, float]:
+    def _get_raw_xsrf_token(self) -> tuple[int | None, bytes, float]:
         """Read or generate the xsrf token in its raw form.
 
         The raw_xsrf_token is a tuple containing:
@@ -1614,7 +1614,7 @@ class RequestHandler:
 
     def _decode_xsrf_token(
         self, cookie: str
-    ) -> tuple[Optional[int], Optional[bytes], Optional[float]]:
+    ) -> tuple[int | None, bytes | None, float | None]:
         """Convert a cookie string into a the tuple form returned by
         _get_raw_xsrf_token.
         """
@@ -1706,7 +1706,7 @@ class RequestHandler:
         )
 
     def static_url(
-        self, path: str, include_host: Optional[bool] = None, **kwargs: Any
+        self, path: str, include_host: bool | None = None, **kwargs: Any
     ) -> str:
         """Returns a static URL for the given relative static file path.
 
@@ -1755,7 +1755,7 @@ class RequestHandler:
         """Alias for `Application.reverse_url`."""
         return self.application.reverse_url(name, *args)
 
-    def compute_etag(self) -> Optional[str]:
+    def compute_etag(self) -> str | None:
         """Computes the etag header to be used for this request.
 
         By default uses a hash of the content written so far.
@@ -1888,7 +1888,7 @@ class RequestHandler:
                 # in a finally block to avoid GC issues prior to Python 3.4.
                 self._prepared_future.set_result(None)
 
-    def data_received(self, chunk: bytes) -> Optional[Awaitable[None]]:
+    def data_received(self, chunk: bytes) -> Awaitable[None] | None:
         """Implement this method to handle streamed request data.
 
         Requires the `.stream_request_body` decorator.
@@ -1938,8 +1938,8 @@ class RequestHandler:
     def log_exception(
         self,
         typ: "Optional[Type[BaseException]]",
-        value: Optional[BaseException],
-        tb: Optional[TracebackType],
+        value: BaseException | None,
+        tb: TracebackType | None,
     ) -> None:
         """Override to customize logging of uncaught exceptions.
 
@@ -2026,8 +2026,8 @@ def _has_stream_request_body(cls: type[RequestHandler]) -> bool:
 
 
 def removeslash(
-    method: Callable[..., Optional[Awaitable[None]]],
-) -> Callable[..., Optional[Awaitable[None]]]:
+    method: Callable[..., Awaitable[None] | None],
+) -> Callable[..., Awaitable[None] | None]:
     """Use this decorator to remove trailing slashes from the request path.
 
     For example, a request to ``/foo/`` would redirect to ``/foo`` with this
@@ -2038,7 +2038,7 @@ def removeslash(
     @functools.wraps(method)
     def wrapper(  # type: ignore
         self: RequestHandler, *args, **kwargs
-    ) -> Optional[Awaitable[None]]:
+    ) -> Awaitable[None] | None:
         if self.request.path.endswith("/"):
             if self.request.method in ("GET", "HEAD"):
                 uri = self.request.path.rstrip("/")
@@ -2055,8 +2055,8 @@ def removeslash(
 
 
 def addslash(
-    method: Callable[..., Optional[Awaitable[None]]],
-) -> Callable[..., Optional[Awaitable[None]]]:
+    method: Callable[..., Awaitable[None] | None],
+) -> Callable[..., Awaitable[None] | None]:
     """Use this decorator to add a missing trailing slash to the request path.
 
     For example, a request to ``/foo`` would redirect to ``/foo/`` with this
@@ -2067,7 +2067,7 @@ def addslash(
     @functools.wraps(method)
     def wrapper(  # type: ignore
         self: RequestHandler, *args, **kwargs
-    ) -> Optional[Awaitable[None]]:
+    ) -> Awaitable[None] | None:
         if not self.request.path.endswith("/"):
             if self.request.method in ("GET", "HEAD"):
                 uri = self.request.path + "/"
@@ -2093,7 +2093,7 @@ class _ApplicationRouter(ReversibleRuleRouter):
     """
 
     def __init__(
-        self, application: "Application", rules: Optional[_RuleList] = None
+        self, application: "Application", rules: _RuleList | None = None
     ) -> None:
         assert isinstance(application, Application)
         self.application = application
@@ -2111,7 +2111,7 @@ class _ApplicationRouter(ReversibleRuleRouter):
 
     def get_target_delegate(
         self, target: Any, request: httputil.HTTPServerRequest, **target_params: Any
-    ) -> Optional[httputil.HTTPMessageDelegate]:
+    ) -> httputil.HTTPMessageDelegate | None:
         if isclass(target) and issubclass(target, RequestHandler):
             return self.application.get_handler_delegate(
                 request, target, **target_params
@@ -2205,9 +2205,9 @@ class Application(ReversibleRouter):
 
     def __init__(
         self,
-        handlers: Optional[_RuleList] = None,
-        default_host: Optional[str] = None,
-        transforms: Optional[list[type["OutputTransform"]]] = None,
+        handlers: _RuleList | None = None,
+        default_host: str | None = None,
+        transforms: list[type["OutputTransform"]] | None = None,
         **settings: Any,
     ) -> None:
         if transforms is None:
@@ -2262,11 +2262,11 @@ class Application(ReversibleRouter):
     def listen(
         self,
         port: int,
-        address: Optional[str] = None,
+        address: str | None = None,
         *,
         family: socket.AddressFamily = socket.AF_UNSPEC,
         backlog: int = tornado.netutil._DEFAULT_BACKLOG,
-        flags: Optional[int] = None,
+        flags: int | None = None,
         reuse_port: bool = False,
         **kwargs: Any,
     ) -> HTTPServer:
@@ -2352,9 +2352,7 @@ class Application(ReversibleRouter):
                 except TypeError:
                     pass
 
-    def __call__(
-        self, request: httputil.HTTPServerRequest
-    ) -> Optional[Awaitable[None]]:
+    def __call__(self, request: httputil.HTTPServerRequest) -> Awaitable[None] | None:
         # Legacy HTTPServer interface
         dispatcher = self.find_handler(request)
         return dispatcher.execute()
@@ -2379,9 +2377,9 @@ class Application(ReversibleRouter):
         self,
         request: httputil.HTTPServerRequest,
         target_class: type[RequestHandler],
-        target_kwargs: Optional[dict[str, Any]] = None,
-        path_args: Optional[list[bytes]] = None,
-        path_kwargs: Optional[dict[str, bytes]] = None,
+        target_kwargs: dict[str, Any] | None = None,
+        path_args: list[bytes] | None = None,
+        path_kwargs: dict[str, bytes] | None = None,
     ) -> "_HandlerDelegate":
         """Returns `~.httputil.HTTPMessageDelegate` that can serve a request
         for application and `RequestHandler` subclass.
@@ -2444,9 +2442,9 @@ class _HandlerDelegate(httputil.HTTPMessageDelegate):
         application: Application,
         request: httputil.HTTPServerRequest,
         handler_class: type[RequestHandler],
-        handler_kwargs: Optional[dict[str, Any]],
-        path_args: Optional[list[bytes]],
-        path_kwargs: Optional[dict[str, bytes]],
+        handler_kwargs: dict[str, Any] | None,
+        path_args: list[bytes] | None,
+        path_kwargs: dict[str, bytes] | None,
     ) -> None:
         self.application = application
         self.connection = request.connection
@@ -2460,15 +2458,15 @@ class _HandlerDelegate(httputil.HTTPMessageDelegate):
 
     def headers_received(
         self,
-        start_line: Union[httputil.RequestStartLine, httputil.ResponseStartLine],
+        start_line: httputil.RequestStartLine | httputil.ResponseStartLine,
         headers: httputil.HTTPHeaders,
-    ) -> Optional[Awaitable[None]]:
+    ) -> Awaitable[None] | None:
         if self.stream_request_body:
             self.request._body_future = Future()
             return self.execute()
         return None
 
-    def data_received(self, data: bytes) -> Optional[Awaitable[None]]:
+    def data_received(self, data: bytes) -> Awaitable[None] | None:
         if self.stream_request_body:
             return self.handler.data_received(data)
         else:
@@ -2490,7 +2488,7 @@ class _HandlerDelegate(httputil.HTTPMessageDelegate):
         else:
             self.chunks = None  # type: ignore
 
-    def execute(self) -> Optional[Awaitable[None]]:
+    def execute(self) -> Awaitable[None] | None:
         # If template cache is disabled (usually in the debug mode),
         # re-compile templates and reload static files on every
         # request so you don't need to restart to see changes
@@ -2556,7 +2554,7 @@ class HTTPError(Exception):
     def __init__(
         self,
         status_code: int = 500,
-        log_message: Optional[str] = None,
+        log_message: str | None = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -2566,7 +2564,7 @@ class HTTPError(Exception):
         self.reason = kwargs.get("reason", None)
 
     @property
-    def log_message(self) -> Optional[str]:
+    def log_message(self) -> str | None:
         """
         A backwards compatible way of accessing log_message.
         """
@@ -2574,7 +2572,7 @@ class HTTPError(Exception):
             return self._log_message.replace("%", "%%")
         return self._log_message
 
-    def get_message(self) -> Optional[str]:
+    def get_message(self) -> str | None:
         if self._log_message and self.args:
             return self._log_message % self.args
         return self._log_message
@@ -2766,10 +2764,10 @@ class StaticFileHandler(RequestHandler):
 
     CACHE_MAX_AGE = 86400 * 365 * 10  # 10 years
 
-    _static_hashes: dict[str, Optional[str]] = {}
+    _static_hashes: dict[str, str | None] = {}
     _lock = threading.Lock()  # protects _static_hashes
 
-    def initialize(self, path: str, default_filename: Optional[str] = None) -> None:
+    def initialize(self, path: str, default_filename: str | None = None) -> None:
         self.root = path
         self.default_filename = default_filename
 
@@ -2864,7 +2862,7 @@ class StaticFileHandler(RequestHandler):
         else:
             assert self.request.method == "HEAD"
 
-    def compute_etag(self) -> Optional[str]:
+    def compute_etag(self) -> str | None:
         """Sets the ``Etag`` header based on static url version.
 
         This allows efficient ``If-None-Match`` checks against cached
@@ -2947,7 +2945,7 @@ class StaticFileHandler(RequestHandler):
         abspath = os.path.abspath(os.path.join(root, path))
         return abspath
 
-    def validate_absolute_path(self, root: str, absolute_path: str) -> Optional[str]:
+    def validate_absolute_path(self, root: str, absolute_path: str) -> str | None:
         """Validate and return the absolute path.
 
         ``root`` is the configured path for the `StaticFileHandler`,
@@ -3008,7 +3006,7 @@ class StaticFileHandler(RequestHandler):
 
     @classmethod
     def get_content(
-        cls, abspath: str, start: Optional[int] = None, end: Optional[int] = None
+        cls, abspath: str, start: int | None = None, end: int | None = None
     ) -> Generator[bytes, None, None]:
         """Retrieve the content of the requested resource which is located
         at the given absolute path.
@@ -3028,7 +3026,7 @@ class StaticFileHandler(RequestHandler):
             if start is not None:
                 file.seek(start)
             if end is not None:
-                remaining: Optional[int] = end - (start or 0)
+                remaining: int | None = end - (start or 0)
             else:
                 remaining = None
             while True:
@@ -3083,7 +3081,7 @@ class StaticFileHandler(RequestHandler):
         stat_result = self._stat()
         return stat_result.st_size
 
-    def get_modified_time(self) -> Optional[datetime.datetime]:
+    def get_modified_time(self) -> datetime.datetime | None:
         """Returns the time that ``self.absolute_path`` was last modified.
 
         May be overridden in subclasses.  Should return a `~datetime.datetime`
@@ -3135,7 +3133,7 @@ class StaticFileHandler(RequestHandler):
         pass
 
     def get_cache_time(
-        self, path: str, modified: Optional[datetime.datetime], mime_type: str
+        self, path: str, modified: datetime.datetime | None, mime_type: str
     ) -> int:
         """Override to customize cache control behavior.
 
@@ -3195,7 +3193,7 @@ class StaticFileHandler(RequestHandler):
         return url_path
 
     @classmethod
-    def get_version(cls, settings: dict[str, Any], path: str) -> Optional[str]:
+    def get_version(cls, settings: dict[str, Any], path: str) -> str | None:
         """Generate the version string to be used in static URLs.
 
         ``settings`` is the `Application.settings` dictionary and ``path``
@@ -3212,7 +3210,7 @@ class StaticFileHandler(RequestHandler):
         return cls._get_cached_version(abs_path)
 
     @classmethod
-    def _get_cached_version(cls, abs_path: str) -> Optional[str]:
+    def _get_cached_version(cls, abs_path: str) -> str | None:
         with cls._lock:
             hashes = cls._static_hashes
             if abs_path not in hashes:
@@ -3369,8 +3367,8 @@ class GZipContentEncoding(OutputTransform):
 
 
 def authenticated(
-    method: Callable[..., Optional[Awaitable[None]]],
-) -> Callable[..., Optional[Awaitable[None]]]:
+    method: Callable[..., Awaitable[None] | None],
+) -> Callable[..., Awaitable[None] | None]:
     """Decorate methods with this to require that the user be logged in.
 
     If the user is not logged in, they will be redirected to the configured
@@ -3385,7 +3383,7 @@ def authenticated(
     @functools.wraps(method)
     def wrapper(  # type: ignore
         self: RequestHandler, *args, **kwargs
-    ) -> Optional[Awaitable[None]]:
+    ) -> Awaitable[None] | None:
         if not self.current_user:
             if self.request.method in ("GET", "HEAD"):
                 url = self.get_login_url()
@@ -3425,16 +3423,16 @@ class UIModule:
     def current_user(self) -> Any:
         return self.handler.current_user
 
-    def render(self, *args: Any, **kwargs: Any) -> Union[str, bytes]:
+    def render(self, *args: Any, **kwargs: Any) -> str | bytes:
         """Override in subclasses to return this module's output."""
         raise NotImplementedError()
 
-    def embedded_javascript(self) -> Optional[str]:
+    def embedded_javascript(self) -> str | None:
         """Override to return a JavaScript string
         to be embedded in the page."""
         return None
 
-    def javascript_files(self) -> Optional[Iterable[str]]:
+    def javascript_files(self) -> Iterable[str] | None:
         """Override to return a list of JavaScript files needed by this module.
 
         If the return values are relative paths, they will be passed to
@@ -3442,12 +3440,12 @@ class UIModule:
         """
         return None
 
-    def embedded_css(self) -> Optional[str]:
+    def embedded_css(self) -> str | None:
         """Override to return a CSS string
         that will be embedded in the page."""
         return None
 
-    def css_files(self) -> Optional[Iterable[str]]:
+    def css_files(self) -> Iterable[str] | None:
         """Override to returns a list of CSS files required by this module.
 
         If the return values are relative paths, they will be passed to
@@ -3455,13 +3453,13 @@ class UIModule:
         """
         return None
 
-    def html_head(self) -> Optional[str]:
+    def html_head(self) -> str | None:
         """Override to return an HTML string that will be put in the <head/>
         element.
         """
         return None
 
-    def html_body(self) -> Optional[str]:
+    def html_body(self) -> str | None:
         """Override to return an HTML string that will be put at the end of
         the <body/> element.
         """
@@ -3575,10 +3573,10 @@ class _UIModuleNamespace:
 def create_signed_value(
     secret: _CookieSecretTypes,
     name: str,
-    value: Union[str, bytes],
-    version: Optional[int] = None,
-    clock: Optional[Callable[[], float]] = None,
-    key_version: Optional[int] = None,
+    value: str | bytes,
+    version: int | None = None,
+    clock: Callable[[], float] | None = None,
+    key_version: int | None = None,
 ) -> bytes:
     if version is None:
         version = DEFAULT_SIGNED_VALUE_VERSION
@@ -3607,7 +3605,7 @@ def create_signed_value(
         # - name (not encoded; assumed to be ~alphanumeric)
         # - value (base64-encoded)
         # - signature (hex-encoded; no length prefix)
-        def format_field(s: Union[str, bytes]) -> bytes:
+        def format_field(s: str | bytes) -> bytes:
             return utf8("%d:" % len(s)) + utf8(s)
 
         to_sign = b"|".join(
@@ -3665,11 +3663,11 @@ def _get_version(value: bytes) -> int:
 def decode_signed_value(
     secret: _CookieSecretTypes,
     name: str,
-    value: Union[None, str, bytes],
+    value: None | str | bytes,
     max_age_days: float = 31,
-    clock: Optional[Callable[[], float]] = None,
-    min_version: Optional[int] = None,
-) -> Optional[bytes]:
+    clock: Callable[[], float] | None = None,
+    min_version: int | None = None,
+) -> bytes | None:
     if clock is None:
         clock = time.time
     if min_version is None:
@@ -3694,12 +3692,12 @@ def decode_signed_value(
 
 
 def _decode_signed_value_v1(
-    secret: Union[str, bytes],
+    secret: str | bytes,
     name: str,
     value: bytes,
     max_age_days: float,
     clock: Callable[[], float],
-) -> Optional[bytes]:
+) -> bytes | None:
     parts = utf8(value).split(b"|")
     if len(parts) != 3:
         return None
@@ -3754,7 +3752,7 @@ def _decode_signed_value_v2(
     value: bytes,
     max_age_days: float,
     clock: Callable[[], float],
-) -> Optional[bytes]:
+) -> bytes | None:
     try:
         (
             key_version,
@@ -3788,7 +3786,7 @@ def _decode_signed_value_v2(
         return None
 
 
-def get_signature_key_version(value: Union[str, bytes]) -> Optional[int]:
+def get_signature_key_version(value: str | bytes) -> int | None:
     value = utf8(value)
     version = _get_version(value)
     if version < 2:
@@ -3801,14 +3799,14 @@ def get_signature_key_version(value: Union[str, bytes]) -> Optional[int]:
     return key_version
 
 
-def _create_signature_v1(secret: Union[str, bytes], *parts: Union[str, bytes]) -> bytes:
+def _create_signature_v1(secret: str | bytes, *parts: str | bytes) -> bytes:
     hash = hmac.new(utf8(secret), digestmod=hashlib.sha1)
     for part in parts:
         hash.update(utf8(part))
     return utf8(hash.hexdigest())
 
 
-def _create_signature_v2(secret: Union[str, bytes], s: bytes) -> bytes:
+def _create_signature_v2(secret: str | bytes, s: bytes) -> bytes:
     hash = hmac.new(utf8(secret), digestmod=hashlib.sha256)
     hash.update(utf8(s))
     return utf8(hash.hexdigest())

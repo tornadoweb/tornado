@@ -208,7 +208,7 @@ from tornado import escape
 from tornado.log import app_log
 from tornado.util import ObjectDict, exec_in, unicode_type
 
-from typing import Any, Union, Callable, Optional, TextIO
+from typing import Any, Callable, Optional, TextIO
 from collections.abc import Iterable
 import typing
 
@@ -262,12 +262,12 @@ class Template:
     # this signature update website/sphinx/template.rst too.
     def __init__(
         self,
-        template_string: Union[str, bytes],
+        template_string: str | bytes,
         name: str = "<string>",
         loader: Optional["BaseLoader"] = None,
-        compress_whitespace: Union[bool, _UnsetMarker] = _UNSET,
-        autoescape: Optional[Union[str, _UnsetMarker]] = _UNSET,
-        whitespace: Optional[str] = None,
+        compress_whitespace: bool | _UnsetMarker = _UNSET,
+        autoescape: str | _UnsetMarker | None = _UNSET,
+        whitespace: str | None = None,
     ) -> None:
         """Construct a Template.
 
@@ -308,7 +308,7 @@ class Template:
         filter_whitespace(whitespace, "")
 
         if not isinstance(autoescape, _UnsetMarker):
-            self.autoescape: Optional[str] = autoescape
+            self.autoescape: str | None = autoescape
         elif loader:
             self.autoescape = loader.autoescape
         else:
@@ -400,9 +400,9 @@ class BaseLoader:
 
     def __init__(
         self,
-        autoescape: Optional[str] = _DEFAULT_AUTOESCAPE,
-        namespace: Optional[dict[str, Any]] = None,
-        whitespace: Optional[str] = None,
+        autoescape: str | None = _DEFAULT_AUTOESCAPE,
+        namespace: dict[str, Any] | None = None,
+        whitespace: str | None = None,
     ) -> None:
         """Construct a template loader.
 
@@ -435,11 +435,11 @@ class BaseLoader:
         with self.lock:
             self.templates = {}
 
-    def resolve_path(self, name: str, parent_path: Optional[str] = None) -> str:
+    def resolve_path(self, name: str, parent_path: str | None = None) -> str:
         """Converts a possibly-relative path to absolute (used internally)."""
         raise NotImplementedError()
 
-    def load(self, name: str, parent_path: Optional[str] = None) -> Template:
+    def load(self, name: str, parent_path: str | None = None) -> Template:
         """Loads a template."""
         name = self.resolve_path(name, parent_path=parent_path)
         with self.lock:
@@ -458,7 +458,7 @@ class Loader(BaseLoader):
         super().__init__(**kwargs)
         self.root = os.path.abspath(root_directory)
 
-    def resolve_path(self, name: str, parent_path: Optional[str] = None) -> str:
+    def resolve_path(self, name: str, parent_path: str | None = None) -> str:
         if (
             parent_path
             and not parent_path.startswith("<")
@@ -486,7 +486,7 @@ class DictLoader(BaseLoader):
         super().__init__(**kwargs)
         self.dict = dict
 
-    def resolve_path(self, name: str, parent_path: Optional[str] = None) -> str:
+    def resolve_path(self, name: str, parent_path: str | None = None) -> str:
         if (
             parent_path
             and not parent_path.startswith("<")
@@ -509,7 +509,7 @@ class _Node:
         raise NotImplementedError()
 
     def find_named_blocks(
-        self, loader: Optional[BaseLoader], named_blocks: dict[str, "_NamedBlock"]
+        self, loader: BaseLoader | None, named_blocks: dict[str, "_NamedBlock"]
     ) -> None:
         for child in self.each_child():
             child.find_named_blocks(loader, named_blocks)
@@ -561,7 +561,7 @@ class _NamedBlock(_Node):
             block.body.generate(writer)
 
     def find_named_blocks(
-        self, loader: Optional[BaseLoader], named_blocks: dict[str, "_NamedBlock"]
+        self, loader: BaseLoader | None, named_blocks: dict[str, "_NamedBlock"]
     ) -> None:
         named_blocks[self.name] = self
         _Node.find_named_blocks(self, loader, named_blocks)
@@ -579,7 +579,7 @@ class _IncludeBlock(_Node):
         self.line = line
 
     def find_named_blocks(
-        self, loader: Optional[BaseLoader], named_blocks: dict[str, _NamedBlock]
+        self, loader: BaseLoader | None, named_blocks: dict[str, _NamedBlock]
     ) -> None:
         assert loader is not None
         included = loader.load(self.name, self.template_name)
@@ -709,7 +709,7 @@ class ParseError(Exception):
     """
 
     def __init__(
-        self, message: str, filename: Optional[str] = None, lineno: int = 0
+        self, message: str, filename: str | None = None, lineno: int = 0
     ) -> None:
         self.message = message
         # The names "filename" and "lineno" are chosen for consistency
@@ -726,7 +726,7 @@ class _CodeWriter:
         self,
         file: TextIO,
         named_blocks: dict[str, _NamedBlock],
-        loader: Optional[BaseLoader],
+        loader: BaseLoader | None,
         current_template: Template,
     ) -> None:
         self.file = file
@@ -766,7 +766,7 @@ class _CodeWriter:
         return IncludeTemplate()
 
     def write_line(
-        self, line: str, line_number: int, indent: Optional[int] = None
+        self, line: str, line_number: int, indent: int | None = None
     ) -> None:
         if indent is None:
             indent = self._indent
@@ -787,7 +787,7 @@ class _TemplateReader:
         self.line = 1
         self.pos = 0
 
-    def find(self, needle: str, start: int = 0, end: Optional[int] = None) -> int:
+    def find(self, needle: str, start: int = 0, end: int | None = None) -> int:
         assert start >= 0, start
         pos = self.pos
         start += pos
@@ -801,7 +801,7 @@ class _TemplateReader:
             index -= pos
         return index
 
-    def consume(self, count: Optional[int] = None) -> str:
+    def consume(self, count: int | None = None) -> str:
         if count is None:
             count = len(self.text) - self.pos
         newpos = self.pos + count
@@ -816,7 +816,7 @@ class _TemplateReader:
     def __len__(self) -> int:
         return self.remaining()
 
-    def __getitem__(self, key: Union[int, slice]) -> str:
+    def __getitem__(self, key: int | slice) -> str:
         if isinstance(key, slice):
             size = len(self)
             start, stop, step = key.indices(size)
@@ -848,8 +848,8 @@ def _format_code(code: str) -> str:
 def _parse(
     reader: _TemplateReader,
     template: Template,
-    in_block: Optional[str] = None,
-    in_loop: Optional[str] = None,
+    in_block: str | None = None,
+    in_loop: str | None = None,
 ) -> _ChunkList:
     body = _ChunkList([])
     while True:
@@ -992,7 +992,7 @@ def _parse(
                     reader.raise_parse_error("set missing statement")
                 block = _Statement(suffix, line)
             elif operator == "autoescape":
-                fn: Optional[str] = suffix.strip()
+                fn: str | None = suffix.strip()
                 if fn == "None":
                     fn = None
                 template.autoescape = fn

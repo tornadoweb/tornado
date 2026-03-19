@@ -40,7 +40,6 @@ from tornado.ioloop import IOLoop, _Selectable
 from typing import (
     Any,
     Callable,
-    Optional,
     Protocol,
     TypeVar,
     Union,
@@ -105,7 +104,7 @@ class BaseAsyncIOLoop(IOLoop):
             # doesn't understand dynamic proxies.
             self.selector_loop = AddThreadSelectorEventLoop(asyncio_loop)  # type: ignore
         # Maps fd to (fileobj, handler function) pair (as in IOLoop.add_handler)
-        self.handlers: dict[int, tuple[Union[int, _Selectable], Callable]] = {}
+        self.handlers: dict[int, tuple[int | _Selectable, Callable]] = {}
         # Set of fds listening for reads/writes
         self.readers: set[int] = set()
         self.writers: set[int] = set()
@@ -155,7 +154,7 @@ class BaseAsyncIOLoop(IOLoop):
         self.asyncio_loop.close()
 
     def add_handler(
-        self, fd: Union[int, _Selectable], handler: Callable[..., None], events: int
+        self, fd: int | _Selectable, handler: Callable[..., None], events: int
     ) -> None:
         fd, fileobj = self.split_fd(fd)
         if fd in self.handlers:
@@ -168,7 +167,7 @@ class BaseAsyncIOLoop(IOLoop):
             self.selector_loop.add_writer(fd, self._handle_events, fd, IOLoop.WRITE)
             self.writers.add(fd)
 
-    def update_handler(self, fd: Union[int, _Selectable], events: int) -> None:
+    def update_handler(self, fd: int | _Selectable, events: int) -> None:
         fd, fileobj = self.split_fd(fd)
         if events & IOLoop.READ:
             if fd not in self.readers:
@@ -187,7 +186,7 @@ class BaseAsyncIOLoop(IOLoop):
                 self.selector_loop.remove_writer(fd)
                 self.writers.remove(fd)
 
-    def remove_handler(self, fd: Union[int, _Selectable]) -> None:
+    def remove_handler(self, fd: int | _Selectable) -> None:
         fd, fileobj = self.split_fd(fd)
         if fd not in self.handlers:
             return
@@ -261,7 +260,7 @@ class BaseAsyncIOLoop(IOLoop):
 
     def run_in_executor(
         self,
-        executor: Optional[concurrent.futures.Executor],
+        executor: concurrent.futures.Executor | None,
         func: Callable[..., _T],
         *args: Any,
     ) -> "asyncio.Future[_T]":
@@ -474,11 +473,11 @@ class SelectorThread:
         self._real_loop = real_loop
 
         self._select_cond = threading.Condition()
-        self._select_args: Optional[
+        self._select_args: None | (
             tuple[list[_FileDescriptorLike], list[_FileDescriptorLike]]
-        ] = None
+        ) = None
         self._closing_selector = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._thread_manager_handle = self._thread_manager()
 
         async def thread_manager_anext() -> None:
