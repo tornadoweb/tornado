@@ -188,7 +188,7 @@ Foo
 Content-Disposition: form-data; name="files"; filename="测试.txt"
 
 Foo
---1234--""".encode("utf-8").replace(b"\n", b"\r\n")
+--1234--""".encode().replace(b"\n", b"\r\n")
         args, files = form_data_args()
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]

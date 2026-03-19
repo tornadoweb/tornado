@@ -121,6 +121,6 @@ def abstract_base_test(cls: _TestCaseType) -> _TestCaseType:
         def setUpClass(cls):
             if cls is AbstractBaseWrapper:
                 raise unittest.SkipTest(ABT_SKIP_MESSAGE)
-            super(AbstractBaseWrapper, cls).setUpClass()
+            super().setUpClass()
 
     return AbstractBaseWrapper  # type: ignore

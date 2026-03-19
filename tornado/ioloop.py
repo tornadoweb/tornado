@@ -49,7 +49,7 @@ from tornado.log import app_log
 from tornado.util import Configurable, TimeoutError, import_object
 
 import typing
-from typing import Union, Any, Type, Optional, Callable, TypeVar, Awaitable
+from typing import Any, Callable, TypeVar, Awaitable
 
 if typing.TYPE_CHECKING:
     from typing import Dict, List, Set, TypedDict  # noqa: F401
@@ -171,9 +171,7 @@ class IOLoop(Configurable):
     _pending_tasks: set[Future] = set()
 
     @classmethod
-    def configure(
-        cls, impl: Union[None, str, Type[Configurable]], **kwargs: Any
-    ) -> None:
+    def configure(cls, impl: None | str | type[Configurable], **kwargs: Any) -> None:
         from tornado.platform.asyncio import BaseAsyncIOLoop
 
         if isinstance(impl, str):
@@ -497,7 +495,7 @@ class IOLoop(Configurable):
 
             class FutureCell(TypedDict):
                 # noqa: F841
-                future: Optional[Future]
+                future: Future | None
                 timeout_called: bool
 
         future_cell: FutureCell = {"future": None, "timeout_called": False}
@@ -686,7 +684,7 @@ class IOLoop(Configurable):
 
     def add_future(
         self,
-        future: Union[Future[_T], concurrent.futures.Future[_T]],
+        future: Future[_T] | concurrent.futures.Future[_T],
         callback: Callable[[Future[_T]], None],
     ) -> None:
         """Schedules a callback on the ``IOLoop`` when the given
