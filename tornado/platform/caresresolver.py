@@ -9,7 +9,8 @@ from tornado.netutil import Resolver, is_valid_ip
 import typing
 
 if typing.TYPE_CHECKING:
-    from typing import Generator, Any, List, Tuple, Dict  # noqa: F401
+    from typing import Any, List, Tuple, Dict  # noqa: F401
+    from collections.abc import Generator
 
 
 class CaresResolver(Resolver):
@@ -36,7 +37,7 @@ class CaresResolver(Resolver):
     def initialize(self) -> None:
         self.io_loop = IOLoop.current()
         self.channel = pycares.Channel(sock_state_cb=self._sock_state_cb)
-        self.fds: Dict[int, int] = {}
+        self.fds: dict[int, int] = {}
 
     def _sock_state_cb(self, fd: int, readable: bool, writable: bool) -> None:
         state = (IOLoop.READ if readable else 0) | (IOLoop.WRITE if writable else 0)
@@ -67,7 +68,7 @@ class CaresResolver(Resolver):
             addresses = [host]
         else:
             # gethostbyname doesn't take callback as a kwarg
-            fut: Future[Tuple[Any, Any]] = Future()
+            fut: Future[tuple[Any, Any]] = Future()
             self.channel.gethostbyname(
                 host, family, lambda result, error: fut.set_result((result, error))
             )

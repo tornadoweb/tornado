@@ -33,7 +33,9 @@ import time
 from io import BytesIO
 import urllib.parse
 
-from typing import Dict, Any, Callable, Optional, Type, Union, Awaitable
+from typing import Any, Optional, Type
+from collections.abc import Callable
+from collections.abc import Awaitable
 from types import TracebackType
 import typing
 
@@ -118,23 +120,23 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     def initialize(  # type: ignore
         self,
         max_clients: int = 10,
-        hostname_mapping: Optional[Dict[str, str]] = None,
+        hostname_mapping: dict[str, str] | None = None,
         max_buffer_size: int = 104857600,
-        resolver: Optional[Resolver] = None,
-        defaults: Optional[Dict[str, Any]] = None,
-        max_header_size: Optional[int] = None,
-        max_body_size: Optional[int] = None,
+        resolver: Resolver | None = None,
+        defaults: dict[str, Any] | None = None,
+        max_header_size: int | None = None,
+        max_body_size: int | None = None,
     ) -> None:
         super().initialize(defaults=defaults)
         self.max_clients = max_clients
         self.queue: Deque[
-            Tuple[object, HTTPRequest, Callable[[HTTPResponse], None]]
+            tuple[object, HTTPRequest, Callable[[HTTPResponse], None]]
         ] = collections.deque()
-        self.active: Dict[
-            object, Tuple[HTTPRequest, Callable[[HTTPResponse], None]]
+        self.active: dict[
+            object, tuple[HTTPRequest, Callable[[HTTPResponse], None]]
         ] = {}
-        self.waiting: Dict[
-            object, Tuple[HTTPRequest, Callable[[HTTPResponse], None], object]
+        self.waiting: dict[
+            object, tuple[HTTPRequest, Callable[[HTTPResponse], None], object]
         ] = {}
         self.max_buffer_size = max_buffer_size
         self.max_header_size = max_header_size
@@ -227,7 +229,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
                 self.io_loop.remove_timeout(timeout_handle)
             del self.waiting[key]
 
-    def _on_timeout(self, key: object, info: Optional[str] = None) -> None:
+    def _on_timeout(self, key: object, info: str | None = None) -> None:
         """Timeout callback of request.
 
         Construct a timeout HTTPResponse when a timeout occurs.
@@ -254,7 +256,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
     def __init__(
         self,
-        client: Optional[SimpleAsyncHTTPClient],
+        client: SimpleAsyncHTTPClient | None,
         request: HTTPRequest,
         release_callback: Callable[[], None],
         final_callback: Callable[[HTTPResponse], None],
@@ -274,9 +276,9 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self.tcp_client = tcp_client
         self.max_header_size = max_header_size
         self.max_body_size = max_body_size
-        self.code: Optional[int] = None
-        self.headers: Optional[httputil.HTTPHeaders] = None
-        self.chunks: List[bytes] = []
+        self.code: int | None = None
+        self.headers: httputil.HTTPHeaders | None = None
+        self.chunks: list[bytes] = []
         self._decompressor = None
         # Timeout handle returned by IOLoop.add_timeout
         self._timeout: object = None
@@ -446,9 +448,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             if not self._handle_exception(*sys.exc_info()):
                 raise
 
-    def _get_ssl_options(
-        self, scheme: str
-    ) -> Union[None, Dict[str, Any], ssl.SSLContext]:
+    def _get_ssl_options(self, scheme: str) -> None | dict[str, Any] | ssl.SSLContext:
         if scheme == "https":
             if self.request.ssl_options is not None:
                 return self.request.ssl_options
@@ -477,7 +477,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             return ssl_ctx
         return None
 
-    def _on_timeout(self, info: Optional[str] = None) -> None:
+    def _on_timeout(self, info: str | None = None) -> None:
         """Timeout callback of _HTTPConnection instance.
 
         Raise a `HTTPTimeoutError` when a timeout occurs.
@@ -542,8 +542,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
     def _handle_exception(
         self,
         typ: "Optional[Type[BaseException]]",
-        value: Optional[BaseException],
-        tb: Optional[TracebackType],
+        value: BaseException | None,
+        tb: TracebackType | None,
     ) -> bool:
         if self.final_callback is not None:
             self._remove_timeout()
@@ -587,7 +587,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
     async def headers_received(
         self,
-        first_line: Union[httputil.ResponseStartLine, httputil.RequestStartLine],
+        first_line: httputil.ResponseStartLine | httputil.RequestStartLine,
         headers: httputil.HTTPHeaders,
     ) -> None:
         assert isinstance(first_line, httputil.ResponseStartLine)
@@ -687,7 +687,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
     def _on_end_request(self) -> None:
         self.stream.close()
 
-    def data_received(self, chunk: bytes) -> Optional[Awaitable[None]]:
+    def data_received(self, chunk: bytes) -> Awaitable[None] | None:
         if self._should_follow_redirect():
             # We're going to follow a redirect so just discard the body.
             return None

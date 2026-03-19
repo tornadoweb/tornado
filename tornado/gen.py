@@ -92,26 +92,25 @@ except ImportError:
 
 import typing
 from typing import (
-    Mapping,
     Union,
     Any,
-    Callable,
     List,
     Type,
     Tuple,
-    Awaitable,
     Dict,
-    Sequence,
     overload,
 )
+from collections.abc import Callable
+from collections.abc import Mapping, Awaitable, Sequence
 
 if typing.TYPE_CHECKING:
-    from typing import Deque, Optional, Set, Iterable  # noqa: F401
+    from typing import Deque, Optional, Set  # noqa: F401
+    from collections.abc import Iterable
 
 _T = typing.TypeVar("_T")
 
 _Yieldable = Union[
-    None, Awaitable, List[Awaitable], Dict[Any, Awaitable], concurrent.futures.Future
+    None, Awaitable, list[Awaitable], dict[Any, Awaitable], concurrent.futures.Future
 ]
 
 
@@ -180,7 +179,7 @@ def coroutine(func: Callable[..., _T]) -> Callable[..., "Future[_T]"]: ...
 
 
 def coroutine(
-    func: Union[Callable[..., "Generator[Any, Any, _T]"], Callable[..., _T]],
+    func: Callable[..., "Generator[Any, Any, _T]"] | Callable[..., _T],
 ) -> Callable[..., "Future[_T]"]:
     """Decorator for asynchronous generators.
 
@@ -363,7 +362,7 @@ class WaitIterator:
 
     """
 
-    _unfinished: Dict[Future, Union[int, str]] = {}
+    _unfinished: dict[Future, int | str] = {}
 
     def __init__(self, *args: Future, **kwargs: Future) -> None:
         if args and kwargs:
@@ -377,9 +376,9 @@ class WaitIterator:
             futures = args
 
         self._finished: Deque[Future] = collections.deque()
-        self.current_index: Optional[Union[str, int]] = None
-        self.current_future: Optional[Future] = None
-        self._running_future: Optional[Future] = None
+        self.current_index: str | int | None = None
+        self.current_future: Future | None = None
+        self._running_future: Future | None = None
 
         for future in futures:
             future_add_done_callback(future, self._done_callback)
@@ -439,19 +438,19 @@ class WaitIterator:
 @overload
 def multi(
     children: Sequence[_Yieldable],
-    quiet_exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = (),
-) -> Future[List]: ...
+    quiet_exceptions: type[Exception] | tuple[type[Exception], ...] = (),
+) -> Future[list]: ...
 
 
 @overload
 def multi(
     children: Mapping[Any, _Yieldable],
-    quiet_exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = (),
-) -> Future[Dict]: ...
+    quiet_exceptions: type[Exception] | tuple[type[Exception], ...] = (),
+) -> Future[dict]: ...
 
 
 def multi(
-    children: Union[Sequence[_Yieldable], Mapping[Any, _Yieldable]],
+    children: Sequence[_Yieldable] | Mapping[Any, _Yieldable],
     quiet_exceptions: "Union[Type[Exception], Tuple[Type[Exception], ...]]" = (),
 ) -> "Union[Future[List], Future[Dict]]":
     """Runs multiple asynchronous operations in parallel.
@@ -505,7 +504,7 @@ Multi = multi
 
 
 def multi_future(
-    children: Union[Sequence[_Yieldable], Mapping[Any, _Yieldable]],
+    children: Sequence[_Yieldable] | Mapping[Any, _Yieldable],
     quiet_exceptions: "Union[Type[Exception], Tuple[Type[Exception], ...]]" = (),
 ) -> "Union[Future[List], Future[Dict]]":
     """Wait for multiple asynchronous futures in parallel.
@@ -523,7 +522,7 @@ def multi_future(
        Use `multi` instead.
     """
     if isinstance(children, dict):
-        keys: Optional[List] = list(children.keys())
+        keys: list | None = list(children.keys())
         children_seq: Iterable = children.values()
     else:
         keys = None
@@ -559,7 +558,7 @@ def multi_future(
                 else:
                     future_set_result_unless_cancelled(future, result_list)
 
-    listening: Set[Future] = set()
+    listening: set[Future] = set()
     for f in children_futs:
         if f not in listening:
             listening.add(f)
@@ -589,7 +588,7 @@ def maybe_future(x: Any) -> Future:
 
 
 def with_timeout(
-    timeout: Union[float, datetime.timedelta],
+    timeout: float | datetime.timedelta,
     future: _Yieldable,
     quiet_exceptions: "Union[Type[Exception], Tuple[Type[Exception], ...]]" = (),
 ) -> Future:
@@ -754,7 +753,7 @@ class Runner:
         self.ctx_run = ctx_run
         self.gen = gen
         self.result_future = result_future
-        self.future: Union[None, Future] = _null_future
+        self.future: None | Future = _null_future
         self.running = False
         self.finished = False
         self.io_loop = IOLoop.current()
@@ -784,7 +783,7 @@ class Runner:
                         # Save the exception for later. It's important that
                         # gen.throw() not be called inside this try/except block
                         # because that makes sys.exc_info behave unexpectedly.
-                        exc: Optional[Exception] = e
+                        exc: Exception | None = e
                     else:
                         exc = None
                     finally:
@@ -844,7 +843,7 @@ class Runner:
         return True
 
     def handle_exception(
-        self, typ: Type[Exception], value: Exception, tb: types.TracebackType
+        self, typ: type[Exception], value: Exception, tb: types.TracebackType
     ) -> bool:
         if not self.running and not self.finished:
             self.future = Future()

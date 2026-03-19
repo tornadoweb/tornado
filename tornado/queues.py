@@ -35,7 +35,8 @@ from tornado import gen, ioloop
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado.locks import Event
 
-from typing import Union, TypeVar, Generic, Awaitable, Optional
+from typing import TypeVar, Generic
+from collections.abc import Awaitable
 import typing
 
 if typing.TYPE_CHECKING:
@@ -58,9 +59,7 @@ class QueueFull(Exception):
     pass
 
 
-def _set_timeout(
-    future: Future, timeout: Union[None, float, datetime.timedelta]
-) -> None:
+def _set_timeout(future: Future, timeout: None | float | datetime.timedelta) -> None:
     if timeout:
 
         def on_timeout() -> None:
@@ -73,7 +72,7 @@ def _set_timeout(
 
 
 class _QueueIterator(Generic[_T]):
-    def __init__(self, q: "Queue[_T]") -> None:
+    def __init__(self, q: Queue[_T]) -> None:
         self.q = q
 
     def __anext__(self) -> Awaitable[_T]:
@@ -162,7 +161,7 @@ class Queue(Generic[_T]):
         self._maxsize = maxsize
         self._init()
         self._getters: Deque[Future[_T]] = collections.deque([])
-        self._putters: Deque[Tuple[_T, Future[None]]] = collections.deque([])
+        self._putters: Deque[tuple[_T, Future[None]]] = collections.deque([])
         self._unfinished_tasks = 0
         self._finished = Event()
         self._finished.set()
@@ -186,8 +185,8 @@ class Queue(Generic[_T]):
             return self.qsize() >= self.maxsize
 
     def put(
-        self, item: _T, timeout: Optional[Union[float, datetime.timedelta]] = None
-    ) -> "Future[None]":
+        self, item: _T, timeout: float | datetime.timedelta | None = None
+    ) -> Future[None]:
         """Put an item into the queue, perhaps waiting until there is room.
 
         Returns a Future, which raises `tornado.util.TimeoutError` after a
@@ -224,9 +223,7 @@ class Queue(Generic[_T]):
         else:
             self.__put_internal(item)
 
-    def get(
-        self, timeout: Optional[Union[float, datetime.timedelta]] = None
-    ) -> Awaitable[_T]:
+    def get(self, timeout: float | datetime.timedelta | None = None) -> Awaitable[_T]:
         """Remove and return an item from the queue.
 
         Returns an awaitable which resolves once an item is available, or raises
@@ -292,7 +289,7 @@ class Queue(Generic[_T]):
             self._finished.set()
 
     def join(
-        self, timeout: Optional[Union[float, datetime.timedelta]] = None
+        self, timeout: float | datetime.timedelta | None = None
     ) -> Awaitable[None]:
         """Block until all items in the queue are processed.
 

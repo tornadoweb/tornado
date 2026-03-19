@@ -103,7 +103,7 @@ class CookieTestRequestHandler(RequestHandler):
     # stub out enough methods to make the signed_cookie functions work
     def __init__(self, cookie_secret="0123456789", key_version=None):
         # don't call super.__init__
-        self._cookies: typing.Dict[str, bytes] = {}
+        self._cookies: dict[str, bytes] = {}
         if key_version is None:
             self.application = ObjectDict(  # type: ignore
                 settings=dict(cookie_secret=cookie_secret)
@@ -113,7 +113,7 @@ class CookieTestRequestHandler(RequestHandler):
                 settings=dict(cookie_secret=cookie_secret, key_version=key_version)
             )
 
-    def get_cookie(self, name) -> typing.Optional[str]:  # type: ignore[override]
+    def get_cookie(self, name) -> str | None:  # type: ignore[override]
         return to_unicode(self._cookies.get(name))
 
     def set_cookie(self, name, value, expires_days=None):  # type: ignore[override]
@@ -649,7 +649,7 @@ class RequestEncodingTest(WebTestCase):
 
 class TypeCheckHandler(RequestHandler):
     def prepare(self):
-        self.errors: typing.Dict[str, str] = {}
+        self.errors: dict[str, str] = {}
 
         self.check_type("status", self.get_status(), int)
 
@@ -2522,7 +2522,7 @@ class BaseFlowControlHandler(RequestHandler):
     def initialize(self, test):
         self.test = test
         self.method = None
-        self.methods: typing.List[str] = []
+        self.methods: list[str] = []
 
     @contextlib.contextmanager
     def in_method(self, method):

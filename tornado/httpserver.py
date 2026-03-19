@@ -37,7 +37,9 @@ from tornado.tcpserver import TCPServer
 from tornado.util import Configurable
 
 import typing
-from typing import Union, Any, Dict, Callable, List, Type, Tuple, Optional, Awaitable
+from typing import Any
+from collections.abc import Callable
+from collections.abc import Awaitable
 
 if typing.TYPE_CHECKING:
     from typing import Set  # noqa: F401
@@ -163,22 +165,22 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
 
     def initialize(
         self,
-        request_callback: Union[
-            httputil.HTTPServerConnectionDelegate,
-            Callable[[httputil.HTTPServerRequest], None],
-        ],
+        request_callback: (
+            httputil.HTTPServerConnectionDelegate
+            | Callable[[httputil.HTTPServerRequest], None]
+        ),
         no_keep_alive: bool = False,
         xheaders: bool = False,
-        ssl_options: Optional[Union[Dict[str, Any], ssl.SSLContext]] = None,
-        protocol: Optional[str] = None,
+        ssl_options: dict[str, Any] | ssl.SSLContext | None = None,
+        protocol: str | None = None,
         decompress_request: bool = False,
-        chunk_size: Optional[int] = None,
-        max_header_size: Optional[int] = None,
-        idle_connection_timeout: Optional[float] = None,
-        body_timeout: Optional[float] = None,
-        max_body_size: Optional[int] = None,
-        max_buffer_size: Optional[int] = None,
-        trusted_downstream: Optional[List[str]] = None,
+        chunk_size: int | None = None,
+        max_header_size: int | None = None,
+        idle_connection_timeout: float | None = None,
+        body_timeout: float | None = None,
+        max_body_size: int | None = None,
+        max_buffer_size: int | None = None,
+        trusted_downstream: list[str] | None = None,
     ) -> None:
         # This method's signature is not extracted with autodoc
         # because we want its arguments to appear on the class
@@ -202,15 +204,15 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
             max_buffer_size=max_buffer_size,
             read_chunk_size=chunk_size,
         )
-        self._connections: Set[HTTP1ServerConnection] = set()
+        self._connections: set[HTTP1ServerConnection] = set()
         self.trusted_downstream = trusted_downstream
 
     @classmethod
-    def configurable_base(cls) -> Type[Configurable]:
+    def configurable_base(cls) -> type[Configurable]:
         return HTTPServer
 
     @classmethod
-    def configurable_default(cls) -> Type[Configurable]:
+    def configurable_default(cls) -> type[Configurable]:
         return HTTPServer
 
     async def close_all_connections(self) -> None:
@@ -232,7 +234,7 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
             conn = next(iter(self._connections))
             await conn.close()
 
-    def handle_stream(self, stream: iostream.IOStream, address: Tuple) -> None:
+    def handle_stream(self, stream: iostream.IOStream, address: tuple) -> None:
         context = _HTTPRequestContext(
             stream, address, self.protocol, self.trusted_downstream
         )
@@ -265,15 +267,15 @@ class _CallableAdapter(httputil.HTTPMessageDelegate):
     ) -> None:
         self.connection = request_conn
         self.request_callback = request_callback
-        self.request: Optional[httputil.HTTPServerRequest] = None
+        self.request: httputil.HTTPServerRequest | None = None
         self.delegate = None
-        self._chunks: List[bytes] = []
+        self._chunks: list[bytes] = []
 
     def headers_received(
         self,
-        start_line: Union[httputil.RequestStartLine, httputil.ResponseStartLine],
+        start_line: httputil.RequestStartLine | httputil.ResponseStartLine,
         headers: httputil.HTTPHeaders,
-    ) -> Optional[Awaitable[None]]:
+    ) -> Awaitable[None] | None:
         self.request = httputil.HTTPServerRequest(
             connection=self.connection,
             start_line=typing.cast(httputil.RequestStartLine, start_line),
@@ -281,7 +283,7 @@ class _CallableAdapter(httputil.HTTPMessageDelegate):
         )
         return None
 
-    def data_received(self, chunk: bytes) -> Optional[Awaitable[None]]:
+    def data_received(self, chunk: bytes) -> Awaitable[None] | None:
         self._chunks.append(chunk)
         return None
 
@@ -299,9 +301,9 @@ class _HTTPRequestContext:
     def __init__(
         self,
         stream: iostream.IOStream,
-        address: Tuple,
-        protocol: Optional[str],
-        trusted_downstream: Optional[List[str]] = None,
+        address: tuple,
+        protocol: str | None,
+        trusted_downstream: list[str] | None = None,
     ) -> None:
         self.address = address
         # Save the socket's address family now so we know how to
@@ -384,15 +386,15 @@ class _ProxyAdapter(httputil.HTTPMessageDelegate):
 
     def headers_received(
         self,
-        start_line: Union[httputil.RequestStartLine, httputil.ResponseStartLine],
+        start_line: httputil.RequestStartLine | httputil.ResponseStartLine,
         headers: httputil.HTTPHeaders,
-    ) -> Optional[Awaitable[None]]:
+    ) -> Awaitable[None] | None:
         # TODO: either make context an official part of the
         # HTTPConnection interface or figure out some other way to do this.
         self.connection.context._apply_xheaders(headers)  # type: ignore
         return self.delegate.headers_received(start_line, headers)
 
-    def data_received(self, chunk: bytes) -> Optional[Awaitable[None]]:
+    def data_received(self, chunk: bytes) -> Awaitable[None] | None:
         return self.delegate.data_received(chunk)
 
     def finish(self) -> None:

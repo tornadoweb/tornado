@@ -53,7 +53,9 @@ from tornado import gen, httputil
 from tornado.ioloop import IOLoop
 from tornado.util import Configurable
 
-from typing import Type, Any, Union, Dict, Callable, Optional, Awaitable, cast
+from typing import Type, Any, Union, Optional, cast
+from collections.abc import Callable
+from collections.abc import Awaitable
 
 
 class HTTPClient:
@@ -176,20 +178,20 @@ class AsyncHTTPClient(Configurable):
 
     """
 
-    _instance_cache: Dict[IOLoop, "AsyncHTTPClient"]
+    _instance_cache: dict[IOLoop, "AsyncHTTPClient"]
 
     @classmethod
-    def configurable_base(cls) -> Type[Configurable]:
+    def configurable_base(cls) -> type[Configurable]:
         return AsyncHTTPClient
 
     @classmethod
-    def configurable_default(cls) -> Type[Configurable]:
+    def configurable_default(cls) -> type[Configurable]:
         from tornado.simple_httpclient import SimpleAsyncHTTPClient
 
         return SimpleAsyncHTTPClient
 
     @classmethod
-    def _async_clients(cls) -> Dict[IOLoop, "AsyncHTTPClient"]:
+    def _async_clients(cls) -> dict[IOLoop, "AsyncHTTPClient"]:
         attr_name = "_async_client_dict_" + cls.__name__
         if not hasattr(cls, attr_name):
             setattr(cls, attr_name, weakref.WeakKeyDictionary())
@@ -213,7 +215,7 @@ class AsyncHTTPClient(Configurable):
             instance_cache[instance.io_loop] = instance
         return instance
 
-    def initialize(self, defaults: Optional[Dict[str, Any]] = None) -> None:
+    def initialize(self, defaults: dict[str, Any] | None = None) -> None:
         self.io_loop = IOLoop.current()
         self.defaults = dict(HTTPRequest._DEFAULTS)
         if defaults is not None:
@@ -339,7 +341,7 @@ class AsyncHTTPClient(Configurable):
 class HTTPRequest:
     """HTTP client request object."""
 
-    _headers: Union[Dict[str, str], httputil.HTTPHeaders]
+    _headers: dict[str, str] | httputil.HTTPHeaders
 
     # Default values for HTTPRequest parameters.
     # Merged with the values on the request object by AsyncHTTPClient
@@ -359,41 +361,39 @@ class HTTPRequest:
         self,
         url: str,
         method: str = "GET",
-        headers: Optional[Union[Dict[str, str], httputil.HTTPHeaders]] = None,
-        body: Optional[Union[bytes, str]] = None,
-        auth_username: Optional[str] = None,
-        auth_password: Optional[str] = None,
-        auth_mode: Optional[str] = None,
-        connect_timeout: Optional[float] = None,
-        request_timeout: Optional[float] = None,
-        if_modified_since: Optional[Union[float, datetime.datetime]] = None,
-        follow_redirects: Optional[bool] = None,
-        max_redirects: Optional[int] = None,
-        user_agent: Optional[str] = None,
-        use_gzip: Optional[bool] = None,
-        network_interface: Optional[str] = None,
-        streaming_callback: Optional[
-            Callable[[bytes], Optional[Awaitable[None]]]
-        ] = None,
-        header_callback: Optional[Callable[[str], None]] = None,
-        prepare_curl_callback: Optional[Callable[[Any], None]] = None,
-        proxy_host: Optional[str] = None,
-        proxy_port: Optional[int] = None,
-        proxy_username: Optional[str] = None,
-        proxy_password: Optional[str] = None,
-        proxy_auth_mode: Optional[str] = None,
-        allow_nonstandard_methods: Optional[bool] = None,
-        validate_cert: Optional[bool] = None,
-        ca_certs: Optional[str] = None,
-        allow_ipv6: Optional[bool] = None,
-        client_key: Optional[str] = None,
-        client_cert: Optional[str] = None,
-        body_producer: Optional[
+        headers: dict[str, str] | httputil.HTTPHeaders | None = None,
+        body: bytes | str | None = None,
+        auth_username: str | None = None,
+        auth_password: str | None = None,
+        auth_mode: str | None = None,
+        connect_timeout: float | None = None,
+        request_timeout: float | None = None,
+        if_modified_since: float | datetime.datetime | None = None,
+        follow_redirects: bool | None = None,
+        max_redirects: int | None = None,
+        user_agent: str | None = None,
+        use_gzip: bool | None = None,
+        network_interface: str | None = None,
+        streaming_callback: None | (Callable[[bytes], Awaitable[None] | None]) = None,
+        header_callback: Callable[[str], None] | None = None,
+        prepare_curl_callback: Callable[[Any], None] | None = None,
+        proxy_host: str | None = None,
+        proxy_port: int | None = None,
+        proxy_username: str | None = None,
+        proxy_password: str | None = None,
+        proxy_auth_mode: str | None = None,
+        allow_nonstandard_methods: bool | None = None,
+        validate_cert: bool | None = None,
+        ca_certs: str | None = None,
+        allow_ipv6: bool | None = None,
+        client_key: str | None = None,
+        client_cert: str | None = None,
+        body_producer: None | (
             Callable[[Callable[[bytes], None]], "Future[None]"]
-        ] = None,
+        ) = None,
         expect_100_continue: bool = False,
-        decompress_response: Optional[bool] = None,
-        ssl_options: Optional[Union[Dict[str, Any], ssl.SSLContext]] = None,
+        decompress_response: bool | None = None,
+        ssl_options: dict[str, Any] | ssl.SSLContext | None = None,
     ) -> None:
         r"""All parameters except ``url`` are optional.
 
@@ -533,7 +533,7 @@ class HTTPRequest:
         self.max_redirects = max_redirects
         self.user_agent = user_agent
         if decompress_response is not None:
-            self.decompress_response: Optional[bool] = decompress_response
+            self.decompress_response: bool | None = decompress_response
         else:
             self.decompress_response = use_gzip
         self.network_interface = network_interface
@@ -558,7 +558,7 @@ class HTTPRequest:
         return self._headers  # type: ignore
 
     @headers.setter
-    def headers(self, value: Union[Dict[str, str], httputil.HTTPHeaders]) -> None:
+    def headers(self, value: dict[str, str] | httputil.HTTPHeaders) -> None:
         if value is None:
             self._headers = httputil.HTTPHeaders()
         else:
@@ -569,7 +569,7 @@ class HTTPRequest:
         return self._body
 
     @body.setter
-    def body(self, value: Union[bytes, str]) -> None:
+    def body(self, value: bytes | str) -> None:
         self._body = utf8(value)
 
 
@@ -624,7 +624,7 @@ class HTTPResponse:
     """
 
     # I'm not sure why these don't get type-inferred from the references in __init__.
-    error: Optional[BaseException] = None
+    error: BaseException | None = None
     _error_is_response_code = False
     request: HTTPRequest
 
@@ -632,14 +632,14 @@ class HTTPResponse:
         self,
         request: HTTPRequest,
         code: int,
-        headers: Optional[httputil.HTTPHeaders] = None,
-        buffer: Optional[BytesIO] = None,
-        effective_url: Optional[str] = None,
-        error: Optional[BaseException] = None,
-        request_time: Optional[float] = None,
-        time_info: Optional[Dict[str, float]] = None,
-        reason: Optional[str] = None,
-        start_time: Optional[float] = None,
+        headers: httputil.HTTPHeaders | None = None,
+        buffer: BytesIO | None = None,
+        effective_url: str | None = None,
+        error: BaseException | None = None,
+        request_time: float | None = None,
+        time_info: dict[str, float] | None = None,
+        reason: str | None = None,
+        start_time: float | None = None,
     ) -> None:
         if isinstance(request, _RequestProxy):
             self.request = request.request
@@ -652,7 +652,7 @@ class HTTPResponse:
         else:
             self.headers = httputil.HTTPHeaders()
         self.buffer = buffer
-        self._body: Optional[bytes] = None
+        self._body: bytes | None = None
         if effective_url is None:
             self.effective_url = request.url
         else:
@@ -713,8 +713,8 @@ class HTTPClientError(Exception):
     def __init__(
         self,
         code: int,
-        message: Optional[str] = None,
-        response: Optional[HTTPResponse] = None,
+        message: str | None = None,
+        response: HTTPResponse | None = None,
     ) -> None:
         self.code = code
         self.message = message or httputil.responses.get(code, "Unknown")
@@ -740,9 +740,7 @@ class _RequestProxy:
     Used internally by AsyncHTTPClient implementations.
     """
 
-    def __init__(
-        self, request: HTTPRequest, defaults: Optional[Dict[str, Any]]
-    ) -> None:
+    def __init__(self, request: HTTPRequest, defaults: dict[str, Any] | None) -> None:
         self.request = request
         self.defaults = defaults
 

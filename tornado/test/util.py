@@ -11,7 +11,7 @@ import warnings
 
 from tornado.testing import bind_unused_port
 
-_TestCaseType = typing.TypeVar("_TestCaseType", bound=typing.Type[unittest.TestCase])
+_TestCaseType = typing.TypeVar("_TestCaseType", bound=type[unittest.TestCase])
 
 skipIfNonUnix = unittest.skipIf(
     os.name != "posix" or sys.platform == "cygwin", "non-unix platform"
@@ -80,7 +80,7 @@ def exec_test(caller_globals, caller_locals, s):
     # globals: it's all global from the perspective of code defined
     # in s.
     global_namespace = dict(caller_globals, **caller_locals)  # type: ignore
-    local_namespace: typing.Dict[str, typing.Any] = {}
+    local_namespace: dict[str, typing.Any] = {}
     exec(textwrap.dedent(s), global_namespace, local_namespace)
     return local_namespace
 
@@ -121,6 +121,6 @@ def abstract_base_test(cls: _TestCaseType) -> _TestCaseType:
         def setUpClass(cls):
             if cls is AbstractBaseWrapper:
                 raise unittest.SkipTest(ABT_SKIP_MESSAGE)
-            super(AbstractBaseWrapper, cls).setUpClass()
+            super().setUpClass()
 
     return AbstractBaseWrapper  # type: ignore

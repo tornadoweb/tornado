@@ -39,16 +39,11 @@ from tornado.ioloop import IOLoop, _Selectable
 
 from typing import (
     Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
     Protocol,
-    Set,
-    Tuple,
     TypeVar,
     Union,
 )
+from collections.abc import Callable
 
 if typing.TYPE_CHECKING:
     from typing_extensions import TypeVarTuple, Unpack
@@ -67,7 +62,7 @@ if typing.TYPE_CHECKING:
     _Ts = TypeVarTuple("_Ts")
 
 # Collection of selector thread event loops to shut down on exit.
-_selector_loops: Set["SelectorThread"] = set()
+_selector_loops: set["SelectorThread"] = set()
 
 
 def _atexit_callback() -> None:
@@ -109,10 +104,10 @@ class BaseAsyncIOLoop(IOLoop):
             # doesn't understand dynamic proxies.
             self.selector_loop = AddThreadSelectorEventLoop(asyncio_loop)  # type: ignore
         # Maps fd to (fileobj, handler function) pair (as in IOLoop.add_handler)
-        self.handlers: Dict[int, Tuple[Union[int, _Selectable], Callable]] = {}
+        self.handlers: dict[int, tuple[int | _Selectable, Callable]] = {}
         # Set of fds listening for reads/writes
-        self.readers: Set[int] = set()
-        self.writers: Set[int] = set()
+        self.readers: set[int] = set()
+        self.writers: set[int] = set()
         self.closing = False
         # If an asyncio loop was closed through an asyncio interface
         # instead of IOLoop.close(), we'd never hear about it and may
@@ -159,7 +154,7 @@ class BaseAsyncIOLoop(IOLoop):
         self.asyncio_loop.close()
 
     def add_handler(
-        self, fd: Union[int, _Selectable], handler: Callable[..., None], events: int
+        self, fd: int | _Selectable, handler: Callable[..., None], events: int
     ) -> None:
         fd, fileobj = self.split_fd(fd)
         if fd in self.handlers:
@@ -172,7 +167,7 @@ class BaseAsyncIOLoop(IOLoop):
             self.selector_loop.add_writer(fd, self._handle_events, fd, IOLoop.WRITE)
             self.writers.add(fd)
 
-    def update_handler(self, fd: Union[int, _Selectable], events: int) -> None:
+    def update_handler(self, fd: int | _Selectable, events: int) -> None:
         fd, fileobj = self.split_fd(fd)
         if events & IOLoop.READ:
             if fd not in self.readers:
@@ -191,7 +186,7 @@ class BaseAsyncIOLoop(IOLoop):
                 self.selector_loop.remove_writer(fd)
                 self.writers.remove(fd)
 
-    def remove_handler(self, fd: Union[int, _Selectable]) -> None:
+    def remove_handler(self, fd: int | _Selectable) -> None:
         fd, fileobj = self.split_fd(fd)
         if fd not in self.handlers:
             return
@@ -265,7 +260,7 @@ class BaseAsyncIOLoop(IOLoop):
 
     def run_in_executor(
         self,
-        executor: Optional[concurrent.futures.Executor],
+        executor: concurrent.futures.Executor | None,
         func: Callable[..., _T],
         *args: Any,
     ) -> "asyncio.Future[_T]":
@@ -478,11 +473,11 @@ class SelectorThread:
         self._real_loop = real_loop
 
         self._select_cond = threading.Condition()
-        self._select_args: Optional[
-            Tuple[List[_FileDescriptorLike], List[_FileDescriptorLike]]
-        ] = None
+        self._select_args: None | (
+            tuple[list[_FileDescriptorLike], list[_FileDescriptorLike]]
+        ) = None
         self._closing_selector = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._thread_manager_handle = self._thread_manager()
 
         async def thread_manager_anext() -> None:
@@ -498,8 +493,8 @@ class SelectorThread:
             context=self._main_thread_ctx,
         )
 
-        self._readers: Dict[_FileDescriptorLike, Callable] = {}
-        self._writers: Dict[_FileDescriptorLike, Callable] = {}
+        self._readers: dict[_FileDescriptorLike, Callable] = {}
+        self._writers: dict[_FileDescriptorLike, Callable] = {}
 
         # Writing to _waker_w will wake up the selector thread, which
         # watches for _waker_r to be readable.
@@ -639,7 +634,7 @@ class SelectorThread:
                 pass
 
     def _handle_select(
-        self, rs: List[_FileDescriptorLike], ws: List[_FileDescriptorLike]
+        self, rs: list[_FileDescriptorLike], ws: list[_FileDescriptorLike]
     ) -> None:
         for r in rs:
             self._handle_event(r, self._readers)
@@ -650,7 +645,7 @@ class SelectorThread:
     def _handle_event(
         self,
         fd: _FileDescriptorLike,
-        cb_map: Dict[_FileDescriptorLike, Callable],
+        cb_map: dict[_FileDescriptorLike, Callable],
     ) -> None:
         try:
             callback = cb_map[fd]

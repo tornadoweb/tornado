@@ -39,7 +39,8 @@ from tornado.httpclient import (
 )
 from tornado.log import app_log
 
-from typing import Dict, Any, Callable, Union, Optional
+from typing import Any
+from collections.abc import Callable
 import typing
 
 if typing.TYPE_CHECKING:
@@ -52,7 +53,7 @@ CR_OR_LF_RE = re.compile(b"\r|\n")
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):
     def initialize(  # type: ignore
-        self, max_clients: int = 10, defaults: Optional[Dict[str, Any]] = None
+        self, max_clients: int = 10, defaults: dict[str, Any] | None = None
     ) -> None:
         super().initialize(defaults=defaults)
         # Typeshed is incomplete for CurlMulti, so just use Any for now.
@@ -62,10 +63,10 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         self._curls = [self._curl_create() for i in range(max_clients)]
         self._free_list = self._curls[:]
         self._requests: Deque[
-            Tuple[HTTPRequest, Callable[[HTTPResponse], None], float]
+            tuple[HTTPRequest, Callable[[HTTPResponse], None], float]
         ] = collections.deque()
-        self._fds: Dict[int, int] = {}
-        self._timeout: Optional[object] = None
+        self._fds: dict[int, int] = {}
+        self._timeout: object | None = None
 
         # libcurl has bugs that sometimes cause it to not report all
         # relevant file descriptors and timeouts to TIMERFUNCTION/
@@ -262,8 +263,8 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
     def _finish(
         self,
         curl: pycurl.Curl,
-        curl_error: Optional[int] = None,
-        curl_message: Optional[str] = None,
+        curl_error: int | None = None,
+        curl_message: str | None = None,
     ) -> None:
         info = curl.info  # type: ignore
         curl.info = None  # type: ignore
@@ -272,7 +273,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         buffer = info["buffer"]
         if curl_error:
             assert curl_message is not None
-            error: Optional[CurlError] = CurlError(curl_error, curl_message)
+            error: CurlError | None = CurlError(curl_error, curl_message)
             assert error is not None
             code = error.code
             effective_url = None
@@ -377,7 +378,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                     "'CurlAsyncHTTPClient' does not support async streaming_callbacks."
                 )
 
-            def write_function(b: Union[bytes, bytearray]) -> int:
+            def write_function(b: bytes | bytearray) -> int:
                 assert request.streaming_callback is not None
                 self.io_loop.add_callback(request.streaming_callback, b)
                 return len(b)
@@ -553,7 +554,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
     def _curl_header_callback(
         self,
         headers: httputil.HTTPHeaders,
-        header_callback: Optional[Callable[[str], None]],
+        header_callback: Callable[[str], None] | None,
         header_line_bytes: bytes,
     ) -> None:
         header_line = native_str(header_line_bytes.decode("latin1"))

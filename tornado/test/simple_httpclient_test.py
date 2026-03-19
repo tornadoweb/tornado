@@ -524,8 +524,8 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
         # simple_httpclient_test, but it fails with the version of libcurl
         # available on travis-ci. Move it when that has been upgraded
         # or we have a better framework to skip tests based on curl version.
-        headers: typing.List[str] = []
-        chunk_bytes: typing.List[bytes] = []
+        headers: list[str] = []
+        chunk_bytes: list[bytes] = []
         self.fetch(
             "/redirect?url=/hello",
             header_callback=headers.append,
@@ -538,8 +538,8 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
         self.assertEqual(num_start_lines, 1)
 
     def test_streaming_callback_coroutine(self: typing.Any):
-        headers: typing.List[str] = []
-        chunk_bytes: typing.List[bytes] = []
+        headers: list[str] = []
+        chunk_bytes: list[bytes] = []
 
         import asyncio
 

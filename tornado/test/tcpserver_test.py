@@ -11,8 +11,6 @@ from tornado.tcpserver import TCPServer
 from tornado.test.util import skipIfNonUnix
 from tornado.testing import AsyncTestCase, ExpectLog, bind_unused_port, gen_test
 
-from typing import Tuple
-
 
 class TCPServerTest(AsyncTestCase):
     @gen_test
@@ -123,7 +121,7 @@ class TestMultiprocess(unittest.TestCase):
     # processes, each of which prints its task id to stdout (a single
     # byte, so we don't have to worry about atomicity of the shared
     # stdout stream) and then exits.
-    def run_subproc(self, code: str) -> Tuple[str, str]:
+    def run_subproc(self, code: str) -> tuple[str, str]:
         try:
             result = subprocess.run(
                 [sys.executable, "-Werror::DeprecationWarning"],

@@ -29,7 +29,9 @@ from tornado import gen
 from tornado.netutil import Resolver
 from tornado.gen import TimeoutError
 
-from typing import Any, Union, Dict, Tuple, List, Callable, Iterator, Optional
+from typing import Any, Tuple
+from collections.abc import Callable
+from collections.abc import Iterator
 
 if typing.TYPE_CHECKING:
     from typing import Set  # noqa(F401)
@@ -57,28 +59,28 @@ class _Connector:
 
     def __init__(
         self,
-        addrinfo: List[Tuple],
+        addrinfo: list[tuple],
         connect: Callable[
-            [socket.AddressFamily, Tuple], Tuple[IOStream, "Future[IOStream]"]
+            [socket.AddressFamily, tuple], tuple[IOStream, "Future[IOStream]"]
         ],
     ) -> None:
         self.io_loop = IOLoop.current()
         self.connect = connect
 
-        self.future: Future[Tuple[socket.AddressFamily, Any, IOStream]] = Future()
-        self.timeout: Optional[object] = None
-        self.connect_timeout: Optional[object] = None
-        self.last_error: Optional[Exception] = None
+        self.future: Future[tuple[socket.AddressFamily, Any, IOStream]] = Future()
+        self.timeout: object | None = None
+        self.connect_timeout: object | None = None
+        self.last_error: Exception | None = None
         self.remaining = len(addrinfo)
         self.primary_addrs, self.secondary_addrs = self.split(addrinfo)
-        self.streams: Set[IOStream] = set()
+        self.streams: set[IOStream] = set()
 
     @staticmethod
     def split(
-        addrinfo: List[Tuple],
-    ) -> Tuple[
-        List[Tuple[socket.AddressFamily, Tuple]],
-        List[Tuple[socket.AddressFamily, Tuple]],
+        addrinfo: list[tuple],
+    ) -> tuple[
+        list[tuple[socket.AddressFamily, tuple]],
+        list[tuple[socket.AddressFamily, tuple]],
     ]:
         """Partition the ``addrinfo`` list by address family.
 
@@ -101,7 +103,7 @@ class _Connector:
     def start(
         self,
         timeout: float = _INITIAL_CONNECT_TIMEOUT,
-        connect_timeout: Optional[Union[float, datetime.timedelta]] = None,
+        connect_timeout: float | datetime.timedelta | None = None,
     ) -> "Future[Tuple[socket.AddressFamily, Any, IOStream]]":
         self.try_connect(iter(self.primary_addrs))
         self.set_timeout(timeout)
@@ -109,7 +111,7 @@ class _Connector:
             self.set_connect_timeout(connect_timeout)
         return self.future
 
-    def try_connect(self, addrs: Iterator[Tuple[socket.AddressFamily, Tuple]]) -> None:
+    def try_connect(self, addrs: Iterator[tuple[socket.AddressFamily, tuple]]) -> None:
         try:
             af, addr = next(addrs)
         except StopIteration:
@@ -129,9 +131,9 @@ class _Connector:
 
     def on_connect_done(
         self,
-        addrs: Iterator[Tuple[socket.AddressFamily, Tuple]],
+        addrs: Iterator[tuple[socket.AddressFamily, tuple]],
         af: socket.AddressFamily,
-        addr: Tuple,
+        addr: tuple,
         future: "Future[IOStream]",
     ) -> None:
         self.remaining -= 1
@@ -173,9 +175,7 @@ class _Connector:
         if self.timeout is not None:
             self.io_loop.remove_timeout(self.timeout)
 
-    def set_connect_timeout(
-        self, connect_timeout: Union[float, datetime.timedelta]
-    ) -> None:
+    def set_connect_timeout(self, connect_timeout: float | datetime.timedelta) -> None:
         self.connect_timeout = self.io_loop.add_timeout(
             connect_timeout, self.on_connect_timeout
         )
@@ -203,7 +203,7 @@ class TCPClient:
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
     """
 
-    def __init__(self, resolver: Optional[Resolver] = None) -> None:
+    def __init__(self, resolver: Resolver | None = None) -> None:
         if resolver is not None:
             self.resolver = resolver
             self._own_resolver = False
@@ -220,11 +220,11 @@ class TCPClient:
         host: str,
         port: int,
         af: socket.AddressFamily = socket.AF_UNSPEC,
-        ssl_options: Optional[Union[Dict[str, Any], ssl.SSLContext]] = None,
-        max_buffer_size: Optional[int] = None,
-        source_ip: Optional[str] = None,
-        source_port: Optional[int] = None,
-        timeout: Optional[Union[float, datetime.timedelta]] = None,
+        ssl_options: dict[str, Any] | ssl.SSLContext | None = None,
+        max_buffer_size: int | None = None,
+        source_ip: str | None = None,
+        source_port: int | None = None,
+        timeout: float | datetime.timedelta | None = None,
     ) -> IOStream:
         """Connect to the given host and port.
 
@@ -293,12 +293,12 @@ class TCPClient:
 
     def _create_stream(
         self,
-        max_buffer_size: Optional[int],
+        max_buffer_size: int | None,
         af: socket.AddressFamily,
-        addr: Tuple,
-        source_ip: Optional[str] = None,
-        source_port: Optional[int] = None,
-    ) -> Tuple[IOStream, "Future[IOStream]"]:
+        addr: tuple,
+        source_ip: str | None = None,
+        source_port: int | None = None,
+    ) -> tuple[IOStream, "Future[IOStream]"]:
         # Always connect in plaintext; we'll convert to ssl if necessary
         # after one connection has completed.
         source_port_bind = source_port if isinstance(source_port, int) else 0

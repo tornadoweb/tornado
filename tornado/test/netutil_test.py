@@ -199,7 +199,7 @@ class TestPortAllocation(unittest.TestCase):
         not hasattr(socket, "SO_REUSEPORT"), "SO_REUSEPORT is not supported"
     )
     def test_reuse_port(self):
-        sockets: typing.List[socket.socket] = []
+        sockets: list[socket.socket] = []
         sock, port = bind_unused_port(reuse_port=True)
         try:
             sockets = bind_sockets(port, "127.0.0.1", reuse_port=True)

@@ -34,7 +34,8 @@ import types
 from tornado.log import app_log
 
 import typing
-from typing import Any, Callable, Optional, Tuple, Union
+from typing import Any, Union
+from collections.abc import Callable
 
 _T = typing.TypeVar("_T")
 
@@ -213,9 +214,7 @@ def future_set_exception_unless_cancelled(
 
 def future_set_exc_info(
     future: "Union[futures.Future[_T], Future[_T]]",
-    exc_info: Tuple[
-        Optional[type], Optional[BaseException], Optional[types.TracebackType]
-    ],
+    exc_info: tuple[type | None, BaseException | None, types.TracebackType | None],
 ) -> None:
     """Set the given ``exc_info`` as the `Future`'s exception.
 

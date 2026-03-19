@@ -34,12 +34,14 @@ from tornado.util import raise_exc_info, basestring_type
 from tornado.web import Application
 
 import typing
-from typing import Tuple, Any, Callable, Type, Dict, Union, Optional, Coroutine
+from typing import Any, Type, Union, Optional
+from collections.abc import Callable
+from collections.abc import Coroutine
 from types import TracebackType
 
 if typing.TYPE_CHECKING:
-    _ExcInfoTuple = Tuple[
-        Optional[Type[BaseException]], Optional[BaseException], Optional[TracebackType]
+    _ExcInfoTuple = tuple[
+        Optional[type[BaseException]], Optional[BaseException], Optional[TracebackType]
     ]
 
 
@@ -48,7 +50,7 @@ _NON_OWNED_IOLOOPS = AsyncIOMainLoop
 
 def bind_unused_port(
     reuse_port: bool = False, address: str = "127.0.0.1"
-) -> Tuple[socket.socket, int]:
+) -> tuple[socket.socket, int]:
     """Binds a server socket to an available port on localhost.
 
     Returns a tuple (socket, port).
@@ -136,12 +138,12 @@ class AsyncTestCase(unittest.TestCase):
         super().__init__(methodName)
         self.__stopped = False
         self.__running = False
-        self.__failure: Optional[_ExcInfoTuple] = None
+        self.__failure: _ExcInfoTuple | None = None
         self.__stop_args: Any = None
-        self.__timeout: Optional[object] = None
+        self.__timeout: object | None = None
 
         # Not used in this class itself, but used by @gen_test
-        self._test_generator: Optional[Union[Generator, Coroutine]] = None
+        self._test_generator: Generator | Coroutine | None = None
 
     def setUp(self) -> None:
         py_ver = sys.version_info
@@ -222,7 +224,7 @@ class AsyncTestCase(unittest.TestCase):
         return IOLoop(make_current=False)
 
     def _handle_exception(
-        self, typ: Type[Exception], value: Exception, tb: TracebackType
+        self, typ: type[Exception], value: Exception, tb: TracebackType
     ) -> bool:
         if self.__failure is None:
             self.__failure = (typ, value, tb)
@@ -240,8 +242,8 @@ class AsyncTestCase(unittest.TestCase):
             raise_exc_info(failure)
 
     def run(
-        self, result: Optional[unittest.TestResult] = None
-    ) -> Optional[unittest.TestResult]:
+        self, result: unittest.TestResult | None = None
+    ) -> unittest.TestResult | None:
         ret = super().run(result)
         # As a last resort, if an exception escaped super.run() and wasn't
         # re-raised in tearDown, raise it here.  This will cause the
@@ -294,8 +296,8 @@ class AsyncTestCase(unittest.TestCase):
 
     def wait(
         self,
-        condition: Optional[Callable[..., bool]] = None,
-        timeout: Optional[float] = None,
+        condition: Callable[..., bool] | None = None,
+        timeout: float | None = None,
     ) -> Any:
         """Runs the `.IOLoop` until stop is called or timeout has passed.
 
@@ -448,7 +450,7 @@ class AsyncHTTPTestCase(AsyncTestCase):
             timeout=get_async_test_timeout(),
         )
 
-    def get_httpserver_options(self) -> Dict[str, Any]:
+    def get_httpserver_options(self) -> dict[str, Any]:
         """May be overridden by subclasses to return additional
         keyword arguments for the server.
         """
@@ -488,10 +490,10 @@ class AsyncHTTPSTestCase(AsyncHTTPTestCase):
     def get_http_client(self) -> AsyncHTTPClient:
         return AsyncHTTPClient(force_instance=True, defaults=dict(validate_cert=False))
 
-    def get_httpserver_options(self) -> Dict[str, Any]:
+    def get_httpserver_options(self) -> dict[str, Any]:
         return dict(ssl_options=self.get_ssl_options())
 
-    def get_ssl_options(self) -> Dict[str, Any]:
+    def get_ssl_options(self) -> dict[str, Any]:
         """May be overridden by subclasses to select SSL options.
 
         By default includes a self-signed testing certificate.
@@ -499,7 +501,7 @@ class AsyncHTTPSTestCase(AsyncHTTPTestCase):
         return AsyncHTTPSTestCase.default_ssl_options()
 
     @staticmethod
-    def default_ssl_options() -> Dict[str, Any]:
+    def default_ssl_options() -> dict[str, Any]:
         # Testing keys were generated with:
         # openssl req -new -keyout tornado/test/test.key \
         #     -out tornado/test/test.crt \
@@ -517,7 +519,7 @@ class AsyncHTTPSTestCase(AsyncHTTPTestCase):
 
 @typing.overload
 def gen_test(
-    *, timeout: Optional[float] = None
+    *, timeout: float | None = None
 ) -> Callable[[Callable[..., Union[Generator, "Coroutine"]]], Callable[..., None]]:
     pass
 
@@ -528,12 +530,12 @@ def gen_test(func: Callable[..., Union[Generator, "Coroutine"]]) -> Callable[...
 
 
 def gen_test(  # noqa: F811
-    func: Optional[Callable[..., Union[Generator, "Coroutine"]]] = None,
-    timeout: Optional[float] = None,
-) -> Union[
-    Callable[..., None],
-    Callable[[Callable[..., Union[Generator, "Coroutine"]]], Callable[..., None]],
-]:
+    func: Callable[..., Union[Generator, "Coroutine"]] | None = None,
+    timeout: float | None = None,
+) -> (
+    Callable[..., None]
+    | Callable[[Callable[..., Union[Generator, "Coroutine"]]], Callable[..., None]]
+):
     """Testing equivalent of ``@gen.coroutine``, to be applied to test methods.
 
     ``@gen.coroutine`` cannot be used on tests because the `.IOLoop` is not
@@ -584,7 +586,7 @@ def gen_test(  # noqa: F811
         @functools.wraps(f)
         def pre_coroutine(
             self: AsyncTestCase, *args: Any, **kwargs: Any
-        ) -> Union[Generator, Coroutine]:
+        ) -> Generator | Coroutine:
             # Type comments used to avoid pypy3 bug.
             result = f(self, *args, **kwargs)
             if isinstance(result, Generator) or inspect.iscoroutine(result):
@@ -659,10 +661,10 @@ class ExpectLog(logging.Filter):
 
     def __init__(
         self,
-        logger: Union[logging.Logger, basestring_type],
+        logger: logging.Logger | basestring_type,
         regex: str,
         required: bool = True,
-        level: Optional[int] = None,
+        level: int | None = None,
     ) -> None:
         """Constructs an ExpectLog context manager.
 
@@ -699,7 +701,7 @@ class ExpectLog(logging.Filter):
         self.deprecated_level_matched = 0
         self.logged_stack = False
         self.level = level
-        self.orig_level: Optional[int] = None
+        self.orig_level: int | None = None
 
     def filter(self, record: logging.LogRecord) -> bool:
         if record.exc_info:
@@ -733,8 +735,8 @@ class ExpectLog(logging.Filter):
     def __exit__(
         self,
         typ: "Optional[Type[BaseException]]",
-        value: Optional[BaseException],
-        tb: Optional[TracebackType],
+        value: BaseException | None,
+        tb: TracebackType | None,
     ) -> None:
         if self.orig_level is not None:
             self.logger.setLevel(self.orig_level)
