@@ -7,7 +7,7 @@ import re
 import socket
 import ssl
 import sys
-import typing  # noqa: F401
+import typing
 
 from tornado.escape import to_unicode, utf8
 from tornado import gen, version

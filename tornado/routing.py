@@ -706,12 +706,12 @@ def _unquote_or_none(s: str) -> bytes:
     pass
 
 
-@overload  # noqa: F811
+@overload
 def _unquote_or_none(s: None) -> None:
     pass
 
 
-def _unquote_or_none(s: str | None) -> bytes | None:  # noqa: F811
+def _unquote_or_none(s: str | None) -> bytes | None:
     """None-safe wrapper around url_unescape to handle unmatched optional
     groups correctly.
 

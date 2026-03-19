@@ -49,16 +49,9 @@ from tornado.log import app_log
 from tornado.util import Configurable, TimeoutError, import_object
 
 import typing
-from typing import Any, TypeVar
+from typing import Any, TypeVar, TypedDict, Protocol
 from collections.abc import Callable
 from collections.abc import Awaitable
-
-if typing.TYPE_CHECKING:
-    from typing import Dict, List, Set, TypedDict  # noqa: F401
-
-    from typing_extensions import Protocol
-else:
-    Protocol = object
 
 
 class _Selectable(Protocol):
@@ -241,11 +234,11 @@ class IOLoop(Configurable):
 
     @typing.overload
     @staticmethod
-    def current(instance: bool = True) -> IOLoop | None:  # noqa: F811
+    def current(instance: bool = True) -> IOLoop | None:
         pass
 
     @staticmethod
-    def current(instance: bool = True) -> IOLoop | None:  # noqa: F811
+    def current(instance: bool = True) -> IOLoop | None:
         """Returns the current thread's `IOLoop`.
 
         If an `IOLoop` is currently running or has been marked as
@@ -397,13 +390,13 @@ class IOLoop(Configurable):
     ) -> None:
         pass
 
-    @typing.overload  # noqa: F811
+    @typing.overload
     def add_handler(
         self, fd: _S, handler: Callable[[_S, int], None], events: int
     ) -> None:
         pass
 
-    def add_handler(  # noqa: F811
+    def add_handler(
         self, fd: int | _Selectable, handler: Callable[..., None], events: int
     ) -> None:
         """Registers the given handler to receive the given events for ``fd``.
@@ -493,12 +486,10 @@ class IOLoop(Configurable):
         .. versionchanged:: 6.2
            ``tornado.util.TimeoutError`` is now an alias to ``asyncio.TimeoutError``.
         """
-        if typing.TYPE_CHECKING:
 
-            class FutureCell(TypedDict):
-                # noqa: F841
-                future: Future | None
-                timeout_called: bool
+        class FutureCell(TypedDict):
+            future: Future | None
+            timeout_called: bool
 
         future_cell: FutureCell = {"future": None, "timeout_called": False}
 

@@ -37,10 +37,6 @@ from typing import Any, Optional, Type
 from collections.abc import Callable
 from collections.abc import Awaitable
 from types import TracebackType
-import typing
-
-if typing.TYPE_CHECKING:
-    from typing import Deque, Tuple, List  # noqa: F401
 
 
 class HTTPTimeoutError(HTTPError):
@@ -129,7 +125,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     ) -> None:
         super().initialize(defaults=defaults)
         self.max_clients = max_clients
-        self.queue: Deque[
+        self.queue: collections.deque[
             tuple[object, HTTPRequest, Callable[[HTTPResponse], None]]
         ] = collections.deque()
         self.active: dict[

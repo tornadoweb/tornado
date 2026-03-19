@@ -48,9 +48,6 @@ from io import BytesIO
 
 import typing
 
-if typing.TYPE_CHECKING:
-    from typing import Dict, List  # noqa: F401
-
 
 async def read_stream_body(stream):
     """Reads an HTTP response from `stream` and returns a tuple of its

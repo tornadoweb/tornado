@@ -1,5 +1,6 @@
 import asyncio
 from concurrent import futures
+import contextvars
 import gc
 import datetime
 import platform
@@ -15,16 +16,6 @@ from tornado.test.util import skipNotCPython
 from tornado.web import Application, RequestHandler, HTTPError
 
 from tornado import gen
-
-try:
-    import contextvars
-except ImportError:
-    contextvars = None  # type: ignore
-
-import typing
-
-if typing.TYPE_CHECKING:
-    from typing import List, Optional  # noqa: F401
 
 
 class GenBasicTest(AsyncTestCase):
@@ -1048,11 +1039,9 @@ class RunnerGCTest(AsyncTestCase):
         self.assertEqual(result, [None, None])
 
 
-if contextvars is not None:
-    ctx_var: contextvars.ContextVar[int] = contextvars.ContextVar("ctx_var")
+ctx_var: contextvars.ContextVar[int] = contextvars.ContextVar("ctx_var")
 
 
-@unittest.skipIf(contextvars is None, "contextvars module not present")
 class ContextVarsTest(AsyncTestCase):
     async def native_root(self, x):
         ctx_var.set(x)

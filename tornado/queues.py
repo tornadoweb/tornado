@@ -35,12 +35,8 @@ from tornado import gen, ioloop
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado.locks import Event
 
-from typing import TypeVar, Generic
+from typing import TypeVar, Generic, Any
 from collections.abc import Awaitable
-import typing
-
-if typing.TYPE_CHECKING:
-    from typing import Deque, Tuple, Any  # noqa: F401
 
 _T = TypeVar("_T")
 
@@ -160,8 +156,10 @@ class Queue(Generic[_T]):
 
         self._maxsize = maxsize
         self._init()
-        self._getters: Deque[Future[_T]] = collections.deque([])
-        self._putters: Deque[tuple[_T, Future[None]]] = collections.deque([])
+        self._getters: collections.deque[Future[_T]] = collections.deque([])
+        self._putters: collections.deque[tuple[_T, Future[None]]] = collections.deque(
+            []
+        )
         self._unfinished_tasks = 0
         self._finished = Event()
         self._finished.set()

@@ -118,11 +118,6 @@ from typing import (
 from collections.abc import Callable
 from collections.abc import Awaitable, Iterable, Generator
 from types import TracebackType
-import typing
-
-if typing.TYPE_CHECKING:
-    from typing import Set  # noqa: F401
-
 
 # The following types are accepted by RequestHandler.set_header
 # and related methods.
@@ -441,18 +436,16 @@ class RequestHandler:
         pass
 
     @overload
-    def get_argument(  # noqa: F811
+    def get_argument(
         self, name: str, default: _ArgDefaultMarker = _ARG_DEFAULT, strip: bool = True
     ) -> str:
         pass
 
     @overload
-    def get_argument(  # noqa: F811
-        self, name: str, default: None, strip: bool = True
-    ) -> str | None:
+    def get_argument(self, name: str, default: None, strip: bool = True) -> str | None:
         pass
 
-    def get_argument(  # noqa: F811
+    def get_argument(
         self,
         name: str,
         default: None | str | _ArgDefaultMarker = _ARG_DEFAULT,
@@ -490,18 +483,18 @@ class RequestHandler:
         pass
 
     @overload
-    def get_body_argument(  # noqa: F811
+    def get_body_argument(
         self, name: str, default: _ArgDefaultMarker = _ARG_DEFAULT, strip: bool = True
     ) -> str:
         pass
 
     @overload
-    def get_body_argument(  # noqa: F811
+    def get_body_argument(
         self, name: str, default: None, strip: bool = True
     ) -> str | None:
         pass
 
-    def get_body_argument(  # noqa: F811
+    def get_body_argument(
         self,
         name: str,
         default: None | str | _ArgDefaultMarker = _ARG_DEFAULT,
@@ -534,18 +527,18 @@ class RequestHandler:
         pass
 
     @overload
-    def get_query_argument(  # noqa: F811
+    def get_query_argument(
         self, name: str, default: _ArgDefaultMarker = _ARG_DEFAULT, strip: bool = True
     ) -> str:
         pass
 
     @overload
-    def get_query_argument(  # noqa: F811
+    def get_query_argument(
         self, name: str, default: None, strip: bool = True
     ) -> str | None:
         pass
 
-    def get_query_argument(  # noqa: F811
+    def get_query_argument(
         self,
         name: str,
         default: None | str | _ArgDefaultMarker = _ARG_DEFAULT,

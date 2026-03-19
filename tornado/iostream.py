@@ -42,7 +42,6 @@ from tornado.util import errno_from_exception
 
 import typing
 from typing import (
-    Optional,
     Any,
     TypeVar,
 )
@@ -50,9 +49,6 @@ from collections.abc import Callable
 from collections.abc import Awaitable
 from re import Pattern
 from types import TracebackType
-
-if typing.TYPE_CHECKING:
-    from typing import Deque, List, Type  # noqa: F401
 
 _IOStreamType = TypeVar("_IOStreamType", bound="IOStream")
 
@@ -119,7 +115,9 @@ class _StreamBuffer:
 
     def __init__(self) -> None:
         # A sequence of (False, bytearray) and (True, memoryview) objects
-        self._buffers: Deque[tuple[bool, bytearray | memoryview]] = collections.deque()
+        self._buffers: collections.deque[tuple[bool, bytearray | memoryview]] = (
+            collections.deque()
+        )
         # Position in the first buffer
         self._first_pos = 0
         self._size = 0
@@ -260,7 +258,9 @@ class BaseIOStream:
         self._read_partial = False
         self._read_until_close = False
         self._read_future: Future | None = None
-        self._write_futures: Deque[tuple[int, Future[None]]] = collections.deque()
+        self._write_futures: collections.deque[tuple[int, Future[None]]] = (
+            collections.deque()
+        )
         self._close_callback: Callable[[], None] | None = None
         self._connect_future: Future[IOStream] | None = None
         # _ssl_connect_future should be defined in SSLIOStream
@@ -557,7 +557,7 @@ class BaseIOStream:
             | bool
             | BaseException
             | tuple[
-                "Optional[Type[BaseException]]",
+                type[BaseException] | None,
                 BaseException | None,
                 TracebackType | None,
             ]

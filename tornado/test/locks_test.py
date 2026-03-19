@@ -12,7 +12,6 @@
 
 import asyncio
 from datetime import timedelta
-import typing  # noqa: F401
 import unittest
 
 from tornado import gen, locks

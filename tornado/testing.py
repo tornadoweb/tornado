@@ -39,10 +39,9 @@ from collections.abc import Callable
 from collections.abc import Coroutine
 from types import TracebackType
 
-if typing.TYPE_CHECKING:
-    _ExcInfoTuple = tuple[
-        Optional[type[BaseException]], Optional[BaseException], Optional[TracebackType]
-    ]
+_ExcInfoTuple = tuple[
+    type[BaseException] | None, BaseException | None, TracebackType | None
+]
 
 
 _NON_OWNED_IOLOOPS = AsyncIOMainLoop
@@ -524,12 +523,12 @@ def gen_test(
     pass
 
 
-@typing.overload  # noqa: F811
+@typing.overload
 def gen_test(func: Callable[..., Union[Generator, "Coroutine"]]) -> Callable[..., None]:
     pass
 
 
-def gen_test(  # noqa: F811
+def gen_test(
     func: Callable[..., Union[Generator, "Coroutine"]] | None = None,
     timeout: float | None = None,
 ) -> (

@@ -20,7 +20,6 @@ import socket
 import numbers
 import datetime
 import ssl
-import typing
 
 from tornado.concurrent import Future, future_add_done_callback
 from tornado.ioloop import IOLoop
@@ -32,9 +31,6 @@ from tornado.gen import TimeoutError
 from typing import Any, Tuple
 from collections.abc import Callable
 from collections.abc import Iterator
-
-if typing.TYPE_CHECKING:
-    from typing import Set  # noqa(F401)
 
 _INITIAL_CONNECT_TIMEOUT = 0.3
 

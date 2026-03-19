@@ -28,7 +28,7 @@ from tornado.testing import AsyncHTTPTestCase
 from tornado.web import Application, HTTPError, RequestHandler
 from tornado.wsgi import WSGIContainer
 
-import typing  # noqa: F401
+import typing
 
 
 class BasicRouter(Router):

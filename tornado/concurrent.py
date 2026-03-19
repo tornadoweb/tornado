@@ -241,14 +241,14 @@ def future_add_done_callback(
     pass
 
 
-@typing.overload  # noqa: F811
+@typing.overload
 def future_add_done_callback(
     future: "Future[_T]", callback: Callable[["Future[_T]"], None]
 ) -> None:
     pass
 
 
-def future_add_done_callback(  # noqa: F811
+def future_add_done_callback(
     future: "Union[futures.Future[_T], Future[_T]]", callback: Callable[..., None]
 ) -> None:
     """Arrange to call ``callback`` when ``future`` is complete.

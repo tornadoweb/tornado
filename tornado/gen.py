@@ -66,6 +66,7 @@ import builtins
 import collections
 from collections.abc import Generator
 import concurrent.futures
+import contextvars
 import datetime
 import functools
 from functools import singledispatch
@@ -85,11 +86,6 @@ from tornado.ioloop import IOLoop
 from tornado.log import app_log
 from tornado.util import TimeoutError
 
-try:
-    import contextvars
-except ImportError:
-    contextvars = None  # type: ignore
-
 import typing
 from typing import (
     Union,
@@ -100,12 +96,8 @@ from typing import (
     Dict,
     overload,
 )
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from collections.abc import Mapping, Awaitable, Sequence
-
-if typing.TYPE_CHECKING:
-    from typing import Deque, Optional, Set  # noqa: F401
-    from collections.abc import Iterable
 
 _T = typing.TypeVar("_T")
 
@@ -211,10 +203,7 @@ def coroutine(
         # This function is type-annotated with a comment to work around
         # https://bitbucket.org/pypy/pypy/issues/2868/segfault-with-args-type-annotation-in
         future = _create_future()
-        if contextvars is not None:
-            ctx_run: Callable = contextvars.copy_context().run
-        else:
-            ctx_run = _fake_ctx_run
+        ctx_run: Callable = contextvars.copy_context().run
         try:
             result = ctx_run(func, *args, **kwargs)
         except (Return, StopIteration) as e:
@@ -375,7 +364,7 @@ class WaitIterator:
             self._unfinished = {f: i for (i, f) in enumerate(args)}
             futures = args
 
-        self._finished: Deque[Future] = collections.deque()
+        self._finished: collections.deque[Future] = collections.deque()
         self.current_index: str | int | None = None
         self.current_future: Future | None = None
         self._running_future: Future | None = None
