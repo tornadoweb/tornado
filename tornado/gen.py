@@ -66,6 +66,7 @@ import builtins
 import collections
 from collections.abc import Generator
 import concurrent.futures
+import contextvars
 import datetime
 import functools
 from functools import singledispatch
@@ -84,11 +85,6 @@ from tornado.concurrent import (
 from tornado.ioloop import IOLoop
 from tornado.log import app_log
 from tornado.util import TimeoutError
-
-try:
-    import contextvars
-except ImportError:
-    contextvars = None  # type: ignore
 
 import typing
 from typing import (
@@ -207,10 +203,7 @@ def coroutine(
         # This function is type-annotated with a comment to work around
         # https://bitbucket.org/pypy/pypy/issues/2868/segfault-with-args-type-annotation-in
         future = _create_future()
-        if contextvars is not None:
-            ctx_run: Callable = contextvars.copy_context().run
-        else:
-            ctx_run = _fake_ctx_run
+        ctx_run: Callable = contextvars.copy_context().run
         try:
             result = ctx_run(func, *args, **kwargs)
         except (Return, StopIteration) as e:

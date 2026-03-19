@@ -3,7 +3,7 @@
 # and ensure that it doesn't blow up (e.g. with unicode/bytes issues in
 # python 3)
 
-import unittest
+from unittest import mock
 
 from tornado.auth import (
     OpenIdMixin,
@@ -20,11 +20,6 @@ from tornado.httputil import url_concat
 from tornado.log import app_log
 from tornado.testing import AsyncHTTPTestCase, ExpectLog
 from tornado.web import RequestHandler, Application, HTTPError
-
-try:
-    from unittest import mock
-except ImportError:
-    mock = None  # type: ignore
 
 
 class OpenIdClientLoginHandler(RequestHandler, OpenIdMixin):
@@ -403,7 +398,6 @@ class AuthTest(AsyncHTTPTestCase):
             response.headers["Set-Cookie"],
         )
 
-    @unittest.skipIf(mock is None, "mock package not present")
     def test_oauth10a_redirect_error(self):
         with mock.patch.object(OAuth1ServerRequestTokenHandler, "get") as get:
             get.side_effect = Exception("boom")
