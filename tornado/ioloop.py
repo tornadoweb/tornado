@@ -234,11 +234,11 @@ class IOLoop(Configurable):
 
     @typing.overload
     @staticmethod
-    def current(instance: bool = True) -> IOLoop | None:  # noqa: F811
+    def current(instance: bool = True) -> IOLoop | None:
         pass
 
     @staticmethod
-    def current(instance: bool = True) -> IOLoop | None:  # noqa: F811
+    def current(instance: bool = True) -> IOLoop | None:
         """Returns the current thread's `IOLoop`.
 
         If an `IOLoop` is currently running or has been marked as
@@ -390,13 +390,13 @@ class IOLoop(Configurable):
     ) -> None:
         pass
 
-    @typing.overload  # noqa: F811
+    @typing.overload
     def add_handler(
         self, fd: _S, handler: Callable[[_S, int], None], events: int
     ) -> None:
         pass
 
-    def add_handler(  # noqa: F811
+    def add_handler(
         self, fd: int | _Selectable, handler: Callable[..., None], events: int
     ) -> None:
         """Registers the given handler to receive the given events for ``fd``.
@@ -488,7 +488,6 @@ class IOLoop(Configurable):
         """
 
         class FutureCell(TypedDict):
-            # noqa: F841
             future: Future | None
             timeout_called: bool
 

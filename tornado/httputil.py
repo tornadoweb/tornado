@@ -162,19 +162,19 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
     def __init__(self, __arg: Mapping[str, list[str]]) -> None:
         pass
 
-    @typing.overload  # noqa: F811
+    @typing.overload
     def __init__(self, __arg: Mapping[str, str]) -> None:
         pass
 
-    @typing.overload  # noqa: F811
+    @typing.overload
     def __init__(self, *args: tuple[str, str]) -> None:
         pass
 
-    @typing.overload  # noqa: F811
+    @typing.overload
     def __init__(self, **kwargs: str) -> None:
         pass
 
-    def __init__(self, *args: typing.Any, **kwargs: str) -> None:  # noqa: F811
+    def __init__(self, *args: typing.Any, **kwargs: str) -> None:
         # Formally, HTTP headers are a mapping from a field name to a "combined field value",
         # which may be constructed from multiple field lines by joining them with commas.
         # In practice, however, some headers (notably Set-Cookie) do not follow this convention,

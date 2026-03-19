@@ -1,4 +1,3 @@
-# flake8: noqa
 import subprocess
 import sys
 import unittest

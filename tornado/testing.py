@@ -523,12 +523,12 @@ def gen_test(
     pass
 
 
-@typing.overload  # noqa: F811
+@typing.overload
 def gen_test(func: Callable[..., Union[Generator, "Coroutine"]]) -> Callable[..., None]:
     pass
 
 
-def gen_test(  # noqa: F811
+def gen_test(
     func: Callable[..., Union[Generator, "Coroutine"]] | None = None,
     timeout: float | None = None,
 ) -> (
