@@ -25,3 +25,12 @@ archs = "universal2"
 [tool.cibuildwheel.windows]
 # TODO: figure out what's going on with these occasional log messages.
 test-command = "python -m tornado.test --fail-if-logs=false"
+
+[[tool.cibuildwheel.overrides]]
+select = "*{riscv64,ppc64le,s390x}*"
+# On emulated platforms, only run the websocket tests, since those are the ones that
+# exercise the C extension and are most likely to encounter architecture-related issues.
+# The full test suite is very slow under emulation.
+# TODO: It would be nice to run the full test suite on a single python version for
+# each architecture and only run the websocket tests for other versions on emulated archs.
+test-command = "python -m tornado.test tornado.test.websocket_test"
