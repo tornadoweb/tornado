@@ -114,6 +114,10 @@ class ThreadedResolverTest(_ResolverTestMixin):
 
     def tearDown(self):
         self.resolver.close()
+        # ThreadedResolver uses a global thread pool, so we have to shut it down
+        if ThreadedResolver._threadpool is not None:
+            ThreadedResolver._threadpool.shutdown(wait=True)
+            ThreadedResolver._threadpool = None
         super().tearDown()
 
 
