@@ -50,12 +50,17 @@ jobs:
           path: ./dist/tornado-*.tar.gz
 
   build_wheels:
-    name: Build wheels on ${{ matrix.os }}
+    name: Build wheels on ${{ matrix.os }}${{ matrix.name_suffix || '' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, ubuntu-24.04-arm, windows-2025, windows-11-arm, macos-15]
+        arch: [auto]
+        include:
+          - os: ubuntu-24.04
+            arch: "riscv64"
+            name_suffix: "-riscv64"
 
     steps:
       - uses: actions/checkout@v4
@@ -66,8 +71,18 @@ jobs:
         with:
           python-version: ${{ env.python-version }}
 
+      - name: Set up QEMU
+        if: matrix.arch != 'auto'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: ${{ matrix.arch }}
+
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.4.0
+        env:
+          CIBW_ARCHS: ${{ matrix.arch }}
+          # Increase timeouts for emulated archs
+          CIBW_ENVIRONMENT: ${{ matrix.arch != 'auto' && 'ASYNC_TEST_TIMEOUT=30 EMULATION=1' || '' }}
 
       - name: Audit ABI3 compliance
         # This may be moved into cibuildwheel itself in the future. See
@@ -76,7 +91,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: artifacts-${{ matrix.os }}
+          name: artifacts-${{ matrix.os }}${{ matrix.name_suffix || '' }}
           path: ./wheelhouse/*.whl
 
   upload_pypi_test:

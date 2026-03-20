@@ -21,6 +21,12 @@ skipIfNonUnix = unittest.skipIf(
 # depend on an external network.
 skipIfNoNetwork = unittest.skipIf("NO_NETWORK" in os.environ, "network access disabled")
 
+# Set the environment variable EMULATION=1 to disable any tests that
+# are unreliable under emulation
+skipIfEmulated = unittest.skipIf(
+    "EMULATION" in os.environ, "test unreliable under emulation"
+)
+
 skipNotCPython = unittest.skipIf(
     # "CPython" here essentially refers to the traditional synchronous refcounting GC,
     # so we skip these tests in free-threading builds of cpython too.

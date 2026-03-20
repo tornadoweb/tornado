@@ -12,3 +12,4 @@ rules:
         # Additional trusted repositories
         pypa/*: ref-pin
         astral-sh/setup-uv: ref-pin
+        docker/setup-qemu-action: ref-pin
