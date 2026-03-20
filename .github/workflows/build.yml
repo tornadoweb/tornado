@@ -56,11 +56,20 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, ubuntu-24.04-arm, windows-2025, windows-11-arm, macos-15]
-        arch: [auto]
+        emulated: [false]
         include:
           - os: ubuntu-24.04
+            emulated: true
             arch: "riscv64"
             name_suffix: "-riscv64"
+          - os: ubuntu-24.04
+            emulated: true
+            arch: "ppc64le"
+            name_suffix: "-ppc64le"
+          - os: ubuntu-24.04
+            emulated: true
+            arch: "s390x"
+            name_suffix: "-s390x"
 
     steps:
       - uses: actions/checkout@v4
@@ -72,7 +81,7 @@ jobs:
           python-version: ${{ env.python-version }}
 
       - name: Set up QEMU
-        if: matrix.arch != 'auto'
+        if: matrix.emulated
         uses: docker/setup-qemu-action@v3
         with:
           platforms: ${{ matrix.arch }}
@@ -80,9 +89,9 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.4.0
         env:
-          CIBW_ARCHS: ${{ matrix.arch }}
+          CIBW_ARCHS: ${{ matrix.emulated && matrix.arch || '' }}
           # Increase timeouts for emulated archs
-          CIBW_ENVIRONMENT: ${{ matrix.arch != 'auto' && 'ASYNC_TEST_TIMEOUT=30 EMULATION=1' || '' }}
+          CIBW_ENVIRONMENT: ${{ matrix.emulated && 'ASYNC_TEST_TIMEOUT=30 EMULATION=1' || '' }}
 
       - name: Audit ABI3 compliance
         # This may be moved into cibuildwheel itself in the future. See
