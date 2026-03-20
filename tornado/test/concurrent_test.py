@@ -183,7 +183,7 @@ class RunOnExecutorTest(AsyncTestCase):
     def test_call_with_no_args(self):
         class Object:
             def __init__(self):
-                self.executor = futures.thread.ThreadPoolExecutor(1)
+                self.executor = futures.ThreadPoolExecutor(1)
 
             @run_on_executor()
             def f(self):
@@ -197,7 +197,7 @@ class RunOnExecutorTest(AsyncTestCase):
     def test_call_with_executor(self):
         class Object:
             def __init__(self):
-                self.__executor = futures.thread.ThreadPoolExecutor(1)
+                self.__executor = futures.ThreadPoolExecutor(1)
 
             @run_on_executor(executor="_Object__executor")
             def f(self):
@@ -211,7 +211,7 @@ class RunOnExecutorTest(AsyncTestCase):
     def test_async_await(self):
         class Object:
             def __init__(self):
-                self.executor = futures.thread.ThreadPoolExecutor(1)
+                self.executor = futures.ThreadPoolExecutor(1)
 
             @run_on_executor()
             def f(self):
