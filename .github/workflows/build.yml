@@ -29,10 +29,10 @@ jobs:
     name: Build sdist
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         name: Install Python
         with:
           python-version: ${{ env.python-version }}
@@ -44,7 +44,7 @@ jobs:
       - name: Build sdist
         run: "python setup.py sdist && ls -l dist"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: artifacts-sdist
           path: ./dist/tornado-*.tar.gz
@@ -72,10 +72,10 @@ jobs:
             name_suffix: "-s390x"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         name: Install Python
         with:
           python-version: ${{ env.python-version }}
@@ -98,7 +98,7 @@ jobs:
         # https://github.com/pypa/cibuildwheel/issues/1342
         run: python -m pip install abi3audit && abi3audit --verbose --summary ./wheelhouse/*abi3*.whl
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: artifacts-${{ matrix.os }}${{ matrix.name_suffix || '' }}
           path: ./wheelhouse/*.whl
@@ -112,7 +112,7 @@ jobs:
       # This permission is required for pypi's "trusted publisher" feature
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: artifacts-*
           path: dist
@@ -132,7 +132,7 @@ jobs:
       # This permission is required for pypi's "trusted publisher" feature
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: artifacts-*
           path: dist

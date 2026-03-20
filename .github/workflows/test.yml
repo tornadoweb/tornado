@@ -19,10 +19,10 @@ jobs:
     name: Run quick tests
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         name: Install Python
         with:
           # [[[cog cog.outl(f"python-version: '3.{default_python_minor}'")]]]
@@ -99,10 +99,10 @@ jobs:
           # [[[end]]]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         name: Install Python
         with:
           python-version: ${{ matrix.python}}
@@ -124,10 +124,10 @@ jobs:
     needs: test_quick
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         name: Install Python
         with:
           # [[[cog cog.outl(f"python-version: '3.{default_python_minor}'")]]]
@@ -142,10 +142,10 @@ jobs:
     runs-on: ubuntu-24.04
     needs: test_quick
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         name: Install uv
       - name: Run zizmor
         run: uvx zizmor .github/workflows
@@ -163,7 +163,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: test_quick
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - name: Run cibuildwheel
