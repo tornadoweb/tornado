@@ -15,12 +15,11 @@
 import collections
 import datetime
 import types
+from collections.abc import Awaitable
+from typing import Any, Optional, Type
 
 from tornado import gen, ioloop
 from tornado.concurrent import Future, future_set_result_unless_cancelled
-
-from typing import Optional, Type, Any
-from collections.abc import Awaitable
 
 __all__ = ["Condition", "Event", "Semaphore", "BoundedSemaphore", "Lock"]
 

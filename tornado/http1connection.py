@@ -22,23 +22,18 @@ import asyncio
 import logging
 import re
 import types
+from collections.abc import Awaitable, Callable
+from typing import Optional, Type, cast
 
+from tornado import gen, httputil, iostream
 from tornado.concurrent import (
     Future,
     future_add_done_callback,
     future_set_result_unless_cancelled,
 )
 from tornado.escape import native_str, utf8
-from tornado import gen
-from tornado import httputil
-from tornado import iostream
-from tornado.log import gen_log, app_log
+from tornado.log import app_log, gen_log
 from tornado.util import GzipDecompressor
-
-
-from typing import cast, Optional, Type
-from collections.abc import Callable
-from collections.abc import Awaitable
 
 CR_OR_LF_RE = re.compile(b"\r|\n")
 

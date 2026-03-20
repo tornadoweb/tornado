@@ -34,16 +34,16 @@ import sys
 import threading
 import typing
 import warnings
-from tornado.gen import convert_yielded
-from tornado.ioloop import IOLoop, _Selectable
-
+from collections.abc import Callable
 from typing import (
     Any,
     Protocol,
     TypeVar,
     Union,
 )
-from collections.abc import Callable
+
+from tornado.gen import convert_yielded
+from tornado.ioloop import IOLoop, _Selectable
 
 if typing.TYPE_CHECKING:
     from typing_extensions import TypeVarTuple, Unpack

@@ -1,22 +1,21 @@
+import datetime
 import re
 import sys
-import datetime
 import textwrap
 import unittest
+from typing import Any, cast
 
 import tornado
 from tornado.escape import utf8
 from tornado.util import (
-    raise_exc_info,
+    ArgReplacer,
     Configurable,
     exec_in,
-    ArgReplacer,
-    timedelta_to_seconds,
     import_object,
+    raise_exc_info,
     re_unescape,
+    timedelta_to_seconds,
 )
-
-from typing import cast, Any
 
 
 class RaiseExcInfoTest(unittest.TestCase):

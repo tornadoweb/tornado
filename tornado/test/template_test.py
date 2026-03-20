@@ -2,8 +2,8 @@ import os
 import traceback
 import unittest
 
-from tornado.escape import utf8, native_str, to_unicode
-from tornado.template import Template, DictLoader, ParseError, Loader
+from tornado.escape import native_str, to_unicode, utf8
+from tornado.template import DictLoader, Loader, ParseError, Template
 from tornado.util import ObjectDict
 
 

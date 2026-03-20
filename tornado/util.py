@@ -14,25 +14,23 @@ from __future__ import annotations
 
 import array
 import asyncio
-from inspect import getfullargspec
 import os
 import re
 import typing
 import zlib
-
+from collections.abc import Callable, Mapping, Sequence
+from inspect import getfullargspec
+from re import Match
 from typing import (
     Any,
 )
-from collections.abc import Callable
-from collections.abc import Mapping, Sequence
-from re import Match
 
 if typing.TYPE_CHECKING:
     # Additional imports only used in type comments.
     # This lets us make these imports lazy.
     import datetime
-    from types import TracebackType
     import unittest
+    from types import TracebackType
 
 # Aliases for types that are spelled differently in different Python
 # versions. bytes_type is deprecated and no longer used in Tornado

@@ -1,11 +1,11 @@
 import datetime
-from io import StringIO
 import os
 import sys
-from unittest import mock
 import unittest
+from io import StringIO
+from unittest import mock
 
-from tornado.options import OptionParser, Error
+from tornado.options import Error, OptionParser
 from tornado.util import basestring_type
 
 

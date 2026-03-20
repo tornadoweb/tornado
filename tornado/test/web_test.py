@@ -1,55 +1,10 @@
-import http
-
-from tornado.concurrent import Future
-from tornado import gen
-from tornado.escape import (
-    json_decode,
-    utf8,
-    to_unicode,
-    recursive_unicode,
-    native_str,
-    to_basestring,
-)
-from tornado.httpclient import HTTPClientError
-from tornado.httputil import format_timestamp
-from tornado.iostream import IOStream
-from tornado import locale
-from tornado.locks import Event
-from tornado.log import app_log, gen_log
-from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.template import DictLoader
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
-from tornado.test.util import ignore_deprecation
-from tornado.util import ObjectDict, unicode_type
-from tornado.web import (
-    Application,
-    RequestHandler,
-    StaticFileHandler,
-    RedirectHandler as WebRedirectHandler,
-    HTTPError,
-    MissingArgumentError,
-    ErrorHandler,
-    authenticated,
-    url,
-    _create_signature_v1,
-    create_signed_value,
-    decode_signed_value,
-    get_signature_key_version,
-    UIModule,
-    Finish,
-    stream_request_body,
-    removeslash,
-    addslash,
-    GZipContentEncoding,
-)
-
 import binascii
 import contextlib
 import copy
 import datetime
 import email.utils
 import gzip
-from io import BytesIO
+import http
 import itertools
 import logging
 import os
@@ -58,6 +13,51 @@ import socket
 import typing
 import unittest
 import urllib.parse
+from io import BytesIO
+
+from tornado import gen, locale
+from tornado.concurrent import Future
+from tornado.escape import (
+    json_decode,
+    native_str,
+    recursive_unicode,
+    to_basestring,
+    to_unicode,
+    utf8,
+)
+from tornado.httpclient import HTTPClientError
+from tornado.httputil import format_timestamp
+from tornado.iostream import IOStream
+from tornado.locks import Event
+from tornado.log import app_log, gen_log
+from tornado.simple_httpclient import SimpleAsyncHTTPClient
+from tornado.template import DictLoader
+from tornado.test.util import ignore_deprecation
+from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
+from tornado.util import ObjectDict, unicode_type
+from tornado.web import (
+    Application,
+    ErrorHandler,
+    Finish,
+    GZipContentEncoding,
+    HTTPError,
+    MissingArgumentError,
+)
+from tornado.web import RedirectHandler as WebRedirectHandler
+from tornado.web import (
+    RequestHandler,
+    StaticFileHandler,
+    UIModule,
+    _create_signature_v1,
+    addslash,
+    authenticated,
+    create_signed_value,
+    decode_signed_value,
+    get_signature_key_version,
+    removeslash,
+    stream_request_body,
+    url,
+)
 
 
 def relpath(*a):

@@ -1,7 +1,4 @@
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
-from concurrent import futures
-from collections.abc import Generator
 import contextlib
 import datetime
 import functools
@@ -11,25 +8,28 @@ import sys
 import threading
 import time
 import types
-from unittest import mock
 import unittest
+from collections.abc import Generator
+from concurrent import futures
+from concurrent.futures import ThreadPoolExecutor
+from unittest import mock
 
-from tornado.escape import native_str
 from tornado import gen
-from tornado.ioloop import IOLoop, TimeoutError, PeriodicCallback
+from tornado.concurrent import Future
+from tornado.escape import native_str
+from tornado.ioloop import IOLoop, PeriodicCallback, TimeoutError
 from tornado.log import app_log
-from tornado.testing import (
-    AsyncTestCase,
-    bind_unused_port,
-    ExpectLog,
-    gen_test,
-    setup_with_context_manager,
-)
 from tornado.test.util import (
     ignore_deprecation,
     skipIfNonUnix,
 )
-from tornado.concurrent import Future
+from tornado.testing import (
+    AsyncTestCase,
+    ExpectLog,
+    bind_unused_port,
+    gen_test,
+    setup_with_context_manager,
+)
 
 
 class TestIOLoop(AsyncTestCase):

@@ -19,18 +19,16 @@ import asyncio
 import concurrent.futures
 import errno
 import os
-import sys
 import socket
 import ssl
 import stat
+import sys
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from tornado.concurrent import dummy_executor, run_on_executor
 from tornado.ioloop import IOLoop
 from tornado.util import Configurable, errno_from_exception
-
-from typing import Any
-from collections.abc import Callable
-from collections.abc import Awaitable
 
 # Note that the naming of ssl.Purpose is confusing; the purpose
 # of a context is to authenticate the opposite side of the connection.

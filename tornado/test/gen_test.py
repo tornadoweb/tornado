@@ -1,21 +1,20 @@
 import asyncio
-from concurrent import futures
 import contextvars
-import gc
 import datetime
+import gc
 import platform
 import sys
 import time
-import weakref
 import unittest
-
-from tornado.concurrent import Future
-from tornado.log import app_log
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
-from tornado.test.util import skipNotCPython
-from tornado.web import Application, RequestHandler, HTTPError
+import weakref
+from concurrent import futures
 
 from tornado import gen
+from tornado.concurrent import Future
+from tornado.log import app_log
+from tornado.test.util import skipNotCPython
+from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
+from tornado.web import Application, HTTPError, RequestHandler
 
 
 class GenBasicTest(AsyncTestCase):

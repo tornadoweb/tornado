@@ -65,8 +65,6 @@ import gzip
 import hashlib
 import hmac
 import http.cookies
-from inspect import isclass
-from io import BytesIO
 import mimetypes
 import numbers
 import os.path
@@ -75,49 +73,45 @@ import socket
 import sys
 import threading
 import time
-import warnings
-import tornado
 import traceback
 import types
 import urllib.parse
+import warnings
+from inspect import isclass
+from io import BytesIO
 from urllib.parse import urlencode
 
+import tornado
+from tornado import escape, gen, httputil, iostream, locale, template
 from tornado.concurrent import Future, future_set_result_unless_cancelled
-from tornado import escape
-from tornado import gen
+from tornado.escape import _unicode, utf8
 from tornado.httpserver import HTTPServer
-from tornado import httputil
-from tornado import iostream
-from tornado import locale
 from tornado.log import access_log, app_log, gen_log
-from tornado import template
-from tornado.escape import utf8, _unicode
 from tornado.routing import (
     AnyMatches,
     DefaultHostMatches,
     HostMatches,
     ReversibleRouter,
-    Rule,
     ReversibleRuleRouter,
+    Rule,
     URLSpec,
     _RuleList,
 )
-from tornado.util import ObjectDict, unicode_type, _websocket_mask
+from tornado.util import ObjectDict, _websocket_mask, unicode_type
 
 url = URLSpec
 
+from collections.abc import Awaitable, Callable, Generator, Iterable
+from types import TracebackType
 from typing import (
     Any,
-    Union,
     Optional,
     Type,
     TypeVar,
+    Union,
     cast,
     overload,
 )
-from collections.abc import Callable
-from collections.abc import Awaitable, Iterable, Generator
-from types import TracebackType
 
 # The following types are accepted by RequestHandler.set_header
 # and related methods.

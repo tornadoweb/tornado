@@ -1,36 +1,3 @@
-from tornado.concurrent import Future
-from tornado import gen
-from tornado import netutil
-from tornado.ioloop import IOLoop
-from tornado.iostream import (
-    IOStream,
-    SSLIOStream,
-    PipeIOStream,
-    StreamClosedError,
-    _StreamBuffer,
-)
-from tornado.httpclient import AsyncHTTPClient, HTTPResponse
-from tornado.httputil import HTTPHeaders
-from tornado.locks import Condition, Event
-from tornado.log import gen_log
-from tornado.netutil import ssl_options_to_context, ssl_wrap_socket
-from tornado.platform.asyncio import AddThreadSelectorEventLoop
-from tornado.tcpserver import TCPServer
-from tornado.testing import (
-    AsyncHTTPTestCase,
-    AsyncHTTPSTestCase,
-    AsyncTestCase,
-    bind_unused_port,
-    ExpectLog,
-    gen_test,
-)
-from tornado.test.util import (
-    skipIfNonUnix,
-    refusing_port,
-    ignore_deprecation,
-    abstract_base_test,
-)
-from tornado.web import RequestHandler, Application
 import asyncio
 import errno
 import hashlib
@@ -41,8 +8,41 @@ import random
 import socket
 import ssl
 import typing
-from unittest import mock
 import unittest
+from unittest import mock
+
+from tornado import gen, netutil
+from tornado.concurrent import Future
+from tornado.httpclient import AsyncHTTPClient, HTTPResponse
+from tornado.httputil import HTTPHeaders
+from tornado.ioloop import IOLoop
+from tornado.iostream import (
+    IOStream,
+    PipeIOStream,
+    SSLIOStream,
+    StreamClosedError,
+    _StreamBuffer,
+)
+from tornado.locks import Condition, Event
+from tornado.log import gen_log
+from tornado.netutil import ssl_options_to_context, ssl_wrap_socket
+from tornado.platform.asyncio import AddThreadSelectorEventLoop
+from tornado.tcpserver import TCPServer
+from tornado.test.util import (
+    abstract_base_test,
+    ignore_deprecation,
+    refusing_port,
+    skipIfNonUnix,
+)
+from tornado.testing import (
+    AsyncHTTPSTestCase,
+    AsyncHTTPTestCase,
+    AsyncTestCase,
+    ExpectLog,
+    bind_unused_port,
+    gen_test,
+)
+from tornado.web import Application, RequestHandler
 
 
 def _server_ssl_options():

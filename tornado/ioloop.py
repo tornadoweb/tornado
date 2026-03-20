@@ -29,29 +29,27 @@ import asyncio
 import concurrent.futures
 import datetime
 import functools
+import math
 import numbers
 import os
+import random
 import sys
 import time
-import math
-import random
+import typing
 import warnings
+from collections.abc import Awaitable, Callable
 from inspect import isawaitable
+from typing import Any, Protocol, TypedDict, TypeVar
 
 from tornado.concurrent import (
     Future,
-    is_future,
     chain_future,
-    future_set_exc_info,
     future_add_done_callback,
+    future_set_exc_info,
+    is_future,
 )
 from tornado.log import app_log
 from tornado.util import Configurable, TimeoutError, import_object
-
-import typing
-from typing import Any, TypeVar, TypedDict, Protocol
-from collections.abc import Callable
-from collections.abc import Awaitable
 
 
 class _Selectable(Protocol):

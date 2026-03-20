@@ -1,12 +1,12 @@
 import os
 import shutil
 import subprocess
-from subprocess import Popen
 import sys
-from tempfile import mkdtemp
 import textwrap
 import time
 import unittest
+from subprocess import Popen
+from tempfile import mkdtemp
 
 
 class AutoreloadTest(unittest.TestCase):

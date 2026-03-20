@@ -101,21 +101,19 @@ instances to define isolated sets of options, such as for subcommands.
 
 import datetime
 import numbers
+import os
 import re
 import sys
-import os
 import textwrap
-
-from tornado.escape import _unicode, native_str
-from tornado.log import define_logging_options
-from tornado.util import basestring_type, exec_in
-
+from collections.abc import Callable, Iterable, Iterator
 from typing import (
     Any,
     TextIO,
 )
-from collections.abc import Callable
-from collections.abc import Iterator, Iterable
+
+from tornado.escape import _unicode, native_str
+from tornado.log import define_logging_options
+from tornado.util import basestring_type, exec_in
 
 
 class Error(Exception):

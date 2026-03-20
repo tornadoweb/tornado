@@ -10,11 +10,11 @@ import unittest
 from tornado.httpclient import HTTPClient, HTTPError
 from tornado.httpserver import HTTPServer
 from tornado.log import gen_log
-from tornado.process import fork_processes, task_id, Subprocess
+from tornado.process import Subprocess, fork_processes, task_id
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.testing import bind_unused_port, ExpectLog, AsyncTestCase, gen_test
 from tornado.test.util import skipIfNonUnix
-from tornado.web import RequestHandler, Application
+from tornado.testing import AsyncTestCase, ExpectLog, bind_unused_port, gen_test
+from tornado.web import Application, RequestHandler
 
 
 # Not using AsyncHTTPTestCase because we need control over the IOLoop.

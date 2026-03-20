@@ -1,8 +1,3 @@
-from tornado import gen, ioloop
-from tornado.httpserver import HTTPServer
-from tornado.locks import Event
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, gen_test
-from tornado.web import Application
 import asyncio
 import contextlib
 import gc
@@ -12,6 +7,12 @@ import sys
 import traceback
 import unittest
 import warnings
+
+from tornado import gen, ioloop
+from tornado.httpserver import HTTPServer
+from tornado.locks import Event
+from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, gen_test
+from tornado.web import Application
 
 
 @contextlib.contextmanager

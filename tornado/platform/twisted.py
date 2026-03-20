@@ -12,14 +12,13 @@
 """Bridges between the Twisted package and Tornado."""
 
 import sys
+import typing
 
 from twisted.internet.defer import Deferred  # type: ignore
 from twisted.python import failure  # type: ignore
 
-from tornado.concurrent import Future, future_set_exc_info
 from tornado import gen
-
-import typing
+from tornado.concurrent import Future, future_set_exc_info
 
 
 def install() -> None:

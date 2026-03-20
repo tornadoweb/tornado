@@ -5,7 +5,7 @@ import tempfile
 import unittest
 
 import tornado.locale
-from tornado.escape import utf8, to_unicode
+from tornado.escape import to_unicode, utf8
 from tornado.util import unicode_type
 
 

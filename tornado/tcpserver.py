@@ -19,22 +19,20 @@ import errno
 import os
 import socket
 import ssl
+from collections.abc import Awaitable, Callable, Iterable
+from typing import Any
 
-from tornado import gen
-from tornado.log import app_log
+from tornado import gen, process
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
+from tornado.log import app_log
 from tornado.netutil import (
-    bind_sockets,
-    add_accept_handler,
-    ssl_wrap_socket,
     _DEFAULT_BACKLOG,
+    add_accept_handler,
+    bind_sockets,
+    ssl_wrap_socket,
 )
-from tornado import process
 from tornado.util import errno_from_exception
-
-from typing import Any
-from collections.abc import Iterable, Awaitable, Callable
 
 
 class TCPServer:

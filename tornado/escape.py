@@ -28,13 +28,12 @@ docstrings on each function for details.
 import html
 import json
 import re
+import typing
 import urllib.parse
+from collections.abc import Callable
+from typing import Any
 
 from tornado.util import unicode_type
-
-import typing
-from typing import Any
-from collections.abc import Callable
 
 
 def xhtml_escape(value: str | bytes) -> str:

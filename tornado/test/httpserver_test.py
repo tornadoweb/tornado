@@ -1,11 +1,28 @@
+import datetime
+import gzip
+import logging
+import os
+import shutil
+import socket
+import ssl
+import sys
+import tempfile
+import textwrap
+import typing
+import unittest
+import urllib.parse
+import uuid
+from contextlib import closing, contextmanager
+from io import BytesIO
+
 from tornado import gen, netutil
 from tornado.escape import (
+    _unicode,
     json_decode,
     json_encode,
-    utf8,
-    _unicode,
-    recursive_unicode,
     native_str,
+    recursive_unicode,
+    utf8,
 )
 from tornado.http1connection import HTTP1Connection
 from tornado.httpclient import HTTPError
@@ -18,35 +35,17 @@ from tornado.httputil import (
 )
 from tornado.iostream import IOStream
 from tornado.locks import Event
-from tornado.log import gen_log, app_log
+from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
+from tornado.test.util import abstract_base_test
 from tornado.testing import (
-    AsyncHTTPTestCase,
     AsyncHTTPSTestCase,
+    AsyncHTTPTestCase,
     AsyncTestCase,
     ExpectLog,
     gen_test,
 )
-from tornado.test.util import abstract_base_test
 from tornado.web import Application, RequestHandler, stream_request_body
-
-from contextlib import closing, contextmanager
-import datetime
-import gzip
-import logging
-import os
-import shutil
-import socket
-import ssl
-import sys
-import tempfile
-import textwrap
-import unittest
-import urllib.parse
-import uuid
-from io import BytesIO
-
-import typing
 
 
 async def read_stream_body(stream):

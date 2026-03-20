@@ -10,7 +10,6 @@
 """
 
 import asyncio
-from collections.abc import Generator
 import functools
 import inspect
 import logging
@@ -19,25 +18,22 @@ import re
 import signal
 import socket
 import sys
+import typing
 import unittest
 import warnings
+from collections.abc import Callable, Coroutine, Generator
+from types import TracebackType
+from typing import Any, Optional, Type, Union
 
-from tornado import gen
+from tornado import gen, netutil
 from tornado.httpclient import AsyncHTTPClient, HTTPResponse
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop, TimeoutError
-from tornado import netutil
+from tornado.log import app_log
 from tornado.platform.asyncio import AsyncIOMainLoop
 from tornado.process import Subprocess
-from tornado.log import app_log
-from tornado.util import raise_exc_info, basestring_type
+from tornado.util import basestring_type, raise_exc_info
 from tornado.web import Application
-
-import typing
-from typing import Any, Type, Union, Optional
-from collections.abc import Callable
-from collections.abc import Coroutine
-from types import TracebackType
 
 _ExcInfoTuple = tuple[
     type[BaseException] | None, BaseException | None, TracebackType | None
