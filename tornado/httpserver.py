@@ -27,19 +27,15 @@ class except to start a server at the beginning of the process
 
 import socket
 import ssl
+import typing
+from collections.abc import Awaitable, Callable
+from typing import Any
 
+from tornado import httputil, iostream, netutil
 from tornado.escape import native_str
-from tornado.http1connection import HTTP1ServerConnection, HTTP1ConnectionParameters
-from tornado import httputil
-from tornado import iostream
-from tornado import netutil
+from tornado.http1connection import HTTP1ConnectionParameters, HTTP1ServerConnection
 from tornado.tcpserver import TCPServer
 from tornado.util import Configurable
-
-import typing
-from typing import Any
-from collections.abc import Callable
-from collections.abc import Awaitable
 
 
 class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate):

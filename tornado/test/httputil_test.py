@@ -1,29 +1,27 @@
-from tornado.httputil import (
-    url_concat,
-    parse_multipart_form_data,
-    HTTPHeaders,
-    format_timestamp,
-    HTTPServerRequest,
-    parse_request_start_line,
-    parse_cookie,
-    qs_to_qsl,
-    HTTPInputError,
-    HTTPFile,
-    ParseMultipartConfig,
-)
-from tornado.escape import utf8, native_str
-from tornado.log import gen_log
-from tornado.test.util import ignore_deprecation
-
 import copy
 import datetime
 import logging
 import pickle
 import time
-import urllib.parse
 import unittest
+import urllib.parse
 
-from tornado.test.util import skipIfEmulated
+from tornado.escape import native_str, utf8
+from tornado.httputil import (
+    HTTPFile,
+    HTTPHeaders,
+    HTTPInputError,
+    HTTPServerRequest,
+    ParseMultipartConfig,
+    format_timestamp,
+    parse_cookie,
+    parse_multipart_form_data,
+    parse_request_start_line,
+    qs_to_qsl,
+    url_concat,
+)
+from tornado.log import gen_log
+from tornado.test.util import ignore_deprecation, skipIfEmulated
 
 
 def form_data_args() -> tuple[dict[str, list[bytes]], dict[str, list[HTTPFile]]]:

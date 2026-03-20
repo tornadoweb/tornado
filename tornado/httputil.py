@@ -27,16 +27,16 @@ import copy
 import dataclasses
 import datetime
 import email.utils
-from functools import lru_cache
-from http.client import responses
 import http.cookies
 import re
-from ssl import SSLError
 import time
 import unicodedata
-from urllib.parse import urlencode, urlparse, urlunparse, parse_qsl
+from functools import lru_cache
+from http.client import responses
+from ssl import SSLError
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-from tornado.escape import native_str, parse_qs_bytes, utf8, to_unicode
+from tornado.escape import native_str, parse_qs_bytes, to_unicode, utf8
 from tornado.util import ObjectDict, unicode_type
 
 # responses is unused in this file, but we re-export it to other files.
@@ -44,16 +44,16 @@ from tornado.util import ObjectDict, unicode_type
 responses
 
 import typing
+from collections.abc import Awaitable, Generator, Iterable, Iterator, Mapping
 from typing import (
     AnyStr,
 )
-from collections.abc import Iterable, Mapping, Iterator, Awaitable, Generator
 
 if typing.TYPE_CHECKING:
     # These are relatively heavy imports and aren't needed in this file
     # unless we're type-checking.
-    from asyncio import Future
     import unittest
+    from asyncio import Future
 
 # To be used with str.strip() and related methods.
 HTTP_WHITESPACE = " \t"

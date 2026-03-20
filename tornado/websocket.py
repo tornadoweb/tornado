@@ -18,36 +18,33 @@ import functools
 import hashlib
 import logging
 import os
-import sys
 import struct
-import tornado
-from urllib.parse import urlparse
+import sys
 import warnings
 import zlib
+from collections.abc import Awaitable, Callable
+from types import TracebackType
+from typing import (
+    Any,
+    Optional,
+    Protocol,
+    Type,
+    Union,
+    cast,
+)
+from urllib.parse import urlparse
 
+import tornado
+from tornado import gen, httpclient, httputil, simple_httpclient
 from tornado.concurrent import Future, future_set_result_unless_cancelled
-from tornado.escape import utf8, native_str, to_unicode
-from tornado import gen, httpclient, httputil
+from tornado.escape import native_str, to_unicode, utf8
 from tornado.ioloop import IOLoop
-from tornado.iostream import StreamClosedError, IOStream
-from tornado.log import gen_log, app_log
+from tornado.iostream import IOStream, StreamClosedError
+from tornado.log import app_log, gen_log
 from tornado.netutil import Resolver
-from tornado import simple_httpclient
 from tornado.queues import Queue
 from tornado.tcpclient import TCPClient
 from tornado.util import _websocket_mask
-
-from typing import (
-    cast,
-    Any,
-    Optional,
-    Union,
-    Type,
-    Protocol,
-)
-from collections.abc import Callable
-from collections.abc import Awaitable
-from types import TracebackType
 
 
 # The zlib compressor types aren't actually exposed anywhere

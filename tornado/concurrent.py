@@ -26,16 +26,15 @@ directly.
 """
 
 import asyncio
-from concurrent import futures
 import functools
 import sys
 import types
+import typing
+from collections.abc import Callable
+from concurrent import futures
+from typing import Any, Union
 
 from tornado.log import app_log
-
-import typing
-from typing import Any, Union
-from collections.abc import Callable
 
 _T = typing.TypeVar("_T")
 

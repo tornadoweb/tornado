@@ -1,35 +1,34 @@
 import base64
 import binascii
-from contextlib import closing
 import copy
-import gzip
-import threading
 import datetime
-from io import BytesIO
+import gzip
 import subprocess
 import sys
+import threading
 import time
 import unicodedata
 import unittest
+from contextlib import closing
+from io import BytesIO
 
-from tornado.escape import utf8, native_str, to_unicode
-from tornado import gen
+from tornado import gen, netutil
+from tornado.escape import native_str, to_unicode, utf8
 from tornado.httpclient import (
+    HTTPClient,
+    HTTPError,
     HTTPRequest,
     HTTPResponse,
     _RequestProxy,
-    HTTPError,
-    HTTPClient,
 )
 from tornado.httpserver import HTTPServer
+from tornado.httputil import HTTPHeaders, format_timestamp
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
-from tornado.log import gen_log, app_log
-from tornado import netutil
-from tornado.testing import AsyncHTTPTestCase, bind_unused_port, gen_test, ExpectLog
+from tornado.log import app_log, gen_log
 from tornado.test.util import ignore_deprecation
+from tornado.testing import AsyncHTTPTestCase, ExpectLog, bind_unused_port, gen_test
 from tornado.web import Application, RequestHandler, url
-from tornado.httputil import format_timestamp, HTTPHeaders
 
 
 class HelloWorldHandler(RequestHandler):

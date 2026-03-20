@@ -33,7 +33,7 @@ import logging.handlers
 import sys
 
 from tornado.escape import _unicode
-from tornado.util import unicode_type, basestring_type
+from tornado.util import basestring_type, unicode_type
 
 try:
     import colorama  # type: ignore

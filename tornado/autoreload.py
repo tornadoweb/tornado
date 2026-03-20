@@ -78,15 +78,14 @@ import functools
 import importlib.abc
 import os
 import pkgutil
+import subprocess
 import sys
 import traceback
 import types
-import subprocess
 import weakref
 
-from tornado import ioloop
+from tornado import ioloop, process
 from tornado.log import gen_log
-from tornado import process
 
 try:
     import signal
@@ -265,6 +264,7 @@ def main() -> None:
     # parsing at the first positional argument. optparse supports
     # this but as far as I can tell argparse does not.
     import optparse
+
     import tornado.autoreload
 
     global _autoreload_is_main

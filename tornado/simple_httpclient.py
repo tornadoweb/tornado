@@ -1,26 +1,3 @@
-from tornado.escape import _unicode
-from tornado import gen, version
-from tornado.httpclient import (
-    HTTPResponse,
-    HTTPError,
-    AsyncHTTPClient,
-    main,
-    _RequestProxy,
-    HTTPRequest,
-)
-from tornado import httputil
-from tornado.http1connection import HTTP1Connection, HTTP1ConnectionParameters
-from tornado.ioloop import IOLoop
-from tornado.iostream import StreamClosedError, IOStream
-from tornado.netutil import (
-    Resolver,
-    OverrideResolver,
-    _client_ssl_defaults,
-    is_valid_ip,
-)
-from tornado.log import gen_log
-from tornado.tcpclient import TCPClient
-
 import base64
 import collections
 import copy
@@ -30,13 +7,33 @@ import socket
 import ssl
 import sys
 import time
-from io import BytesIO
 import urllib.parse
-
-from typing import Any, Optional, Type
-from collections.abc import Callable
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
+from io import BytesIO
 from types import TracebackType
+from typing import Any, Optional, Type
+
+from tornado import gen, httputil, version
+from tornado.escape import _unicode
+from tornado.http1connection import HTTP1Connection, HTTP1ConnectionParameters
+from tornado.httpclient import (
+    AsyncHTTPClient,
+    HTTPError,
+    HTTPRequest,
+    HTTPResponse,
+    _RequestProxy,
+    main,
+)
+from tornado.ioloop import IOLoop
+from tornado.iostream import IOStream, StreamClosedError
+from tornado.log import gen_log
+from tornado.netutil import (
+    OverrideResolver,
+    Resolver,
+    _client_ssl_defaults,
+    is_valid_ip,
+)
+from tornado.tcpclient import TCPClient
 
 
 class HTTPTimeoutError(HTTPError):

@@ -18,26 +18,24 @@ the server into multiple processes and managing subprocesses.
 """
 
 import asyncio
-import os
 import multiprocessing
+import os
 import signal
 import subprocess
 import sys
 import time
-
 from binascii import hexlify
+from collections.abc import Callable
+from typing import Any
 
+from tornado import ioloop
 from tornado.concurrent import (
     Future,
-    future_set_result_unless_cancelled,
     future_set_exception_unless_cancelled,
+    future_set_result_unless_cancelled,
 )
-from tornado import ioloop
 from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
-
-from typing import Any
-from collections.abc import Callable
 
 # Re-export this exception for convenience.
 CalledProcessError = subprocess.CalledProcessError

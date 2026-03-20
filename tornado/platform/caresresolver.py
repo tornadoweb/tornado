@@ -1,14 +1,14 @@
-import pycares  # type: ignore
 import socket
+import typing
+from collections.abc import Generator
+from typing import Any
 
-from tornado.concurrent import Future
+import pycares  # type: ignore
+
 from tornado import gen
+from tornado.concurrent import Future
 from tornado.ioloop import IOLoop
 from tornado.netutil import Resolver, is_valid_ip
-
-import typing
-from typing import Any
-from collections.abc import Generator
 
 
 class CaresResolver(Resolver):

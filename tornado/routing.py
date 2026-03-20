@@ -176,21 +176,20 @@ For more information on application-level routing see docs for `~.web.Applicatio
 """
 
 import re
+from collections.abc import Awaitable, Sequence
 from functools import partial
-
-from tornado import httputil
-from tornado.httpserver import _CallableAdapter
-from tornado.escape import url_escape, url_unescape, utf8
-from tornado.log import app_log
-from tornado.util import basestring_type, import_object, re_unescape, unicode_type
-
+from re import Pattern
 from typing import (
     Any,
     Union,
     overload,
 )
-from collections.abc import Awaitable, Sequence
-from re import Pattern
+
+from tornado import httputil
+from tornado.escape import url_escape, url_unescape, utf8
+from tornado.httpserver import _CallableAdapter
+from tornado.log import app_log
+from tornado.util import basestring_type, import_object, re_unescape, unicode_type
 
 
 class Router(httputil.HTTPServerConnectionDelegate):

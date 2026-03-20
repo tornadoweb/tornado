@@ -30,13 +30,12 @@ from __future__ import annotations
 import collections
 import datetime
 import heapq
+from collections.abc import Awaitable
+from typing import Any, Generic, TypeVar
 
 from tornado import gen, ioloop
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado.locks import Event
-
-from typing import TypeVar, Generic, Any
-from collections.abc import Awaitable
 
 _T = TypeVar("_T")
 

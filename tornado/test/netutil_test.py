@@ -1,22 +1,21 @@
 import errno
 import signal
 import socket
-from subprocess import Popen
 import sys
 import time
+import typing
 import unittest
+from subprocess import Popen
 
 from tornado.netutil import (
     BlockingResolver,
     OverrideResolver,
     ThreadedResolver,
-    is_valid_ip,
     bind_sockets,
+    is_valid_ip,
 )
-from tornado.testing import AsyncTestCase, gen_test, bind_unused_port
-from tornado.test.util import skipIfNoNetwork, abstract_base_test
-
-import typing
+from tornado.test.util import abstract_base_test, skipIfNoNetwork
+from tornado.testing import AsyncTestCase, bind_unused_port, gen_test
 
 try:
     import pycares  # type: ignore

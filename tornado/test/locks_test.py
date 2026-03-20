@@ -11,12 +11,12 @@
 # under the License.
 
 import asyncio
-from datetime import timedelta
 import unittest
+from datetime import timedelta
 
 from tornado import gen, locks
 from tornado.gen import TimeoutError
-from tornado.testing import gen_test, AsyncTestCase
+from tornado.testing import AsyncTestCase, gen_test
 
 
 class ConditionTest(AsyncTestCase):

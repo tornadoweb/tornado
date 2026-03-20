@@ -17,30 +17,27 @@
 
 import collections
 import functools
+import inspect
 import logging
-import pycurl
 import re
 import threading
 import time
-import inspect
+from collections.abc import Callable
 from io import BytesIO
+from typing import Any
 
-from tornado import gen
-from tornado import httputil
-from tornado import ioloop
+import pycurl
 
-from tornado.escape import utf8, native_str
+from tornado import gen, httputil, ioloop
+from tornado.escape import native_str, utf8
 from tornado.httpclient import (
+    AsyncHTTPClient,
+    HTTPError,
     HTTPRequest,
     HTTPResponse,
-    HTTPError,
-    AsyncHTTPClient,
     main,
 )
 from tornado.log import app_log
-
-from typing import Any
-from collections.abc import Callable
 
 curl_log = logging.getLogger("tornado.curl_httpclient")
 

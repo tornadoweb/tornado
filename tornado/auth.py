@@ -77,15 +77,13 @@ import time
 import urllib.parse
 import uuid
 import warnings
+from collections.abc import Iterable
+from typing import Any, cast
 
-from tornado import httpclient
-from tornado import escape
+from tornado import escape, httpclient
 from tornado.httputil import url_concat
 from tornado.util import unicode_type
 from tornado.web import RequestHandler
-
-from typing import Any, cast
-from collections.abc import Iterable
 
 
 class AuthError(Exception):

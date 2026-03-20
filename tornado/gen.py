@@ -64,40 +64,37 @@ function to extend this mechanism.
 import asyncio
 import builtins
 import collections
-from collections.abc import Generator
 import concurrent.futures
 import contextvars
 import datetime
 import functools
-from functools import singledispatch
-from inspect import isawaitable
 import sys
 import types
+import typing
+from collections.abc import Awaitable, Callable, Generator, Iterable, Mapping, Sequence
+from functools import singledispatch
+from inspect import isawaitable
+from typing import (
+    Any,
+    Dict,
+    List,
+    Tuple,
+    Type,
+    Union,
+    overload,
+)
 
 from tornado.concurrent import (
     Future,
-    is_future,
     chain_future,
-    future_set_exc_info,
     future_add_done_callback,
+    future_set_exc_info,
     future_set_result_unless_cancelled,
+    is_future,
 )
 from tornado.ioloop import IOLoop
 from tornado.log import app_log
 from tornado.util import TimeoutError
-
-import typing
-from typing import (
-    Union,
-    Any,
-    List,
-    Type,
-    Tuple,
-    Dict,
-    overload,
-)
-from collections.abc import Callable, Iterable
-from collections.abc import Mapping, Awaitable, Sequence
 
 _T = typing.TypeVar("_T")
 

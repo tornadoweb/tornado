@@ -28,20 +28,18 @@ container.
 """
 
 import concurrent.futures
-from io import BytesIO
-import tornado
 import sys
+import typing
+from collections.abc import Callable
+from io import BytesIO
+from types import TracebackType
+from typing import Any
 
+import tornado
+from tornado import escape, httputil
 from tornado.concurrent import dummy_executor
-from tornado import escape
-from tornado import httputil
 from tornado.ioloop import IOLoop
 from tornado.log import access_log
-
-from typing import Any
-from collections.abc import Callable
-from types import TracebackType
-import typing
 
 if typing.TYPE_CHECKING:
     from _typeshed.wsgi import WSGIApplication as WSGIAppType

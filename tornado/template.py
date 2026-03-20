@@ -197,21 +197,19 @@ To include a literal ``{{``, ``{%``, or ``{#`` in the output, escape them as
 """
 
 import datetime
-from io import StringIO
 import linecache
 import os.path
 import posixpath
 import re
 import threading
+import typing
+from collections.abc import Callable, Iterable
+from io import StringIO
+from typing import Any, ContextManager, Optional, TextIO
 
 from tornado import escape
 from tornado.log import app_log
 from tornado.util import ObjectDict, exec_in, unicode_type
-
-from typing import Any, Optional, TextIO, ContextManager
-from collections.abc import Callable
-from collections.abc import Iterable
-import typing
 
 _DEFAULT_AUTOESCAPE = "xhtml_escape"
 

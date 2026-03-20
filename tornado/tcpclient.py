@@ -15,22 +15,20 @@
 
 """A non-blocking TCP connection factory."""
 
-import functools
-import socket
-import numbers
 import datetime
+import functools
+import numbers
+import socket
 import ssl
+from collections.abc import Callable, Iterator
+from typing import Any, Tuple
 
+from tornado import gen
 from tornado.concurrent import Future, future_add_done_callback
+from tornado.gen import TimeoutError
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
-from tornado import gen
 from tornado.netutil import Resolver
-from tornado.gen import TimeoutError
-
-from typing import Any, Tuple
-from collections.abc import Callable
-from collections.abc import Iterator
 
 _INITIAL_CONNECT_TIMEOUT = 0.3
 

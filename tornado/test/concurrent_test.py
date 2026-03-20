@@ -12,20 +12,20 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-from concurrent import futures
 import logging
 import re
 import socket
 import unittest
+from concurrent import futures
 
+from tornado import gen
 from tornado.concurrent import (
     Future,
     chain_future,
-    run_on_executor,
     future_set_result_unless_cancelled,
+    run_on_executor,
 )
-from tornado.escape import utf8, to_unicode
-from tornado import gen
+from tornado.escape import to_unicode, utf8
 from tornado.iostream import IOStream
 from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncTestCase, bind_unused_port, gen_test

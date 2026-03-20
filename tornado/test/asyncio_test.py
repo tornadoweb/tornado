@@ -16,23 +16,23 @@ import threading
 import time
 import unittest
 import warnings
-
 from concurrent.futures import ThreadPoolExecutor
+
 import tornado.platform.asyncio
 from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.platform.asyncio import (
+    AddThreadSelectorEventLoop,
     AsyncIOLoop,
     to_asyncio_future,
-    AddThreadSelectorEventLoop,
 )
+from tornado.test.util import ignore_deprecation
 from tornado.testing import (
+    AsyncHTTPTestCase,
     AsyncTestCase,
     gen_test,
     setup_with_context_manager,
-    AsyncHTTPTestCase,
 )
-from tornado.test.util import ignore_deprecation
 from tornado.web import Application, RequestHandler
 
 

@@ -1,11 +1,11 @@
-from hashlib import md5
 import unittest
+from hashlib import md5
 
-from tornado.escape import utf8
-from tornado.testing import AsyncHTTPTestCase
-from tornado.test import httpclient_test
-from tornado.web import Application, RequestHandler
 from tornado import gen
+from tornado.escape import utf8
+from tornado.test import httpclient_test
+from tornado.testing import AsyncHTTPTestCase
+from tornado.web import Application, RequestHandler
 
 try:
     import pycurl

@@ -1,18 +1,18 @@
-from functools import reduce
 import gc
 import io
 import locale  # system locale module, not tornado.locale
 import logging
 import operator
-import textwrap
 import sys
+import textwrap
 import unittest
 import warnings
+from functools import reduce
 
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 from tornado.netutil import Resolver
-from tornado.options import define, add_parse_callback, options
+from tornado.options import add_parse_callback, define, options
 from tornado.test.util import ABT_SKIP_MESSAGE
 
 TEST_MODULES = [

@@ -38,24 +38,22 @@ To select ``curl_httpclient``, call `AsyncHTTPClient.configure` at startup::
 
 import datetime
 import functools
-from io import BytesIO
 import ssl
 import time
 import weakref
+from collections.abc import Awaitable, Callable
+from io import BytesIO
+from typing import Any, Optional, Type, Union, cast
 
+from tornado import gen, httputil
 from tornado.concurrent import (
     Future,
-    future_set_result_unless_cancelled,
     future_set_exception_unless_cancelled,
+    future_set_result_unless_cancelled,
 )
-from tornado.escape import utf8, native_str
-from tornado import gen, httputil
+from tornado.escape import native_str, utf8
 from tornado.ioloop import IOLoop
 from tornado.util import Configurable
-
-from typing import Type, Any, Union, Optional, cast
-from collections.abc import Callable
-from collections.abc import Awaitable
 
 
 class HTTPClient:
