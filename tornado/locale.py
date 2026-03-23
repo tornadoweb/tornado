@@ -434,7 +434,7 @@ class Locale:
 
     def format_day(
         self, date: datetime.datetime, gmt_offset: int = 0, dow: bool = True
-    ) -> bool:
+    ) -> str:
         """Formats the given date as a day of week.
 
         Example: "Monday, January 22". You can remove the day of week with
