@@ -1624,7 +1624,7 @@ class CustomStaticFileTest(WebTestCase):
     def get_handlers(self):
         class MyStaticFileHandler(StaticFileHandler):
             @classmethod
-            def make_static_url(cls, settings, path):
+            def make_static_url(cls, settings, path, include_version=True):
                 version_hash = cls.get_version(settings, path)
                 extension_index = path.rindex(".")
                 before_version = path[:extension_index]

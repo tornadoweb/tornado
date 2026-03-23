@@ -69,8 +69,7 @@ class OAuth1ClientLoginHandler(RequestHandler, OAuthMixin):
             return
         yield self.authorize_redirect(http_client=self.settings["http_client"])
 
-    @gen.coroutine
-    def _oauth_get_user_future(self, access_token):
+    async def _oauth_get_user_future(self, access_token):
         if self.get_argument("fail_in_get_user", None):
             raise Exception("failing in get_user")
         if access_token != dict(key="uiop", secret="5678"):

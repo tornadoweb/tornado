@@ -85,7 +85,7 @@ jobs:
           - python: '3.14'
             tox_env: py314
           - python: '3.14t-dev'
-            tox_env: py314
+            tox_env: py314t
           - python: '3.15-dev'
             tox_env: py315
           - python: '3.10.8'
