@@ -1,3 +1,4 @@
+async-asgi-testclient
 black
 flake8
 mypy>=0.941
