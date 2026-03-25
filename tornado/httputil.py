@@ -45,9 +45,7 @@ responses
 
 import typing
 from collections.abc import Awaitable, Generator, Iterable, Iterator, Mapping
-from typing import (
-    AnyStr,
-)
+from typing import AnyStr, Optional
 
 if typing.TYPE_CHECKING:
     # These are relatively heavy imports and aren't needed in this file
