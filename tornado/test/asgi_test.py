@@ -49,26 +49,26 @@ class AsyncASGITestCase(AsyncTestCase):
         )
         self.client = async_asgi_testclient.TestClient(self.asgi_app)
 
-    @gen_test(timeout=10)
+    @gen_test
     async def test_basic_request(self):
         resp = await self.client.get("/?name=foo")
-        assert resp.status_code == 200
-        assert resp.text == "Hello, foo"
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.text, "Hello, foo")
 
-    @gen_test(timeout=10)
+    @gen_test
     async def test_get_request_details(self):
         resp = await self.client.get("/inspect/foo/?bar=baz")
         d = resp.json()
-        assert d["method"] == "GET"
-        assert d["path"] == "/inspect/foo/"
-        assert d["query_params"] == {"bar": ["baz"]}
-        assert d["body"] == ""
+        self.assertEqual(d["method"], "GET")
+        self.assertEqual(d["path"], "/inspect/foo/")
+        self.assertEqual(d["query_params"], {"bar": ["baz"]})
+        self.assertEqual(d["body"], "")
 
-    @gen_test(timeout=10)
+    @gen_test
     async def test_post_request_details(self):
         resp = await self.client.post("/inspect/foo/?bar=baz", data=b"123")
         d = resp.json()
-        assert d["method"] == "POST"
-        assert d["path"] == "/inspect/foo/"
-        assert d["query_params"] == {"bar": ["baz"]}
-        assert d["body"] == "123"
+        self.assertEqual(d["method"], "POST")
+        self.assertEqual(d["path"], "/inspect/foo/")
+        self.assertEqual(d["query_params"], {"bar": ["baz"]})
+        self.assertEqual(d["body"], "123")
