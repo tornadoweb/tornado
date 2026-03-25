@@ -39,9 +39,9 @@ class ASGIHTTPConnection(HTTPConnection):
 
     # Various tornado APIs (e.g. RequestHandler.flush()) return a Future which
     # application code does not need to await. The operations these represent
-    # are expected to complete even if the Future is discarded. ASGI is based
-    # on 'awaitable callables', which do not guarantee this. So we need to hold
-    # references to tasks until they complete
+    # are expected to complete even if the Future is not awaited. We hold onto
+    # these on the connection so they are not destroyed, and so that we can
+    # wait for them at the end of the ASGI connections scope.
     def _bg_task(self, coro) -> Future:  # type: ignore
         task = create_task(coro)
         self.task_holder.add(task)
