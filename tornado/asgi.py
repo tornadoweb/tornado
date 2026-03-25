@@ -1,5 +1,6 @@
+import inspect
 from asyncio import create_task, Future, Task, wait
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Optional, Union
 
@@ -13,6 +14,7 @@ from tornado.web import Application
 
 ReceiveCallable = Callable[[], Awaitable[dict]]
 SendCallable = Callable[[dict], Awaitable[None]]
+ApplicationGen = Callable[[], AsyncGenerator]
 
 
 @dataclass
@@ -115,20 +117,70 @@ class ASGIHTTPConnection(HTTPConnection):
 class ASGIAdapter:
     """Wrap a tornado application object to use with an ASGI server"""
 
-    def __init__(self, application: Application):
-        self.application = application
+    application: Optional[Application]
+
+    def __init__(self, application: Application | ApplicationGen):
+        if isinstance(application, Application):
+            self.application_gen = None
+            self.application = application
+        elif inspect.isasyncgenfunction(application):
+            self.application_gen = application()
+            self.application = None
+        else:
+            raise TypeError(f"ASGIAdapter does not recognise {application!r}")
 
     async def __call__(
         self, scope: dict, receive: ReceiveCallable, send: SendCallable
     ) -> None:
+        if scope["type"] == "lifespan":
+            return await self.lifespan_scope(scope, receive, send)
         if scope["type"] == "http":
             return await self.http_scope(scope, receive, send)
         raise KeyError(scope["type"])
+
+    async def _initialise_application(self) -> None:
+        # Ideally triggered by a lifespan startup message, but if the server
+        # doesn't support that, we'll do the setup on the first request.
+        if self.application is None:
+            assert self.application_gen is not None
+            self.application = await anext(self.application_gen)
+
+    async def lifespan_scope(
+        self, scope: dict, receive: ReceiveCallable, send: SendCallable
+    ) -> None:
+        while True:
+            event = await receive()
+            if event["type"] == "lifespan.startup":
+                try:
+                    await self._initialise_application()
+                except Exception as e:
+                    await send({"type": "lifespan.startup.failed", "message": str(e)})
+                else:
+                    await send({"type": "lifespan.startup.complete"})
+
+            elif event["type"] == "lifespan.shutdown":
+                try:
+                    if self.application_gen is not None:
+                        await anext(self.application_gen)
+                except StopAsyncIteration:
+                    await send({"type": "lifespan.shutdown.complete"})
+                except Exception as e:
+                    await send({"type": "lifespan.shutdown.failed", "message": str(e)})
+                else:
+                    await send(
+                        {
+                            "type": "lifespan.shutdown.failed",
+                            "message": "Async generator did not exit as expected",
+                        }
+                    )
 
     async def http_scope(
         self, scope: dict, receive: ReceiveCallable, send: SendCallable
     ) -> None:
         """Handles one HTTP request"""
+        await self._initialise_application()
+        assert self.application is not None
+
         ctx = ASGIHTTPRequestContext(scope["scheme"])
         if client_addr := scope.get("client", None):
             ctx.address = tuple(client_addr)
