@@ -93,7 +93,7 @@ python-discovery==1.2.0
     # via virtualenv
 pytokens==0.4.1
     # via black
-requests==2.32.5
+requests==2.33.0
     # via sphinx
 roman-numerals==4.1.0
     # via sphinx
