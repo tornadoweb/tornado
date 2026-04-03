@@ -318,6 +318,7 @@ class TCPClient:
         except OSError as e:
             fu: Future[IOStream] = Future()
             fu.set_exception(e)
-            return stream, fu
+            socket_obj.close()
+            return socket_obj, fu
         else:
             return stream, stream.connect(addr)
