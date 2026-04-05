@@ -422,7 +422,7 @@ class RequestHandler:
         # If \n is allowed into the header, it is possible to inject
         # additional headers or split the request.
         if RequestHandler._VALID_HEADER_CHARS.fullmatch(retval) is None:
-            raise ValueError("Unsafe header value %r", retval)
+            raise ValueError("Unsafe header value %r" % retval)
         return retval
 
     @overload
@@ -1564,7 +1564,7 @@ class RequestHandler:
                     ]
                 )
             else:
-                raise ValueError("unknown xsrf cookie version %d", output_version)
+                raise ValueError("unknown xsrf cookie version %d" % output_version)
             if version is None:
                 if self.current_user and "expires_days" not in cookie_kwargs:
                     cookie_kwargs["expires_days"] = 30
@@ -2001,14 +2001,14 @@ def stream_request_body(cls: type[_RequestHandlerType]) -> type[_RequestHandlerT
     for example usage.
     """  # noqa: E501
     if not issubclass(cls, RequestHandler):
-        raise TypeError("expected subclass of RequestHandler, got %r", cls)
+        raise TypeError("expected subclass of RequestHandler, got %r" % cls)
     cls._stream_request_body = True
     return cls
 
 
 def _has_stream_request_body(cls: type[RequestHandler]) -> bool:
     if not issubclass(cls, RequestHandler):
-        raise TypeError("expected subclass of RequestHandler, got %r", cls)
+        raise TypeError("expected subclass of RequestHandler, got %r" % cls)
     return cls._stream_request_body
 
 
