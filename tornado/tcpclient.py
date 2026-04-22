@@ -272,17 +272,17 @@ class TCPClient:
         # information here and re-use it on subsequent connections to
         # the same host. (http://tools.ietf.org/html/rfc6555#section-4.2)
         if ssl_options is not None:
+            tls_future = stream.start_tls(
+                False, ssl_options=ssl_options, server_hostname=host
+            )
             if timeout is not None:
-                stream = await gen.with_timeout(
-                    timeout,
-                    stream.start_tls(
-                        False, ssl_options=ssl_options, server_hostname=host
-                    ),
-                )
+                try:
+                    stream = await gen.with_timeout(timeout, tls_future)
+                except TimeoutError:
+                    tls_future.cancel()
+                    raise
             else:
-                stream = await stream.start_tls(
-                    False, ssl_options=ssl_options, server_hostname=host
-                )
+                stream = await tls_future
         return stream
 
     def _create_stream(
