@@ -1256,6 +1256,12 @@ class IOStream(BaseIOStream):
         ssl_stream._ssl_connect_future = future
         ssl_stream.max_buffer_size = self.max_buffer_size
         ssl_stream.read_chunk_size = self.read_chunk_size
+
+        def _on_cancel(fut: Future[SSLIOStream]) -> None:
+            if fut.cancelled():
+                ssl_stream.close()
+
+        future.add_done_callback(_on_cancel)  # type: ignore[arg-type]
         return future
 
     def _handle_connect(self) -> None:
