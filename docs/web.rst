@@ -151,6 +151,7 @@
 
       The `Application` object serving this request
 
+   .. automethod:: RequestHandler.check_allowed_origin
    .. automethod:: RequestHandler.check_etag_header
    .. automethod:: RequestHandler.check_xsrf_cookie
    .. automethod:: RequestHandler.compute_etag
