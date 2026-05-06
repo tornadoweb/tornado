@@ -3136,7 +3136,7 @@ class CheckSameOriginTest(SimpleHandlerTestCase):
             self.write("ok")
 
     def get_app_kwargs(self):
-        return dict(check_fetch_header=True, check_origin=self.get_url(""))
+        return dict(check_allowed_origin=True)
 
     def _post(self, headers):
         return self.fetch("/", method="POST", body="x=1", headers=headers)
