@@ -279,6 +279,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         IOLoop.current().add_future(
             gen.convert_yielded(self.run()), lambda f: f.result()
         )
+        self._connect_phase: str | None = None
 
     async def run(self) -> None:
         try:
@@ -337,6 +338,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 ssl_options=ssl_options,
                 max_buffer_size=self.max_buffer_size,
                 source_ip=source_ip,
+                on_phase_change=self._set_connect_phase,
             )
 
             if self.final_callback is None:
@@ -478,7 +480,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         :info string key: More detailed timeout information.
         """
         self._timeout = None
-        error_message = f"Timeout {info}" if info else "Timeout"
+        error_message = f"Timeout during {self._connect_phase}" if self._connect_phase else "Timeout"
+        error_message = f"{error_message} {info}" if info else error_message
         if self.final_callback is not None:
             self._handle_exception(
                 HTTPTimeoutError, HTTPTimeoutError(error_message), None
@@ -689,6 +692,12 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         else:
             self.chunks.append(chunk)
             return None
+
+    def _set_connect_phase(self, phase: str) -> None:
+        if phase == "dns":
+            self._connect_phase = "DNS resolution"
+        elif phase == "tcp_connect":
+            self._connect_phase = "TCP connection"
 
 
 if __name__ == "__main__":
