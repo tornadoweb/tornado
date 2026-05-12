@@ -666,7 +666,7 @@ class ParseCookieTest(unittest.TestCase):
             "django_language",
             parse_cookie("abc=def; unnamed; django_language=en").keys(),
         )
-        # Even a double quote may be an unamed value.
+        # Even a double quote may be an unnamed value.
         self.assertEqual(parse_cookie('a=b; "; c=d'), {"a": "b", "": '"', "c": "d"})
         # Spaces in names and values, and an equals sign in values.
         self.assertEqual(

@@ -855,7 +855,7 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
     * Select a project, or create a new one.
     * Depending on permissions required, you may need to set your app to
       "testing" mode and add your account as a test user, or go through
-      a verfication process. You may also need to use the "Enable
+      a verification process. You may also need to use the "Enable
       APIs and Services" command to enable specific services.
     * In the sidebar on the left, select Credentials.
     * Click CREATE CREDENTIALS and click OAuth client ID.
