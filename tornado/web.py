@@ -720,7 +720,7 @@ class RequestHandler:
             # Note change from _ to -.
             morsel["max-age"] = str(max_age)
         if httponly:
-            # Note that SimpleCookie ignores the value here. The presense of an
+            # Note that SimpleCookie ignores the value here. The presence of an
             # httponly (or secure) key is treated as true.
             morsel["httponly"] = True
         if secure:

@@ -50,7 +50,7 @@ Python.)
 
 When the ``main`` function returns, the program exits, so most of the time for a
 web server ``main`` should run forever. Waiting on an `asyncio.Event` whose
-``set()`` method is never called is a convenient way to make an asynchronus
+``set()`` method is never called is a convenient way to make an asynchronous
 function run forever. (and if you wish to have ``main`` exit early as a part of
 a graceful shutdown procedure, you can call ``shutdown_event.set()`` to make it
 exit).

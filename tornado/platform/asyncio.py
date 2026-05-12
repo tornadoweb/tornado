@@ -533,7 +533,7 @@ class SelectorThread:
         self._thread.start()
         self._start_select()
         try:
-            # The presense of this yield statement means that this coroutine
+            # The presence of this yield statement means that this coroutine
             # is actually an asynchronous generator, which has a special
             # shutdown protocol. We wait at this yield point until the
             # event loop's shutdown_asyncgens method is called, at which point

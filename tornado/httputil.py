@@ -73,7 +73,7 @@ class _ABNF:
     """
 
     # RFC 3986 (URI)
-    # The URI hostname ABNF is both complex (including detailed vaildation of IPv4 and IPv6
+    # The URI hostname ABNF is both complex (including detailed validation of IPv4 and IPv6
     # literals) and not strict enough (a lot of punctuation is allowed by the ABNF even though
     # it is not allowed by DNS). We simplify it by allowing square brackets and colons in any
     # position, not only for their use in IPv6 literals.

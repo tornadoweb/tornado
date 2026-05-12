@@ -99,7 +99,7 @@ def json_encode(value: Any) -> str:
 def json_decode(value: str | bytes) -> Any:
     """Returns Python objects for the given JSON string.
 
-    Supports both `str` and `bytes` inputs. Equvalent to `json.loads`.
+    Supports both `str` and `bytes` inputs. Equivalent to `json.loads`.
     """
     return json.loads(value)
 
@@ -393,7 +393,7 @@ def linkify(
         return f'<a href="{href}"{params}>{url}</a>'
 
     # First HTML-escape so that our strings are all safe.
-    # The regex is modified to avoid character entites other than &amp; so
+    # The regex is modified to avoid character entities other than &amp; so
     # that we won't pick up &quot;, etc.
     text = _unicode(xhtml_escape(text))
     return _URL_RE.sub(make_link, text)
