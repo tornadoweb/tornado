@@ -52,6 +52,8 @@ if typing.TYPE_CHECKING:
 class _HasFileno(Protocol):
     def fileno(self) -> int:
         pass
+    def __hash__(self) -> int:
+        pass
 
 
 _FileDescriptorLike = Union[int, _HasFileno]
