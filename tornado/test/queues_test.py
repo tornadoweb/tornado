@@ -118,6 +118,14 @@ class QueueGetTest(AsyncTestCase):
         self.assertEqual(0, (yield get))
 
     @gen_test
+    def test_get_zero_timeout(self):
+        q: queues.Queue[int] = queues.Queue()
+        with self.assertRaises(TimeoutError):
+            yield q.get(timeout=timedelta(seconds=0))
+        with self.assertRaises(TimeoutError):
+            yield q.get(timeout=0)
+
+    @gen_test
     def test_get_timeout_preempted(self):
         q: queues.Queue[int] = queues.Queue()
         get = q.get(timeout=timedelta(seconds=0.01))

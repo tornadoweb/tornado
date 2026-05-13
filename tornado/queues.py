@@ -55,7 +55,7 @@ class QueueFull(Exception):
 
 
 def _set_timeout(future: Future, timeout: None | float | datetime.timedelta) -> None:
-    if timeout:
+    if timeout is not None:
 
         def on_timeout() -> None:
             if not future.done():
