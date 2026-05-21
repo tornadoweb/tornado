@@ -46,10 +46,20 @@ class OpenIdClientLoginHandler(RequestHandler, OpenIdMixin):
 
 
 class OpenIdServerAuthenticateHandler(RequestHandler):
+    flip_flop = False
+
     def post(self):
         if self.get_argument("openid.mode") != "check_authentication":
             raise Exception("incorrect openid.mode %r")
-        self.write("is_valid:true")
+        # Cover both orderings of the response parameters if we call this handler twice.
+        # (the flip_flop side effect is simpler than plumbing parameters around).
+        # We check both orderings to catch mistaken uses of re.match instead of re.search
+        # or incorrect matching of the newline characters.
+        if type(self).flip_flop:
+            self.write("is_valid:true\nns:http://specs.openid.net/auth/2.0\n")
+        else:
+            self.write("ns:http://specs.openid.net/auth/2.0\nis_valid:true\n")
+        type(self).flip_flop = not type(self).flip_flop
 
 
 class OAuth1ClientLoginHandler(RequestHandler, OAuthMixin):
@@ -344,15 +354,17 @@ class AuthTest(AsyncHTTPTestCase):
         self.assertIn("/openid/server/authenticate?", response.headers["Location"])
 
     def test_openid_get_user(self):
-        response = self.fetch(
-            "/openid/client/login?openid.mode=blah"
-            "&openid.ns.ax=http://openid.net/srv/ax/1.0"
-            "&openid.ax.type.email=http://axschema.org/contact/email"
-            "&openid.ax.value.email=foo@example.com"
-        )
-        response.rethrow()
-        parsed = json_decode(response.body)
-        self.assertEqual(parsed["email"], "foo@example.com")
+        for i in range(2):
+            with self.subTest(i=i):
+                response = self.fetch(
+                    "/openid/client/login?openid.mode=blah"
+                    "&openid.ns.ax=http://openid.net/srv/ax/1.0"
+                    "&openid.ax.type.email=http://axschema.org/contact/email"
+                    "&openid.ax.value.email=foo@example.com"
+                )
+                response.rethrow()
+                parsed = json_decode(response.body)
+                self.assertEqual(parsed["email"], "foo@example.com")
 
     def test_oauth10_redirect(self):
         response = self.fetch("/oauth10/client/login", follow_redirects=False)

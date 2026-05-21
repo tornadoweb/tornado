@@ -73,6 +73,7 @@ import base64
 import binascii
 import hashlib
 import hmac
+import re
 import time
 import urllib.parse
 import uuid
@@ -217,7 +218,7 @@ class OpenIdMixin:
         self, response: httpclient.HTTPResponse
     ) -> Dict[str, Any]:
         handler = cast(RequestHandler, self)
-        if b"is_valid:true" not in response.body:
+        if re.search(rb"(?m)^is_valid:true$", response.body) is None:
             raise AuthError("Invalid OpenID response: %r" % response.body)
 
         # Make sure we got back at least an email from attribute exchange
