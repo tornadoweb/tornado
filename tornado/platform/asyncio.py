@@ -730,7 +730,7 @@ class AddThreadSelectorEventLoop(asyncio.AbstractEventLoop):
 
     def add_reader(
         self,
-        fd: "_FileDescriptorLike",
+        fd: "_FileDescriptorLike",  # type: ignore[override]
         callback: Callable[..., None],
         *args: "Unpack[_Ts]",
     ) -> None:
@@ -738,14 +738,14 @@ class AddThreadSelectorEventLoop(asyncio.AbstractEventLoop):
 
     def add_writer(
         self,
-        fd: "_FileDescriptorLike",
+        fd: "_FileDescriptorLike",  # type: ignore[override]
         callback: Callable[..., None],
         *args: "Unpack[_Ts]",
     ) -> None:
         return self._selector.add_writer(fd, callback, *args)
 
-    def remove_reader(self, fd: "_FileDescriptorLike") -> bool:
+    def remove_reader(self, fd: "_FileDescriptorLike") -> bool:  # type: ignore[override]
         return self._selector.remove_reader(fd)
 
-    def remove_writer(self, fd: "_FileDescriptorLike") -> bool:
+    def remove_writer(self, fd: "_FileDescriptorLike") -> bool:  # type: ignore[override]
         return self._selector.remove_writer(fd)
