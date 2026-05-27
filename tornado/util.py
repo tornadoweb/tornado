@@ -145,7 +145,7 @@ def exec_in(
 
 
 def raise_exc_info(
-    exc_info: Tuple[Optional[type], Optional[BaseException], Optional["TracebackType"]]
+    exc_info: Tuple[Optional[type], Optional[BaseException], Optional["TracebackType"]],
 ) -> typing.NoReturn:
     try:
         if exc_info[1] is not None:
@@ -418,6 +418,8 @@ def _websocket_mask_python(mask: bytes, data: bytes) -> bytes:
 
     This pure-python implementation may be replaced by an optimized version when available.
     """
+    if len(mask) != 4:
+        raise ValueError("mask must be 4 bytes")
     mask_arr = array.array("B", mask)
     unmasked_arr = array.array("B", data)
     for i in range(len(data)):

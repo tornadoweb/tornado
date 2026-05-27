@@ -631,6 +631,42 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             new_request.url = urllib.parse.urljoin(
                 self.request.url, self.headers["Location"]
             )
+            new_request.headers = self.request.headers.copy()
+            parsed_orig_url = urllib.parse.urlsplit(original_request.url)
+            parsed_new_url = urllib.parse.urlsplit(new_request.url)
+            if (
+                parsed_orig_url.scheme != parsed_new_url.scheme
+                or parsed_orig_url.netloc != parsed_new_url.netloc
+            ):
+                # Cross-origin redirect: strip auth headers.
+                # Note that while there is no formal specification of headers that should be
+                # stripped here, libcurl strips the Authorization and Cookie headers, so we
+                # do the same.
+                # Reference:
+                # https://github.com/curl/curl/blob/01d8191b25a05e8fa91553a6c0d48acb99907d26/lib/http.c#L1827-L1828
+                #
+                # Note that checking for cross-origin redirects is a crude heuristic. It is both
+                # too weak (e.g. cookies that have a path attribute may need to be stripped even on
+                # same-origin redirects) and too strong (e.g. cookies may be kept on cross-host
+                # redirects within the same domain). However, we cannot know the full details of
+                # the cookie policy at this layer, so we use the same heuristic as libcurl.
+                # Applications that need more control over behavior on redirects can set
+                # follow_redirects=False and handle 3xx responses themselves.
+                new_request.auth_username = None
+                new_request.auth_password = None
+                if "@" in parsed_new_url.netloc:
+                    if parsed_new_url.port is not None:
+                        new_netloc = f"{parsed_new_url.hostname}:{parsed_new_url.port}"
+                    else:
+                        assert parsed_new_url.hostname is not None
+                        new_netloc = parsed_new_url.hostname
+                    parsed_new_url = parsed_new_url._replace(netloc=new_netloc)
+                new_request.url = urllib.parse.urlunsplit(parsed_new_url)
+                for h in ["Authorization", "Cookie"]:
+                    try:
+                        del new_request.headers[h]
+                    except KeyError:
+                        pass
             assert self.request.max_redirects is not None
             new_request.max_redirects = self.request.max_redirects - 1
             del new_request.headers["Host"]
@@ -655,7 +691,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     "Transfer-Encoding",
                 ]:
                     try:
-                        del self.request.headers[h]
+                        del new_request.headers[h]
                     except KeyError:
                         pass
             new_request.original_request = original_request  # type: ignore
