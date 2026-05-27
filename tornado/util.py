@@ -408,6 +408,8 @@ def _websocket_mask_python(mask: bytes, data: bytes) -> bytes:
 
     This pure-python implementation may be replaced by an optimized version when available.
     """
+    if len(mask) != 4:
+        raise ValueError("mask must be 4 bytes")
     mask_arr = array.array("B", mask)
     unmasked_arr = array.array("B", data)
     for i in range(len(data)):
