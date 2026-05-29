@@ -97,7 +97,18 @@ class OpenIdMixin:
     Class attributes:
 
     * ``_OPENID_ENDPOINT``: the identity provider's URI.
+
+    .. deprecated:: 6.6
+        OpenID 2.0 is no longer widely supported by identity providers.
+        This class will be removed in Tornado 7.0.
     """
+
+    def __init__(self) -> None:
+        warnings.warn(
+            "OpenIdMixin is deprecated and will be removed in Tornado 7.0",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
     def authenticate_redirect(
         self,
