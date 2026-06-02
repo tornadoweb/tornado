@@ -14,12 +14,15 @@ Security fixes
   Wang](https://github.com/noobone123) for being first to report this issue, as well as additional
   reporters [Kai Aizen](https://github.com/SnailSploit), [HunSec](https://github.com/0xHunSec), and
   [Thai Son Dinh](https://github.com/sondt99).
+  `CVE-2026-49853 <https://github.com/tornadoweb/tornado/security/advisories/GHSA-3x9g-8vmp-wqvf>`_
 - ``SimpleAsyncHTTPClient`` now enforces ``max_body_size`` on the decompressed size of the response,
   rather than the compressed size. This prevents a denial-of-service attack via a very large
   compressed response. Thanks to [Yuichiro Kedashiro](https://github.com/yuui25) for reporting this
   issue.
+  `CVE-2026-49855 <https://github.com/tornadoweb/tornado/security/advisories/GHSA-mgf9-4vpg-hj56>`_
 - Fixed a bug in the C extension that could have read up to three bytes past the end of an input
   array. Thanks to [Thai Son Dinh](https://github.com/sondt99) for reporting this issue.
+  `CVE-2026-49854 <https://github.com/tornadoweb/tornado/security/advisories/GHSA-cx3h-4qpv-8hc9>`_
 - ``OpenIDMixin`` has improved parsing for the ``check_authentication`` response. Thanks to
   [Yannick Wang](https://github.com/noobone123) for reporting this issue.
 
