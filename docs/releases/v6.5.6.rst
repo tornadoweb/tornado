@@ -10,21 +10,21 @@ Security fixes
 - ``SimpleAsyncHTTPClient`` now strips the ``Authorization`` and ``Cookie`` headers from the request
   when following a redirect to a different origin. This matches the default behavior of
   ``CurlAsyncHTTPClient``. Applications that need different behavior here can set
-  ``follow_redirects=False`` and handle redirects manually. Thanks to [Yannick
-  Wang](https://github.com/noobone123) for being first to report this issue, as well as additional
-  reporters [Kai Aizen](https://github.com/SnailSploit), [HunSec](https://github.com/0xHunSec), and
-  [Thai Son Dinh](https://github.com/sondt99).
+  ``follow_redirects=False`` and handle redirects manually. Thanks to `Yannick
+  Wang <https://github.com/noobone123>`_ for being first to report this issue, as well as
+  additional reporters `Kai Aizen <https://github.com/SnailSploit>`_,
+  `HunSec <https://github.com/0xHunSec>`_, and `Thai Son Dinh <https://github.com/sondt99>`_.
   `CVE-2026-49853 <https://github.com/tornadoweb/tornado/security/advisories/GHSA-3x9g-8vmp-wqvf>`_
 - ``SimpleAsyncHTTPClient`` now enforces ``max_body_size`` on the decompressed size of the response,
   rather than the compressed size. This prevents a denial-of-service attack via a very large
-  compressed response. Thanks to [Yuichiro Kedashiro](https://github.com/yuui25) for reporting this
+  compressed response. Thanks to `Yuichiro Kedashiro <https://github.com/yuui25>`_ for reporting this
   issue.
   `CVE-2026-49855 <https://github.com/tornadoweb/tornado/security/advisories/GHSA-mgf9-4vpg-hj56>`_
 - Fixed a bug in the C extension that could have read up to three bytes past the end of an input
-  array. Thanks to [Thai Son Dinh](https://github.com/sondt99) for reporting this issue.
+  array. Thanks to `Thai Son Dinh <https://github.com/sondt99>`_ for reporting this issue.
   `CVE-2026-49854 <https://github.com/tornadoweb/tornado/security/advisories/GHSA-cx3h-4qpv-8hc9>`_
 - ``OpenIDMixin`` has improved parsing for the ``check_authentication`` response. Thanks to
-  [Yannick Wang](https://github.com/noobone123) for reporting this issue.
+  `Yannick Wang <https://github.com/noobone123>`_ for reporting this issue.
 
 Bug fixes
 ~~~~~~~~~
