@@ -225,6 +225,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                     # _process_queue() is called from
                     # _finish_pending_requests the exceptions have
                     # nowhere to go.
+                    curl.reset()
                     self._free_list.append(curl)
                     callback(HTTPResponse(request=request, code=599, error=e))
                 else:
@@ -242,7 +243,6 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         info = curl.info  # type: ignore
         curl.info = None  # type: ignore
         self._multi.remove_handle(curl)
-        self._free_list.append(curl)
         buffer = info["buffer"]
         if curl_error:
             assert curl_message is not None
@@ -286,21 +286,14 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             )
         except Exception:
             self.handle_callback_exception(info["callback"])
+        curl.reset()
+        self._free_list.append(curl)
 
     def handle_callback_exception(self, callback: Any) -> None:
         app_log.error("Exception in callback %r", callback, exc_info=True)
 
     def _curl_create(self) -> pycurl.Curl:
-        curl = pycurl.Curl()
-        if curl_log.isEnabledFor(logging.DEBUG):
-            curl.setopt(pycurl.VERBOSE, 1)
-            curl.setopt(pycurl.DEBUGFUNCTION, self._curl_debug)
-        if hasattr(
-            pycurl, "PROTOCOLS"
-        ):  # PROTOCOLS first appeared in pycurl 7.19.5 (2014-07-12)
-            curl.setopt(pycurl.PROTOCOLS, pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS)
-            curl.setopt(pycurl.REDIR_PROTOCOLS, pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS)
-        return curl
+        return pycurl.Curl()
 
     def _curl_setup_request(
         self,
@@ -309,6 +302,15 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         buffer: BytesIO,
         headers: httputil.HTTPHeaders,
     ) -> None:
+        if curl_log.isEnabledFor(logging.DEBUG):
+            curl.setopt(pycurl.VERBOSE, 1)
+            curl.setopt(pycurl.DEBUGFUNCTION, self._curl_debug)
+        if hasattr(
+            pycurl, "PROTOCOLS"
+        ):  # PROTOCOLS first appeared in pycurl 7.19.5 (2014-07-12)
+            curl.setopt(pycurl.PROTOCOLS, pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS)
+            curl.setopt(pycurl.REDIR_PROTOCOLS, pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS)
+
         curl.setopt(pycurl.URL, native_str(request.url))
 
         # libcurl's magic "Expect: 100-continue" behavior causes delays
