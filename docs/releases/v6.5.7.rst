@@ -1,0 +1,13 @@
+What's new in Tornado 6.5.7
+===========================
+
+Jun 8, 2026
+-----------
+
+Security fixes
+~~~~~~~~~~~~~~
+
+- ``CurlAsyncHTTPClient`` now fully resets the curl object before reusing it. This prevents
+  incorrectly reusing options from a previous request, specifically including client SSL and
+  credentials used for accessing proxies. Thanks to `Koh Jun Sheng <https://github.com/seankohjs>`_
+  for reporting this issue.
