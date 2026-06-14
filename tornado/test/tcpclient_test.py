@@ -13,6 +13,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 import getpass
+import os
 import socket
 import typing
 import unittest
@@ -428,3 +429,63 @@ class ConnectorTest(AsyncTestCase):
         self.assertEqual(len(conn.streams), 1)
         self.assert_connector_streams_closed(conn)
         self.assertRaises(TimeoutError, future.result)
+
+
+class TestTLSHandshakeTimeoutCleanup(AsyncTestCase):
+    """Regression test: TLS handshake timeout must not leak file descriptors.
+
+    When TCPClient.connect() times out during the TLS handshake phase,
+    start_tls() has already transferred socket ownership to a new SSLIOStream.
+    The timeout handler must close that SSLIOStream to prevent an fd leak.
+    See tornado#3614.
+    """
+
+    @gen_test
+    def test_tls_handshake_timeout_closes_stream(self) -> None:
+        import ssl as _ssl
+
+        # Set up a server socket that accepts TCP but never completes TLS
+        server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server_sock.bind(("127.0.0.1", 0))
+        port = server_sock.getsockname()[1]
+        server_sock.listen(1)
+
+        ctx = _ssl.SSLContext(_ssl.PROTOCOL_TLS_CLIENT)
+        ctx.check_hostname = False
+        ctx.verify_mode = _ssl.CERT_NONE
+
+        # Count open fds before (Linux /proc/self/fd)
+        try:
+            fds_before = len(os.listdir("/proc/self/fd"))
+        except OSError:
+            fds_before = 0
+
+        client = TCPClient()
+        error_raised = False
+        try:
+            yield client.connect(
+                "127.0.0.1",
+                port,
+                ssl_options=ctx,
+                timeout=0.01,
+            )
+        except TimeoutError:
+            error_raised = True
+
+        self.assertTrue(error_raised, "Expected TimeoutError from TLS handshake timeout")
+
+        server_sock.close()
+
+        # Let IOLoop process cleanup callbacks
+        from tornado.gen import moment
+        yield moment
+
+        # Verify no fd leaked
+        if fds_before > 0:
+            fds_after = len(os.listdir("/proc/self/fd"))
+            self.assertLessEqual(
+                fds_after, fds_before + 2,
+                "File descriptor leaked after TLS handshake timeout "
+                f"(before={fds_before}, after={fds_after})",
+            )

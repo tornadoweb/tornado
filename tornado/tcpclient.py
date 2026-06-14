@@ -273,12 +273,22 @@ class TCPClient:
         # the same host. (http://tools.ietf.org/html/rfc6555#section-4.2)
         if ssl_options is not None:
             if timeout is not None:
-                stream = await gen.with_timeout(
-                    timeout,
-                    stream.start_tls(
-                        False, ssl_options=ssl_options, server_hostname=host
-                    ),
-                )
+                try:
+                    stream = await gen.with_timeout(
+                        timeout,
+                        stream.start_tls(
+                            False, ssl_options=ssl_options, server_hostname=host
+                        ),
+                    )
+                except gen.TimeoutError:
+                    # start_tls() transferred socket ownership to a new
+                    # SSLIOStream (self._tls_stream). Close it to prevent
+                    # a file descriptor leak. See tornado#3614.
+                    tls_stream = getattr(stream, "_tls_stream", None)
+                    if tls_stream is not None:
+                        tls_stream.close()
+                        stream._tls_stream = None
+                    raise
             else:
                 stream = await stream.start_tls(
                     False, ssl_options=ssl_options, server_hostname=host
