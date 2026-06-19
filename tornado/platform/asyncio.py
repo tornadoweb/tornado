@@ -327,7 +327,7 @@ class AsyncIOLoop(BaseAsyncIOLoop):
             kwargs["asyncio_loop"] = loop = asyncio.new_event_loop()
         try:
             super().initialize(**kwargs)
-        except Exception:
+        except (OSError, RuntimeError, ValueError, TypeError):
             # If initialize() does not succeed (taking ownership of the loop),
             # we have to close it.
             if loop is not None:
