@@ -122,7 +122,7 @@ class Condition(_TimeoutGarbageCollector):
         """
         waiter: Future[bool] = Future()
         self._waiters.append(waiter)
-        if timeout:
+        if timeout is not None:
 
             def on_timeout() -> None:
                 if not waiter.done():
@@ -421,7 +421,7 @@ class Semaphore(_TimeoutGarbageCollector):
             waiter.set_result(_ReleasingContextManager(self))
         else:
             self._waiters.append(waiter)
-            if timeout:
+            if timeout is not None:
 
                 def on_timeout() -> None:
                     if not waiter.done():
