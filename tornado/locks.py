@@ -119,6 +119,10 @@ class Condition(_TimeoutGarbageCollector):
 
         Returns a `.Future` that resolves ``True`` if the condition is notified,
         or ``False`` after a timeout.
+
+        .. versionchanged:: 6.6
+           A ``timeout`` argument of zero will either return or raise immediately.
+           Previously, zero was treated equivalent to ``None`` (wait forever).
         """
         waiter: Future[bool] = Future()
         self._waiters.append(waiter)
@@ -231,6 +235,10 @@ class Event:
 
         Returns an awaitable, which raises `tornado.util.TimeoutError` after a
         timeout.
+
+        .. versionchanged:: 6.6
+           A ``timeout`` argument of zero will either return or raise immediately.
+           Previously, zero was treated equivalent to ``None`` (wait forever).
         """
         fut: Future[None] = Future()
         if self._value:
@@ -414,6 +422,10 @@ class Semaphore(_TimeoutGarbageCollector):
 
         Block if the counter is zero and wait for a `.release`. The awaitable
         raises `.TimeoutError` after the deadline.
+
+        .. versionchanged:: 6.6
+           A ``timeout`` argument of zero will either return or raise immediately.
+           Previously, zero was treated equivalent to ``None`` (wait forever).
         """
         waiter: Future[_ReleasingContextManager] = Future()
         if self._value > 0:
@@ -528,6 +540,10 @@ class Lock:
 
         Returns an awaitable, which raises `tornado.util.TimeoutError` after a
         timeout.
+
+        .. versionchanged:: 6.6
+           A ``timeout`` argument of zero will either return or raise immediately.
+           Previously, zero was treated equivalent to ``None`` (wait forever).
         """
         return self._block.acquire(timeout)
 
