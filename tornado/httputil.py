@@ -35,6 +35,7 @@ from functools import lru_cache
 from http.client import responses
 from ssl import SSLError
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+import warnings
 
 from tornado.escape import native_str, parse_qs_bytes, to_unicode, utf8
 from tornado.util import ObjectDict, unicode_type
@@ -467,6 +468,13 @@ class HTTPServerRequest:
        The ``host`` argument to the ``HTTPServerRequest`` constructor is deprecated. Use
        ``headers["Host"]`` instead. This argument was mistakenly removed in Tornado 6.5.0 and
        temporarily restored in 6.5.2.
+
+    .. deprecated:: 6.6
+       Creating a ``HTTPServerRequest`` with out a ``start_line`` argument is deprecated.
+       This argument will require a non-None value in Tornado 6.7. The ``method``, ``uri``,
+       and ``version`` arguments are deprecated and will be removed in Tornado 6.7, along
+       with the previously-deprecated ``host`` argument. At this time all remaining arguments
+       will become keyword-only.
     """
 
     path: str
@@ -488,14 +496,34 @@ class HTTPServerRequest:
         start_line: RequestStartLine | None = None,
         server_connection: object | None = None,
     ) -> None:
-        if start_line is not None:
-            method, uri, version = start_line
-        assert method
-        self.method = method
-        assert uri
-        self.uri = uri
-        self.version = version
+        if method is not None or uri is not None:
+            warnings.warn(
+                "The method, uri, and version arguments to HTTPServerRequest are deprecated and "
+                "will be removed in Tornado 6.7. Use the start_line argument instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        if start_line is None:
+            warnings.warn(
+                "The start_line argument to HTTPServerRequest will be required in Tornado 6.7.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            start_line = RequestStartLine(method or "GET", uri or "/", version)
+            del method, uri, version
+        self.method, self.uri, self.version = start_line
+
         self.headers = headers or HTTPHeaders()
+        if host is not None:
+            warnings.warn(
+                "The host argument to HTTPServerRequest is deprecated and will be removed "
+                "in Tornado 6.7. Use headers['Host'] instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            self.headers["Host"] = host
+            del host
+
         self.body = body or b""
 
         # set remote IP and protocol
@@ -504,9 +532,9 @@ class HTTPServerRequest:
         self.protocol = getattr(context, "protocol", "http")
 
         try:
-            self.host = host or self.headers["Host"]
+            self.host = self.headers["Host"]
         except KeyError:
-            if version == "HTTP/1.0":
+            if self.version == "HTTP/1.0":
                 # HTTP/1.0 does not require the Host header.
                 self.host = "127.0.0.1"
             else:
@@ -538,8 +566,8 @@ class HTTPServerRequest:
         self._start_time = time.time()
         self._finish_time = None
 
-        if uri is not None:
-            self.path, sep, self.query = uri.partition("?")
+        if self.uri is not None:
+            self.path, sep, self.query = self.uri.partition("?")
         self.arguments = parse_qs_bytes(self.query, keep_blank_values=True)
         self.query_arguments = copy.deepcopy(self.arguments)
         self.body_arguments: dict[str, list[bytes]] = {}
