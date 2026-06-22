@@ -13,6 +13,7 @@ from tornado.httputil import (
     HTTPInputError,
     HTTPServerRequest,
     ParseMultipartConfig,
+    RequestStartLine,
     format_timestamp,
     parse_cookie,
     parse_multipart_form_data,
@@ -592,15 +593,19 @@ class HTTPServerRequestTest(unittest.TestCase):
         # All parameters are formally optional, but uri is required
         # (and has been for some time).  This test ensures that no
         # more required parameters slip in.
-        HTTPServerRequest(method="GET", uri="/")
+        with ignore_deprecation():
+            HTTPServerRequest(method="GET", uri="/")
+        # The new minimal construction uses the start_line parameter.
+        HTTPServerRequest(start_line=RequestStartLine("GET", "/", "HTTP/1.0"))
 
     def test_body_is_a_byte_string(self):
-        request = HTTPServerRequest(method="GET", uri="/")
+        request = HTTPServerRequest(start_line=RequestStartLine("GET", "/", "HTTP/1.0"))
         self.assertIsInstance(request.body, bytes)
 
     def test_repr_does_not_contain_headers(self):
         request = HTTPServerRequest(
-            method="GET", uri="/", headers=HTTPHeaders({"Canary": ["Coal Mine"]})
+            start_line=RequestStartLine("GET", "/", "HTTP/1.0"),
+            headers=HTTPHeaders({"Canary": ["Coal Mine"]}),
         )
         self.assertNotIn("Canary", repr(request))
 
