@@ -193,6 +193,10 @@ class Queue(Generic[_T]):
         scale as `tornado.ioloop.IOLoop.time`, normally `time.time`), or a
         `datetime.timedelta` object for a deadline relative to the
         current time.
+
+        .. versionchanged:: 6.6
+           A ``timeout`` argument of zero will either return or raise immediately.
+           Previously, zero was treated equivalent to ``None`` (wait forever).
         """
         future: Future[None] = Future()
         try:
@@ -240,6 +244,9 @@ class Queue(Generic[_T]):
            ``timedelta`` objects for relative timeouts (consistent
            with other timeouts in Tornado).
 
+        .. versionchanged:: 6.6
+           A ``timeout`` argument of zero will either return or raise immediately.
+           Previously, zero was treated equivalent to ``None`` (wait forever).
         """
         future: Future[_T] = Future()
         try:
@@ -292,6 +299,10 @@ class Queue(Generic[_T]):
 
         Returns an awaitable, which raises `tornado.util.TimeoutError` after a
         timeout.
+
+        .. versionchanged:: 6.6
+           A ``timeout`` argument of zero will either return or raise immediately.
+           Previously, zero was treated equivalent to ``None`` (wait forever).
         """
         return self._finished.wait(timeout)
 
