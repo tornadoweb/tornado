@@ -49,8 +49,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         self, max_clients: int = 10, defaults: dict[str, Any] | None = None
     ) -> None:
         super().initialize(defaults=defaults)
-        # Typeshed is incomplete for CurlMulti, so just use Any for now.
-        self._multi: Any = pycurl.CurlMulti()
+        self._multi = pycurl.CurlMulti()
         self._multi.setopt(pycurl.M_TIMERFUNCTION, self._set_timeout)
         self._multi.setopt(pycurl.M_SOCKETFUNCTION, self._handle_socket)
         self._curls = [self._curl_create() for i in range(max_clients)]
@@ -81,7 +80,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         # Set below properties to None to reduce the reference count of current
         # instance, because those properties hold some methods of current
         # instance that will case circular reference.
-        self._multi = None
+        self._multi = None  # type: ignore
 
     def fetch_impl(
         self, request: HTTPRequest, callback: Callable[[HTTPResponse], None]
@@ -90,7 +89,9 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         self._process_queue()
         self._set_timeout(0)
 
-    def _handle_socket(self, event: int, fd: int, multi: Any, data: bytes) -> None:
+    def _handle_socket(
+        self, event: int, fd: int, multi: pycurl.CurlMulti, data: Any | None
+    ) -> None:
         """Called by libcurl when it wants to change the file descriptors
         it cares about.
         """
