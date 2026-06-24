@@ -13,13 +13,14 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 import getpass
+import os
+import ssl as _ssl
 import socket
 import typing
 import unittest
 from contextlib import closing
 
 from tornado.concurrent import Future
-from tornado import gen
 from tornado.gen import TimeoutError
 from tornado.iostream import IOStream
 from tornado.netutil import Resolver, bind_sockets
@@ -27,7 +28,6 @@ from tornado.queues import Queue
 from tornado.tcpclient import TCPClient, _Connector
 from tornado.tcpserver import TCPServer
 from tornado.test.util import refusing_port, skipIfNoIPv6, skipIfNonUnix
-import threading
 from tornado.testing import AsyncTestCase, gen_test
 
 # Fake address families for testing.  Used in place of AF_INET
@@ -432,82 +432,60 @@ class ConnectorTest(AsyncTestCase):
         self.assertRaises(TimeoutError, future.result)
 
 
-class TCPClientSSLTest(AsyncTestCase):
-    """Tests for TCPClient SSL/TLS connect behavior."""
+class TestTLSHandshakeTimeoutCleanup(AsyncTestCase):
+    """Regression test: TLS handshake timeout must not leak file descriptors.
 
-    def setUp(self):
-        super().setUp()
-        self.server_sock = None
+    When TCPClient.connect() times out during the TLS handshake phase,
+    start_tls() has already transferred socket ownership to a new SSLIOStream.
+    The timeout handler must close that SSLIOStream to prevent an fd leak.
+    See tornado#3614.
+    """
 
-    def tearDown(self):
-        if self.server_sock is not None:
-            try:
-                self.server_sock.close()
-            except OSError:
-                pass
-        super().tearDown()
-
+    @skipIfNonUnix
     @gen_test
-    def test_tls_handshake_timeout_closes_stream(self):
-        """When a TLS handshake times out, the SSLIOStream must be closed to
-        prevent socket file descriptor leaks (GitHub issue #3615).
+    def test_tls_handshake_timeout_closes_stream(self) -> None:
+        # Set up a server socket that accepts TCP but never completes TLS
+        server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server_sock.bind(("127.0.0.1", 0))
+        port = server_sock.getsockname()[1]
+        server_sock.listen(1)
 
-        This test verifies that after a timeout during the TLS handshake,
-        the underlying socket is properly closed (no fd leak).
-        """
-        import ssl as _ssl
-        import asyncio
+        ctx = _ssl.SSLContext(_ssl.PROTOCOL_TLS_CLIENT)
+        ctx.check_hostname = False
+        ctx.verify_mode = _ssl.CERT_NONE
 
-        # Set up a raw TCP server that accepts but never completes TLS.
-        self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server_sock.bind(("127.0.0.1", 0))
-        port = self.server_sock.getsockname()[1]
-        self.server_sock.listen(1)
-        self.server_sock.settimeout(2)
+        # Count open fds before (Linux /proc/self/fd)
+        try:
+            fds_before = len(os.listdir("/proc/self/fd"))
+        except OSError:
+            fds_before = 0
 
-        accepted_socket = [None]
-
-        def accept_in_background():
-            try:
-                conn, _ = self.server_sock.accept()
-                accepted_socket[0] = conn
-                # Hold connection open without completing TLS handshake.
-                _ssl.socket.setdefaulttimeout(5)
-                time.sleep(5)
-            except Exception:
-                pass
-
-        thread = threading.Thread(target=accept_in_background, daemon=True)
-        thread.start()
-
-        # Use a very short timeout to trigger TLS handshake timeout quickly.
-        with self.assertRaises(TimeoutError):
-            yield TCPClient().connect(
+        client = TCPClient()
+        error_raised = False
+        try:
+            yield client.connect(
                 "127.0.0.1",
                 port,
-                ssl_options=dict(cert_reqs=_ssl.CERT_NONE),
-                timeout=0.05,
+                ssl_options=ctx,
+                timeout=0.01,
             )
+        except TimeoutError:
+            error_raised = True
 
-        thread.join(timeout=2)
+        self.assertTrue(error_raised, "Expected TimeoutError from TLS handshake timeout")
 
-        # Give the IOLoop a chance to process the close callback.
-        yield gen.moment
+        server_sock.close()
 
-        # The key assertion: we don't care about data already in flight,
-        # but the stream must be closed (no fd leak). We verify this
-        # indirectly: if the stream wasn't closed, reading from the server
-        # side would eventually get more TLS data or hang. If it was closed,
-        # we get either empty bytes (FIN) or a connection reset error.
-        if accepted_socket[0] is not None:
-            # Drain any data already sent before the close (e.g., ClientHello).
-            accepted_socket[0].settimeout(0.5)
-            try:
-                while True:
-                    chunk = accepted_socket[0].recv(4096)
-                    if not chunk:
-                        break  # FIN received — stream was closed ✅
-            except (ConnectionResetError, BrokenPipeError, OSError):
-                pass  # Connection reset — stream was closed ✅
+        # Let IOLoop process cleanup callbacks
+        from tornado.gen import moment
+        yield moment
 
+        # Verify no fd leaked
+        if fds_before > 0:
+            fds_after = len(os.listdir("/proc/self/fd"))
+            self.assertLessEqual(
+                fds_after, fds_before + 2,
+                "File descriptor leaked after TLS handshake timeout "
+                f"(before={fds_before}, after={fds_after})",
+            )

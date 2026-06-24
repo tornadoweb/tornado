@@ -278,8 +278,17 @@ class TCPClient:
             if timeout is not None:
                 try:
                     stream = await gen.with_timeout(timeout, tls_future)
-                except TimeoutError:
+                except gen.TimeoutError:
+                    # Cancel the TLS handshake coroutine so it doesn't
+                    # continue running with a stale _tls_stream reference.
                     tls_future.cancel()
+                    # start_tls() transferred socket ownership to a new
+                    # SSLIOStream (self._tls_stream). Close it to prevent
+                    # a file descriptor leak. See tornado#3614.
+                    tls_stream = getattr(stream, "_tls_stream", None)
+                    if tls_stream is not None:
+                        tls_stream.close()
+                        stream._tls_stream = None
                     raise
             else:
                 stream = await tls_future

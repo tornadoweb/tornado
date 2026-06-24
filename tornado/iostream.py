@@ -624,10 +624,7 @@ class BaseIOStream:
                     self._ssl_connect_future.set_exception(self.error)
                 else:
                     self._ssl_connect_future.set_exception(StreamClosedError())
-            try:
-                self._ssl_connect_future.exception()
-            except asyncio.CancelledError:
-                pass
+            self._ssl_connect_future.exception()
             self._ssl_connect_future = None
         if self._close_callback is not None:
             cb = self._close_callback
@@ -1259,12 +1256,9 @@ class IOStream(BaseIOStream):
         ssl_stream._ssl_connect_future = future
         ssl_stream.max_buffer_size = self.max_buffer_size
         ssl_stream.read_chunk_size = self.read_chunk_size
-
-        def _on_cancel(fut: Future[SSLIOStream]) -> None:
-            if fut.cancelled():
-                ssl_stream.close()
-
-        future.add_done_callback(_on_cancel)  # type: ignore[arg-type]
+        # Keep a reference so callers can clean up if the handshake
+        # is abandoned (e.g. due to timeout). See tornado#3614.
+        self._tls_stream = ssl_stream
         return future
 
     def _handle_connect(self) -> None:
