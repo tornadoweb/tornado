@@ -22,9 +22,17 @@
   To run a subset of tests, add a module, class, or method name to the command line:
   `python3 -m tornado.test.httputil_test`.
 * Tests can also be run with the standard library's `unittest` package CLI. This is useful
-  for integration with some editors.
+  for integration with some editors. However, this mode skips a few checks, notably the
+  requirement that tests do not generate any log output without corresponding ExpectLog
+  assertions.
 * Tornado does not use `pytest`. Some effort has been made to make the tests work with 
   the `pytest` runner, but this is not maintained.
+* Tests must run on Linux, macOS, and Windows (unless they are testing platform-dependent
+  functionality, in which case they should be skipped on other platforms).
+* Use mocks sparingly. Prefer to use real sockets, servers, etc as much as possible.
+  It is rarely appropriate to use mocks just to speed up a test. The most common reason
+  to use mocks in Tornado tests is to simulate error conditions that cannot be
+  reproduced without mocks.
 
 ## Documentation
 
@@ -37,3 +45,10 @@ Tornado has a neutral stance towards AI-generated code. All pull requests, wheth
 or machine-generated, are subject to strict code review standards. However, PRs that appear
 to be AI-generated *and* contain clear flaws (such as failing CI) may be closed without
 detailed review. 
+
+## PR Checklist
+
+- [ ] Run `tox -e lint,docs,py3` locally and make sure it passes
+- [ ] If you modify `curl_httpclient.py`, also run `tox -e py3-full`
+- [ ] Review your changes for any backwards incompatibilities that may affect
+      downstream applications using Tornado
