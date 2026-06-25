@@ -298,6 +298,21 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         buffer: BytesIO,
         headers: httputil.HTTPHeaders,
     ) -> None:
+        self._curl_setup_debug_and_url(curl, request)
+        self._curl_setup_headers(curl, request, headers)
+        self._curl_setup_write_function(curl, request, buffer)
+        self._curl_setup_connection_options(curl, request)
+        self._curl_setup_proxy(curl, request)
+        self._curl_setup_ssl_verify(curl, request)
+        self._curl_setup_method(curl, request)
+        self._curl_setup_body(curl, request)
+        self._curl_setup_auth(curl, request)
+        self._curl_setup_client_cert(curl, request)
+        self._curl_setup_misc(curl, request)
+
+    def _curl_setup_debug_and_url(
+        self, curl: pycurl.Curl, request: HTTPRequest
+    ) -> None:
         if curl_log.isEnabledFor(logging.DEBUG):
             curl.setopt(pycurl.VERBOSE, 1)
             curl.setopt(pycurl.DEBUGFUNCTION, self._curl_debug)
@@ -309,6 +324,12 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
 
         curl.setopt(pycurl.URL, native_str(request.url))
 
+    def _curl_setup_headers(
+        self,
+        curl: pycurl.Curl,
+        request: HTTPRequest,
+        headers: httputil.HTTPHeaders,
+    ) -> None:
         # libcurl's magic "Expect: 100-continue" behavior causes delays
         # with servers that don't support it (which include, among others,
         # Google's OpenID endpoint).  Additionally, this behavior has
@@ -340,6 +361,10 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 self._curl_header_callback, headers, request.header_callback
             ),
         )
+
+    def _curl_setup_write_function(
+        self, curl: pycurl.Curl, request: HTTPRequest, buffer: BytesIO
+    ) -> None:
         if request.streaming_callback:
 
             if gen.is_coroutine_function(
@@ -357,6 +382,10 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         else:
             write_function = buffer.write  # type: ignore
         curl.setopt(pycurl.WRITEFUNCTION, write_function)
+
+    def _curl_setup_connection_options(
+        self, curl: pycurl.Curl, request: HTTPRequest
+    ) -> None:
         curl.setopt(pycurl.FOLLOWLOCATION, request.follow_redirects)
         curl.setopt(pycurl.MAXREDIRS, request.max_redirects)
         assert request.connect_timeout is not None
@@ -373,6 +402,8 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             curl.setopt(pycurl.ENCODING, "gzip,deflate")
         else:
             curl.setopt(pycurl.ENCODING, None)
+
+    def _curl_setup_proxy(self, curl: pycurl.Curl, request: HTTPRequest) -> None:
         if request.proxy_host and request.proxy_port:
             curl.setopt(pycurl.PROXY, request.proxy_host)
             curl.setopt(pycurl.PROXYPORT, request.proxy_port)
@@ -397,6 +428,10 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             except TypeError:  # not supported, disable proxy
                 curl.setopt(pycurl.PROXY, "")
             curl.unsetopt(pycurl.PROXYUSERPWD)
+
+    def _curl_setup_ssl_verify(
+        self, curl: pycurl.Curl, request: HTTPRequest
+    ) -> None:
         if request.validate_cert:
             curl.setopt(pycurl.SSL_VERIFYPEER, 1)
             curl.setopt(pycurl.SSL_VERIFYHOST, 2)
@@ -421,6 +456,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         else:
             curl.setopt(pycurl.IPRESOLVE, pycurl.IPRESOLVE_WHATEVER)
 
+    def _curl_setup_method(self, curl: pycurl.Curl, request: HTTPRequest) -> None:
         # Set the request method through curl's irritating interface which makes
         # up names for almost every single method
         curl_options = {
@@ -440,6 +476,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         else:
             raise KeyError("unknown method " + request.method)
 
+    def _curl_setup_body(self, curl: pycurl.Curl, request: HTTPRequest) -> None:
         body_expected = request.method in ("POST", "PATCH", "PUT")
         body_present = request.body is not None
         if not request.allow_nonstandard_methods:
@@ -477,6 +514,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 curl.setopt(pycurl.UPLOAD, True)
                 curl.setopt(pycurl.INFILESIZE, len(request.body or ""))
 
+    def _curl_setup_auth(self, curl: pycurl.Curl, request: HTTPRequest) -> None:
         if request.auth_username is not None:
             assert request.auth_password is not None
             if request.auth_mode is None or request.auth_mode == "basic":
@@ -500,6 +538,9 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             curl.unsetopt(pycurl.USERPWD)
             curl_log.debug("%s %s", request.method, request.url)
 
+    def _curl_setup_client_cert(
+        self, curl: pycurl.Curl, request: HTTPRequest
+    ) -> None:
         if request.client_cert is not None:
             curl.setopt(pycurl.SSLCERT, request.client_cert)
 
@@ -509,6 +550,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if request.ssl_options is not None:
             raise ValueError("ssl_options not supported in curl_httpclient")
 
+    def _curl_setup_misc(self, curl: pycurl.Curl, request: HTTPRequest) -> None:
         if threading.active_count() > 1:
             # libcurl/pycurl is not thread-safe by default.  When multiple threads
             # are used, signals should be disabled.  This has the side effect
