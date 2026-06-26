@@ -499,6 +499,48 @@ Foo: even
         self.assertEqual(headers["quux"], "xyzzy")
         self.assertEqual(sorted(headers.get_all()), [("Foo", "bar"), ("Quux", "xyzzy")])
 
+    def test_non_string_key_setitem_raises_type_error(self):
+        # HTTPHeaders indexes via _normalize_header, which is decorated with
+        # @lru_cache and only accepts str. Non-string keys used to leak an
+        # AttributeError out of the cache wrapper; now they raise TypeError
+        # at the call site so callers get a useful error.
+        headers = HTTPHeaders()
+        for bad in (1, 1.5, None, b"Foo", ("Foo",), object()):
+            with self.assertRaises(TypeError):
+                headers[bad] = "value"
+            # __setitem__ must not silently store partial state for the bad
+            # key, and must not corrupt the lru_cache for valid lookups.
+            self.assertEqual(len(headers), 0)
+            self.assertNotIn(bad, headers)
+
+    def test_non_string_key_getitem_raises_type_error(self):
+        headers = HTTPHeaders()
+        headers["Foo"] = "bar"
+        for bad in (1, 1.5, None, b"Foo", ("Foo",), object()):
+            with self.assertRaises(TypeError):
+                headers[bad]
+        # Pre-existing string key still reads back.
+        self.assertEqual(headers["Foo"], "bar")
+
+    def test_non_string_key_delitem_raises_type_error(self):
+        headers = HTTPHeaders()
+        headers["Foo"] = "bar"
+        for bad in (1, 1.5, None, b"Foo", ("Foo",), object()):
+            with self.assertRaises(TypeError):
+                del headers[bad]
+        # Pre-existing string entry must still be intact.
+        self.assertEqual(headers["Foo"], "bar")
+
+    def test_non_string_key_contains_returns_false(self):
+        # __contains__ already guarded against non-strings; this pins the
+        # behaviour so a future refactor of __setitem__/__getitem__ cannot
+        # regress it.
+        headers = HTTPHeaders()
+        headers["Foo"] = "bar"
+        for bad in (1, 1.5, None, b"Foo", ("Foo",), object()):
+            self.assertFalse(bad in headers)
+        self.assertIn("Foo", headers)
+
     def test_string(self):
         headers = HTTPHeaders()
         headers.add("Foo", "1")
