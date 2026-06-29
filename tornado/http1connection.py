@@ -184,41 +184,155 @@ class HTTP1Connection(httputil.HTTPConnection):
             )
         return self._read_message(delegate)
 
-    async def _read_message(self, delegate: httputil.HTTPMessageDelegate) -> bool:
-        need_delegate_close = False
-        try:
-            header_future = self.stream.read_until_regex(
-                b"\r?\n\r?\n", max_bytes=self.params.max_header_size
+    async def _read_headers_with_timeout(self) -> bytes:
+        """Read HTTP headers with optional timeout.
+
+        Returns the raw header data.
+        Raises TimeoutError on timeout.
+        """
+        header_future = self.stream.read_until_regex(
+            b"\r?\n\r?\n", max_bytes=self.params.max_header_size
+        )
+        if self.params.header_timeout is None:
+            header_data = await header_future
+        else:
+            try:
+                header_data = await gen.with_timeout(
+                    self.stream.io_loop.time() + self.params.header_timeout,
+                    header_future,
+                    quiet_exceptions=iostream.StreamClosedError,
+                )
+            except gen.TimeoutError:
+                self.close()
+                raise
+        return header_data
+
+    def _process_start_line(
+        self, start_line_str: str, headers: httputil.HTTPHeaders
+    ) -> "httputil.RequestStartLine | httputil.ResponseStartLine":
+        """Parse start line and configure connection state based on request/response.
+
+        Returns the parsed start line object.
+        """
+        if self.is_client:
+            resp_start_line = httputil.parse_response_start_line(start_line_str)
+            self._response_start_line = resp_start_line
+            # TODO: this will need to change to support client-side keepalive
+            self._disconnect_on_finish = False
+            return resp_start_line
+        else:
+            req_start_line = httputil.parse_request_start_line(start_line_str)
+            self._request_start_line = req_start_line
+            self._request_headers = headers
+            self._disconnect_on_finish = not self._can_keep_alive(
+                req_start_line, headers
             )
-            if self.params.header_timeout is None:
-                header_data = await header_future
+            return req_start_line
+
+    def _check_skip_body(
+        self,
+        start_line: "httputil.RequestStartLine | httputil.ResponseStartLine",
+        headers: httputil.HTTPHeaders,
+    ) -> bool:
+        """Determine if message body should be skipped.
+
+        Returns True if body should be skipped, False otherwise.
+        """
+        skip_body = False
+        if self.is_client:
+            assert isinstance(start_line, httputil.ResponseStartLine)
+            if (
+                self._request_start_line is not None
+                and self._request_start_line.method == "HEAD"
+            ):
+                skip_body = True
+            code = start_line.code
+            if code == 304:
+                # 304 responses may include the content-length header
+                # but do not actually have a body.
+                # http://tools.ietf.org/html/rfc7230#section-3.3
+                skip_body = True
+            if 100 <= code < 200:
+                # 1xx responses should never indicate the presence of
+                # a body.
+                if "Content-Length" in headers or "Transfer-Encoding" in headers:
+                    raise httputil.HTTPInputError(
+                        "Response code %d cannot have body" % code
+                    )
+        else:
+            if headers.get("Expect") == "100-continue" and not self._write_finished:
+                self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
+        return skip_body
+
+    async def _read_body_with_timeout(
+        self,
+        start_line: "httputil.RequestStartLine | httputil.ResponseStartLine",
+        headers: httputil.HTTPHeaders,
+        delegate: httputil.HTTPMessageDelegate,
+    ) -> bool:
+        """Read HTTP message body with optional timeout.
+
+        Returns True if body was successfully read, False on timeout.
+        """
+        body_future = self._read_body(
+            start_line.code if self.is_client else 0, headers, delegate
+        )
+        if body_future is not None:
+            if self._body_timeout is None:
+                await body_future
             else:
                 try:
-                    header_data = await gen.with_timeout(
-                        self.stream.io_loop.time() + self.params.header_timeout,
-                        header_future,
+                    await gen.with_timeout(
+                        self.stream.io_loop.time() + self._body_timeout,
+                        body_future,
                         quiet_exceptions=iostream.StreamClosedError,
                     )
                 except gen.TimeoutError:
-                    self.close()
+                    gen_log.info("Timeout reading body from %s", self.context)
+                    self.stream.close()
                     return False
+        return True
+
+    async def _finalize_message(
+        self, delegate: httputil.HTTPMessageDelegate
+    ) -> bool:
+        """Finalize message reading and handle post-read callbacks.
+
+        Returns True if connection should remain open, False otherwise.
+        """
+        self._read_finished = True
+        if not self._write_finished or self.is_client:
+            with _ExceptionLoggingContext(app_log):
+                delegate.finish()
+        # If we're waiting for the application to produce an asynchronous
+        # response, and we're not detached, register a close callback
+        # on the stream (we didn't need one while we were reading)
+        if (
+            not self._finish_future.done()
+            and self.stream is not None
+            and not self.stream.closed()
+        ):
+            self.stream.set_close_callback(self._on_connection_close)
+            await self._finish_future
+        if self.is_client and self._disconnect_on_finish:
+            self.close()
+        if self.stream is None:
+            return False
+        return True
+
+    async def _read_message(self, delegate: httputil.HTTPMessageDelegate) -> bool:
+        need_delegate_close = False
+        try:
+            # Phase 1: Read and parse headers
+            try:
+                header_data = await self._read_headers_with_timeout()
+            except gen.TimeoutError:
+                return False
+
             start_line_str, headers = self._parse_headers(header_data)
-            if self.is_client:
-                resp_start_line = httputil.parse_response_start_line(start_line_str)
-                self._response_start_line = resp_start_line
-                start_line: httputil.RequestStartLine | httputil.ResponseStartLine = (
-                    resp_start_line
-                )
-                # TODO: this will need to change to support client-side keepalive
-                self._disconnect_on_finish = False
-            else:
-                req_start_line = httputil.parse_request_start_line(start_line_str)
-                self._request_start_line = req_start_line
-                self._request_headers = headers
-                start_line = req_start_line
-                self._disconnect_on_finish = not self._can_keep_alive(
-                    req_start_line, headers
-                )
+            start_line = self._process_start_line(start_line_str, headers)
+
+            # Phase 2: Notify delegate of headers
             need_delegate_close = True
             with _ExceptionLoggingContext(app_log):
                 header_recv_future = delegate.headers_received(start_line, headers)
@@ -228,70 +342,24 @@ class HTTP1Connection(httputil.HTTPConnection):
                 # We've been detached.
                 need_delegate_close = False
                 return False
-            skip_body = False
-            if self.is_client:
-                assert isinstance(start_line, httputil.ResponseStartLine)
-                if (
-                    self._request_start_line is not None
-                    and self._request_start_line.method == "HEAD"
-                ):
-                    skip_body = True
-                code = start_line.code
-                if code == 304:
-                    # 304 responses may include the content-length header
-                    # but do not actually have a body.
-                    # http://tools.ietf.org/html/rfc7230#section-3.3
-                    skip_body = True
-                if 100 <= code < 200:
-                    # 1xx responses should never indicate the presence of
-                    # a body.
-                    if "Content-Length" in headers or "Transfer-Encoding" in headers:
-                        raise httputil.HTTPInputError(
-                            "Response code %d cannot have body" % code
-                        )
+
+            # Phase 3: Check if body should be skipped
+            skip_body = self._check_skip_body(start_line, headers)
+            if self.is_client and isinstance(start_line, httputil.ResponseStartLine):
+                if 100 <= start_line.code < 200:
                     # TODO: client delegates will get headers_received twice
                     # in the case of a 100-continue.  Document or change?
                     await self._read_message(delegate)
-            else:
-                if headers.get("Expect") == "100-continue" and not self._write_finished:
-                    self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
+
+            # Phase 4: Read message body
             if not skip_body:
-                body_future = self._read_body(
-                    resp_start_line.code if self.is_client else 0, headers, delegate
-                )
-                if body_future is not None:
-                    if self._body_timeout is None:
-                        await body_future
-                    else:
-                        try:
-                            await gen.with_timeout(
-                                self.stream.io_loop.time() + self._body_timeout,
-                                body_future,
-                                quiet_exceptions=iostream.StreamClosedError,
-                            )
-                        except gen.TimeoutError:
-                            gen_log.info("Timeout reading body from %s", self.context)
-                            self.stream.close()
-                            return False
-            self._read_finished = True
-            if not self._write_finished or self.is_client:
-                need_delegate_close = False
-                with _ExceptionLoggingContext(app_log):
-                    delegate.finish()
-            # If we're waiting for the application to produce an asynchronous
-            # response, and we're not detached, register a close callback
-            # on the stream (we didn't need one while we were reading)
-            if (
-                not self._finish_future.done()
-                and self.stream is not None
-                and not self.stream.closed()
-            ):
-                self.stream.set_close_callback(self._on_connection_close)
-                await self._finish_future
-            if self.is_client and self._disconnect_on_finish:
-                self.close()
-            if self.stream is None:
+                if not await self._read_body_with_timeout(start_line, headers, delegate):
+                    return False
+
+            # Phase 5: Finalize message
+            if not await self._finalize_message(delegate):
                 return False
+
         except httputil.HTTPInputError as e:
             gen_log.info("Malformed HTTP message from %s: %s", self.context, e)
             if not self.is_client:
@@ -302,7 +370,6 @@ class HTTP1Connection(httputil.HTTPConnection):
             if need_delegate_close:
                 with _ExceptionLoggingContext(app_log):
                     delegate.on_connection_close()
-            header_future = None  # type: ignore
             self._clear_callbacks()
         return True
 
