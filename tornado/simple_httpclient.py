@@ -671,83 +671,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self._remove_timeout()
         original_request = getattr(self.request, "original_request", self.request)
         if self._should_follow_redirect():
-            assert isinstance(self.request, _RequestProxy)
-            assert self.headers is not None
-            new_request = copy.copy(self.request.request)
-            new_request.url = urllib.parse.urljoin(
-                self.request.url, self.headers["Location"]
-            )
-            new_request.headers = self.request.headers.copy()
-            parsed_orig_url = urllib.parse.urlsplit(original_request.url)
-            parsed_new_url = urllib.parse.urlsplit(new_request.url)
-            if (
-                parsed_orig_url.scheme != parsed_new_url.scheme
-                or parsed_orig_url.netloc != parsed_new_url.netloc
-            ):
-                # Cross-origin redirect: strip auth headers.
-                # Note that while there is no formal specification of headers that should be
-                # stripped here, libcurl strips the Authorization and Cookie headers, so we
-                # do the same.
-                # Reference:
-                # https://github.com/curl/curl/blob/01d8191b25a05e8fa91553a6c0d48acb99907d26/lib/http.c#L1827-L1828
-                #
-                # Note that checking for cross-origin redirects is a crude heuristic. It is both
-                # too weak (e.g. cookies that have a path attribute may need to be stripped even on
-                # same-origin redirects) and too strong (e.g. cookies may be kept on cross-host
-                # redirects within the same domain). However, we cannot know the full details of
-                # the cookie policy at this layer, so we use the same heuristic as libcurl.
-                # Applications that need more control over behavior on redirects can set
-                # follow_redirects=False and handle 3xx responses themselves.
-                new_request.auth_username = None
-                new_request.auth_password = None
-                if "@" in parsed_new_url.netloc:
-                    if parsed_new_url.port is not None:
-                        new_netloc = f"{parsed_new_url.hostname}:{parsed_new_url.port}"
-                    else:
-                        assert parsed_new_url.hostname is not None
-                        new_netloc = parsed_new_url.hostname
-                    parsed_new_url = parsed_new_url._replace(netloc=new_netloc)
-                new_request.url = urllib.parse.urlunsplit(parsed_new_url)
-                for h in ["Authorization", "Cookie"]:
-                    try:
-                        del new_request.headers[h]
-                    except KeyError:
-                        pass
-            assert self.request.max_redirects is not None
-            new_request.max_redirects = self.request.max_redirects - 1
-            del new_request.headers["Host"]
-            # https://tools.ietf.org/html/rfc7231#section-6.4
-            #
-            # The original HTTP spec said that after a 301 or 302
-            # redirect, the request method should be preserved.
-            # However, browsers implemented this by changing the
-            # method to GET, and the behavior stuck. 303 redirects
-            # always specified this POST-to-GET behavior, arguably
-            # for *all* methods, but libcurl < 7.70 only does this
-            # for POST, while libcurl >= 7.70 does it for other methods.
-            if (self.code == 303 and self.request.method != "HEAD") or (
-                self.code in (301, 302) and self.request.method == "POST"
-            ):
-                new_request.method = "GET"
-                new_request.body = None  # type: ignore
-                for h in [
-                    "Content-Length",
-                    "Content-Type",
-                    "Content-Encoding",
-                    "Transfer-Encoding",
-                ]:
-                    try:
-                        del new_request.headers[h]
-                    except KeyError:
-                        pass
-            new_request.original_request = original_request  # type: ignore
-            final_callback = self.final_callback
-            self.final_callback = None  # type: ignore
-            self._release()
-            assert self.client is not None
-            fut = self.client.fetch(new_request, raise_error=False)
-            fut.add_done_callback(lambda f: final_callback(f.result()))
-            self._on_end_request()
+            self._handle_redirect(original_request)
             return
         if self.request.streaming_callback:
             buffer = BytesIO()
@@ -764,6 +688,94 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             effective_url=self.request.url,
         )
         self._run_callback(response)
+        self._on_end_request()
+
+    def _handle_redirect(self, original_request: HTTPRequest) -> None:
+        """Handle HTTP redirects (3xx responses).
+
+        Processes redirect responses by creating a new request with the
+        appropriate URL and method modifications based on the redirect code.
+        Handles cross-origin redirects by stripping sensitive headers.
+
+        Args:
+            original_request: The original request before any redirects.
+        """
+        assert isinstance(self.request, _RequestProxy)
+        assert self.headers is not None
+        new_request = copy.copy(self.request.request)
+        new_request.url = urllib.parse.urljoin(
+            self.request.url, self.headers["Location"]
+        )
+        new_request.headers = self.request.headers.copy()
+        parsed_orig_url = urllib.parse.urlsplit(original_request.url)
+        parsed_new_url = urllib.parse.urlsplit(new_request.url)
+        if (
+            parsed_orig_url.scheme != parsed_new_url.scheme
+            or parsed_orig_url.netloc != parsed_new_url.netloc
+        ):
+            # Cross-origin redirect: strip auth headers.
+            # Note that while there is no formal specification of headers that should be
+            # stripped here, libcurl strips the Authorization and Cookie headers, so we
+            # do the same.
+            # Reference:
+            # https://github.com/curl/curl/blob/01d8191b25a05e8fa91553a6c0d48acb99907d26/lib/http.c#L1827-L1828
+            #
+            # Note that checking for cross-origin redirects is a crude heuristic. It is both
+            # too weak (e.g. cookies that have a path attribute may need to be stripped even on
+            # same-origin redirects) and too strong (e.g. cookies may be kept on cross-host
+            # redirects within the same domain). However, we cannot know the full details of
+            # the cookie policy at this layer, so we use the same heuristic as libcurl.
+            # Applications that need more control over behavior on redirects can set
+            # follow_redirects=False and handle 3xx responses themselves.
+            new_request.auth_username = None
+            new_request.auth_password = None
+            if "@" in parsed_new_url.netloc:
+                if parsed_new_url.port is not None:
+                    new_netloc = f"{parsed_new_url.hostname}:{parsed_new_url.port}"
+                else:
+                    assert parsed_new_url.hostname is not None
+                    new_netloc = parsed_new_url.hostname
+                parsed_new_url = parsed_new_url._replace(netloc=new_netloc)
+            new_request.url = urllib.parse.urlunsplit(parsed_new_url)
+            for h in ["Authorization", "Cookie"]:
+                try:
+                    del new_request.headers[h]
+                except KeyError:
+                    pass
+        assert self.request.max_redirects is not None
+        new_request.max_redirects = self.request.max_redirects - 1
+        del new_request.headers["Host"]
+        # https://tools.ietf.org/html/rfc7231#section-6.4
+        #
+        # The original HTTP spec said that after a 301 or 302
+        # redirect, the request method should be preserved.
+        # However, browsers implemented this by changing the
+        # method to GET, and the behavior stuck. 303 redirects
+        # always specified this POST-to-GET behavior, arguably
+        # for *all* methods, but libcurl < 7.70 only does this
+        # for POST, while libcurl >= 7.70 does it for other methods.
+        if (self.code == 303 and self.request.method != "HEAD") or (
+            self.code in (301, 302) and self.request.method == "POST"
+        ):
+            new_request.method = "GET"
+            new_request.body = None  # type: ignore
+            for h in [
+                "Content-Length",
+                "Content-Type",
+                "Content-Encoding",
+                "Transfer-Encoding",
+            ]:
+                try:
+                    del new_request.headers[h]
+                except KeyError:
+                    pass
+        new_request.original_request = original_request  # type: ignore
+        final_callback = self.final_callback
+        self.final_callback = None  # type: ignore
+        self._release()
+        assert self.client is not None
+        fut = self.client.fetch(new_request, raise_error=False)
+        fut.add_done_callback(lambda f: final_callback(f.result()))
         self._on_end_request()
 
     def _on_end_request(self) -> None:
