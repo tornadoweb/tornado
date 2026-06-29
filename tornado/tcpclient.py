@@ -33,6 +33,23 @@ from tornado.netutil import Resolver
 _INITIAL_CONNECT_TIMEOUT = 0.3
 
 
+class _ConnectionState:
+    """Encapsulates the state of an active connection attempt."""
+
+    def __init__(self) -> None:
+        self.last_error: Exception | None = None
+        self.remaining: int = 0
+        self.streams: set[IOStream] = set()
+
+
+class _TimeoutManager:
+    """Encapsulates timeout management for connection attempts."""
+
+    def __init__(self) -> None:
+        self.timeout: object | None = None
+        self.connect_timeout: object | None = None
+
+
 class _Connector:
     """A stateless implementation of the "Happy Eyeballs" algorithm.
 
@@ -60,14 +77,15 @@ class _Connector:
     ) -> None:
         self.io_loop = IOLoop.current()
         self.connect = connect
-
         self.future: Future[tuple[socket.AddressFamily, Any, IOStream]] = Future()
-        self.timeout: object | None = None
-        self.connect_timeout: object | None = None
-        self.last_error: Exception | None = None
-        self.remaining = len(addrinfo)
         self.primary_addrs, self.secondary_addrs = self.split(addrinfo)
-        self.streams: set[IOStream] = set()
+        
+        # Encapsulate connection state
+        self.state = _ConnectionState()
+        self.state.remaining = len(addrinfo)
+        
+        # Encapsulate timeout management
+        self.timeouts = _TimeoutManager()
 
     @staticmethod
     def split(
@@ -112,13 +130,13 @@ class _Connector:
             # We've reached the end of our queue, but the other queue
             # might still be working.  Send a final error on the future
             # only when both queues are finished.
-            if self.remaining == 0 and not self.future.done():
+            if self.state.remaining == 0 and not self.future.done():
                 self.future.set_exception(
-                    self.last_error or IOError("connection failed")
+                    self.state.last_error or IOError("connection failed")
                 )
             return
         stream, future = self.connect(af, addr)
-        self.streams.add(stream)
+        self.state.streams.add(stream)
         future_add_done_callback(
             future, functools.partial(self.on_connect_done, addrs, af, addr)
         )
@@ -130,7 +148,7 @@ class _Connector:
         addr: tuple,
         future: "Future[IOStream]",
     ) -> None:
-        self.remaining -= 1
+        self.state.remaining -= 1
         try:
             stream = future.result()
         except Exception as e:
@@ -138,12 +156,12 @@ class _Connector:
                 return
             # Error: try again (but remember what happened so we have an
             # error to raise in the end)
-            self.last_error = e
+            self.state.last_error = e
             self.try_connect(addrs)
-            if self.timeout is not None:
+            if self.timeouts.timeout is not None:
                 # If the first attempt failed, don't wait for the
                 # timeout to try an address from the secondary queue.
-                self.io_loop.remove_timeout(self.timeout)
+                self.io_loop.remove_timeout(self.timeouts.timeout)
                 self.on_timeout()
             return
         self.clear_timeouts()
@@ -151,26 +169,26 @@ class _Connector:
             # This is a late arrival; just drop it.
             stream.close()
         else:
-            self.streams.discard(stream)
+            self.state.streams.discard(stream)
             self.future.set_result((af, addr, stream))
             self.close_streams()
 
     def set_timeout(self, timeout: float) -> None:
-        self.timeout = self.io_loop.add_timeout(
+        self.timeouts.timeout = self.io_loop.add_timeout(
             self.io_loop.time() + timeout, self.on_timeout
         )
 
     def on_timeout(self) -> None:
-        self.timeout = None
+        self.timeouts.timeout = None
         if not self.future.done():
             self.try_connect(iter(self.secondary_addrs))
 
     def clear_timeout(self) -> None:
-        if self.timeout is not None:
-            self.io_loop.remove_timeout(self.timeout)
+        if self.timeouts.timeout is not None:
+            self.io_loop.remove_timeout(self.timeouts.timeout)
 
     def set_connect_timeout(self, connect_timeout: float | datetime.timedelta) -> None:
-        self.connect_timeout = self.io_loop.add_timeout(
+        self.timeouts.connect_timeout = self.io_loop.add_timeout(
             connect_timeout, self.on_connect_timeout
         )
 
@@ -180,13 +198,13 @@ class _Connector:
         self.close_streams()
 
     def clear_timeouts(self) -> None:
-        if self.timeout is not None:
-            self.io_loop.remove_timeout(self.timeout)
-        if self.connect_timeout is not None:
-            self.io_loop.remove_timeout(self.connect_timeout)
+        if self.timeouts.timeout is not None:
+            self.io_loop.remove_timeout(self.timeouts.timeout)
+        if self.timeouts.connect_timeout is not None:
+            self.io_loop.remove_timeout(self.timeouts.connect_timeout)
 
     def close_streams(self) -> None:
-        for stream in self.streams:
+        for stream in self.state.streams:
             stream.close()
 
 
