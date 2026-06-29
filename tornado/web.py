@@ -988,6 +988,49 @@ class RequestHandler:
         chunk = utf8(chunk)
         self._write_buffer.append(chunk)
 
+    def _extract_modules_assets(self) -> dict[str, list]:
+        """Extract JS, CSS, and HTML assets from active modules.
+
+        Returns a dictionary with keys: js_embed, js_files, css_embed,
+        css_files, html_heads, html_bodies.
+        """
+        assets = {
+            "js_embed": [],
+            "js_files": [],
+            "css_embed": [],
+            "css_files": [],
+            "html_heads": [],
+            "html_bodies": [],
+        }
+
+        for module in getattr(self, "_active_modules", {}).values():
+            embed_part = module.embedded_javascript()
+            if embed_part:
+                assets["js_embed"].append(utf8(embed_part))
+            file_part = module.javascript_files()
+            if file_part:
+                if isinstance(file_part, (unicode_type, bytes)):
+                    assets["js_files"].append(_unicode(file_part))
+                else:
+                    assets["js_files"].extend(file_part)
+            embed_part = module.embedded_css()
+            if embed_part:
+                assets["css_embed"].append(utf8(embed_part))
+            file_part = module.css_files()
+            if file_part:
+                if isinstance(file_part, (unicode_type, bytes)):
+                    assets["css_files"].append(_unicode(file_part))
+                else:
+                    assets["css_files"].extend(file_part)
+            head_part = module.html_head()
+            if head_part:
+                assets["html_heads"].append(utf8(head_part))
+            body_part = module.html_body()
+            if body_part:
+                assets["html_bodies"].append(utf8(body_part))
+
+        return assets
+
     def render(self, template_name: str, **kwargs: Any) -> "Future[None]":
         """Renders the template with the given arguments as the response.
 
@@ -1005,64 +1048,34 @@ class RequestHandler:
             raise RuntimeError("Cannot render() after finish()")
         html = self.render_string(template_name, **kwargs)
 
-        # Insert the additional JS and CSS added by the modules on the page
-        js_embed = []
-        js_files = []
-        css_embed = []
-        css_files = []
-        html_heads = []
-        html_bodies = []
-        for module in getattr(self, "_active_modules", {}).values():
-            embed_part = module.embedded_javascript()
-            if embed_part:
-                js_embed.append(utf8(embed_part))
-            file_part = module.javascript_files()
-            if file_part:
-                if isinstance(file_part, (unicode_type, bytes)):
-                    js_files.append(_unicode(file_part))
-                else:
-                    js_files.extend(file_part)
-            embed_part = module.embedded_css()
-            if embed_part:
-                css_embed.append(utf8(embed_part))
-            file_part = module.css_files()
-            if file_part:
-                if isinstance(file_part, (unicode_type, bytes)):
-                    css_files.append(_unicode(file_part))
-                else:
-                    css_files.extend(file_part)
-            head_part = module.html_head()
-            if head_part:
-                html_heads.append(utf8(head_part))
-            body_part = module.html_body()
-            if body_part:
-                html_bodies.append(utf8(body_part))
+        # Extract assets from active modules
+        assets = self._extract_modules_assets()
 
-        if js_files:
+        # Insert the additional JS and CSS added by the modules on the page
+        if assets["js_files"]:
             # Maintain order of JavaScript files given by modules
-            js = self.render_linked_js(js_files)
+            js = self.render_linked_js(assets["js_files"])
             sloc = html.rindex(b"</body>")
             html = html[:sloc] + utf8(js) + b"\n" + html[sloc:]
-        if js_embed:
-            js_bytes = self.render_embed_js(js_embed)
+        if assets["js_embed"]:
+            js_bytes = self.render_embed_js(assets["js_embed"])
             sloc = html.rindex(b"</body>")
             html = html[:sloc] + js_bytes + b"\n" + html[sloc:]
-        if css_files:
-            css = self.render_linked_css(css_files)
+        if assets["css_files"]:
+            css = self.render_linked_css(assets["css_files"])
             hloc = html.index(b"</head>")
             html = html[:hloc] + utf8(css) + b"\n" + html[hloc:]
-        if css_embed:
-            css_bytes = self.render_embed_css(css_embed)
+        if assets["css_embed"]:
+            css_bytes = self.render_embed_css(assets["css_embed"])
             hloc = html.index(b"</head>")
             html = html[:hloc] + css_bytes + b"\n" + html[hloc:]
-        if html_heads:
+        if assets["html_heads"]:
             hloc = html.index(b"</head>")
-            html = html[:hloc] + b"".join(html_heads) + b"\n" + html[hloc:]
-        if html_bodies:
+            html = html[:hloc] + b"".join(assets["html_heads"]) + b"\n" + html[hloc:]
+        if assets["html_bodies"]:
             hloc = html.index(b"</body>")
-            html = html[:hloc] + b"".join(html_bodies) + b"\n" + html[hloc:]
+            html = html[:hloc] + b"".join(assets["html_bodies"]) + b"\n" + html[hloc:]
         return self.finish(html)
-
     def render_linked_js(self, js_files: Iterable[str]) -> str:
         """Default method used to render the final js links for the
         rendered webpage.
