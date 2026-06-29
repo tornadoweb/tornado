@@ -2588,6 +2588,41 @@ class Application(ReversibleRouter):
         )
 
 
+class _RequestMetadata:
+    """Encapsulates request metadata and configuration.
+
+    This class groups related request attributes to reduce the number
+    of instance attributes in _HandlerDelegate.
+    """
+
+    __slots__ = ("application", "request", "connection")
+
+    def __init__(
+        self, application: "Application", request: httputil.HTTPServerRequest
+    ) -> None:
+        self.application = application
+        self.request = request
+        self.connection = request.connection
+
+
+class _ExecutionContext:
+    """Encapsulates execution context for handler invocation.
+
+    This class groups path arguments and keyword arguments to reduce
+    the number of instance attributes in _HandlerDelegate.
+    """
+
+    __slots__ = ("path_args", "path_kwargs")
+
+    def __init__(
+        self,
+        path_args: list[bytes] | None,
+        path_kwargs: dict[str, bytes] | None,
+    ) -> None:
+        self.path_args = path_args or []
+        self.path_kwargs = path_kwargs or {}
+
+
 class _HandlerDelegate(httputil.HTTPMessageDelegate):
     def __init__(
         self,
@@ -2598,15 +2633,42 @@ class _HandlerDelegate(httputil.HTTPMessageDelegate):
         path_args: list[bytes] | None,
         path_kwargs: dict[str, bytes] | None,
     ) -> None:
-        self.application = application
-        self.connection = request.connection
-        self.request = request
+        self.request_metadata = _RequestMetadata(application, request)
         self.handler_class = handler_class
         self.handler_kwargs = handler_kwargs or {}
-        self.path_args = path_args or []
-        self.path_kwargs = path_kwargs or {}
+        self.execution_context = _ExecutionContext(path_args, path_kwargs)
         self.chunks: list[bytes] = []
-        self.stream_request_body = _has_stream_request_body(self.handler_class)
+        self._stream_request_body = _has_stream_request_body(self.handler_class)
+
+    @property
+    def application(self) -> Application:
+        """Shortcut for accessing the application from request metadata."""
+        return self.request_metadata.application
+
+    @property
+    def request(self) -> httputil.HTTPServerRequest:
+        """Shortcut for accessing the request from request metadata."""
+        return self.request_metadata.request
+
+    @property
+    def connection(self) -> Any:
+        """Shortcut for accessing the connection from request metadata."""
+        return self.request_metadata.connection
+
+    @property
+    def path_args(self) -> list[bytes]:
+        """Shortcut for accessing path args from execution context."""
+        return self.execution_context.path_args
+
+    @property
+    def path_kwargs(self) -> dict[str, bytes]:
+        """Shortcut for accessing path kwargs from execution context."""
+        return self.execution_context.path_kwargs
+
+    @property
+    def stream_request_body(self) -> bool:
+        """Whether this handler streams the request body."""
+        return self._stream_request_body
 
     def headers_received(
         self,
