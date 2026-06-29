@@ -38,6 +38,58 @@ from tornado.util import GzipDecompressor
 CR_OR_LF_RE = re.compile(b"\r|\n")
 
 
+class _ReadState:
+    """Groups HTTP/1.x read state attributes.
+    
+    Encapsulates all attributes related to reading requests/responses,
+    reducing the instance attribute count of HTTP1Connection.
+    """
+
+    def __init__(self) -> None:
+        # True when we have read the entire incoming body.
+        self.read_finished: bool = False
+        # While reading a body with a content-length, this is the
+        # amount left to read.
+        self.expected_content_remaining: int | None = None
+        # Save the start lines after we read or write them; they
+        # affect later processing (e.g. 304 responses and HEAD methods
+        # have content-length but no bodies)
+        self.request_start_line: httputil.RequestStartLine | None = None
+        self.response_start_line: httputil.ResponseStartLine | None = None
+        self.request_headers: httputil.HTTPHeaders | None = None
+
+
+class _WriteState:
+    """Groups HTTP/1.x write state attributes.
+    
+    Encapsulates all attributes related to writing requests/responses,
+    reducing the instance attribute count of HTTP1Connection.
+    """
+
+    def __init__(self) -> None:
+        # _write_finished is set to True when finish() has been called,
+        # i.e. there will be no more data sent.  Data may still be in the
+        # stream's write buffer.
+        self.write_finished: bool = False
+        # True if we are writing output with chunked encoding.
+        self.chunking_output: bool = False
+        # A Future for our outgoing writes, returned by IOStream.write.
+        self.pending_write: Future[None] | None = None
+
+
+class _CallbackState:
+    """Groups callback-related attributes.
+    
+    Encapsulates all attributes related to callbacks,
+    reducing the instance attribute count of HTTP1Connection.
+    """
+
+    def __init__(self) -> None:
+        self.write_callback: Callable[[], None] | None = None
+        self.write_future: Future[None] | None = None
+        self.close_callback: Callable[[], None] | None = None
+
+
 class _QuietException(Exception):
     def __init__(self) -> None:
         pass
@@ -139,12 +191,6 @@ class HTTP1Connection(httputil.HTTPConnection):
             else self.stream.max_buffer_size
         )
         self._body_timeout = self.params.body_timeout
-        # _write_finished is set to True when finish() has been called,
-        # i.e. there will be no more data sent.  Data may still be in the
-        # stream's write buffer.
-        self._write_finished = False
-        # True when we have read the entire incoming body.
-        self._read_finished = False
         # _finish_future resolves when all data has been written and flushed
         # to the IOStream.
         self._finish_future: Future[None] = Future()
@@ -152,20 +198,101 @@ class HTTP1Connection(httputil.HTTPConnection):
         # (after the response has been written in the server side,
         # and after it has been read in the client)
         self._disconnect_on_finish = False
+        # Initialize grouped state objects for read/write/callback operations
+        self._read_state = _ReadState()
+        self._write_state = _WriteState()
+        self._callback_state = _CallbackState()
         self._clear_callbacks()
-        # Save the start lines after we read or write them; they
-        # affect later processing (e.g. 304 responses and HEAD methods
-        # have content-length but no bodies)
-        self._request_start_line: httputil.RequestStartLine | None = None
-        self._response_start_line: httputil.ResponseStartLine | None = None
-        self._request_headers: httputil.HTTPHeaders | None = None
-        # True if we are writing output with chunked encoding.
-        self._chunking_output = False
-        # While reading a body with a content-length, this is the
-        # amount left to read.
-        self._expected_content_remaining: int | None = None
-        # A Future for our outgoing writes, returned by IOStream.write.
-        self._pending_write: Future[None] | None = None
+
+    # Properties for backward compatibility with code that accesses
+    # these attributes directly. These delegate to the grouped state objects.
+    @property
+    def _write_finished(self) -> bool:
+        return self._write_state.write_finished
+
+    @_write_finished.setter
+    def _write_finished(self, value: bool) -> None:
+        self._write_state.write_finished = value
+
+    @property
+    def _read_finished(self) -> bool:
+        return self._read_state.read_finished
+
+    @_read_finished.setter
+    def _read_finished(self, value: bool) -> None:
+        self._read_state.read_finished = value
+
+    @property
+    def _request_start_line(self) -> httputil.RequestStartLine | None:
+        return self._read_state.request_start_line
+
+    @_request_start_line.setter
+    def _request_start_line(self, value: httputil.RequestStartLine | None) -> None:
+        self._read_state.request_start_line = value
+
+    @property
+    def _response_start_line(self) -> httputil.ResponseStartLine | None:
+        return self._read_state.response_start_line
+
+    @_response_start_line.setter
+    def _response_start_line(self, value: httputil.ResponseStartLine | None) -> None:
+        self._read_state.response_start_line = value
+
+    @property
+    def _request_headers(self) -> httputil.HTTPHeaders | None:
+        return self._read_state.request_headers
+
+    @_request_headers.setter
+    def _request_headers(self, value: httputil.HTTPHeaders | None) -> None:
+        self._read_state.request_headers = value
+
+    @property
+    def _chunking_output(self) -> bool:
+        return self._write_state.chunking_output
+
+    @_chunking_output.setter
+    def _chunking_output(self, value: bool) -> None:
+        self._write_state.chunking_output = value
+
+    @property
+    def _expected_content_remaining(self) -> int | None:
+        return self._read_state.expected_content_remaining
+
+    @_expected_content_remaining.setter
+    def _expected_content_remaining(self, value: int | None) -> None:
+        self._read_state.expected_content_remaining = value
+
+    @property
+    def _pending_write(self) -> Future[None] | None:
+        return self._write_state.pending_write
+
+    @_pending_write.setter
+    def _pending_write(self, value: Future[None] | None) -> None:
+        self._write_state.pending_write = value
+
+    @property
+    def _write_callback(self) -> Callable[[], None] | None:
+        return self._callback_state.write_callback
+
+    @_write_callback.setter
+    def _write_callback(self, value: Callable[[], None] | None) -> None:
+        self._callback_state.write_callback = value
+
+    @property
+    def _write_future(self) -> Future[None] | None:
+        return self._callback_state.write_future
+
+    @_write_future.setter
+    def _write_future(self, value: Future[None] | None) -> None:
+        self._callback_state.write_future = value
+
+    @property
+    def _close_callback(self) -> Callable[[], None] | None:
+        return self._callback_state.close_callback
+
+    @_close_callback.setter
+    def _close_callback(self, value: Callable[[], None] | None) -> None:
+        self._callback_state.close_callback = value
 
     def read_response(self, delegate: httputil.HTTPMessageDelegate) -> Awaitable[bool]:
         """Read a single HTTP response.
@@ -312,9 +439,9 @@ class HTTP1Connection(httputil.HTTPConnection):
         This allows the request handler to be garbage collected more
         quickly in CPython by breaking up reference cycles.
         """
-        self._write_callback = None
-        self._write_future: Future[None] | None = None
-        self._close_callback: Callable[[], None] | None = None
+        self._callback_state.write_callback = None
+        self._callback_state.write_future = None
+        self._callback_state.close_callback = None
         if self.stream is not None:
             self.stream.set_close_callback(None)
 
