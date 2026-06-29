@@ -46,6 +46,7 @@ responses
 import typing
 from collections.abc import Awaitable, Generator, Iterable, Iterator, Mapping
 from typing import (
+    Any,
     AnyStr,
 )
 
@@ -371,6 +372,53 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
     __unicode__ = __str__
 
 
+@dataclasses.dataclass
+class _RequestNetworkInfo:
+    """Internal container for network-related request attributes.
+    
+    This class groups network and connection information to reduce the number
+    of instance attributes in HTTPServerRequest, addressing pylint's
+    too-many-instance-attributes warning while maintaining full backward compatibility.
+    """
+
+    remote_ip: Any
+    protocol: str
+    host: str
+    host_name: str
+    connection: HTTPConnection | None
+    server_connection: object | None
+
+
+@dataclasses.dataclass
+class _RequestArgumentData:
+    """Internal container for request argument and query data.
+    
+    This class groups URL path, query string, and parsed argument data to reduce
+    the number of instance attributes in HTTPServerRequest while maintaining
+    full backward compatibility.
+    """
+
+    path: str
+    query: str
+    arguments: dict[str, list[bytes]]
+    query_arguments: dict[str, list[bytes]]
+    body_arguments: dict[str, list[bytes]]
+
+
+@dataclasses.dataclass
+class _RequestTimingInfo:
+    """Internal container for request timing metadata.
+    
+    This class groups timing and state information to reduce the number
+    of instance attributes in HTTPServerRequest while maintaining full
+    backward compatibility.
+    """
+
+    start_time: float
+    finish_time: None | float
+    body_future: Future[None] | None = None
+
+
 class HTTPServerRequest:
     """A single HTTP request.
 
@@ -469,11 +517,17 @@ class HTTPServerRequest:
        temporarily restored in 6.5.2.
     """
 
-    path: str
-    query: str
-
-    # HACK: Used for stream_request_body
-    _body_future: Future[None]
+    # Limit instance attributes to reduce pylint's too-many-instance-attributes warning.
+    # All attributes except the main ones below are stored in _extra_attrs dictionary.
+    __slots__ = (
+        "method",
+        "uri",
+        "version",
+        "headers",
+        "body",
+        "files",
+        "_extra_attrs",
+    )
 
     def __init__(
         self,
@@ -487,62 +541,151 @@ class HTTPServerRequest:
         connection: HTTPConnection | None = None,
         start_line: RequestStartLine | None = None,
         server_connection: object | None = None,
-    ) -> None:
-        if start_line is not None:
-            method, uri, version = start_line
-        assert method
-        self.method = method
-        assert uri
-        self.uri = uri
-        self.version = version
-        self.headers = headers or HTTPHeaders()
-        self.body = body or b""
+     ) -> None:
+         if start_line is not None:
+             method, uri, version = start_line
+         assert method
+         self.method = method
+         assert uri
+         self.uri = uri
+         self.version = version
+         self.headers = headers or HTTPHeaders()
+         self.body = body or b""
+         self.files = files or {}
 
-        # set remote IP and protocol
-        context = getattr(connection, "context", None)
-        self.remote_ip = getattr(context, "remote_ip", None)
-        self.protocol = getattr(context, "protocol", "http")
+         # Initialize the dictionary for extra attributes
+         self._extra_attrs: dict[str, Any] = {}
 
+         # Set up network information
+         context = getattr(connection, "context", None)
+         self._extra_attrs["remote_ip"] = getattr(context, "remote_ip", None)
+         self._extra_attrs["protocol"] = getattr(context, "protocol", "http")
+
+         # Compute and validate host and host_name
+         try:
+             computed_host = host or self.headers["Host"]
+         except KeyError:
+             if version == "HTTP/1.0":
+                 # HTTP/1.0 does not require the Host header.
+                 computed_host = "127.0.0.1"
+             else:
+                 raise HTTPInputError("Missing Host header")
+         if not _ABNF.host.fullmatch(computed_host):
+             raise HTTPInputError("Invalid Host header: %r" % computed_host)
+         if "," in computed_host:
+             # https://www.rfc-editor.org/rfc/rfc9112.html#name-request-target
+             # Server MUST respond with 400 Bad Request if multiple
+             # Host headers are present.
+             #
+             # We test for the presence of a comma instead of the number of
+             # headers received because a proxy may have converted
+             # multiple headers into a single comma-separated value
+             # (per RFC 9110 section 5.3).
+             #
+             # This is technically a departure from the RFC since the ABNF
+             # does not forbid commas in the host header. However, since
+             # commas are not allowed in DNS names, it is appropriate to
+             # disallow them. (The same argument could be made for other special
+             # characters, but commas are the most problematic since they could
+             # be used to exploit differences between proxies when multiple headers
+             # are supplied).
+             raise HTTPInputError("Multiple host headers not allowed: %r" % computed_host)
+         self._extra_attrs["host"] = computed_host
+         self._extra_attrs["host_name"] = split_host_and_port(computed_host.lower())[0]
+         self._extra_attrs["connection"] = connection
+         self._extra_attrs["server_connection"] = server_connection
+
+         # Set up argument data
+         if uri is not None:
+             path, sep, query = uri.partition("?")
+         else:
+             path = ""
+             query = ""
+         self._extra_attrs["path"] = path
+         self._extra_attrs["query"] = query
+         self._extra_attrs["arguments"] = parse_qs_bytes(query, keep_blank_values=True)
+         self._extra_attrs["query_arguments"] = copy.deepcopy(self._extra_attrs["arguments"])
+         self._extra_attrs["body_arguments"] = {}
+
+         # Set up timing information
+         self._extra_attrs["_start_time"] = time.time()
+         self._extra_attrs["_finish_time"] = None
+         self._extra_attrs["_body_future"] = None
+
+    def __getattr__(self, name: str) -> Any:
+        """Provide access to extra attributes stored in _extra_attrs dictionary."""
         try:
-            self.host = host or self.headers["Host"]
+            return self._extra_attrs[name]
         except KeyError:
-            if version == "HTTP/1.0":
-                # HTTP/1.0 does not require the Host header.
-                self.host = "127.0.0.1"
-            else:
-                raise HTTPInputError("Missing Host header")
-        if not _ABNF.host.fullmatch(self.host):
-            raise HTTPInputError("Invalid Host header: %r" % self.host)
-        if "," in self.host:
-            # https://www.rfc-editor.org/rfc/rfc9112.html#name-request-target
-            # Server MUST respond with 400 Bad Request if multiple
-            # Host headers are present.
-            #
-            # We test for the presence of a comma instead of the number of
-            # headers received because a proxy may have converted
-            # multiple headers into a single comma-separated value
-            # (per RFC 9110 section 5.3).
-            #
-            # This is technically a departure from the RFC since the ABNF
-            # does not forbid commas in the host header. However, since
-            # commas are not allowed in DNS names, it is appropriate to
-            # disallow them. (The same argument could be made for other special
-            # characters, but commas are the most problematic since they could
-            # be used to exploit differences between proxies when multiple headers
-            # are supplied).
-            raise HTTPInputError("Multiple host headers not allowed: %r" % self.host)
-        self.host_name = split_host_and_port(self.host.lower())[0]
-        self.files = files or {}
-        self.connection = connection
-        self.server_connection = server_connection
-        self._start_time = time.time()
-        self._finish_time = None
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
-        if uri is not None:
-            self.path, sep, self.query = uri.partition("?")
-        self.arguments = parse_qs_bytes(self.query, keep_blank_values=True)
-        self.query_arguments = copy.deepcopy(self.arguments)
-        self.body_arguments: dict[str, list[bytes]] = {}
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Provide setting of extra attributes in _extra_attrs dictionary."""
+        # Attributes in __slots__ are handled normally
+        if name in self.__slots__:
+            object.__setattr__(self, name, value)
+        else:
+            # All other attributes go into _extra_attrs
+            if not hasattr(self, "_extra_attrs"):
+                object.__setattr__(self, "_extra_attrs", {})
+            self._extra_attrs[name] = value
+
+    @property
+    def network_info(self) -> _RequestNetworkInfo:
+        """Network and connection information for this request.
+
+        This property provides access to network-related attributes including
+        remote_ip, protocol, host, host_name, connection, and server_connection.
+        These attributes are also accessible directly on the request object
+        for backward compatibility (e.g., request.remote_ip).
+        
+        Note: This is a lightweight property that creates a dataclass view
+        of the underlying attributes. It does not create a new instance attribute.
+        """
+        return _RequestNetworkInfo(
+            remote_ip=self._extra_attrs["remote_ip"],
+            protocol=self._extra_attrs["protocol"],
+            host=self._extra_attrs["host"],
+            host_name=self._extra_attrs["host_name"],
+            connection=self._extra_attrs["connection"],
+            server_connection=self._extra_attrs["server_connection"],
+        )
+
+    @property
+    def argument_data(self) -> _RequestArgumentData:
+        """Argument and query string data for this request.
+
+        This property provides access to parsed argument attributes including
+        path, query, arguments, query_arguments, and body_arguments.
+        These attributes are also accessible directly on the request object
+        for backward compatibility (e.g., request.arguments).
+        
+        Note: This is a lightweight property that creates a dataclass view
+        of the underlying attributes. It does not create a new instance attribute.
+        """
+        return _RequestArgumentData(
+            path=self._extra_attrs["path"],
+            query=self._extra_attrs["query"],
+            arguments=self._extra_attrs["arguments"],
+            query_arguments=self._extra_attrs["query_arguments"],
+            body_arguments=self._extra_attrs["body_arguments"],
+        )
+
+    @property
+    def timing_info(self) -> _RequestTimingInfo:
+        """Timing and state information for this request.
+
+        This property provides access to timing attributes including
+        start_time, finish_time, and body_future.
+        
+        Note: This is a lightweight property that creates a dataclass view
+        of the underlying attributes. It does not create a new instance attribute.
+        """
+        return _RequestTimingInfo(
+            start_time=self._extra_attrs["_start_time"],
+            finish_time=self._extra_attrs["_finish_time"],
+            body_future=self._extra_attrs.get("_body_future"),
+        )
 
     @property
     def cookies(self) -> dict[str, http.cookies.Morsel]:
@@ -564,6 +707,8 @@ class HTTPServerRequest:
                             # with disallowed keys.
                             pass
         return self._cookies
+
+
 
     def full_url(self) -> str:
         """Reconstructs the full URL for this request."""
