@@ -280,56 +280,192 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             gen.convert_yielded(self.run()), lambda f: f.result()
         )
 
+    def _validate_and_parse_url(self) -> tuple[str, int]:
+        """Validate and parse the request URL.
+
+        Returns:
+            A tuple of (host, port)
+        """
+        self.parsed = urllib.parse.urlsplit(_unicode(self.request.url))
+        if self.parsed.scheme not in ("http", "https"):
+            raise ValueError("Unsupported url scheme: %s" % self.request.url)
+
+        # urlsplit results have hostname and port results, but they
+        # didn't support ipv6 literals until python 2.7.
+        netloc = self.parsed.netloc
+        if "@" in netloc:
+            userpass, _, netloc = netloc.rpartition("@")
+        host, port = httputil.split_host_and_port(netloc)
+        if port is None:
+            port = 443 if self.parsed.scheme == "https" else 80
+        if re.match(r"^\[.*\]$", host):
+            # raw ipv6 addresses in urls are enclosed in brackets
+            host = host[1:-1]
+        self.parsed_hostname = host  # save final host for _on_connect
+        return host, port
+
+    def _get_address_family(self) -> int:
+        """Determine the address family for connection."""
+        if self.request.allow_ipv6 is False:
+            return socket.AF_INET
+        return socket.AF_UNSPEC
+
+    def _get_source_ip(self) -> str | None:
+        """Validate and return the source IP address."""
+        if not self.request.network_interface:
+            return None
+        if is_valid_ip(self.request.network_interface):
+            return self.request.network_interface
+        raise ValueError(
+            "Unrecognized IPv4 or IPv6 address for network_interface, got %r"
+            % (self.request.network_interface,)
+        )
+
+    def _setup_connection_timeout(self) -> float:
+        """Calculate and set up connection timeout.
+
+        Returns:
+            The timeout value in seconds.
+        """
+        if self.request.connect_timeout and self.request.request_timeout:
+            timeout = min(
+                self.request.connect_timeout, self.request.request_timeout
+            )
+        elif self.request.connect_timeout:
+            timeout = self.request.connect_timeout
+        elif self.request.request_timeout:
+            timeout = self.request.request_timeout
+        else:
+            timeout = 0
+        if timeout:
+            self._timeout = self.io_loop.add_timeout(
+                self.start_time + timeout,
+                functools.partial(self._on_timeout, "while connecting"),
+            )
+        return timeout
+
+    def _handle_successful_connection(self, stream: IOStream) -> bool:
+        """Handle a successful TCP connection.
+
+        Returns:
+            True if processing should continue, False if it should stop.
+        """
+        if self.final_callback is None:
+            # final_callback is cleared if we've hit our timeout.
+            stream.close()
+            return False
+        self.stream = stream
+        self.stream.set_close_callback(self.on_connection_close)
+        self._remove_timeout()
+        if self.final_callback is None:
+            return False
+        if self.request.request_timeout:
+            self._timeout = self.io_loop.add_timeout(
+                self.start_time + self.request.request_timeout,
+                functools.partial(self._on_timeout, "during request"),
+            )
+        return True
+
+    def _validate_request(self) -> None:
+        """Validate the HTTP request method and proxy settings."""
+        if (
+            self.request.method not in self._SUPPORTED_METHODS
+            and not self.request.allow_nonstandard_methods
+        ):
+            raise KeyError("unknown method %s" % self.request.method)
+        for key in (
+            "proxy_host",
+            "proxy_port",
+            "proxy_username",
+            "proxy_password",
+            "proxy_auth_mode",
+        ):
+            if getattr(self.request, key, None):
+                raise NotImplementedError("%s not supported" % key)
+
+    def _set_host_header(self) -> None:
+        """Set the Host header if not already set."""
+        if "Host" not in self.request.headers:
+            if "@" in self.parsed.netloc:
+                self.request.headers["Host"] = self.parsed.netloc.rpartition("@")[-1]
+            else:
+                self.request.headers["Host"] = self.parsed.netloc
+
+    def _prepare_auth_headers(self) -> None:
+        """Prepare authentication headers."""
+        username, password = None, None
+        if self.parsed.username is not None:
+            username, password = self.parsed.username, self.parsed.password
+        elif self.request.auth_username is not None:
+            username = self.request.auth_username
+            password = self.request.auth_password or ""
+        if username is not None:
+            assert password is not None
+            if self.request.auth_mode not in (None, "basic"):
+                raise ValueError("unsupported auth_mode %s", self.request.auth_mode)
+            self.request.headers["Authorization"] = "Basic " + _unicode(
+                base64.b64encode(
+                    httputil.encode_username_password(username, password)
+                )
+            )
+
+    def _set_user_agent(self) -> None:
+        """Set the User-Agent header if not already set."""
+        if self.request.user_agent:
+            self.request.headers["User-Agent"] = self.request.user_agent
+        elif self.request.headers.get("User-Agent") is None:
+            self.request.headers["User-Agent"] = f"Tornado/{version}"
+
+    def _validate_request_body(self) -> None:
+        """Validate that the request body matches the HTTP method."""
+        if not self.request.allow_nonstandard_methods:
+            # Some HTTP methods nearly always have bodies while others
+            # almost never do. Fail in this case unless the user has
+            # opted out of sanity checks with allow_nonstandard_methods.
+            body_expected = self.request.method in ("POST", "PATCH", "PUT")
+            body_present = (
+                self.request.body is not None
+                or self.request.body_producer is not None
+            )
+            if (body_expected and not body_present) or (
+                body_present and not body_expected
+            ):
+                raise ValueError(
+                    "Body must %sbe None for method %s (unless "
+                    "allow_nonstandard_methods is true)"
+                    % ("not " if body_expected else "", self.request.method)
+                )
+
+    def _prepare_request_headers(self) -> None:
+        """Prepare all request headers."""
+        if "Connection" not in self.request.headers:
+            self.request.headers["Connection"] = "close"
+        self._set_host_header()
+        self._prepare_auth_headers()
+        self._set_user_agent()
+        if self.request.expect_100_continue:
+            self.request.headers["Expect"] = "100-continue"
+        if self.request.body is not None:
+            # When body_producer is used the caller is responsible for
+            # setting Content-Length (or else chunked encoding will be used).
+            self.request.headers["Content-Length"] = str(len(self.request.body))
+        if (
+            self.request.method == "POST"
+            and "Content-Type" not in self.request.headers
+        ):
+            self.request.headers["Content-Type"] = (
+                "application/x-www-form-urlencoded"
+            )
+        if self.request.decompress_response:
+            self.request.headers["Accept-Encoding"] = "gzip"
+
     async def run(self) -> None:
         try:
-            self.parsed = urllib.parse.urlsplit(_unicode(self.request.url))
-            if self.parsed.scheme not in ("http", "https"):
-                raise ValueError("Unsupported url scheme: %s" % self.request.url)
-            # urlsplit results have hostname and port results, but they
-            # didn't support ipv6 literals until python 2.7.
-            netloc = self.parsed.netloc
-            if "@" in netloc:
-                userpass, _, netloc = netloc.rpartition("@")
-            host, port = httputil.split_host_and_port(netloc)
-            if port is None:
-                port = 443 if self.parsed.scheme == "https" else 80
-            if re.match(r"^\[.*\]$", host):
-                # raw ipv6 addresses in urls are enclosed in brackets
-                host = host[1:-1]
-            self.parsed_hostname = host  # save final host for _on_connect
-
-            if self.request.allow_ipv6 is False:
-                af = socket.AF_INET
-            else:
-                af = socket.AF_UNSPEC
-
+            host, port = self._validate_and_parse_url()
+            af = self._get_address_family()
             ssl_options = self._get_ssl_options(self.parsed.scheme)
-
-            source_ip = None
-            if self.request.network_interface:
-                if is_valid_ip(self.request.network_interface):
-                    source_ip = self.request.network_interface
-                else:
-                    raise ValueError(
-                        "Unrecognized IPv4 or IPv6 address for network_interface, got %r"
-                        % (self.request.network_interface,)
-                    )
-
-            if self.request.connect_timeout and self.request.request_timeout:
-                timeout = min(
-                    self.request.connect_timeout, self.request.request_timeout
-                )
-            elif self.request.connect_timeout:
-                timeout = self.request.connect_timeout
-            elif self.request.request_timeout:
-                timeout = self.request.request_timeout
-            else:
-                timeout = 0
-            if timeout:
-                self._timeout = self.io_loop.add_timeout(
-                    self.start_time + timeout,
-                    functools.partial(self._on_timeout, "while connecting"),
-                )
+            source_ip = self._get_source_ip()
+            self._setup_connection_timeout()
             stream = await self.tcp_client.connect(
                 host,
                 port,
@@ -339,94 +475,11 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 source_ip=source_ip,
             )
 
-            if self.final_callback is None:
-                # final_callback is cleared if we've hit our timeout.
-                stream.close()
+            if not self._handle_successful_connection(stream):
                 return
-            self.stream = stream
-            self.stream.set_close_callback(self.on_connection_close)
-            self._remove_timeout()
-            if self.final_callback is None:
-                return
-            if self.request.request_timeout:
-                self._timeout = self.io_loop.add_timeout(
-                    self.start_time + self.request.request_timeout,
-                    functools.partial(self._on_timeout, "during request"),
-                )
-            if (
-                self.request.method not in self._SUPPORTED_METHODS
-                and not self.request.allow_nonstandard_methods
-            ):
-                raise KeyError("unknown method %s" % self.request.method)
-            for key in (
-                "proxy_host",
-                "proxy_port",
-                "proxy_username",
-                "proxy_password",
-                "proxy_auth_mode",
-            ):
-                if getattr(self.request, key, None):
-                    raise NotImplementedError("%s not supported" % key)
-            if "Connection" not in self.request.headers:
-                self.request.headers["Connection"] = "close"
-            if "Host" not in self.request.headers:
-                if "@" in self.parsed.netloc:
-                    self.request.headers["Host"] = self.parsed.netloc.rpartition("@")[
-                        -1
-                    ]
-                else:
-                    self.request.headers["Host"] = self.parsed.netloc
-            username, password = None, None
-            if self.parsed.username is not None:
-                username, password = self.parsed.username, self.parsed.password
-            elif self.request.auth_username is not None:
-                username = self.request.auth_username
-                password = self.request.auth_password or ""
-            if username is not None:
-                assert password is not None
-                if self.request.auth_mode not in (None, "basic"):
-                    raise ValueError("unsupported auth_mode %s", self.request.auth_mode)
-                self.request.headers["Authorization"] = "Basic " + _unicode(
-                    base64.b64encode(
-                        httputil.encode_username_password(username, password)
-                    )
-                )
-            if self.request.user_agent:
-                self.request.headers["User-Agent"] = self.request.user_agent
-            elif self.request.headers.get("User-Agent") is None:
-                self.request.headers["User-Agent"] = f"Tornado/{version}"
-            if not self.request.allow_nonstandard_methods:
-                # Some HTTP methods nearly always have bodies while others
-                # almost never do. Fail in this case unless the user has
-                # opted out of sanity checks with allow_nonstandard_methods.
-                body_expected = self.request.method in ("POST", "PATCH", "PUT")
-                body_present = (
-                    self.request.body is not None
-                    or self.request.body_producer is not None
-                )
-                if (body_expected and not body_present) or (
-                    body_present and not body_expected
-                ):
-                    raise ValueError(
-                        "Body must %sbe None for method %s (unless "
-                        "allow_nonstandard_methods is true)"
-                        % ("not " if body_expected else "", self.request.method)
-                    )
-            if self.request.expect_100_continue:
-                self.request.headers["Expect"] = "100-continue"
-            if self.request.body is not None:
-                # When body_producer is used the caller is responsible for
-                # setting Content-Length (or else chunked encoding will be used).
-                self.request.headers["Content-Length"] = str(len(self.request.body))
-            if (
-                self.request.method == "POST"
-                and "Content-Type" not in self.request.headers
-            ):
-                self.request.headers["Content-Type"] = (
-                    "application/x-www-form-urlencoded"
-                )
-            if self.request.decompress_response:
-                self.request.headers["Accept-Encoding"] = "gzip"
+            self._validate_request()
+            self._validate_request_body()
+            self._prepare_request_headers()
             req_path = (self.parsed.path or "/") + (
                 ("?" + self.parsed.query) if self.parsed.query else ""
             )
