@@ -640,6 +640,8 @@ class _Option:
     )
 
     def _parse_timedelta(self, value: str) -> datetime.timedelta:
+        if not value or not value.strip():
+            raise Error("Invalid time delta: %r" % value)
         try:
             sum = datetime.timedelta()
             start = 0

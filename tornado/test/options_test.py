@@ -5,7 +5,7 @@ import unittest
 from io import StringIO
 from unittest import mock
 
-from tornado.options import Error, OptionParser
+from tornado.options import Error, OptionParser, _Option
 from tornado.util import basestring_type
 
 
@@ -260,6 +260,20 @@ class OptionsTest(unittest.TestCase):
         with self.assertRaises(Error) as cm:
             options.define("foo")
         self.assertRegex(str(cm.exception), "Option.*foo.*already defined")
+
+    def test_parse_timedelta_empty_or_whitespace_raises(self):
+        # Empty or whitespace-only timedelta values used to be silently
+        # accepted as 0 (the while loop body never ran), so `--t=` and
+        # `--t=" "` both parsed as datetime.timedelta(0). They now raise
+        # options.Error with the offending value in the message, matching
+        # the other type-specific parsers in this module.
+        for bad in ("", " ", "\t", "\n", "   \t  "):
+            option = _Option(
+                "t", type=datetime.timedelta, default=datetime.timedelta(0)
+            )
+            with self.assertRaises(Error) as cm:
+                option._parse_timedelta(bad)
+            self.assertIn(repr(bad), str(cm.exception))
 
     def test_error_redefine_underscore(self):
         # Ensure that the dash/underscore normalization doesn't
