@@ -811,6 +811,30 @@ class _PerMessageDeflateDecompressor:
         return result
 
 
+class _ProtocolState(dict):
+    """Dictionary-based state container to reduce attribute count."""
+    def __init__(self):
+        super().__init__()
+        # Initialize all state attributes
+        self['final_frame'] = False
+        self['frame_opcode'] = None
+        self['masked_frame'] = None
+        self['frame_mask'] = None
+        self['frame_length'] = None
+        self['fragmented_message_buffer'] = None
+        self['fragmented_message_opcode'] = None
+        self['waiting'] = None
+        self['compression_options'] = None
+        self['decompressor'] = None
+        self['compressor'] = None
+        self['frame_compressed'] = None
+        self['message_bytes_in'] = 0
+        self['message_bytes_out'] = 0
+        self['wire_bytes_in'] = 0
+        self['wire_bytes_out'] = 0
+        self['received_pong'] = False
+
+
 class WebSocketProtocol13(WebSocketProtocol):
     """Implementation of the WebSocket protocol from RFC 6455.
 
@@ -837,31 +861,13 @@ class WebSocketProtocol13(WebSocketProtocol):
         WebSocketProtocol.__init__(self, handler)
         self.mask_outgoing = mask_outgoing
         self.params = params
-        self._final_frame = False
-        self._frame_opcode = None
-        self._masked_frame = None
-        self._frame_mask: bytes | None = None
-        self._frame_length = None
-        self._fragmented_message_buffer: bytearray | None = None
-        self._fragmented_message_opcode = None
-        self._waiting: object = None
-        self._compression_options = params.compression_options
-        self._decompressor: _PerMessageDeflateDecompressor | None = None
-        self._compressor: _PerMessageDeflateCompressor | None = None
-        self._frame_compressed: bool | None = None
-        # The total uncompressed size of all messages received or sent.
-        # Unicode messages are encoded to utf8.
-        # Only for testing; subject to change.
-        self._message_bytes_in = 0
-        self._message_bytes_out = 0
-        # The total size of all packets received or sent.  Includes
-        # the effect of compression, frame overhead, and control frames.
-        self._wire_bytes_in = 0
-        self._wire_bytes_out = 0
-        self._received_pong: bool = False
         self.close_code: int | None = None
         self.close_reason: str | None = None
+        self._selected_subprotocol: str | None = None
         self._ping_coroutine: asyncio.Task | None = None
+        # Consolidated internal state dictionary
+        self._state = _ProtocolState()
+        self._state['compression_options'] = params.compression_options
 
     # Use a property for this to satisfy the abc.
     @property
@@ -871,6 +877,143 @@ class WebSocketProtocol13(WebSocketProtocol):
     @selected_subprotocol.setter
     def selected_subprotocol(self, value: str | None) -> None:
         self._selected_subprotocol = value
+
+    # Convenience properties for state dictionary access
+    @property
+    def _final_frame(self) -> bool:
+        return self._state['final_frame']
+
+    @_final_frame.setter
+    def _final_frame(self, value: bool) -> None:
+        self._state['final_frame'] = value
+
+    @property
+    def _frame_opcode(self) -> int | None:
+        return self._state['frame_opcode']
+
+    @_frame_opcode.setter
+    def _frame_opcode(self, value: int | None) -> None:
+        self._state['frame_opcode'] = value
+
+    @property
+    def _masked_frame(self) -> bool | None:
+        return self._state['masked_frame']
+
+    @_masked_frame.setter
+    def _masked_frame(self, value: bool | None) -> None:
+        self._state['masked_frame'] = value
+
+    @property
+    def _frame_mask(self) -> bytes | None:
+        return self._state['frame_mask']
+
+    @_frame_mask.setter
+    def _frame_mask(self, value: bytes | None) -> None:
+        self._state['frame_mask'] = value
+
+    @property
+    def _frame_length(self) -> int | None:
+        return self._state['frame_length']
+
+    @_frame_length.setter
+    def _frame_length(self, value: int | None) -> None:
+        self._state['frame_length'] = value
+
+    @property
+    def _fragmented_message_buffer(self) -> bytearray | None:
+        return self._state['fragmented_message_buffer']
+
+    @_fragmented_message_buffer.setter
+    def _fragmented_message_buffer(self, value: bytearray | None) -> None:
+        self._state['fragmented_message_buffer'] = value
+
+    @property
+    def _fragmented_message_opcode(self) -> int | None:
+        return self._state['fragmented_message_opcode']
+
+    @_fragmented_message_opcode.setter
+    def _fragmented_message_opcode(self, value: int | None) -> None:
+        self._state['fragmented_message_opcode'] = value
+
+    @property
+    def _waiting(self) -> object:
+        return self._state['waiting']
+
+    @_waiting.setter
+    def _waiting(self, value: object) -> None:
+        self._state['waiting'] = value
+
+    @property
+    def _compression_options(self) -> dict | None:
+        return self._state['compression_options']
+
+    @_compression_options.setter
+    def _compression_options(self, value: dict | None) -> None:
+        self._state['compression_options'] = value
+
+    @property
+    def _decompressor(self) -> "_PerMessageDeflateDecompressor | None":
+        return self._state['decompressor']
+
+    @_decompressor.setter
+    def _decompressor(self, value: "_PerMessageDeflateDecompressor | None") -> None:
+        self._state['decompressor'] = value
+
+    @property
+    def _compressor(self) -> "_PerMessageDeflateCompressor | None":
+        return self._state['compressor']
+
+    @_compressor.setter
+    def _compressor(self, value: "_PerMessageDeflateCompressor | None") -> None:
+        self._state['compressor'] = value
+
+    @property
+    def _frame_compressed(self) -> bool | None:
+        return self._state['frame_compressed']
+
+    @_frame_compressed.setter
+    def _frame_compressed(self, value: bool | None) -> None:
+        self._state['frame_compressed'] = value
+
+    @property
+    def _message_bytes_in(self) -> int:
+        return self._state['message_bytes_in']
+
+    @_message_bytes_in.setter
+    def _message_bytes_in(self, value: int) -> None:
+        self._state['message_bytes_in'] = value
+
+    @property
+    def _message_bytes_out(self) -> int:
+        return self._state['message_bytes_out']
+
+    @_message_bytes_out.setter
+    def _message_bytes_out(self, value: int) -> None:
+        self._state['message_bytes_out'] = value
+
+    @property
+    def _wire_bytes_in(self) -> int:
+        return self._state['wire_bytes_in']
+
+    @_wire_bytes_in.setter
+    def _wire_bytes_in(self, value: int) -> None:
+        self._state['wire_bytes_in'] = value
+
+    @property
+    def _wire_bytes_out(self) -> int:
+        return self._state['wire_bytes_out']
+
+    @_wire_bytes_out.setter
+    def _wire_bytes_out(self, value: int) -> None:
+        self._state['wire_bytes_out'] = value
+
+    @property
+    def _received_pong(self) -> bool:
+        return self._state['received_pong']
+
+    @_received_pong.setter
+    def _received_pong(self, value: bool) -> None:
+        self._state['received_pong'] = value
 
     async def accept_connection(self, handler: WebSocketHandler) -> None:
         try:
