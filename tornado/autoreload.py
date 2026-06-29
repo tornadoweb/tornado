@@ -242,6 +242,49 @@ _USAGE = """
 """
 
 
+def _parse_arguments() -> tuple[bool, str, list[str], bool]:
+    """Parse command-line arguments for autoreload wrapper.
+    
+    We use optparse instead of the newer argparse because we want to
+    mimic the python command-line interface which requires stopping
+    parsing at the first positional argument. optparse supports
+    this but as far as I can tell argparse does not.
+    
+    Returns:
+        A tuple of (is_module, path_or_module, argv, until_success) where:
+        - is_module: True if -m was specified
+        - path_or_module: The module name or file path to run
+        - argv: The modified sys.argv for the script
+        - until_success: True if --until-success was specified
+    """
+    import optparse
+
+    parser = optparse.OptionParser(
+        prog="python -m tornado.autoreload",
+        usage=_USAGE,
+        epilog="Either -m or a path must be specified, but not both",
+    )
+    parser.disable_interspersed_args()
+    parser.add_option("-m", dest="module", metavar="module", help="module to run")
+    parser.add_option(
+        "--until-success",
+        action="store_true",
+        help="stop reloading after the program exist successfully (status code 0)",
+    )
+    opts, rest = parser.parse_args()
+
+    if opts.module is None:
+        if not rest:
+            print("Either -m or a path must be specified", file=sys.stderr)
+            sys.exit(1)
+        path = rest[0]
+        argv = rest[:]
+        return False, path, argv, opts.until_success
+    else:
+        argv = [sys.argv[0]] + rest
+        return True, opts.module, argv, opts.until_success
+
+
 def main() -> None:
     """Command-line wrapper to re-run a script whenever its source changes.
 
@@ -258,13 +301,6 @@ def main() -> None:
     # Remember that we were launched with autoreload as main.
     # The main module can be tricky; set the variables both in our globals
     # (which may be __main__) and the real importable version.
-    #
-    # We use optparse instead of the newer argparse because we want to
-    # mimic the python command-line interface which requires stopping
-    # parsing at the first positional argument. optparse supports
-    # this but as far as I can tell argparse does not.
-    import optparse
-
     import tornado.autoreload
 
     global _autoreload_is_main
@@ -275,28 +311,8 @@ def main() -> None:
     original_spec = getattr(sys.modules["__main__"], "__spec__", None)
     tornado.autoreload._original_spec = _original_spec = original_spec
 
-    parser = optparse.OptionParser(
-        prog="python -m tornado.autoreload",
-        usage=_USAGE,
-        epilog="Either -m or a path must be specified, but not both",
-    )
-    parser.disable_interspersed_args()
-    parser.add_option("-m", dest="module", metavar="module", help="module to run")
-    parser.add_option(
-        "--until-success",
-        action="store_true",
-        help="stop reloading after the program exist successfully (status code 0)",
-    )
-    opts, rest = parser.parse_args()
-    if opts.module is None:
-        if not rest:
-            print("Either -m or a path must be specified", file=sys.stderr)
-            sys.exit(1)
-        path = rest[0]
-        sys.argv = rest[:]
-    else:
-        path = None
-        sys.argv = [sys.argv[0]] + rest
+    is_module, path_or_module, argv, until_success = _parse_arguments()
+    sys.argv = argv
 
     # SystemExit.code is typed funny: https://github.com/python/typeshed/issues/8513
     # All we care about is truthiness
@@ -304,11 +320,10 @@ def main() -> None:
     try:
         import runpy
 
-        if opts.module is not None:
-            runpy.run_module(opts.module, run_name="__main__", alter_sys=True)
+        if is_module:
+            runpy.run_module(path_or_module, run_name="__main__", alter_sys=True)
         else:
-            assert path is not None
-            runpy.run_path(path, run_name="__main__")
+            runpy.run_path(path_or_module, run_name="__main__")
     except SystemExit as e:
         exit_status = e.code
         gen_log.info("Script exited with status %s", e.code)
@@ -332,14 +347,13 @@ def main() -> None:
     # restore sys.argv so subsequent executions will include autoreload
     sys.argv = original_argv
 
-    if opts.module is not None:
-        assert opts.module is not None
+    if is_module:
         # runpy did a fake import of the module as __main__, but now it's
         # no longer in sys.modules.  Figure out where it is and watch it.
-        loader = pkgutil.get_loader(opts.module)
+        loader = pkgutil.get_loader(path_or_module)
         if loader is not None and isinstance(loader, importlib.abc.FileLoader):
             watch(loader.get_filename())
-    if opts.until_success and not exit_status:
+    if until_success and not exit_status:
         return
     wait()
 
