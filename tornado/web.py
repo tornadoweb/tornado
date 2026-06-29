@@ -160,6 +160,88 @@ class _ArgDefaultMarker:
 _ARG_DEFAULT = _ArgDefaultMarker()
 
 
+class _ResponseState:
+    """Encapsula o estado da resposta HTTP.
+    
+    Agrupa atributos relacionados ao gerenciamento de headers,
+    status code, buffer de escrita e estado de finalização da resposta.
+    Reduz a complexidade da classe RequestHandler.
+    """
+    
+    __slots__ = (
+        'headers',
+        'status_code',
+        'reason',
+        'write_buffer',
+        'headers_written',
+        'finished',
+        'new_cookie',
+    )
+    
+    def __init__(self) -> None:
+        """Inicializa o estado da resposta com valores padrão."""
+        self.headers = httputil.HTTPHeaders(
+            {
+                "Server": "TornadoServer/%s" % tornado.version,
+                "Content-Type": "text/html; charset=UTF-8",
+                "Date": httputil.format_timestamp(time.time()),
+            }
+        )
+        self.status_code = 200
+        self.reason = httputil.responses[200]
+        self.write_buffer: list[bytes] = []
+        self.headers_written = False
+        self.finished = False
+        self.new_cookie: http.cookies.SimpleCookie | None = None
+    
+    def clear(self) -> None:
+        """Reseta o estado da resposta para valores padrão."""
+        self.headers = httputil.HTTPHeaders(
+            {
+                "Server": "TornadoServer/%s" % tornado.version,
+                "Content-Type": "text/html; charset=UTF-8",
+                "Date": httputil.format_timestamp(time.time()),
+            }
+        )
+        self.status_code = 200
+        self.reason = httputil.responses[200]
+        self.write_buffer = []
+
+
+class _RequestState:
+    """Encapsula o estado de requisição e contexto do usuário.
+    
+    Agrupa atributos relacionados a localização, usuário autenticado,
+    tokens XSRF e futuros preparados. Implementa lazy initialization
+    para economizar memória em requisições que não precisam desses valores.
+    """
+    
+    __slots__ = (
+        '_locale',
+        '_current_user',
+        '_xsrf_token',
+        '_raw_xsrf_token',
+        'prepared_future',
+        '_initialized_flags',
+    )
+    
+    def __init__(self) -> None:
+        """Inicializa o estado de requisição sem valores (lazy initialization)."""
+        self._locale: tornado.locale.Locale | None = None
+        self._current_user: Any = None
+        self._xsrf_token: bytes | None = None
+        self._raw_xsrf_token: tuple[int | None, bytes, float] | None = None
+        self.prepared_future: Future | None = None
+        
+        # Flags de inicialização para lazy loading (como dict para economizar slots)
+        self._initialized_flags = {
+            'locale': False,
+            'current_user': False,
+            'xsrf_token': False,
+            'raw_xsrf_token': False,
+        }
+
+
 class RequestHandler:
     """Base class for HTTP request handlers.
 
@@ -203,10 +285,9 @@ class RequestHandler:
 
         self.application = application
         self.request = request
-        self._headers_written = False
-        self._finished = False
         self._auto_finish = True
-        self._prepared_future = None
+        self._response = _ResponseState()
+        self._request_state = _RequestState()
         self.ui = ObjectDict(
             (n, self._ui_method(m)) for n, m in application.ui_methods.items()
         )
@@ -316,17 +397,8 @@ class RequestHandler:
 
     def clear(self) -> None:
         """Resets all headers and content for this response."""
-        self._headers = httputil.HTTPHeaders(
-            {
-                "Server": "TornadoServer/%s" % tornado.version,
-                "Content-Type": "text/html; charset=UTF-8",
-                "Date": httputil.format_timestamp(time.time()),
-            }
-        )
+        self._response.clear()
         self.set_default_headers()
-        self._write_buffer: list[bytes] = []
-        self._status_code = 200
-        self._reason = httputil.responses[200]
 
     def set_default_headers(self) -> None:
         """Override this to set HTTP headers at the beginning of the request.
@@ -337,6 +409,94 @@ class RequestHandler:
         during error handling.
         """
         pass
+
+    # ========== Properties delegates para _ResponseState ==========
+    # Estas properties mantêm a compatibilidade com código existente
+    # enquanto delegam para o objeto _ResponseState encapsulado.
+    
+    @property
+    def _headers(self) -> httputil.HTTPHeaders:
+        """Delegate property para _response.headers"""
+        return self._response.headers
+    
+    @_headers.setter
+    def _headers(self, value: httputil.HTTPHeaders) -> None:
+        """Delegate property para _response.headers"""
+        self._response.headers = value
+    
+    @property
+    def _write_buffer(self) -> list[bytes]:
+        """Delegate property para _response.write_buffer"""
+        return self._response.write_buffer
+    
+    @_write_buffer.setter
+    def _write_buffer(self, value: list[bytes]) -> None:
+        """Delegate property para _response.write_buffer"""
+        self._response.write_buffer = value
+    
+    @property
+    def _status_code(self) -> int:
+        """Delegate property para _response.status_code"""
+        return self._response.status_code
+    
+    @_status_code.setter
+    def _status_code(self, value: int) -> None:
+        """Delegate property para _response.status_code"""
+        self._response.status_code = value
+    
+    @property
+    def _reason(self) -> str:
+        """Delegate property para _response.reason"""
+        return self._response.reason
+    
+    @_reason.setter
+    def _reason(self, value: str) -> None:
+        """Delegate property para _response.reason"""
+        self._response.reason = value
+    
+    @property
+    def _headers_written(self) -> bool:
+        """Delegate property para _response.headers_written"""
+        return self._response.headers_written
+    
+    @_headers_written.setter
+    def _headers_written(self, value: bool) -> None:
+        """Delegate property para _response.headers_written"""
+        self._response.headers_written = value
+    
+    @property
+    def _finished(self) -> bool:
+        """Delegate property para _response.finished"""
+        return self._response.finished
+    
+    @_finished.setter
+    def _finished(self, value: bool) -> None:
+        """Delegate property para _response.finished"""
+        self._response.finished = value
+    
+    # ========== Properties delegates para _RequestState ==========
+    
+    @property
+    def _prepared_future(self) -> Future | None:
+        """Delegate property para _request_state.prepared_future"""
+        return self._request_state.prepared_future
+    
+    @_prepared_future.setter
+    def _prepared_future(self, value: Future | None) -> None:
+        """Delegate property para _request_state.prepared_future"""
+        self._request_state.prepared_future = value
+    
+    @property
+    def _new_cookie(self) -> http.cookies.SimpleCookie:
+        """Delegate property para _response.new_cookie (lazy initialization)"""
+        if self._response.new_cookie is None:
+            self._response.new_cookie = http.cookies.SimpleCookie()
+        return self._response.new_cookie
+    
+    @_new_cookie.setter
+    def _new_cookie(self, value: http.cookies.SimpleCookie) -> None:
+        """Delegate property para _response.new_cookie"""
+        self._response.new_cookie = value
 
     def set_status(self, status_code: int, reason: str | None = None) -> None:
         """Sets the status code for our response.
@@ -700,8 +860,7 @@ class RequestHandler:
                 raise http.cookies.CookieError(
                     f"Invalid cookie attribute {attr_name}={attr_value!r} for cookie {name!r}"
                 )
-        if not hasattr(self, "_new_cookie"):
-            self._new_cookie: http.cookies.SimpleCookie = http.cookies.SimpleCookie()
+         # _new_cookie é agora uma property que faz lazy initialization
         if name in self._new_cookie:
             del self._new_cookie[name]
         self._new_cookie[name] = value
@@ -1401,18 +1560,20 @@ class RequestHandler:
         .. versionchanged: 4.1
            Added a property setter.
         """
-        if not hasattr(self, "_locale"):
+        if not self._request_state._initialized_flags['locale']:
             loc = self.get_user_locale()
             if loc is not None:
-                self._locale = loc
+                self._request_state._locale = loc
             else:
-                self._locale = self.get_browser_locale()
-                assert self._locale
-        return self._locale
+                self._request_state._locale = self.get_browser_locale()
+                assert self._request_state._locale
+            self._request_state._initialized_flags['locale'] = True
+        return self._request_state._locale
 
     @locale.setter
     def locale(self, value: tornado.locale.Locale) -> None:
-        self._locale = value
+        self._request_state._locale = value
+        self._request_state._initialized_flags['locale'] = True
 
     def get_user_locale(self) -> tornado.locale.Locale | None:
         """Override to determine the locale from the authenticated user.
@@ -1483,13 +1644,15 @@ class RequestHandler:
 
         The user object may be any type of the application's choosing.
         """
-        if not hasattr(self, "_current_user"):
-            self._current_user = self.get_current_user()
-        return self._current_user
+        if not self._request_state._initialized_flags['current_user']:
+            self._request_state._current_user = self.get_current_user()
+            self._request_state._initialized_flags['current_user'] = True
+        return self._request_state._current_user
 
     @current_user.setter
     def current_user(self, value: Any) -> None:
-        self._current_user = value
+        self._request_state._current_user = value
+        self._request_state._initialized_flags['current_user'] = True
 
     def get_current_user(self) -> Any:
         """Override to determine the current user from, e.g., a cookie.
@@ -1547,15 +1710,15 @@ class RequestHandler:
            will set the ``secure`` and ``httponly`` flags on the
            ``_xsrf`` cookie.
         """
-        if not hasattr(self, "_xsrf_token"):
+        if not self._request_state._initialized_flags['xsrf_token']:
             version, token, timestamp = self._get_raw_xsrf_token()
             output_version = self.settings.get("xsrf_cookie_version", 2)
             cookie_kwargs = self.settings.get("xsrf_cookie_kwargs", {})
             if output_version == 1:
-                self._xsrf_token = binascii.b2a_hex(token)
+                self._request_state._xsrf_token = binascii.b2a_hex(token)
             elif output_version == 2:
                 mask = os.urandom(4)
-                self._xsrf_token = b"|".join(
+                self._request_state._xsrf_token = b"|".join(
                     [
                         b"2",
                         binascii.b2a_hex(mask),
@@ -1569,8 +1732,9 @@ class RequestHandler:
                 if self.current_user and "expires_days" not in cookie_kwargs:
                     cookie_kwargs["expires_days"] = 30
                 cookie_name = self.settings.get("xsrf_cookie_name", "_xsrf")
-                self.set_cookie(cookie_name, self._xsrf_token, **cookie_kwargs)
-        return self._xsrf_token
+                self.set_cookie(cookie_name, self._request_state._xsrf_token, **cookie_kwargs)
+            self._request_state._initialized_flags['xsrf_token'] = True
+        return self._request_state._xsrf_token
 
     def _get_raw_xsrf_token(self) -> tuple[int | None, bytes, float]:
         """Read or generate the xsrf token in its raw form.
@@ -1583,7 +1747,7 @@ class RequestHandler:
         * timestamp: the time this token was generated (will not be accurate
           for version 1 cookies)
         """
-        if not hasattr(self, "_raw_xsrf_token"):
+        if not self._request_state._initialized_flags['raw_xsrf_token']:
             cookie_name = self.settings.get("xsrf_cookie_name", "_xsrf")
             cookie = self.get_cookie(cookie_name)
             if cookie:
@@ -1596,8 +1760,9 @@ class RequestHandler:
                 timestamp = time.time()
             assert token is not None
             assert timestamp is not None
-            self._raw_xsrf_token = (version, token, timestamp)
-        return self._raw_xsrf_token
+            self._request_state._raw_xsrf_token = (version, token, timestamp)
+            self._request_state._initialized_flags['raw_xsrf_token'] = True
+        return self._request_state._raw_xsrf_token
 
     def _decode_xsrf_token(
         self, cookie: str
