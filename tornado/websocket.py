@@ -26,6 +26,7 @@ from collections.abc import Awaitable, Callable
 from types import TracebackType
 from typing import (
     Any,
+    NamedTuple,
     Optional,
     Protocol,
     Type,
@@ -97,6 +98,15 @@ _default_max_message_size = 10 * 1024 * 1024
 
 # log to "gen_log" but suppress duplicate log messages
 de_dupe_gen_log = functools.lru_cache(gen_log.log)
+
+
+class _FrameHeader(NamedTuple):
+    """Structure to hold WebSocket frame header information."""
+    is_final_frame: bool
+    is_masked: bool
+    opcode: int
+    opcode_is_control: bool
+    frame_compressed: bool | None
 
 
 class WebSocketError(Exception):
@@ -1130,57 +1140,115 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._wire_bytes_in += n
         return data
 
-    async def _receive_frame(self) -> None:
-        # Read the frame header.
+    async def _parse_frame_header(self) -> tuple[_FrameHeader, int, bool]:
+        """Parse WebSocket frame header and return header info, payload length, and is_masked flag.
+        
+        Returns:
+            Tuple of (_FrameHeader, payloadlen, is_masked) or None if frame is invalid.
+            Returns on invalid frame by calling _abort() and returning.
+        """
+        # Read the frame header (first 2 bytes)
         data = await self._read_bytes(2)
         header, mask_payloadlen = struct.unpack("BB", data)
-        is_final_frame = header & self.FIN
+        
+        # Extract header fields
+        is_final_frame = bool(header & self.FIN)
         reserved_bits = header & self.RSV_MASK
         opcode = header & self.OPCODE_MASK
-        opcode_is_control = opcode & 0x8
+        opcode_is_control = bool(opcode & 0x8)
+        
+        # Handle compression flag
+        frame_compressed: bool | None = None
         if self._decompressor is not None and opcode != 0:
             # Compression flag is present in the first frame's header,
             # but we can't decompress until we have all the frames of
             # the message.
-            self._frame_compressed = bool(reserved_bits & self.RSV1)
+            frame_compressed = bool(reserved_bits & self.RSV1)
             reserved_bits &= ~self.RSV1
+        
+        # Validate reserved bits
         if reserved_bits:
             # client is using as-yet-undefined extensions; abort
             self._abort()
-            return
+            return None  # type: ignore
+        
+        # Extract masked flag and initial payload length
         is_masked = bool(mask_payloadlen & 0x80)
         payloadlen = mask_payloadlen & 0x7F
-
-        # Parse and validate the length.
+        
+        # Validate control frames
         if opcode_is_control and payloadlen >= 126:
             # control frames must have payload < 126
             self._abort()
-            return
+            return None  # type: ignore
+        
+        # Store the compression flag for later use
+        self._frame_compressed = frame_compressed
+        
+        header_info = _FrameHeader(
+            is_final_frame=is_final_frame,
+            is_masked=is_masked,
+            opcode=opcode,
+            opcode_is_control=opcode_is_control,
+            frame_compressed=frame_compressed,
+        )
+        
+        return header_info, payloadlen, is_masked
+
+    async def _parse_frame_length(self, payloadlen: int) -> int | None:
+        """Parse and validate the payload length field.
+        
+        Handles 7-bit, 16-bit, and 64-bit length encoding.
+        Returns the actual payload length or None if frame is invalid.
+        """
         if payloadlen < 126:
             self._frame_length = payloadlen
+            return payloadlen
         elif payloadlen == 126:
             data = await self._read_bytes(2)
             payloadlen = struct.unpack("!H", data)[0]
         elif payloadlen == 127:
             data = await self._read_bytes(8)
             payloadlen = struct.unpack("!Q", data)[0]
+        
+        # Check if message exceeds max size
         new_len = payloadlen
         if self._fragmented_message_buffer is not None:
             new_len += len(self._fragmented_message_buffer)
+        
         if new_len > self.params.max_message_size:
             self.close(1009, "message too big")
             self._abort()
-            return
+            return None
+        
+        return payloadlen
 
-        # Read the payload, unmasking if necessary.
+    async def _read_frame_payload(self, payloadlen: int, is_masked: bool) -> bytes:
+        """Read and unmask the frame payload if necessary."""
         if is_masked:
             self._frame_mask = await self._read_bytes(4)
+        
         data = await self._read_bytes(payloadlen)
+        
         if is_masked:
             assert self._frame_mask is not None
             data = _websocket_mask(self._frame_mask, data)
+        
+        return data
 
-        # Decide what to do with this frame.
+    def _process_frame_data(
+        self,
+        opcode: int,
+        opcode_is_control: bool,
+        is_final_frame: bool,
+        data: bytes,
+    ) -> tuple[int, bytes] | None:
+        """Process frame data based on frame type and state.
+        
+        Handles control frames, continuation frames, and data frames.
+        Returns a tuple of (final_opcode, final_data) or None if frame should not be handled.
+        """
+        # Handle control frames
         if opcode_is_control:
             # control frames may be interleaved with a series of fragmented
             # data frames, so control frames must not interact with
@@ -1188,28 +1256,74 @@ class WebSocketProtocol13(WebSocketProtocol):
             if not is_final_frame:
                 # control frames must not be fragmented
                 self._abort()
-                return
-        elif opcode == 0:  # continuation frame
+                return None
+            return (opcode, data)
+        
+        # Handle continuation frame (opcode == 0)
+        if opcode == 0:
             if self._fragmented_message_buffer is None:
                 # nothing to continue
                 self._abort()
-                return
+                return None
             self._fragmented_message_buffer.extend(data)
             if is_final_frame:
-                opcode = self._fragmented_message_opcode
-                data = bytes(self._fragmented_message_buffer)
+                final_opcode = self._fragmented_message_opcode
+                final_data = bytes(self._fragmented_message_buffer)
                 self._fragmented_message_buffer = None
-        else:  # start of new data message
-            if self._fragmented_message_buffer is not None:
-                # can't start new message until the old one is finished
-                self._abort()
-                return
-            if not is_final_frame:
-                self._fragmented_message_opcode = opcode
-                self._fragmented_message_buffer = bytearray(data)
+                return (final_opcode, final_data)
+            # Frame processed but not yet final
+            return None
+        
+        # Handle new data message (opcodes 1, 2, or other non-control)
+        if self._fragmented_message_buffer is not None:
+            # can't start new message until the old one is finished
+            self._abort()
+            return None
+        
+        if not is_final_frame:
+            self._fragmented_message_opcode = opcode
+            self._fragmented_message_buffer = bytearray(data)
+            return None
+        
+        # Single-frame message
+        return (opcode, data)
 
-        if is_final_frame:
-            handled_future = self._handle_message(opcode, data)
+    async def _receive_frame(self) -> None:
+        """Receive and process a WebSocket frame.
+        
+        This is a high-level orchestration method that delegates to:
+        - _parse_frame_header(): Parse frame header
+        - _parse_frame_length(): Parse payload length
+        - _read_frame_payload(): Read and unmask payload
+        - _process_frame_data(): Handle frame type logic
+        """
+        # Parse frame header
+        header_result = await self._parse_frame_header()
+        if header_result is None:
+            return
+        
+        header, payloadlen, is_masked = header_result
+        
+        # Parse and validate payload length
+        payloadlen = await self._parse_frame_length(payloadlen)
+        if payloadlen is None:
+            return
+        
+        # Read and unmask payload
+        data = await self._read_frame_payload(payloadlen, is_masked)
+        
+        # Process frame data based on type
+        result = self._process_frame_data(
+            opcode=header.opcode,
+            opcode_is_control=header.opcode_is_control,
+            is_final_frame=header.is_final_frame,
+            data=data,
+        )
+        
+        # Handle final message if ready
+        if result is not None:
+            opcode, final_data = result
+            handled_future = self._handle_message(opcode, final_data)
             if handled_future is not None:
                 await handled_future
 
