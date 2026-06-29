@@ -516,6 +516,28 @@ class _Mockable:
         setattr(self._options, name, self._originals.pop(name))
 
 
+class _OptionConfig:
+    """Configuration metadata for options.
+    
+    Groups option metadata attributes to reduce instance attribute count.
+    """
+    __slots__ = ("name", "help", "metavar", "file_name", "group_name")
+    
+    def __init__(
+        self,
+        name: str,
+        help: str | None = None,
+        metavar: str | None = None,
+        file_name: str | None = None,
+        group_name: str | None = None,
+    ) -> None:
+        self.name = name
+        self.help = help
+        self.metavar = metavar
+        self.file_name = file_name
+        self.group_name = group_name
+
+
 class _Option:
     # This class could almost be made generic, but the way the types
     # interact with the multiple argument makes this tricky. (default
@@ -536,18 +558,31 @@ class _Option:
     ) -> None:
         if default is None and multiple:
             default = []
-        self.name = name
         if type is None:
             raise ValueError("type must not be None")
+        
+        # Store metadata in a configuration object
+        self._config = _OptionConfig(
+            name=name,
+            help=help,
+            metavar=metavar,
+            file_name=file_name,
+            group_name=group_name,
+        )
+        
+        # Instance attributes
         self.type = type
-        self.help = help
-        self.metavar = metavar
         self.multiple = multiple
-        self.file_name = file_name
-        self.group_name = group_name
         self.callback = callback
         self.default = default
         self._value: Any = _Option.UNSET
+    
+    def __getattr__(self, name: str) -> Any:
+        """Provide transparent access to config attributes."""
+        try:
+            return getattr(self._config, name)
+        except AttributeError as exc:
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'") from exc
 
     def value(self) -> Any:
         return self.default if self._value is _Option.UNSET else self._value
