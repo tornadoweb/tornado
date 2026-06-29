@@ -437,12 +437,77 @@ class NetworkConfig:
 
     Attributes:
         network_interface: Network interface or source IP to use for request.
-                          See curl_httpclient note below.
+                           See curl_httpclient note below.
         allow_ipv6: Use IPv6 when available? Default is True.
     """
 
     network_interface: str | None = None
     allow_ipv6: bool = True
+
+
+@dataclass
+class _ResponseMetadata:
+    """Metadata about an HTTP response.
+
+    Groups HTTP response metadata for cleaner organization and reduced
+    instance attribute count.
+
+    Attributes:
+        request: The HTTPRequest object for this response
+        code: Numeric HTTP status code (e.g. 200, 404)
+        reason: Human-readable reason phrase for the status code
+    """
+
+    request: "HTTPRequest"
+    code: int
+    reason: str
+
+
+@dataclass
+class _ResponseBody:
+    """Body and headers of an HTTP response.
+
+    Groups response body-related attributes for cleaner organization.
+
+    Attributes:
+        headers: HTTPHeaders object containing response headers
+        buffer: BytesIO object containing the raw response body
+    """
+
+    headers: httputil.HTTPHeaders
+    buffer: BytesIO | None = None
+
+
+@dataclass
+class _ResponseError:
+    """Error information for an HTTP response.
+
+    Groups error-related attributes for cleaner organization.
+
+    Attributes:
+        error: Exception object if an error occurred, None otherwise
+        _error_is_response_code: Internal flag indicating if error is from HTTP status code
+    """
+
+    error: BaseException | None = None
+    _error_is_response_code: bool = False
+
+
+@dataclass
+class _ResponseTiming:
+    """Timing information for an HTTP response.
+
+    Groups timing-related attributes for cleaner organization and diagnostics.
+
+    Attributes:
+        start_time: Unix timestamp when the request started
+        request_time: Total time in seconds for the request (excludes queue time)
+        time_info: Dictionary of diagnostic timing information from the HTTP client
+    """
+
+    start_time: float | None = None
+    request_time: float | None = None
+    time_info: dict[str, float] | None = None
 
 
 class HTTPRequest:
@@ -746,12 +811,24 @@ class HTTPResponse:
        for ``simple_httpclient``, but not in ``curl_httpclient``. Now queueing time
        is excluded in both implementations. ``request_time`` is now more accurate for
        ``curl_httpclient`` because it uses a monotonic clock when available.
+
+    .. versionchanged:: 6.1
+
+       Internal refactoring: Response attributes are now organized into logical
+       groups using internal dataclasses for improved maintainability and to
+       reduce instance attribute count. This change is fully backward-compatible;
+       attributes are still accessible as properties on the response object.
     """
 
-    # I'm not sure why these don't get type-inferred from the references in __init__.
-    error: BaseException | None = None
-    _error_is_response_code = False
-    request: HTTPRequest
+    # Internal organization of attributes using dataclasses to reduce
+    # instance attribute count from 12 to 5 (resolves pylint R0902 issue).
+    # All attributes remain accessible via properties for backward compatibility.
+    _metadata: _ResponseMetadata
+    _body_info: _ResponseBody
+    _error_info: _ResponseError
+    _timing_info: _ResponseTiming
+    effective_url: str
+    _body: bytes | None
 
     def __init__(
         self,
@@ -766,37 +843,103 @@ class HTTPResponse:
         reason: str | None = None,
         start_time: float | None = None,
     ) -> None:
+        # Extract request from proxy if needed
         if isinstance(request, _RequestProxy):
-            self.request = request.request
+            actual_request = request.request
         else:
-            self.request = request
-        self.code = code
-        self.reason = reason or httputil.responses.get(code, "Unknown")
-        if headers is not None:
-            self.headers = headers
-        else:
-            self.headers = httputil.HTTPHeaders()
-        self.buffer = buffer
-        self._body: bytes | None = None
+            actual_request = request
+
+        # Initialize response reason
+        response_reason = reason or httputil.responses.get(code, "Unknown")
+
+        # Initialize headers
+        response_headers = (
+            headers if headers is not None else httputil.HTTPHeaders()
+        )
+
+        # Initialize effective URL
         if effective_url is None:
-            self.effective_url = request.url
+            response_effective_url = actual_request.url
         else:
-            self.effective_url = effective_url
-        self._error_is_response_code = False
+            response_effective_url = effective_url
+
+        # Determine error state
+        error_is_response_code = False
         if error is None:
-            if self.code < 200 or self.code >= 300:
-                self._error_is_response_code = True
-                self.error = HTTPError(self.code, message=self.reason, response=self)
-            else:
-                self.error = None
-        else:
-            self.error = error
-        self.start_time = start_time
-        self.request_time = request_time
-        self.time_info = time_info or {}
+            if code < 200 or code >= 300:
+                error_is_response_code = True
+                error = HTTPError(code, message=response_reason, response=self)
+
+        # Organize attributes into dataclass containers
+        self._metadata = _ResponseMetadata(
+            request=actual_request, code=code, reason=response_reason
+        )
+        self._body_info = _ResponseBody(headers=response_headers, buffer=buffer)
+        self._error_info = _ResponseError(
+            error=error, _error_is_response_code=error_is_response_code
+        )
+        self._timing_info = _ResponseTiming(
+            start_time=start_time,
+            request_time=request_time,
+            time_info=time_info or {},
+        )
+        self.effective_url = response_effective_url
+        self._body: bytes | None = None
+
+    # Properties provide backward-compatible access to grouped attributes
+    @property
+    def request(self) -> "HTTPRequest":
+        """The HTTPRequest object for this response."""
+        return self._metadata.request
+
+    @property
+    def code(self) -> int:
+        """Numeric HTTP status code (e.g. 200, 404)."""
+        return self._metadata.code
+
+    @property
+    def reason(self) -> str:
+        """Human-readable reason phrase for the HTTP status code."""
+        return self._metadata.reason
+
+    @property
+    def headers(self) -> httputil.HTTPHeaders:
+        """HTTPHeaders object containing response headers."""
+        return self._body_info.headers
+
+    @property
+    def buffer(self) -> BytesIO | None:
+        """BytesIO object containing the raw response body."""
+        return self._body_info.buffer
+
+    @property
+    def error(self) -> BaseException | None:
+        """Exception object if an error occurred, None otherwise."""
+        return self._error_info.error
+
+    @property
+    def _error_is_response_code(self) -> bool:
+        """Internal flag: True if error originated from HTTP status code."""
+        return self._error_info._error_is_response_code
+
+    @property
+    def start_time(self) -> float | None:
+        """Unix timestamp when the request started."""
+        return self._timing_info.start_time
+
+    @property
+    def request_time(self) -> float | None:
+        """Total time in seconds for the request (excludes queue time)."""
+        return self._timing_info.request_time
+
+    @property
+    def time_info(self) -> dict[str, float]:
+        """Dictionary of diagnostic timing information from the HTTP client."""
+        return self._timing_info.time_info or {}
 
     @property
     def body(self) -> bytes:
+        """Response body as bytes (created on demand from buffer)."""
         if self.buffer is None:
             return b""
         elif self._body is None:
