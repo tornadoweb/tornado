@@ -42,6 +42,7 @@ import ssl
 import time
 import weakref
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
 from io import BytesIO
 from typing import Any, Optional, Type, Union, cast
 
@@ -336,8 +337,134 @@ class AsyncHTTPClient(Configurable):
         super().configure(impl, **kwargs)
 
 
+@dataclass
+class ProxyConfig:
+    """HTTP proxy configuration for HTTPRequest.
+
+    Groups proxy-related parameters for cleaner organization and documentation.
+    All parameters are optional.
+
+    Attributes:
+        host: HTTP proxy hostname
+        port: HTTP proxy port
+        username: HTTP proxy username
+        password: HTTP proxy password (default: "")
+        auth_mode: HTTP proxy authentication mode; default is "basic".
+                   Supports "basic" and "digest" with curl_httpclient.
+    """
+
+    host: str | None = None
+    port: int | None = None
+    username: str | None = None
+    password: str = ""
+    auth_mode: str | None = None
+
+
+@dataclass
+class AuthConfig:
+    """HTTP authentication configuration for HTTPRequest.
+
+    Groups authentication-related parameters for cleaner organization.
+    All parameters are optional.
+
+    Attributes:
+        username: Username for HTTP authentication
+        password: Password for HTTP authentication
+        mode: Authentication mode; default is "basic".
+              Allowed values are implementation-defined;
+              curl_httpclient supports "basic" and "digest";
+              simple_httpclient only supports "basic"
+    """
+
+    username: str | None = None
+    password: str | None = None
+    mode: str | None = None
+
+
+@dataclass
+class SSLConfig:
+    """SSL/TLS configuration for HTTPRequest.
+
+    Groups SSL/TLS security-related parameters for cleaner organization.
+
+    Attributes:
+        validate_cert: For HTTPS requests, validate the server's certificate?
+                      Default is True.
+        ca_certs: Filename of CA certificates in PEM format,
+                 or None to use defaults.
+        client_cert: Filename for client SSL certificate, if any.
+        client_key: Filename for client SSL key, if any.
+        ssl_options: ssl.SSLContext object for use in simple_httpclient
+                    (unsupported by curl_httpclient).
+                    Overrides validate_cert, ca_certs, client_key,
+                    and client_cert.
+    """
+
+    validate_cert: bool = True
+    ca_certs: str | None = None
+    client_cert: str | None = None
+    client_key: str | None = None
+    ssl_options: dict[str, Any] | ssl.SSLContext | None = None
+
+
+@dataclass
+class TimeoutConfig:
+    """Timeout and redirect configuration for HTTPRequest.
+
+    Groups timeout and redirect-related parameters for cleaner organization.
+
+    Attributes:
+        connect_timeout: Timeout for initial connection in seconds,
+                        default 20 seconds (0 means no timeout)
+        request_timeout: Timeout for entire request in seconds,
+                        default 20 seconds (0 means no timeout)
+        follow_redirects: Should redirects be followed automatically
+                         or return the 3xx response? Default True.
+        max_redirects: Limit for follow_redirects, default 5.
+    """
+
+    connect_timeout: float | None = 20.0
+    request_timeout: float | None = 20.0
+    follow_redirects: bool | None = True
+    max_redirects: int | None = 5
+
+
+@dataclass
+class NetworkConfig:
+    """Network interface configuration for HTTPRequest.
+
+    Groups network interface-related parameters for cleaner organization.
+
+    Attributes:
+        network_interface: Network interface or source IP to use for request.
+                          See curl_httpclient note below.
+        allow_ipv6: Use IPv6 when available? Default is True.
+    """
+
+    network_interface: str | None = None
+    allow_ipv6: bool = True
+
+
 class HTTPRequest:
-    """HTTP client request object."""
+    """HTTP client request object.
+
+    HTTPRequest manages HTTP client request parameters. Related parameters are
+    logically grouped through optional dataclass configuration objects:
+
+    - `ProxyConfig`: Groups proxy-related parameters
+      (proxy_host, proxy_port, proxy_username, proxy_password, proxy_auth_mode)
+    - `AuthConfig`: Groups authentication parameters
+      (auth_username, auth_password, auth_mode)
+    - `SSLConfig`: Groups SSL/TLS parameters
+      (validate_cert, ca_certs, client_cert, client_key, ssl_options)
+    - `TimeoutConfig`: Groups timeout and redirect parameters
+      (connect_timeout, request_timeout, follow_redirects, max_redirects)
+    - `NetworkConfig`: Groups network interface parameters
+      (network_interface, allow_ipv6)
+
+    All parameters in __init__ continue to work exactly as before.
+    These dataclasses are provided for documentation and future enhancement.
+    """
 
     _headers: dict[str, str] | httputil.HTTPHeaders
 
