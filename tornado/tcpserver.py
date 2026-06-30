@@ -35,6 +35,51 @@ from tornado.netutil import (
 from tornado.util import errno_from_exception
 
 
+class ServerConfig:
+    """Encapsula as configurações do servidor TCP."""
+
+    def __init__(
+        self,
+        ssl_options: dict[str, Any] | ssl.SSLContext | None = None,
+        max_buffer_size: int | None = None,
+        read_chunk_size: int | None = None,
+    ) -> None:
+        self.ssl_options = ssl_options
+        self.max_buffer_size = max_buffer_size
+        self.read_chunk_size = read_chunk_size
+
+        # Verify the SSL options. Otherwise we don't get errors until clients
+        # connect. This doesn't verify that the keys are legitimate, but
+        # the SSL module doesn't do that until there is a connected socket
+        # which seems like too much work
+        if self.ssl_options is not None and isinstance(self.ssl_options, dict):
+            # Only certfile is required: it can contain both keys
+            if "certfile" not in self.ssl_options:
+                raise KeyError('missing key "certfile" in ssl_options')
+
+            if not os.path.exists(self.ssl_options["certfile"]):
+                raise ValueError(
+                    'certfile "%s" does not exist' % self.ssl_options["certfile"]
+                )
+            if "keyfile" in self.ssl_options and not os.path.exists(
+                self.ssl_options["keyfile"]
+            ):
+                raise ValueError(
+                    'keyfile "%s" does not exist' % self.ssl_options["keyfile"]
+                )
+
+
+class ConnectionState:
+    """Encapsula o estado de conexões e sockets do servidor."""
+
+    def __init__(self) -> None:
+        self.sockets: dict[int, socket.socket] = {}
+        self.handlers: dict[int, Callable[[], None]] = {}
+        self.pending_sockets: list[socket.socket] = []
+        self.started = False
+        self.stopped = False
+
+
 class TCPServer:
     r"""A non-blocking, single-threaded TCP server.
 
@@ -122,34 +167,21 @@ class TCPServer:
         max_buffer_size: int | None = None,
         read_chunk_size: int | None = None,
     ) -> None:
-        self.ssl_options = ssl_options
-        self._sockets: dict[int, socket.socket] = {}
-        self._handlers: dict[int, Callable[[], None]] = {}
-        self._pending_sockets: list[socket.socket] = []
-        self._started = False
-        self._stopped = False
-        self.max_buffer_size = max_buffer_size
-        self.read_chunk_size = read_chunk_size
+        self._config = ServerConfig(ssl_options, max_buffer_size, read_chunk_size)
+        self._state = ConnectionState()
 
-        # Verify the SSL options. Otherwise we don't get errors until clients
-        # connect. This doesn't verify that the keys are legitimate, but
-        # the SSL module doesn't do that until there is a connected socket
-        # which seems like too much work
-        if self.ssl_options is not None and isinstance(self.ssl_options, dict):
-            # Only certfile is required: it can contain both keys
-            if "certfile" not in self.ssl_options:
-                raise KeyError('missing key "certfile" in ssl_options')
+    # Propriedades para manter compatibilidade com a interface pública
+    @property
+    def ssl_options(self) -> dict[str, Any] | ssl.SSLContext | None:
+        return self._config.ssl_options
 
-            if not os.path.exists(self.ssl_options["certfile"]):
-                raise ValueError(
-                    'certfile "%s" does not exist' % self.ssl_options["certfile"]
-                )
-            if "keyfile" in self.ssl_options and not os.path.exists(
-                self.ssl_options["keyfile"]
-            ):
-                raise ValueError(
-                    'keyfile "%s" does not exist' % self.ssl_options["keyfile"]
-                )
+    @property
+    def max_buffer_size(self) -> int | None:
+        return self._config.max_buffer_size
+
+    @property
+    def read_chunk_size(self) -> int | None:
+        return self._config.read_chunk_size
 
     def listen(
         self,
@@ -195,8 +227,8 @@ class TCPServer:
         control over the initialization of a multi-process server.
         """
         for sock in sockets:
-            self._sockets[sock.fileno()] = sock
-            self._handlers[sock.fileno()] = add_accept_handler(
+            self._state.sockets[sock.fileno()] = sock
+            self._state.handlers[sock.fileno()] = add_accept_handler(
                 sock, self._handle_connection
             )
 
@@ -251,10 +283,10 @@ class TCPServer:
             flags=flags,
             reuse_port=reuse_port,
         )
-        if self._started:
+        if self._state.started:
             self.add_sockets(sockets)
         else:
-            self._pending_sockets.extend(sockets)
+            self._state.pending_sockets.extend(sockets)
 
     def start(
         self, num_processes: int | None = 1, max_restarts: int | None = None
@@ -290,12 +322,12 @@ class TCPServer:
            Use either ``listen()`` or ``add_sockets()`` instead of ``bind()``
            and ``start()``.
         """
-        assert not self._started
-        self._started = True
+        assert not self._state.started
+        self._state.started = True
         if num_processes != 1:
             process.fork_processes(num_processes, max_restarts)
-        sockets = self._pending_sockets
-        self._pending_sockets = []
+        sockets = self._state.pending_sockets
+        self._state.pending_sockets = []
         self.add_sockets(sockets)
 
     def stop(self) -> None:
@@ -304,13 +336,13 @@ class TCPServer:
         Requests currently in progress may still continue after the
         server is stopped.
         """
-        if self._stopped:
+        if self._state.stopped:
             return
-        self._stopped = True
-        for fd, sock in self._sockets.items():
+        self._state.stopped = True
+        for fd, sock in self._state.sockets.items():
             assert sock.fileno() == fd
             # Unregister socket from IOLoop
-            self._handlers.pop(fd)()
+            self._state.handlers.pop(fd)()
             sock.close()
 
     def handle_stream(self, stream: IOStream, address: tuple) -> Awaitable[None] | None:
@@ -331,12 +363,13 @@ class TCPServer:
         raise NotImplementedError()
 
     def _handle_connection(self, connection: socket.socket, address: Any) -> None:
-        if self.ssl_options is not None:
+        ssl_opts = self._config.ssl_options
+        if ssl_opts is not None:
             assert ssl, "OpenSSL required for SSL"
             try:
                 connection = ssl_wrap_socket(
                     connection,
-                    self.ssl_options,
+                    ssl_opts,
                     server_side=True,
                     do_handshake_on_connect=False,
                 )
@@ -361,17 +394,17 @@ class TCPServer:
                 else:
                     raise
         try:
-            if self.ssl_options is not None:
+            if ssl_opts is not None:
                 stream: IOStream = SSLIOStream(
                     connection,
-                    max_buffer_size=self.max_buffer_size,
-                    read_chunk_size=self.read_chunk_size,
+                    max_buffer_size=self._config.max_buffer_size,
+                    read_chunk_size=self._config.read_chunk_size,
                 )
             else:
                 stream = IOStream(
                     connection,
-                    max_buffer_size=self.max_buffer_size,
-                    read_chunk_size=self.read_chunk_size,
+                    max_buffer_size=self._config.max_buffer_size,
+                    read_chunk_size=self._config.read_chunk_size,
                 )
 
             future = self.handle_stream(stream, address)
