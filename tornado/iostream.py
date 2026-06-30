@@ -1301,6 +1301,54 @@ class IOStream(BaseIOStream):
                 # resetting the value to ``False`` between requests.
                 if e.errno != errno.EINVAL and not self._is_connreset(e):
                     raise
+class _SSLHandshakeState:
+    """Encapsulates SSL handshake state with synchronized invariants.
+    
+    Consolidates the three SSL handshake-related flags into a single object
+    to reduce the number of instance attributes in SSLIOStream.
+    """
+
+    def __init__(self) -> None:
+        self.accepting = True
+        self.reading = False
+        self.writing = False
+
+    def reset(self) -> None:
+        """Reset reading and writing flags while keeping accepting state."""
+        self.reading = False
+        self.writing = False
+
+    def complete(self) -> None:
+        """Mark the handshake as complete."""
+        self.accepting = False
+        self.reading = False
+        self.writing = False
+class _SSLHandshakeState:
+    """Encapsulates SSL handshake state with synchronized invariants.
+    
+    Consolidates the three SSL handshake-related flags into a single object
+    to reduce the number of instance attributes in SSLIOStream.
+    """
+
+    def __init__(self) -> None:
+        self.accepting = True
+        self.reading = False
+        self.writing = False
+
+    def reset(self) -> None:
+        """Reset reading and writing flags while keeping accepting state."""
+        self.reading = False
+        self.writing = False
+
+    def complete(self) -> None:
+        """Mark the handshake as complete."""
+        self.accepting = False
+        self.reading = False
+        self.writing = False
+
+
+
+
 
 
 class SSLIOStream(IOStream):
@@ -1324,9 +1372,7 @@ class SSLIOStream(IOStream):
         """
         self._ssl_options = kwargs.pop("ssl_options", _client_ssl_defaults)
         super().__init__(*args, **kwargs)
-        self._ssl_accepting = True
-        self._handshake_reading = False
-        self._handshake_writing = False
+        self._handshake_state = _SSLHandshakeState()
         self._server_hostname: str | None = None
 
         # If the socket is already connected, attempt to start the handshake.
@@ -1341,23 +1387,22 @@ class SSLIOStream(IOStream):
             self._add_io_state(self.io_loop.WRITE)
 
     def reading(self) -> bool:
-        return self._handshake_reading or super().reading()
+        return self._handshake_state.reading or super().reading()
 
     def writing(self) -> bool:
-        return self._handshake_writing or super().writing()
+        return self._handshake_state.writing or super().writing()
 
     def _do_ssl_handshake(self) -> None:
         # Based on code from test_ssl.py in the python stdlib
         try:
-            self._handshake_reading = False
-            self._handshake_writing = False
+            self._handshake_state.reset()
             self.socket.do_handshake()
         except ssl.SSLError as err:
             if err.args[0] == ssl.SSL_ERROR_WANT_READ:
-                self._handshake_reading = True
+                self._handshake_state.reading = True
                 return
             elif err.args[0] == ssl.SSL_ERROR_WANT_WRITE:
-                self._handshake_writing = True
+                self._handshake_state.writing = True
                 return
             elif err.args[0] in (ssl.SSL_ERROR_EOF, ssl.SSL_ERROR_ZERO_RETURN):
                 return self.close(exc_info=err)
@@ -1391,7 +1436,7 @@ class SSLIOStream(IOStream):
             # AttributeError.
             return self.close(exc_info=err)
         else:
-            self._ssl_accepting = False
+            self._handshake_state.complete()
             # Prior to the introduction of SNI, this is where we would check
             # the server's claimed hostname.
             assert ssl.HAS_SNI
@@ -1404,13 +1449,13 @@ class SSLIOStream(IOStream):
             future_set_result_unless_cancelled(future, self)
 
     def _handle_read(self) -> None:
-        if self._ssl_accepting:
+        if self._handshake_state.accepting:
             self._do_ssl_handshake()
             return
         super()._handle_read()
 
     def _handle_write(self) -> None:
-        if self._ssl_accepting:
+        if self._handshake_state.accepting:
             self._do_ssl_handshake()
             return
         super()._handle_write()
@@ -1490,7 +1535,7 @@ class SSLIOStream(IOStream):
         if self._ssl_connect_future is not None:
             raise RuntimeError("Already waiting")
         future = self._ssl_connect_future = Future()
-        if not self._ssl_accepting:
+        if not self._handshake_state.accepting:
             self._finish_ssl_connect()
         return future
 
@@ -1519,7 +1564,7 @@ class SSLIOStream(IOStream):
 
     def read_from_fd(self, buf: bytearray | memoryview) -> int | None:
         try:
-            if self._ssl_accepting:
+            if self._handshake_state.accepting:
                 # If the handshake hasn't finished yet, there can't be anything
                 # to read (attempting to read may or may not raise an exception
                 # depending on the SSL version)

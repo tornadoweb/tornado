@@ -757,8 +757,8 @@ class Runner:
             self.running = True
             while True:
                 future = self.future
-                if future is None:
-                    raise Exception("No pending future")
+                # future should never be None after initialization
+                assert future is not None, "No pending future"
                 if not future.done():
                     return
                 self.future = None
@@ -772,8 +772,9 @@ class Runner:
                         exc: Exception | None = e
                     else:
                         exc = None
-                    finally:
-                        future = None
+
+                    # Clear future reference after result() call
+                    future = None
 
                     if exc is not None:
                         try:

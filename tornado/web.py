@@ -2857,12 +2857,12 @@ class StaticFileHandler(RequestHandler):
 
     def _parse_and_validate_range(
         self, range_header: str | None, size: int
-    ) -> tuple[tuple[int | None, int | None], bool] | None:
+    ) -> tuple[tuple[int | None, int | None], bool] | None | bool:
         """Parse and validate the Range header.
 
-        Returns a tuple of ((start, end), should_set_206) or None if no valid range.
-        Returns None if the range is invalid (416 error).
-        If returning None, the caller should return a 416 response.
+        Returns a tuple of ((start, end), should_set_206) if valid range requested.
+        Returns None if no range header or header is invalid (should return 200).
+        Returns False if range is unsatisfiable (should return 416).
         """
         if not range_header:
             return None
@@ -2871,6 +2871,7 @@ class StaticFileHandler(RequestHandler):
         # the request will be treated as if the header didn't exist.
         request_range = httputil._parse_request_range(range_header)
         if not request_range:
+            # Invalid header format - treat as if header didn't exist (return None for 200)
             return None
 
         start, end = request_range
@@ -2892,7 +2893,8 @@ class StaticFileHandler(RequestHandler):
             # https://tools.ietf.org/html/rfc7233#section-2.1
             # A byte-range-spec is invalid if the last-byte-pos value is present
             # and less than the first-byte-pos.
-            return None
+            # Return False to indicate unsatisfiable range (HTTP 416)
+            return False
 
         # Cap end at file size
         if end is not None and end > size:
@@ -2942,8 +2944,10 @@ class StaticFileHandler(RequestHandler):
         range_header = self.request.headers.get("Range")
         range_spec = self._parse_and_validate_range(range_header, size)
 
-        # Handle invalid range (416 error)
-        if range_spec is None and range_header:
+        # Handle unsatisfiable range (416 error)
+        # Note: range_spec=None means invalid header (ignore it),
+        # but range_spec=False means unsatisfiable range (return 416)
+        if range_spec is False:
             self.set_status(416)  # Range Not Satisfiable
             self.set_header("Content-Type", "text/plain")
             self.set_header("Content-Range", f"bytes */{size}")
