@@ -67,19 +67,19 @@ _selector_loops: set["SelectorThread"] = set()
 
 def _atexit_callback() -> None:
     for loop in _selector_loops:
-        with loop._select_cond:
-            loop._closing_selector = True
-            loop._select_cond.notify()
+        with loop._select_state.condition:
+            loop._select_state.closing = True
+            loop._select_state.condition.notify()
         try:
-            loop._waker_w.send(b"a")
+            loop._waker.writer.send(b"a")
         except BlockingIOError:
             pass
-        if loop._thread is not None:
+        if loop._thread_state.thread is not None:
             # If we don't join our (daemon) thread here, we may get a deadlock
             # during interpreter shutdown. I don't really understand why. This
             # deadlock happens every time in CI (both travis and appveyor) but
             # I've never been able to reproduce locally.
-            loop._thread.join()
+            loop._thread_state.thread.join()
     _selector_loops.clear()
 
 
@@ -454,6 +454,39 @@ def __getattr__(name: str) -> typing.Any:
     return _AnyThreadEventLoopPolicy
 
 
+class _WakerSockets:
+    """Encapsulates the socket pair used to wake up the selector thread."""
+
+    def __init__(self) -> None:
+        self.reader, self.writer = socket.socketpair()
+        self.reader.setblocking(False)
+        self.writer.setblocking(False)
+
+    def close(self) -> None:
+        """Close both waker sockets."""
+        self.reader.close()
+        self.writer.close()
+
+
+class _SelectState:
+    """Manages synchronization state for the select loop."""
+
+    def __init__(self) -> None:
+        self.condition = threading.Condition()
+        self.args: None | (
+            tuple[list[_FileDescriptorLike], list[_FileDescriptorLike]]
+        ) = None
+        self.closing = False
+
+
+class _ThreadState:
+    """Manages the selector thread state."""
+
+    def __init__(self) -> None:
+        self.thread: threading.Thread | None = None
+        self.manager_handle: typing.AsyncGenerator[None, None] | None = None
+
+
 class SelectorThread:
     """Define ``add_reader`` methods to be called in a background select thread.
 
@@ -469,21 +502,19 @@ class SelectorThread:
 
     def __init__(self, real_loop: asyncio.AbstractEventLoop) -> None:
         self._main_thread_ctx = contextvars.copy_context()
-
         self._real_loop = real_loop
+        self._select_state = _SelectState()
+        self._thread_state = _ThreadState()
+        self._readers: dict[_FileDescriptorLike, Callable] = {}
+        self._writers: dict[_FileDescriptorLike, Callable] = {}
+        self._waker = _WakerSockets()
 
-        self._select_cond = threading.Condition()
-        self._select_args: None | (
-            tuple[list[_FileDescriptorLike], list[_FileDescriptorLike]]
-        ) = None
-        self._closing_selector = False
-        self._thread: threading.Thread | None = None
-        self._thread_manager_handle = self._thread_manager()
+        self._thread_state.manager_handle = self._thread_manager()
 
         async def thread_manager_anext() -> None:
             # the anext builtin wasn't added until 3.10. We just need to iterate
             # this generator one step.
-            await self._thread_manager_handle.__anext__()
+            await self._thread_state.manager_handle.__anext__()
 
         # When the loop starts, start the thread. Not too soon because we can't
         # clean up if we get to this point but the event loop is closed without
@@ -493,30 +524,23 @@ class SelectorThread:
             context=self._main_thread_ctx,
         )
 
-        self._readers: dict[_FileDescriptorLike, Callable] = {}
-        self._writers: dict[_FileDescriptorLike, Callable] = {}
-
-        # Writing to _waker_w will wake up the selector thread, which
-        # watches for _waker_r to be readable.
-        self._waker_r, self._waker_w = socket.socketpair()
-        self._waker_r.setblocking(False)
-        self._waker_w.setblocking(False)
+        # Writing to _waker.writer will wake up the selector thread, which
+        # watches for _waker.reader to be readable.
         _selector_loops.add(self)
-        self.add_reader(self._waker_r, self._consume_waker)
+        self.add_reader(self._waker.reader, self._consume_waker)
 
     def close(self) -> None:
         if self._closed:
             return
-        with self._select_cond:
-            self._closing_selector = True
-            self._select_cond.notify()
+        with self._select_state.condition:
+            self._select_state.closing = True
+            self._select_state.condition.notify()
         self._wake_selector()
-        if self._thread is not None:
-            self._thread.join()
+        if self._thread_state.thread is not None:
+            self._thread_state.thread.join()
         _selector_loops.discard(self)
-        self.remove_reader(self._waker_r)
-        self._waker_r.close()
-        self._waker_w.close()
+        self.remove_reader(self._waker.reader)
+        self._waker.close()
         self._closed = True
 
     async def _thread_manager(self) -> typing.AsyncGenerator[None, None]:
@@ -525,12 +549,12 @@ class SelectorThread:
         # that due to the order of operations at shutdown, only daemon threads
         # can be shut down in this way (non-daemon threads would require the
         # introduction of a new hook: https://bugs.python.org/issue41962)
-        self._thread = threading.Thread(
+        self._thread_state.thread = threading.Thread(
             name="Tornado selector",
             daemon=True,
             target=self._run_select,
         )
-        self._thread.start()
+        self._thread_state.thread.start()
         self._start_select()
         try:
             # The presence of this yield statement means that this coroutine
@@ -548,13 +572,13 @@ class SelectorThread:
         if self._closed:
             return
         try:
-            self._waker_w.send(b"a")
+            self._waker.writer.send(b"a")
         except BlockingIOError:
             pass
 
     def _consume_waker(self) -> None:
         try:
-            self._waker_r.recv(1024)
+            self._waker.reader.recv(1024)
         except BlockingIOError:
             pass
 
@@ -562,21 +586,21 @@ class SelectorThread:
         # Capture reader and writer sets here in the event loop
         # thread to avoid any problems with concurrent
         # modification while the select loop uses them.
-        with self._select_cond:
-            assert self._select_args is None
-            self._select_args = (list(self._readers.keys()), list(self._writers.keys()))
-            self._select_cond.notify()
+        with self._select_state.condition:
+            assert self._select_state.args is None
+            self._select_state.args = (list(self._readers.keys()), list(self._writers.keys()))
+            self._select_state.condition.notify()
 
     def _run_select(self) -> None:
         while True:
-            with self._select_cond:
-                while self._select_args is None and not self._closing_selector:
-                    self._select_cond.wait()
-                if self._closing_selector:
+            with self._select_state.condition:
+                while self._select_state.args is None and not self._select_state.closing:
+                    self._select_state.condition.wait()
+                if self._select_state.closing:
                     return
-                assert self._select_args is not None
-                to_read, to_write = self._select_args
-                self._select_args = None
+                assert self._select_state.args is not None
+                to_read, to_write = self._select_state.args
+                self._select_state.args = None
 
             # We use the simpler interface of the select module instead of
             # the more stateful interface in the selectors module because
@@ -608,7 +632,7 @@ class SelectorThread:
                 # descriptors on the next iteration. Otherwise, raise the
                 # original error.
                 if e.errno == getattr(errno, "WSAENOTSOCK", errno.EBADF):
-                    rs, _, _ = select.select([self._waker_r.fileno()], [], [], 0)
+                    rs, _, _ = select.select([self._waker.reader.fileno()], [], [], 0)
                     if rs:
                         ws = []
                     else:
