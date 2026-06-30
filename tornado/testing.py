@@ -654,6 +654,15 @@ class ExpectLog(logging.Filter):
        Added the ``logged_stack`` attribute.
     """
 
+    class _MatchCounter:
+        """Container for match tracking counters."""
+
+        __slots__ = ("matched", "deprecated_level_matched")
+
+        def __init__(self) -> None:
+            self.matched = 0
+            self.deprecated_level_matched = 0
+
     def __init__(
         self,
         logger: logging.Logger | basestring_type,
@@ -691,9 +700,7 @@ class ExpectLog(logging.Filter):
         self.logger = logger
         self.regex = re.compile(regex)
         self.required = required
-        # matched and deprecated_level_matched are a counter for the respective event.
-        self.matched = 0
-        self.deprecated_level_matched = 0
+        self._counter = self._MatchCounter()
         self.logged_stack = False
         self.level = level
         self.orig_level: int | None = None
@@ -709,14 +716,14 @@ class ExpectLog(logging.Filter):
                 # just gets swallowed by the logging module), and even if it were it would
                 # have the wrong stack trace. Just remember this fact and report it in
                 # __exit__ instead.
-                self.deprecated_level_matched += 1
+                self._counter.deprecated_level_matched += 1
             if self.level is not None and record.levelno != self.level:
                 app_log.warning(
                     "Got expected log message %r at unexpected level (%s vs %s)"
                     % (message, logging.getLevelName(self.level), record.levelname)
                 )
                 return True
-            self.matched += 1
+            self._counter.matched += 1
             return False
         return True
 
@@ -736,12 +743,12 @@ class ExpectLog(logging.Filter):
         if self.orig_level is not None:
             self.logger.setLevel(self.orig_level)
         self.logger.removeFilter(self)
-        if not typ and self.required and not self.matched:
+        if not typ and self.required and not self._counter.matched:
             raise Exception("did not get expected log message")
         if (
             not typ
             and self.required
-            and (self.deprecated_level_matched >= self.matched)
+            and (self._counter.deprecated_level_matched >= self._counter.matched)
         ):
             warnings.warn(
                 "ExpectLog matched at INFO or below without level argument",
