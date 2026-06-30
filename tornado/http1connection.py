@@ -228,51 +228,11 @@ class HTTP1Connection(httputil.HTTPConnection):
                 # We've been detached.
                 need_delegate_close = False
                 return False
-            skip_body = False
-            if self.is_client:
-                assert isinstance(start_line, httputil.ResponseStartLine)
-                if (
-                    self._request_start_line is not None
-                    and self._request_start_line.method == "HEAD"
-                ):
-                    skip_body = True
-                code = start_line.code
-                if code == 304:
-                    # 304 responses may include the content-length header
-                    # but do not actually have a body.
-                    # http://tools.ietf.org/html/rfc7230#section-3.3
-                    skip_body = True
-                if 100 <= code < 200:
-                    # 1xx responses should never indicate the presence of
-                    # a body.
-                    if "Content-Length" in headers or "Transfer-Encoding" in headers:
-                        raise httputil.HTTPInputError(
-                            "Response code %d cannot have body" % code
-                        )
-                    # TODO: client delegates will get headers_received twice
-                    # in the case of a 100-continue.  Document or change?
-                    await self._read_message(delegate)
-            else:
-                if headers.get("Expect") == "100-continue" and not self._write_finished:
-                    self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
+            skip_body = await self._should_skip_body(start_line, headers, delegate)
             if not skip_body:
-                body_future = self._read_body(
-                    resp_start_line.code if self.is_client else 0, headers, delegate
-                )
-                if body_future is not None:
-                    if self._body_timeout is None:
-                        await body_future
-                    else:
-                        try:
-                            await gen.with_timeout(
-                                self.stream.io_loop.time() + self._body_timeout,
-                                body_future,
-                                quiet_exceptions=iostream.StreamClosedError,
-                            )
-                        except gen.TimeoutError:
-                            gen_log.info("Timeout reading body from %s", self.context)
-                            self.stream.close()
-                            return False
+                body_error = await self._read_body_with_timeout(start_line, headers, delegate)
+                if body_error:
+                    return False
             self._read_finished = True
             if not self._write_finished or self.is_client:
                 need_delegate_close = False
@@ -305,6 +265,88 @@ class HTTP1Connection(httputil.HTTPConnection):
             header_future = None  # type: ignore
             self._clear_callbacks()
         return True
+
+
+    async def _should_skip_body(
+        self,
+        start_line: httputil.RequestStartLine | httputil.ResponseStartLine,
+        headers: httputil.HTTPHeaders,
+        delegate: httputil.HTTPMessageDelegate,
+    ) -> bool:
+        """Determine if HTTP response body should be skipped.
+
+        Handles special cases like HEAD requests, 304 responses, 1xx responses,
+        and server-side 100-continue expectations.
+
+        Returns True if body should be skipped, False if it should be read.
+        """
+        if not self.is_client:
+            # Server side: handle 100-continue expectation
+            if headers.get("Expect") == "100-continue" and not self._write_finished:
+                self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
+            return False
+
+        # Client side: analyze response to determine if body should be skipped
+        assert isinstance(start_line, httputil.ResponseStartLine)
+        code = start_line.code
+        skip_body = False
+
+        # HEAD requests never have a body
+        if (
+            self._request_start_line is not None
+            and self._request_start_line.method == "HEAD"
+        ):
+            skip_body = True
+
+        # 304 Not Modified responses never have a body
+        if code == 304:
+            skip_body = True
+
+        # 1xx responses should never have a body
+        if 100 <= code < 200:
+            # Validate that 1xx responses don't claim to have a body
+            if "Content-Length" in headers or "Transfer-Encoding" in headers:
+                raise httputil.HTTPInputError(
+                    "Response code %d cannot have body" % code
+                )
+            # Recursively read the next response message for 1xx
+            await self._read_message(delegate)
+
+        return skip_body
+
+    async def _read_body_with_timeout(
+        self,
+        start_line: httputil.RequestStartLine | httputil.ResponseStartLine,
+        headers: httputil.HTTPHeaders,
+        delegate: httputil.HTTPMessageDelegate,
+    ) -> bool:
+        """Read HTTP body with optional timeout.
+
+        Returns True if an error occurred (caller should return False),
+        False if body was successfully read or no body was needed.
+        """
+        body_future = self._read_body(
+            start_line.code if self.is_client else 0, headers, delegate
+        )
+        if body_future is None:
+            return False
+
+        if self._body_timeout is None:
+            await body_future
+        else:
+            try:
+                await gen.with_timeout(
+                    self.stream.io_loop.time() + self._body_timeout,
+                    body_future,
+                    quiet_exceptions=iostream.StreamClosedError,
+                )
+            except gen.TimeoutError:
+                gen_log.info("Timeout reading body from %s", self.context)
+                self.stream.close()
+                return True
+
+        return False
+
 
     def _clear_callbacks(self) -> None:
         """Clears the callback attributes.
