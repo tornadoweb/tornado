@@ -241,6 +241,106 @@ _USAGE = """
   python -m tornado.autoreload path/to/script.py [args...]
 """
 
+def _parse_command_line() -> tuple:
+    """Parse command-line arguments for autoreload.
+    
+    Returns:
+        Tuple of (options, path)
+    """
+    import optparse
+
+    parser = optparse.OptionParser(
+        prog="python -m tornado.autoreload",
+        usage=_USAGE,
+        epilog="Either -m or a path must be specified, but not both",
+    )
+    parser.disable_interspersed_args()
+    parser.add_option("-m", dest="module", metavar="module", help="module to run")
+    parser.add_option(
+        "--until-success",
+        action="store_true",
+        help="stop reloading after the program exist successfully (status code 0)",
+    )
+    opts, rest = parser.parse_args()
+    
+    if opts.module is None:
+        if not rest:
+            print("Either -m or a path must be specified", file=sys.stderr)
+            sys.exit(1)
+        path = rest[0]
+        sys.argv = rest[:]
+    else:
+        path = None
+        sys.argv = [sys.argv[0]] + rest
+    
+    return opts, path
+
+
+def _run_script(opts, path: str | None) -> int | str | None:
+    """Execute the script and return exit status.
+    
+    Args:
+        opts: Parsed command-line options
+        path: Path to script file (None if running module)
+        
+    Returns:
+        Exit status code
+    """
+    import runpy
+    
+    exit_status: int | str | None = 1
+    try:
+        if opts.module is not None:
+            runpy.run_module(opts.module, run_name="__main__", alter_sys=True)
+        else:
+            assert path is not None
+            runpy.run_path(path, run_name="__main__")
+    except SystemExit as e:
+        exit_status = e.code
+        gen_log.info("Script exited with status %s", e.code)
+    except Exception as e:
+        gen_log.warning("Script exited with uncaught exception", exc_info=True)
+        _handle_script_exception(e)
+    else:
+        exit_status = 0
+        gen_log.info("Script exited normally")
+    
+    return exit_status
+
+
+def _handle_script_exception(exception: Exception) -> None:
+    """Watch files that may have caused the exception.
+    
+    Args:
+        exception: The exception that occurred during script execution
+    """
+    # If an exception occurred at import time, the file with the error
+    # never made it into sys.modules and so we won't know to watch it.
+    # Just to make sure we've covered everything, walk the stack trace
+    # from the exception and watch every file.
+    for filename, lineno, name, line in traceback.extract_tb(sys.exc_info()[2]):
+        watch(filename)
+    
+    if isinstance(exception, SyntaxError):
+        # SyntaxErrors are special: their innermost stack frame is fake
+        # so extract_tb won't see it and we have to get the filename
+        # from the exception object.
+        if exception.filename is not None:
+            watch(exception.filename)
+
+
+def _watch_module_file(module_name: str) -> None:
+    """Watch the file containing a module.
+    
+    Args:
+        module_name: Name of the module to watch
+    """
+    # runpy did a fake import of the module as __main__, but now it's
+    # no longer in sys.modules. Figure out where it is and watch it.
+    loader = pkgutil.get_loader(module_name)
+    if loader is not None and isinstance(loader, importlib.abc.FileLoader):
+        watch(loader.get_filename())
+
 
 def main() -> None:
     """Command-line wrapper to re-run a script whenever its source changes.
@@ -263,85 +363,38 @@ def main() -> None:
     # mimic the python command-line interface which requires stopping
     # parsing at the first positional argument. optparse supports
     # this but as far as I can tell argparse does not.
-    import optparse
-
     import tornado.autoreload
 
     global _autoreload_is_main
     global _original_argv, _original_spec
-    tornado.autoreload._autoreload_is_main = _autoreload_is_main = True
+    
+    # Set globals
     original_argv = sys.argv
-    tornado.autoreload._original_argv = _original_argv = original_argv
     original_spec = getattr(sys.modules["__main__"], "__spec__", None)
+    tornado.autoreload._autoreload_is_main = _autoreload_is_main = True
+    tornado.autoreload._original_argv = _original_argv = original_argv
     tornado.autoreload._original_spec = _original_spec = original_spec
 
-    parser = optparse.OptionParser(
-        prog="python -m tornado.autoreload",
-        usage=_USAGE,
-        epilog="Either -m or a path must be specified, but not both",
-    )
-    parser.disable_interspersed_args()
-    parser.add_option("-m", dest="module", metavar="module", help="module to run")
-    parser.add_option(
-        "--until-success",
-        action="store_true",
-        help="stop reloading after the program exist successfully (status code 0)",
-    )
-    opts, rest = parser.parse_args()
-    if opts.module is None:
-        if not rest:
-            print("Either -m or a path must be specified", file=sys.stderr)
-            sys.exit(1)
-        path = rest[0]
-        sys.argv = rest[:]
-    else:
-        path = None
-        sys.argv = [sys.argv[0]] + rest
+    # Parse command line
+    opts, path = _parse_command_line()
 
-    # SystemExit.code is typed funny: https://github.com/python/typeshed/issues/8513
-    # All we care about is truthiness
-    exit_status: int | str | None = 1
-    try:
-        import runpy
+    # Run the script
+    exit_status = _run_script(opts, path)
 
-        if opts.module is not None:
-            runpy.run_module(opts.module, run_name="__main__", alter_sys=True)
-        else:
-            assert path is not None
-            runpy.run_path(path, run_name="__main__")
-    except SystemExit as e:
-        exit_status = e.code
-        gen_log.info("Script exited with status %s", e.code)
-    except Exception as e:
-        gen_log.warning("Script exited with uncaught exception", exc_info=True)
-        # If an exception occurred at import time, the file with the error
-        # never made it into sys.modules and so we won't know to watch it.
-        # Just to make sure we've covered everything, walk the stack trace
-        # from the exception and watch every file.
-        for filename, lineno, name, line in traceback.extract_tb(sys.exc_info()[2]):
-            watch(filename)
-        if isinstance(e, SyntaxError):
-            # SyntaxErrors are special:  their innermost stack frame is fake
-            # so extract_tb won't see it and we have to get the filename
-            # from the exception object.
-            if e.filename is not None:
-                watch(e.filename)
-    else:
-        exit_status = 0
-        gen_log.info("Script exited normally")
-    # restore sys.argv so subsequent executions will include autoreload
+    # Restore sys.argv so subsequent executions will include autoreload
     sys.argv = original_argv
 
+    # Watch module file if running a module
     if opts.module is not None:
-        assert opts.module is not None
-        # runpy did a fake import of the module as __main__, but now it's
-        # no longer in sys.modules.  Figure out where it is and watch it.
-        loader = pkgutil.get_loader(opts.module)
-        if loader is not None and isinstance(loader, importlib.abc.FileLoader):
-            watch(loader.get_filename())
+        _watch_module_file(opts.module)
+    
+    # Check if we should stop reloading on success
     if opts.until_success and not exit_status:
         return
+    
+    # Start watching for changes
     wait()
+
 
 
 if __name__ == "__main__":
