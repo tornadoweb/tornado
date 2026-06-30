@@ -227,7 +227,7 @@ class SubprocessTest(AsyncTestCase):
         subproc.set_exit_callback(self.stop)
         ret = self.wait()
         self.assertEqual(ret, 0)
-        self.assertEqual(subproc.returncode, ret)
+        self.assertEqual(subproc.proc.returncode, ret)
 
     @gen_test
     def test_sigchild_future(self):
@@ -236,7 +236,7 @@ class SubprocessTest(AsyncTestCase):
         subproc = Subprocess([sys.executable, "-c", "pass"])
         ret = yield subproc.wait_for_exit()
         self.assertEqual(ret, 0)
-        self.assertEqual(subproc.returncode, ret)
+        self.assertEqual(subproc.proc.returncode, ret)
 
     def test_sigchild_signal(self):
         Subprocess.initialize()
@@ -255,7 +255,7 @@ class SubprocessTest(AsyncTestCase):
         # but not with the system-installed Python 3.7.
         time.sleep(0.1)
 
-        os.kill(subproc.pid, signal.SIGTERM)
+        os.kill(subproc.proc.pid, signal.SIGTERM)
         try:
             ret = self.wait()
         except AssertionError:
@@ -275,7 +275,7 @@ class SubprocessTest(AsyncTestCase):
                 raise AssertionError(
                     "subprocess closed stdout but failed to " "get termination signal"
                 )
-        self.assertEqual(subproc.returncode, ret)
+        self.assertEqual(subproc.proc.returncode, ret)
         self.assertEqual(ret, -signal.SIGTERM)
 
     @gen_test

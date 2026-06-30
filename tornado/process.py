@@ -235,12 +235,10 @@ class Subprocess:
             raise
         for fd in to_close:
             os.close(fd)
-        self.pid = self.proc.pid
         for attr in ["stdin", "stdout", "stderr"]:
             if not hasattr(self, attr):  # don't clobber streams set above
                 setattr(self, attr, getattr(self.proc, attr))
         self._exit_callback: Callable[[int], None] | None = None
-        self.returncode: int | None = None
 
     def set_exit_callback(self, callback: Callable[[int], None]) -> None:
         """Runs ``callback`` when this process exits.
@@ -261,8 +259,8 @@ class Subprocess:
         """
         self._exit_callback = callback
         Subprocess.initialize()
-        Subprocess._waiting[self.pid] = self
-        Subprocess._try_cleanup_process(self.pid)
+        Subprocess._waiting[self.proc.pid] = self
+        Subprocess._try_cleanup_process(self.proc.pid)
 
     def wait_for_exit(self, raise_error: bool = True) -> "Future[int]":
         """Returns a `.Future` which resolves when the process exits.
@@ -345,18 +343,14 @@ class Subprocess:
 
     def _set_returncode(self, status: int) -> None:
         if sys.platform == "win32":
-            self.returncode = -1
+            self.proc.returncode = -1
         else:
             if os.WIFSIGNALED(status):
-                self.returncode = -os.WTERMSIG(status)
+                self.proc.returncode = -os.WTERMSIG(status)
             else:
                 assert os.WIFEXITED(status)
-                self.returncode = os.WEXITSTATUS(status)
-        # We've taken over wait() duty from the subprocess.Popen
-        # object. If we don't inform it of the process's return code,
-        # it will log a warning at destruction in python 3.6+.
-        self.proc.returncode = self.returncode
+                self.proc.returncode = os.WEXITSTATUS(status)
         if self._exit_callback:
             callback = self._exit_callback
             self._exit_callback = None
-            callback(self.returncode)
+            callback(self.proc.returncode)
