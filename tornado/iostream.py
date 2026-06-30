@@ -1366,6 +1366,30 @@ class _SSLHandshakeState:
         self.reading = False
         self.writing = False
 
+class _SSLHandshakeState:
+    """Encapsulates SSL handshake state with synchronized invariants.
+    
+    Consolidates the three SSL handshake-related flags into a single object
+    to reduce the number of instance attributes in SSLIOStream.
+    """
+
+    def __init__(self) -> None:
+        self.accepting = True
+        self.reading = False
+        self.writing = False
+
+    def reset(self) -> None:
+        """Reset reading and writing flags while keeping accepting state."""
+        self.reading = False
+        self.writing = False
+
+    def complete(self) -> None:
+        """Mark the handshake as complete."""
+        self.accepting = False
+        self.reading = False
+        self.writing = False
+
+
 
 class SSLIOStream(IOStream):
     """A utility class to write to and read from a non-blocking SSL socket.
@@ -1548,12 +1572,12 @@ class SSLIOStream(IOStream):
            `.Future` instead.
 
         """
-         if self._ssl_connect_future is not None:
-             raise RuntimeError("Already waiting")
-         future = self._ssl_connect_future = Future()
-         if not self._handshake_state.accepting:
-             self._finish_ssl_connect()
-         return future
+        if self._ssl_connect_future is not None:
+            raise RuntimeError("Already waiting")
+        future = self._ssl_connect_future = Future()
+        if not self._handshake_state.accepting:
+            self._finish_ssl_connect()
+        return future
 
     def write_to_fd(self, data: memoryview) -> int:
         # clip buffer size at 1GB since SSL sockets only support upto 2GB
@@ -1578,13 +1602,13 @@ class SSLIOStream(IOStream):
             # See https://github.com/tornadoweb/tornado/pull/2008
             del data
 
-     def read_from_fd(self, buf: bytearray | memoryview) -> int | None:
-         try:
-             if self._handshake_state.accepting:
-                 # If the handshake hasn't finished yet, there can't be anything
-                 # to read (attempting to read may or may not raise an exception
-                 # depending on the SSL version)
-                 return None
+    def read_from_fd(self, buf: bytearray | memoryview) -> int | None:
+        try:
+            if self._handshake_state.accepting:
+                # If the handshake hasn't finished yet, there can't be anything
+                # to read (attempting to read may or may not raise an exception
+                # depending on the SSL version)
+                return None
             # clip buffer size at 1GB since SSL sockets only support upto 2GB
             # this change in behaviour is transparent, since the function is
             # already expected to (possibly) read less than the provided buffer
