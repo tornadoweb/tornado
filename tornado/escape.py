@@ -333,62 +333,78 @@ def linkify(
     if extra_params and not callable(extra_params):
         extra_params = " " + extra_params.strip()
 
+    def _validate_url(url: str, proto: str | None) -> bool:
+        """Validates if URL should be linkified based on protocol requirements."""
+        if require_protocol and not proto:
+            return False
+        if proto and proto not in permitted_protocols:
+            return False
+        return True
+
+    def _prepare_href(url: str, proto: str | None) -> str:
+        """Prepares the href attribute, adding http:// if no protocol specified."""
+        if not proto:
+            return "http://" + url
+        return url
+
+    def _get_link_params(href: str) -> str:
+        """Builds the extra parameters string for the link tag."""
+        if callable(extra_params):
+            return " " + extra_params(href).strip()
+        return extra_params
+
+    def _shorten_url(url: str, proto: str | None, m: typing.Match, href: str) -> tuple[str, str]:
+        """Shortens long URLs and returns the shortened URL and updated params.
+        
+        Returns a tuple of (url, params) where params may include a title attribute.
+        """
+        params = _get_link_params(href)
+        max_len = 30
+
+        if not (shorten and len(url) > max_len):
+            return url, params
+
+        before_clip = url
+        proto_len = (len(proto) + 1 + len(m.group(3) or "")) if proto else 0
+
+        parts = url[proto_len:].split("/")
+        if len(parts) > 1:
+            # Grab the whole host part plus the first bit of the path
+            url = (
+                url[:proto_len]
+                + parts[0]
+                + "/"
+                + parts[1][:8].split("?")[0].split(".")[0]
+            )
+
+        if len(url) > max_len * 1.5:  # still too long
+            url = url[:max_len]
+
+        if url != before_clip:
+            amp = url.rfind("&")
+            # avoid splitting html char entities
+            if amp > max_len - 5:
+                url = url[:amp]
+            url += "..."
+
+            if len(url) >= len(before_clip):
+                url = before_clip
+            else:
+                # full url is visible on mouse-over (for those who don't
+                # have a status bar, such as Safari by default)
+                params += ' title="%s"' % href
+
+        return url, params
+
     def make_link(m: typing.Match) -> str:
         url = m.group(1)
         proto = m.group(2)
-        if require_protocol and not proto:
-            return url  # not protocol, no linkify
 
-        if proto and proto not in permitted_protocols:
-            return url  # bad protocol, no linkify
+        if not _validate_url(url, proto):
+            return url
 
-        href = m.group(1)
-        if not proto:
-            href = "http://" + href  # no proto specified, use http
-
-        if callable(extra_params):
-            params = " " + extra_params(href).strip()
-        else:
-            params = extra_params
-
-        # clip long urls. max_len is just an approximation
-        max_len = 30
-        if shorten and len(url) > max_len:
-            before_clip = url
-            if proto:
-                proto_len = len(proto) + 1 + len(m.group(3) or "")  # +1 for :
-            else:
-                proto_len = 0
-
-            parts = url[proto_len:].split("/")
-            if len(parts) > 1:
-                # Grab the whole host part plus the first bit of the path
-                # The path is usually not that interesting once shortened
-                # (no more slug, etc), so it really just provides a little
-                # extra indication of shortening.
-                url = (
-                    url[:proto_len]
-                    + parts[0]
-                    + "/"
-                    + parts[1][:8].split("?")[0].split(".")[0]
-                )
-
-            if len(url) > max_len * 1.5:  # still too long
-                url = url[:max_len]
-
-            if url != before_clip:
-                amp = url.rfind("&")
-                # avoid splitting html char entities
-                if amp > max_len - 5:
-                    url = url[:amp]
-                url += "..."
-
-                if len(url) >= len(before_clip):
-                    url = before_clip
-                else:
-                    # full url is visible on mouse-over (for those who don't
-                    # have a status bar, such as Safari by default)
-                    params += ' title="%s"' % href
+        href = _prepare_href(url, proto)
+        url, params = _shorten_url(url, proto, m, href)
 
         return f'<a href="{href}"{params}>{url}</a>'
 
