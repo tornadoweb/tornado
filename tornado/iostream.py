@@ -665,51 +665,85 @@ class BaseIOStream:
     def _handle_connect(self) -> None:
         raise NotImplementedError()
 
+    def _handle_connect_if_needed(self) -> bool:
+        """Handle connection initialization if currently connecting.
+        
+        Returns True if we should continue processing events, False if stream closed.
+        """
+        if self._connecting:
+            # Most IOLoops will report a write failed connect
+            # with the WRITE event, but SelectIOLoop reports a
+            # READ as well so we must check for connecting before
+            # either.
+            self._handle_connect()
+        return not self.closed()
+
+    def _handle_read_if_needed(self, events: int) -> bool:
+        """Handle read event if READ event is present.
+        
+        Returns True if we should continue processing events, False if stream closed.
+        """
+        if events & self.io_loop.READ:
+            self._handle_read()
+        return not self.closed()
+
+    def _handle_write_if_needed(self, events: int) -> bool:
+        """Handle write event if WRITE event is present.
+        
+        Returns True if we should continue processing events, False if stream closed.
+        """
+        if events & self.io_loop.WRITE:
+            self._handle_write()
+        return not self.closed()
+
+    def _handle_error_if_needed(self, events: int) -> bool:
+        """Handle error event if ERROR event is present.
+        
+        Returns True if we should continue processing events, False if error occurred.
+        """
+        if events & self.io_loop.ERROR:
+            self.error = self.get_fd_error()
+            # We may have queued up a user callback in _handle_read or
+            # _handle_write, so don't close the IOStream until those
+            # callbacks have had a chance to run.
+            self.io_loop.add_callback(self.close)
+            return False
+        return True
+
+    def _calculate_and_update_handler_state(self) -> None:
+        """Calculate the new handler state and update if needed."""
+        state = self.io_loop.ERROR
+        if self.reading():
+            state |= self.io_loop.READ
+        if self.writing():
+            state |= self.io_loop.WRITE
+        if state == self.io_loop.ERROR and self._read_buffer_size == 0:
+            # If the connection is idle, listen for reads too so
+            # we can tell if the connection is closed.  If there is
+            # data in the read buffer we won't run the close callback
+            # yet anyway, so we don't need to listen in this case.
+            state |= self.io_loop.READ
+        if state != self._state:
+            assert (
+                self._state is not None
+            ), "shouldn't happen: _handle_events without self._state"
+            self._state = state
+            self.io_loop.update_handler(self.fileno(), self._state)
+
     def _handle_events(self, fd: int | ioloop._Selectable, events: int) -> None:
         if self.closed():
             gen_log.warning("Got events for closed stream %s", fd)
             return
         try:
-            if self._connecting:
-                # Most IOLoops will report a write failed connect
-                # with the WRITE event, but SelectIOLoop reports a
-                # READ as well so we must check for connecting before
-                # either.
-                self._handle_connect()
-            if self.closed():
+            if not self._handle_connect_if_needed():
                 return
-            if events & self.io_loop.READ:
-                self._handle_read()
-            if self.closed():
+            if not self._handle_read_if_needed(events):
                 return
-            if events & self.io_loop.WRITE:
-                self._handle_write()
-            if self.closed():
+            if not self._handle_write_if_needed(events):
                 return
-            if events & self.io_loop.ERROR:
-                self.error = self.get_fd_error()
-                # We may have queued up a user callback in _handle_read or
-                # _handle_write, so don't close the IOStream until those
-                # callbacks have had a chance to run.
-                self.io_loop.add_callback(self.close)
+            if not self._handle_error_if_needed(events):
                 return
-            state = self.io_loop.ERROR
-            if self.reading():
-                state |= self.io_loop.READ
-            if self.writing():
-                state |= self.io_loop.WRITE
-            if state == self.io_loop.ERROR and self._read_buffer_size == 0:
-                # If the connection is idle, listen for reads too so
-                # we can tell if the connection is closed.  If there is
-                # data in the read buffer we won't run the close callback
-                # yet anyway, so we don't need to listen in this case.
-                state |= self.io_loop.READ
-            if state != self._state:
-                assert (
-                    self._state is not None
-                ), "shouldn't happen: _handle_events without self._state"
-                self._state = state
-                self.io_loop.update_handler(self.fileno(), self._state)
+            self._calculate_and_update_handler_state()
         except UnsatisfiableReadError as e:
             gen_log.info("Unsatisfiable read, closing connection: %s" % e)
             self.close(exc_info=e)
