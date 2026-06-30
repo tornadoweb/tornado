@@ -422,13 +422,18 @@ class HTTP1Connection(httputil.HTTPConnection):
         """
         self._max_body_size = max_body_size
 
-    def write_headers(
+    def _prepare_start_line(
         self,
         start_line: httputil.RequestStartLine | httputil.ResponseStartLine,
         headers: httputil.HTTPHeaders,
-        chunk: bytes | None = None,
-    ) -> "Future[None]":
-        """Implements `.HTTPConnection.write_headers`."""
+    ) -> bytes:
+        """Prepares the HTTP start line and sets initial state.
+        
+        Returns the formatted start line as bytes. Sets:
+        - self._request_start_line or self._response_start_line
+        - self._chunking_output (initial determination)
+        - Connection headers if needed (server side only)
+        """
         lines = []
         if self.is_client:
             assert isinstance(start_line, httputil.RequestStartLine)
@@ -462,20 +467,41 @@ class HTTP1Connection(httputil.HTTPConnection):
                 # No need to chunk the output if a Content-Length is specified.
                 and "Content-Length" not in headers
             )
-            # If connection to a 1.1 client will be closed, inform client
-            if (
-                self._request_start_line.version == "HTTP/1.1"
-                and self._disconnect_on_finish
-            ):
-                headers["Connection"] = "close"
-            # If a 1.0 client asked for keep-alive, add the header.
-            if (
-                self._request_start_line.version == "HTTP/1.0"
-                and self._request_headers.get("Connection", "").lower() == "keep-alive"
-            ):
-                headers["Connection"] = "Keep-Alive"
-        if self._chunking_output:
-            headers["Transfer-Encoding"] = "chunked"
+            self._prepare_connection_headers(headers)
+        return lines[0]
+
+    def _prepare_connection_headers(
+        self, headers: httputil.HTTPHeaders
+    ) -> None:
+        """Prepares connection-related headers for server responses.
+        
+        Sets Connection headers based on request version and keep-alive status.
+        Only called for server-side responses (not client).
+        """
+        assert self._request_start_line is not None
+        # If connection to a 1.1 client will be closed, inform client
+        if (
+            self._request_start_line.version == "HTTP/1.1"
+            and self._disconnect_on_finish
+        ):
+            headers["Connection"] = "close"
+        # If a 1.0 client asked for keep-alive, add the header.
+        if (
+            self._request_start_line.version == "HTTP/1.0"
+            and self._request_headers.get("Connection", "").lower() == "keep-alive"
+        ):
+            headers["Connection"] = "Keep-Alive"
+
+    def _set_expected_content_remaining(
+        self,
+        start_line: httputil.RequestStartLine | httputil.ResponseStartLine,
+        headers: httputil.HTTPHeaders,
+    ) -> None:
+        """Sets the expected content remaining based on response headers.
+        
+        Determines if the response has a known content length or if we should
+        expect chunked encoding or read until close.
+        """
         if not self.is_client and (
             self._request_start_line.method == "HEAD"
             or cast(httputil.ResponseStartLine, start_line).code == 304
@@ -485,6 +511,25 @@ class HTTP1Connection(httputil.HTTPConnection):
             self._expected_content_remaining = parse_int(headers["Content-Length"])
         else:
             self._expected_content_remaining = None
+
+    def write_headers(
+        self,
+        start_line: httputil.RequestStartLine | httputil.ResponseStartLine,
+        headers: httputil.HTTPHeaders,
+        chunk: bytes | None = None,
+    ) -> "Future[None]":
+        """Implements `.HTTPConnection.write_headers`."""
+        # Prepare the HTTP start line and set initial state
+        start_line_bytes = self._prepare_start_line(start_line, headers)
+        lines = [start_line_bytes]
+        
+        # Add chunking header if needed
+        if self._chunking_output:
+            headers["Transfer-Encoding"] = "chunked"
+        
+        # Set expected content remaining based on headers
+        self._set_expected_content_remaining(start_line, headers)
+        
         # TODO: headers are supposed to be of type str, but we still have some
         # cases that let bytes slip through. Remove these native_str calls when those
         # are fixed.
@@ -495,6 +540,8 @@ class HTTP1Connection(httputil.HTTPConnection):
         for line in lines:
             if CR_OR_LF_RE.search(line):
                 raise ValueError("Illegal characters (CR or LF) in header: %r" % line)
+        
+        # Write to stream
         future = None
         if self.stream.closed():
             future = self._write_future = Future()
