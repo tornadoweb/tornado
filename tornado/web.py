@@ -2855,6 +2855,73 @@ class StaticFileHandler(RequestHandler):
     def head(self, path: str) -> Awaitable[None]:
         return self.get(path, include_body=False)
 
+    def _parse_and_validate_range(
+        self, range_header: str | None, size: int
+    ) -> tuple[tuple[int | None, int | None], bool] | None:
+        """Parse and validate the Range header.
+
+        Returns a tuple of ((start, end), should_set_206) or None if no valid range.
+        Returns None if the range is invalid (416 error).
+        If returning None, the caller should return a 416 response.
+        """
+        if not range_header:
+            return None
+
+        # As per RFC 2616 14.16, if an invalid Range header is specified,
+        # the request will be treated as if the header didn't exist.
+        request_range = httputil._parse_request_range(range_header)
+        if not request_range:
+            return None
+
+        start, end = request_range
+        
+        # Adjust negative start (suffix-byte-range-spec)
+        if start is not None and start < 0:
+            start += size
+            if start < 0:
+                start = 0
+        
+        # Validate range satisfiability
+        if (
+            start is not None
+            and (start >= size or (end is not None and start >= end))
+        ) or end == 0:
+            # As per RFC 2616 14.35.1, a range is not satisfiable only: if
+            # the first requested byte is equal to or greater than the
+            # content, or when a suffix with length 0 is specified.
+            # https://tools.ietf.org/html/rfc7233#section-2.1
+            # A byte-range-spec is invalid if the last-byte-pos value is present
+            # and less than the first-byte-pos.
+            return None
+
+        # Cap end at file size
+        if end is not None and end > size:
+            # Clients sometimes blindly use a large range to limit their
+            # download size; cap the endpoint at the actual file size.
+            end = size
+
+        # Determine if we should return 206 Partial Content
+        # Note: only return HTTP 206 if less than the entire range has been
+        # requested. Not only is this semantically correct, but Chrome
+        # refuses to play audio if it gets an HTTP 206 in response to
+        # ``Range: bytes=0-``.
+        should_set_206 = size != (end or size) - (start or 0)
+
+        return (start, end), should_set_206
+
+    def _calculate_content_length(
+        self, start: int | None, end: int | None, size: int
+    ) -> int:
+        """Calculate the Content-Length based on range parameters."""
+        if start is not None and end is not None:
+            return end - start
+        elif end is not None:
+            return end
+        elif start is not None:
+            return size - start
+        else:
+            return size
+
     async def get(self, path: str, include_body: bool = True) -> None:
         # Set up our path instance variables.
         self.path = self.parse_url_path(path)
@@ -2871,43 +2938,21 @@ class StaticFileHandler(RequestHandler):
             self.set_status(304)
             return
 
-        request_range = None
-        range_header = self.request.headers.get("Range")
-        if range_header:
-            # As per RFC 2616 14.16, if an invalid Range header is specified,
-            # the request will be treated as if the header didn't exist.
-            request_range = httputil._parse_request_range(range_header)
-
         size = self.get_content_size()
-        if request_range:
-            start, end = request_range
-            if start is not None and start < 0:
-                start += size
-                if start < 0:
-                    start = 0
-            if (
-                start is not None
-                and (start >= size or (end is not None and start >= end))
-            ) or end == 0:
-                # As per RFC 2616 14.35.1, a range is not satisfiable only: if
-                # the first requested byte is equal to or greater than the
-                # content, or when a suffix with length 0 is specified.
-                # https://tools.ietf.org/html/rfc7233#section-2.1
-                # A byte-range-spec is invalid if the last-byte-pos value is present
-                # and less than the first-byte-pos.
-                self.set_status(416)  # Range Not Satisfiable
-                self.set_header("Content-Type", "text/plain")
-                self.set_header("Content-Range", f"bytes */{size}")
-                return
-            if end is not None and end > size:
-                # Clients sometimes blindly use a large range to limit their
-                # download size; cap the endpoint at the actual file size.
-                end = size
-            # Note: only return HTTP 206 if less than the entire range has been
-            # requested. Not only is this semantically correct, but Chrome
-            # refuses to play audio if it gets an HTTP 206 in response to
-            # ``Range: bytes=0-``.
-            if size != (end or size) - (start or 0):
+        range_header = self.request.headers.get("Range")
+        range_spec = self._parse_and_validate_range(range_header, size)
+
+        # Handle invalid range (416 error)
+        if range_spec is None and range_header:
+            self.set_status(416)  # Range Not Satisfiable
+            self.set_header("Content-Type", "text/plain")
+            self.set_header("Content-Range", f"bytes */{size}")
+            return
+
+        # Extract start/end from range spec, or use None if no range requested
+        if range_spec:
+            (start, end), should_set_206 = range_spec
+            if should_set_206:
                 self.set_status(206)  # Partial Content
                 self.set_header(
                     "Content-Range", httputil._get_content_range(start, end, size)
@@ -2915,14 +2960,7 @@ class StaticFileHandler(RequestHandler):
         else:
             start = end = None
 
-        if start is not None and end is not None:
-            content_length = end - start
-        elif end is not None:
-            content_length = end
-        elif start is not None:
-            content_length = size - start
-        else:
-            content_length = size
+        content_length = self._calculate_content_length(start, end, size)
         self.set_header("Content-Length", content_length)
 
         if include_body:
