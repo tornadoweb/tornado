@@ -19,6 +19,7 @@ from tornado.httputil import (
     parse_multipart_form_data,
     parse_request_start_line,
     qs_to_qsl,
+    split_host_and_port,
     url_concat,
 )
 from tornado.log import gen_log
@@ -621,6 +622,33 @@ class ParseRequestStartLineTest(unittest.TestCase):
         self.assertEqual(parsed_start_line.method, self.METHOD)
         self.assertEqual(parsed_start_line.path, self.PATH)
         self.assertEqual(parsed_start_line.version, self.VERSION)
+
+
+class SplitHostAndPortTest(unittest.TestCase):
+    def test_host_only(self):
+        # No colon -> port is None and the whole netloc is the host.
+        self.assertEqual(split_host_and_port("example.com"), ("example.com", None))
+
+    def test_host_and_port(self):
+        self.assertEqual(
+            split_host_and_port("example.com:8080"), ("example.com", 8080)
+        )
+
+    def test_port_at_upper_bound(self):
+        # 65535 is the highest legal TCP port and must be accepted.
+        self.assertEqual(split_host_and_port("example.com:65535"), ("example.com", 65535))
+
+    def test_port_at_lower_bound(self):
+        # 0 is reserved but is still a valid integer in the port slot.
+        self.assertEqual(split_host_and_port("example.com:0"), ("example.com", 0))
+
+    def test_port_above_max_raises(self):
+        # Anything > 65535 is not a valid TCP port and must raise.
+        for port in (65536, 70000, 100000):
+            with self.subTest(port=port):
+                with self.assertRaises(HTTPInputError) as cm:
+                    split_host_and_port(f"example.com:{port}")
+                self.assertIn(str(port), str(cm.exception))
 
 
 class ParseCookieTest(unittest.TestCase):
