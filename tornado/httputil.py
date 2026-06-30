@@ -973,6 +973,63 @@ def set_parse_body_config(config: ParseBodyConfig) -> None:
     _DEFAULT_PARSE_BODY_CONFIG = config
 
 
+def _parse_urlencoded_body(
+    body: bytes,
+    arguments: dict[str, list[bytes]],
+    headers: HTTPHeaders | None = None,
+) -> None:
+    """Parses an application/x-www-form-urlencoded body.
+
+    Updates the arguments dictionary with parsed form data.
+    """
+    if headers and "Content-Encoding" in headers:
+        raise HTTPInputError(
+            "Unsupported Content-Encoding: %s" % headers["Content-Encoding"]
+        )
+    try:
+        # real charset decoding will happen in RequestHandler.decode_argument()
+        uri_arguments = parse_qs_bytes(body, keep_blank_values=True)
+    except Exception as e:
+        raise HTTPInputError("Invalid x-www-form-urlencoded body: %s" % e) from e
+    for name, values in uri_arguments.items():
+        if values:
+            arguments.setdefault(name, []).extend(values)
+
+
+def _parse_multipart_body(
+    content_type: str,
+    body: bytes,
+    arguments: dict[str, list[bytes]],
+    files: dict[str, list[HTTPFile]],
+    headers: HTTPHeaders | None = None,
+    config: ParseMultipartConfig | None = None,
+) -> None:
+    """Parses a multipart/form-data body.
+
+    Updates the arguments and files dictionaries with parsed form data.
+    """
+    if headers and "Content-Encoding" in headers:
+        raise HTTPInputError(
+            "Unsupported Content-Encoding: %s" % headers["Content-Encoding"]
+        )
+    try:
+        fields = content_type.split(";")
+        if fields[0].strip() != "multipart/form-data":
+            # This catches "Content-Type: multipart/form-dataxyz"
+            raise HTTPInputError("Invalid content type")
+        for field in fields:
+            k, sep, v = field.strip().partition("=")
+            if k == "boundary" and v:
+                parse_multipart_form_data(
+                    utf8(v), body, arguments, files, config=config
+                )
+                break
+        else:
+            raise HTTPInputError("multipart boundary not found")
+    except Exception as e:
+        raise HTTPInputError("Invalid multipart/form-data: %s" % e) from e
+
+
 def parse_body_arguments(
     content_type: str,
     body: bytes,
@@ -993,39 +1050,34 @@ def parse_body_arguments(
     if config is None:
         config = _DEFAULT_PARSE_BODY_CONFIG
     if content_type.startswith("application/x-www-form-urlencoded"):
-        if headers and "Content-Encoding" in headers:
-            raise HTTPInputError(
-                "Unsupported Content-Encoding: %s" % headers["Content-Encoding"]
-            )
-        try:
-            # real charset decoding will happen in RequestHandler.decode_argument()
-            uri_arguments = parse_qs_bytes(body, keep_blank_values=True)
-        except Exception as e:
-            raise HTTPInputError("Invalid x-www-form-urlencoded body: %s" % e) from e
-        for name, values in uri_arguments.items():
-            if values:
-                arguments.setdefault(name, []).extend(values)
+        _parse_urlencoded_body(body, arguments, headers)
     elif content_type.startswith("multipart/form-data"):
-        if headers and "Content-Encoding" in headers:
-            raise HTTPInputError(
-                "Unsupported Content-Encoding: %s" % headers["Content-Encoding"]
-            )
-        try:
-            fields = content_type.split(";")
-            if fields[0].strip() != "multipart/form-data":
-                # This catches "Content-Type: multipart/form-dataxyz"
-                raise HTTPInputError("Invalid content type")
-            for field in fields:
-                k, sep, v = field.strip().partition("=")
-                if k == "boundary" and v:
-                    parse_multipart_form_data(
-                        utf8(v), body, arguments, files, config=config.multipart
-                    )
-                    break
-            else:
-                raise HTTPInputError("multipart boundary not found")
-        except Exception as e:
-            raise HTTPInputError("Invalid multipart/form-data: %s" % e) from e
+        _parse_multipart_body(
+            content_type, body, arguments, files, headers, config.multipart
+        )
+
+
+def _validate_multipart_config(
+    config: ParseMultipartConfig | None,
+) -> ParseMultipartConfig:
+    """Validates and returns a multipart configuration.
+
+    Initializes default config if None and validates that parsing is enabled.
+
+    Args:
+        config: The multipart configuration or None to use defaults.
+
+    Returns:
+        A valid ParseMultipartConfig instance.
+
+    Raises:
+        HTTPInputError: If multipart/form-data parsing is disabled.
+    """
+    if config is None:
+        config = _DEFAULT_PARSE_BODY_CONFIG.multipart
+    if not config.enabled:
+        raise HTTPInputError("multipart/form-data parsing is disabled")
+    return config
 
 
 def parse_multipart_form_data(
@@ -1047,10 +1099,7 @@ def parse_multipart_form_data(
        Now recognizes non-ASCII filenames in RFC 2231/5987
        (``filename*=``) format.
     """
-    if config is None:
-        config = _DEFAULT_PARSE_BODY_CONFIG.multipart
-    if not config.enabled:
-        raise HTTPInputError("multipart/form-data parsing is disabled")
+    config = _validate_multipart_config(config)
     # The standard allows for the boundary to be quoted in the header,
     # although it's rare (it happens at least for google app engine
     # xmpp).  I think we're also supposed to handle backslash-escapes
