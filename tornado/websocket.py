@@ -1224,55 +1224,107 @@ class WebSocketProtocol13(WebSocketProtocol):
                 await handled_future
 
     def _handle_message(self, opcode: int, data: bytes) -> "Optional[Future[None]]":
-        """Execute on_message, returning its Future if it is a coroutine."""
+        """Execute on_message, returning its Future if it is a coroutine.
+        
+        Dispatches to specific handlers based on opcode type.
+        """
         if self.client_terminated:
             return None
 
-        if self._frame_compressed:
-            assert self._decompressor is not None
-            try:
-                data = self._decompressor.decompress(data)
-            except _DecompressTooLargeError:
-                self.close(1009, "message too big after decompression")
-                self._abort()
-                return None
+        # Decompress frame if necessary
+        data = self._decompress_frame_data(data)
+        if data is None:
+            return None
 
+        # Dispatch to appropriate handler based on opcode
+        return self._dispatch_message_handler(opcode, data)
+
+    def _decompress_frame_data(self, data: bytes) -> "Optional[bytes]":
+        """Decompress frame data if frame is compressed.
+        
+        Returns decompressed data, or None if decompression failed.
+        """
+        if not self._frame_compressed:
+            return data
+
+        assert self._decompressor is not None
+        try:
+            return self._decompressor.decompress(data)
+        except _DecompressTooLargeError:
+            self.close(1009, "message too big after decompression")
+            self._abort()
+            return None
+
+    def _dispatch_message_handler(
+        self, opcode: int, data: bytes
+    ) -> "Optional[Future[None]]":
+        """Dispatch message to appropriate handler based on opcode."""
         if opcode == 0x1:
-            # UTF-8 data
-            self._message_bytes_in += len(data)
-            try:
-                decoded = data.decode("utf-8")
-            except UnicodeDecodeError:
-                self._abort()
-                return None
-            return self._run_callback(self.handler.on_message, decoded)
+            return self._handle_text_message(data)
         elif opcode == 0x2:
-            # Binary data
-            self._message_bytes_in += len(data)
-            return self._run_callback(self.handler.on_message, data)
+            return self._handle_binary_message(data)
         elif opcode == 0x8:
-            # Close
-            self.client_terminated = True
-            if len(data) >= 2:
-                self.close_code = struct.unpack(">H", data[:2])[0]
-            if len(data) > 2:
-                self.close_reason = to_unicode(data[2:])
-            # Echo the received close code, if any (RFC 6455 section 5.5.1).
-            self.close(self.close_code)
+            return self._handle_close_message(data)
         elif opcode == 0x9:
-            # Ping
-            try:
-                self._write_frame(True, 0xA, data)
-            except StreamClosedError:
-                self._abort()
-            self._run_callback(self.handler.on_ping, data)
+            return self._handle_ping_message(data)
         elif opcode == 0xA:
-            # Pong
-            self._received_pong = True
-            return self._run_callback(self.handler.on_pong, data)
+            return self._handle_pong_message(data)
         else:
             self._abort()
-        return None
+            return None
+
+    def _handle_text_message(self, data: bytes) -> "Optional[Future[None]]":
+        """Handle text message (opcode 0x1).
+        
+        Attempts to decode data as UTF-8 and pass to on_message callback.
+        """
+        self._message_bytes_in += len(data)
+        try:
+            decoded = data.decode("utf-8")
+        except UnicodeDecodeError:
+            self._abort()
+            return None
+        return self._run_callback(self.handler.on_message, decoded)
+
+    def _handle_binary_message(self, data: bytes) -> "Optional[Future[None]]":
+        """Handle binary message (opcode 0x2).
+        
+        Pass binary data directly to on_message callback.
+        """
+        self._message_bytes_in += len(data)
+        return self._run_callback(self.handler.on_message, data)
+
+    def _handle_close_message(self, data: bytes) -> None:
+        """Handle close message (opcode 0x8).
+        
+        Extracts close code and reason from data, then echoes back.
+        """
+        self.client_terminated = True
+        if len(data) >= 2:
+            self.close_code = struct.unpack(">H", data[:2])[0]
+        if len(data) > 2:
+            self.close_reason = to_unicode(data[2:])
+        # Echo the received close code, if any (RFC 6455 section 5.5.1).
+        self.close(self.close_code)
+
+    def _handle_ping_message(self, data: bytes) -> None:
+        """Handle ping message (opcode 0x9).
+        
+        Responds with a pong frame and calls on_ping callback.
+        """
+        try:
+            self._write_frame(True, 0xA, data)
+        except StreamClosedError:
+            self._abort()
+        self._run_callback(self.handler.on_ping, data)
+
+    def _handle_pong_message(self, data: bytes) -> "Optional[Future[None]]":
+        """Handle pong message (opcode 0xA).
+        
+        Marks that a pong was received and calls on_pong callback.
+        """
+        self._received_pong = True
+        return self._run_callback(self.handler.on_pong, data)
 
     def close(self, code: int | None = None, reason: str | None = None) -> None:
         """Closes the WebSocket connection."""
