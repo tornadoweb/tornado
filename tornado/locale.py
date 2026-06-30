@@ -326,6 +326,88 @@ class Locale:
     ) -> str:
         raise NotImplementedError()
 
+    def _normalize_date(
+        self, date: int | float | datetime.datetime
+    ) -> datetime.datetime:
+        """Normalizes the input date to a UTC-aware datetime object.
+        
+        Converts Unix timestamps to datetime objects and ensures all dates
+        have UTC timezone information.
+        """
+        if isinstance(date, (int, float)):
+            date = datetime.datetime.fromtimestamp(date, datetime.timezone.utc)
+        if date.tzinfo is None:
+            date = date.replace(tzinfo=datetime.timezone.utc)
+        return date
+
+    def _determine_format(
+        self,
+        days: int,
+        seconds: int,
+        local_date: datetime.datetime,
+        local_yesterday: datetime.datetime,
+        relative: bool,
+        shorter: bool,
+        full_format: bool,
+    ) -> str | None:
+        """Determines the date format string based on time elapsed.
+        
+        Returns None if no relative format applies (will use full format).
+        Handles relative times (seconds, minutes, hours, days ago) and
+        formats based on the relative and shorter parameters.
+        """
+        _ = self.translate
+
+        if not full_format:
+            if relative and days == 0:
+                if seconds < 50:
+                    return _("1 second ago", "%(seconds)d seconds ago", seconds) % {
+                        "seconds": seconds
+                    }
+                if seconds < 50 * 60:
+                    minutes = round(seconds / 60.0)
+                    return _("1 minute ago", "%(minutes)d minutes ago", minutes) % {
+                        "minutes": minutes
+                    }
+                hours = round(seconds / (60.0 * 60))
+                return _("1 hour ago", "%(hours)d hours ago", hours) % {"hours": hours}
+
+            if days == 0:
+                return _("%(time)s")
+            if days == 1 and local_date.day == local_yesterday.day and relative:
+                return _("yesterday") if shorter else _("yesterday at %(time)s")
+            if days < 5:
+                return _("%(weekday)s") if shorter else _("%(weekday)s at %(time)s")
+            if days < 334:  # 11mo, since confusing for same month last year
+                return (
+                    _("%(month_name)s %(day)s")
+                    if shorter
+                    else _("%(month_name)s %(day)s at %(time)s")
+                )
+
+        return None
+
+    def _format_time(self, local_date: datetime.datetime) -> str:
+        """Formats the time portion based on locale.
+
+        Handles 24-hour format (most locales), 12-hour AM/PM format (en, en_US),
+        and Chinese format with morning/afternoon indicators.
+        """
+        tfhour_clock = self.code not in ("en", "en_US", "zh_CN")
+        if tfhour_clock:
+            return "%d:%02d" % (local_date.hour, local_date.minute)
+        if self.code == "zh_CN":
+            return "%s%d:%02d" % (
+                ("\u4e0a\u5348", "\u4e0b\u5348")[local_date.hour >= 12],
+                local_date.hour % 12 or 12,
+                local_date.minute,
+            )
+        return "%d:%02d %s" % (
+            local_date.hour % 12 or 12,
+            local_date.minute,
+            ("am", "pm")[local_date.hour >= 12],
+        )
+
     def format_date(
         self,
         date: int | float | datetime.datetime,
@@ -349,11 +431,11 @@ class Locale:
            Aware `datetime.datetime` objects are now supported (naive
            datetimes are still assumed to be UTC).
         """
-        if isinstance(date, (int, float)):
-            date = datetime.datetime.fromtimestamp(date, datetime.timezone.utc)
-        if date.tzinfo is None:
-            date = date.replace(tzinfo=datetime.timezone.utc)
+        # Normalize input date to UTC-aware datetime
+        date = self._normalize_date(date)
         now = datetime.datetime.now(datetime.timezone.utc)
+
+        # Handle future dates
         if date > now:
             if relative and (date - now).seconds < 60:
                 # Due to click skew, things are some things slightly
@@ -363,6 +445,8 @@ class Locale:
             else:
                 # Otherwise, future dates always use the full format.
                 full_format = True
+
+        # Calculate local time representations
         local_date = date - datetime.timedelta(minutes=gmt_offset)
         local_now = now - datetime.timedelta(minutes=gmt_offset)
         local_yesterday = local_now - datetime.timedelta(hours=24)
@@ -370,61 +454,24 @@ class Locale:
         seconds = difference.seconds
         days = difference.days
 
+        # Determine the format string to use
         _ = self.translate
-        format = None
-        if not full_format:
-            if relative and days == 0:
-                if seconds < 50:
-                    return _("1 second ago", "%(seconds)d seconds ago", seconds) % {
-                        "seconds": seconds
-                    }
+        format_str = self._determine_format(
+            days, seconds, local_date, local_yesterday, relative, shorter, full_format
+        )
 
-                if seconds < 50 * 60:
-                    minutes = round(seconds / 60.0)
-                    return _("1 minute ago", "%(minutes)d minutes ago", minutes) % {
-                        "minutes": minutes
-                    }
-
-                hours = round(seconds / (60.0 * 60))
-                return _("1 hour ago", "%(hours)d hours ago", hours) % {"hours": hours}
-
-            if days == 0:
-                format = _("%(time)s")
-            elif days == 1 and local_date.day == local_yesterday.day and relative:
-                format = _("yesterday") if shorter else _("yesterday at %(time)s")
-            elif days < 5:
-                format = _("%(weekday)s") if shorter else _("%(weekday)s at %(time)s")
-            elif days < 334:  # 11mo, since confusing for same month last year
-                format = (
-                    _("%(month_name)s %(day)s")
-                    if shorter
-                    else _("%(month_name)s %(day)s at %(time)s")
-                )
-
-        if format is None:
-            format = (
+        # Fall back to full format if no relative format applies
+        if format_str is None:
+            format_str = (
                 _("%(month_name)s %(day)s, %(year)s")
                 if shorter
                 else _("%(month_name)s %(day)s, %(year)s at %(time)s")
             )
 
-        tfhour_clock = self.code not in ("en", "en_US", "zh_CN")
-        if tfhour_clock:
-            str_time = "%d:%02d" % (local_date.hour, local_date.minute)
-        elif self.code == "zh_CN":
-            str_time = "%s%d:%02d" % (
-                ("\u4e0a\u5348", "\u4e0b\u5348")[local_date.hour >= 12],
-                local_date.hour % 12 or 12,
-                local_date.minute,
-            )
-        else:
-            str_time = "%d:%02d %s" % (
-                local_date.hour % 12 or 12,
-                local_date.minute,
-                ("am", "pm")[local_date.hour >= 12],
-            )
+        # Format the time portion based on locale
+        str_time = self._format_time(local_date)
 
-        return format % {
+        return format_str % {
             "month_name": self._months[local_date.month - 1],
             "weekday": self._weekdays[local_date.weekday()],
             "day": str(local_date.day),
