@@ -9,6 +9,7 @@ import sys
 import time
 import urllib.parse
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from io import BytesIO
 from types import TracebackType
 from typing import Any, Optional, Type
@@ -71,6 +72,36 @@ class HTTPStreamClosedError(HTTPError):
         return self.message or "Stream closed"
 
 
+@dataclass
+class _BufferLimits:
+    """Configuration for buffer size limits."""
+
+    max_buffer_size: int
+    max_header_size: int | None
+    max_body_size: int | None
+
+
+@dataclass
+class _RequestQueue:
+    """Manages queued and active HTTP requests."""
+
+    max_clients: int
+    queue: collections.deque[
+        tuple[object, HTTPRequest, Callable[[HTTPResponse], None]]
+    ]
+    active: dict[object, tuple[HTTPRequest, Callable[[HTTPResponse], None]]]
+    waiting: dict[object, tuple[HTTPRequest, Callable[[HTTPResponse], None], object]]
+
+    def __post_init__(self) -> None:
+        """Initialize queue structures if not provided."""
+        if not self.queue:
+            self.queue = collections.deque()
+        if not self.active:
+            self.active = {}
+        if not self.waiting:
+            self.waiting = {}
+
+
 class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """Non-blocking HTTP client with no external dependencies.
 
@@ -121,19 +152,19 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         max_body_size: int | None = None,
     ) -> None:
         super().initialize(defaults=defaults)
-        self.max_clients = max_clients
-        self.queue: collections.deque[
-            tuple[object, HTTPRequest, Callable[[HTTPResponse], None]]
-        ] = collections.deque()
-        self.active: dict[
-            object, tuple[HTTPRequest, Callable[[HTTPResponse], None]]
-        ] = {}
-        self.waiting: dict[
-            object, tuple[HTTPRequest, Callable[[HTTPResponse], None], object]
-        ] = {}
-        self.max_buffer_size = max_buffer_size
-        self.max_header_size = max_header_size
-        self.max_body_size = max_body_size
+        # Group buffer-related limits
+        self.buffer_limits = _BufferLimits(
+            max_buffer_size=max_buffer_size,
+            max_header_size=max_header_size,
+            max_body_size=max_body_size,
+        )
+        # Group request queue management
+        self.request_queue = _RequestQueue(
+            max_clients=max_clients,
+            queue=collections.deque(),
+            active={},
+            waiting={},
+        )
         # TCPClient could create a Resolver for us, but we have to do it
         # ourselves to support hostname_mapping.
         if resolver:
@@ -158,11 +189,11 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self, request: HTTPRequest, callback: Callable[[HTTPResponse], None]
     ) -> None:
         key = object()
-        self.queue.append((key, request, callback))
+        self.request_queue.queue.append((key, request, callback))
         assert request.connect_timeout is not None
         assert request.request_timeout is not None
         timeout_handle = None
-        if len(self.active) >= self.max_clients:
+        if len(self.request_queue.active) >= self.request_queue.max_clients:
             timeout = (
                 min(request.connect_timeout, request.request_timeout)
                 or request.connect_timeout
@@ -173,21 +204,21 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
                     self.io_loop.time() + timeout,
                     functools.partial(self._on_timeout, key, "in request queue"),
                 )
-        self.waiting[key] = (request, callback, timeout_handle)
+        self.request_queue.waiting[key] = (request, callback, timeout_handle)
         self._process_queue()
-        if self.queue:
+        if self.request_queue.queue:
             gen_log.debug(
                 "max_clients limit reached, request queued. "
-                "%d active, %d queued requests." % (len(self.active), len(self.queue))
+                "%d active, %d queued requests." % (len(self.request_queue.active), len(self.request_queue.queue))
             )
 
     def _process_queue(self) -> None:
-        while self.queue and len(self.active) < self.max_clients:
-            key, request, callback = self.queue.popleft()
-            if key not in self.waiting:
+        while self.request_queue.queue and len(self.request_queue.active) < self.request_queue.max_clients:
+            key, request, callback = self.request_queue.queue.popleft()
+            if key not in self.request_queue.waiting:
                 continue
             self._remove_timeout(key)
-            self.active[key] = (request, callback)
+            self.request_queue.active[key] = (request, callback)
             release_callback = functools.partial(self._release_fetch, key)
             self._handle_request(request, release_callback, callback)
 
@@ -205,22 +236,22 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
             request,
             release_callback,
             final_callback,
-            self.max_buffer_size,
+            self.buffer_limits.max_buffer_size,
             self.tcp_client,
-            self.max_header_size,
-            self.max_body_size,
+            self.buffer_limits.max_header_size,
+            self.buffer_limits.max_body_size,
         )
 
     def _release_fetch(self, key: object) -> None:
-        del self.active[key]
+        del self.request_queue.active[key]
         self._process_queue()
 
     def _remove_timeout(self, key: object) -> None:
-        if key in self.waiting:
-            request, callback, timeout_handle = self.waiting[key]
+        if key in self.request_queue.waiting:
+            request, callback, timeout_handle = self.request_queue.waiting[key]
             if timeout_handle is not None:
                 self.io_loop.remove_timeout(timeout_handle)
-            del self.waiting[key]
+            del self.request_queue.waiting[key]
 
     def _on_timeout(self, key: object, info: str | None = None) -> None:
         """Timeout callback of request.
@@ -230,8 +261,8 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         :arg object key: A simple object to mark the request.
         :info string key: More detailed timeout information.
         """
-        request, callback, timeout_handle = self.waiting[key]
-        self.queue.remove((key, request, callback))
+        request, callback, timeout_handle = self.request_queue.waiting[key]
+        self.request_queue.queue.remove((key, request, callback))
 
         error_message = f"Timeout {info}" if info else "Timeout"
         timeout_response = HTTPResponse(
@@ -241,7 +272,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
             request_time=self.io_loop.time() - request.start_time,
         )
         self.io_loop.add_callback(callback, timeout_response)
-        del self.waiting[key]
+        del self.request_queue.waiting[key]
 
 
 class _HTTPConnection(httputil.HTTPMessageDelegate):
