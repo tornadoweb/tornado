@@ -1857,61 +1857,99 @@ class RequestHandler:
                     break
         return match
 
+    def _validate_request(self, *args: bytes, **kwargs: bytes) -> None:
+        """Validates the request method, parses body, and checks XSRF tokens.
+
+        This method handles:
+        - Validating HTTP method is supported
+        - Parsing request body (non-streaming mode)
+        - Setting up path arguments and kwargs
+        - Checking XSRF cookies if enabled
+
+        Raises:
+            HTTPError: If method is not supported (405) or body is invalid (400)
+        """
+        if self.request.method not in self.SUPPORTED_METHODS:
+            raise HTTPError(405)
+
+        # If we're not in stream_request_body mode, this is the place where we parse the body.
+        if not _has_stream_request_body(self.__class__):
+            try:
+                self.request._parse_body()
+            except httputil.HTTPInputError as e:
+                raise HTTPError(400, "Invalid body: %s" % e) from e
+
+        self.path_args = [self.decode_argument(arg) for arg in args]
+        self.path_kwargs = {
+            k: self.decode_argument(v, name=k) for (k, v) in kwargs.items()
+        }
+
+        # If XSRF cookies are turned on, reject form submissions without the proper cookie
+        if self.request.method not in (
+            "GET",
+            "HEAD",
+            "OPTIONS",
+        ) and self.application.settings.get("xsrf_cookies"):
+            self.check_xsrf_cookie()
+
+    async def _prepare_request(self) -> bool:
+        """Prepares the request and waits for streaming body if needed.
+
+        This method handles:
+        - Calling the prepare() hook
+        - Signaling when prepare() is complete
+        - Waiting for the body in streaming mode
+
+        Returns:
+            True if request finished before execution; False otherwise
+        """
+        result = self.prepare()
+        if result is not None:
+            result = await result  # type: ignore
+
+        if self._prepared_future is not None:
+            # Tell the Application we've finished with prepare()
+            # and are ready for the body to arrive.
+            future_set_result_unless_cancelled(self._prepared_future, None)
+
+        if self._finished:
+            return True
+
+        if _has_stream_request_body(self.__class__):
+            # In streaming mode request.body is a Future that signals
+            # the body has been completely received.  The Future has no
+            # result; the data has been passed to self.data_received instead.
+            try:
+                await self.request._body_future
+            except iostream.StreamClosedError:
+                return True
+
+        return False
+
+    async def _execute_handler(self) -> None:
+        """Executes the HTTP method handler (GET, POST, etc.).
+
+        This method retrieves and calls the appropriate handler method
+        based on the HTTP request method, and handles auto-finishing.
+        """
+        method = getattr(self, self.request.method.lower())
+        result = method(*self.path_args, **self.path_kwargs)
+        if result is not None:
+            result = await result
+
+        if self._auto_finish and not self._finished:
+            self.finish()
+
     async def _execute(
         self, transforms: list["OutputTransform"], *args: bytes, **kwargs: bytes
     ) -> None:
         """Executes this request with the given output transforms."""
         self._transforms = transforms
         try:
-            if self.request.method not in self.SUPPORTED_METHODS:
-                raise HTTPError(405)
-
-            # If we're not in stream_request_body mode, this is the place where we parse the body.
-            if not _has_stream_request_body(self.__class__):
-                try:
-                    self.request._parse_body()
-                except httputil.HTTPInputError as e:
-                    raise HTTPError(400, "Invalid body: %s" % e) from e
-
-            self.path_args = [self.decode_argument(arg) for arg in args]
-            self.path_kwargs = {
-                k: self.decode_argument(v, name=k) for (k, v) in kwargs.items()
-            }
-            # If XSRF cookies are turned on, reject form submissions without
-            # the proper cookie
-            if self.request.method not in (
-                "GET",
-                "HEAD",
-                "OPTIONS",
-            ) and self.application.settings.get("xsrf_cookies"):
-                self.check_xsrf_cookie()
-
-            result = self.prepare()
-            if result is not None:
-                result = await result  # type: ignore
-            if self._prepared_future is not None:
-                # Tell the Application we've finished with prepare()
-                # and are ready for the body to arrive.
-                future_set_result_unless_cancelled(self._prepared_future, None)
-            if self._finished:
+            self._validate_request(*args, **kwargs)
+            if await self._prepare_request():
                 return
-
-            if _has_stream_request_body(self.__class__):
-                # In streaming mode request.body is a Future that signals
-                # the body has been completely received.  The Future has no
-                # result; the data has been passed to self.data_received
-                # instead.
-                try:
-                    await self.request._body_future
-                except iostream.StreamClosedError:
-                    return
-
-            method = getattr(self, self.request.method.lower())
-            result = method(*self.path_args, **self.path_kwargs)
-            if result is not None:
-                result = await result
-            if self._auto_finish and not self._finished:
-                self.finish()
+            await self._execute_handler()
         except Exception as e:
             try:
                 self._handle_request_exception(e)
