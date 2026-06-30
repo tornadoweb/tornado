@@ -1130,32 +1130,28 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._wire_bytes_in += n
         return data
 
-    async def _receive_frame(self) -> None:
-        # Read the frame header.
+    async def _parse_frame_header(self):
         data = await self._read_bytes(2)
         header, mask_payloadlen = struct.unpack("BB", data)
         is_final_frame = header & self.FIN
         reserved_bits = header & self.RSV_MASK
         opcode = header & self.OPCODE_MASK
         opcode_is_control = opcode & 0x8
+        is_masked = bool(mask_payloadlen & 0x80)
+        payloadlen = mask_payloadlen & 0x7F
+        return is_final_frame, reserved_bits, opcode, opcode_is_control, payloadlen, is_masked
+
+    def _validate_frame_header(self, reserved_bits, opcode, opcode_is_control, payloadlen):
         if self._decompressor is not None and opcode != 0:
-            # Compression flag is present in the first frame's header,
-            # but we can't decompress until we have all the frames of
-            # the message.
             self._frame_compressed = bool(reserved_bits & self.RSV1)
             reserved_bits &= ~self.RSV1
         if reserved_bits:
-            # client is using as-yet-undefined extensions; abort
-            self._abort()
-            return
-        is_masked = bool(mask_payloadlen & 0x80)
-        payloadlen = mask_payloadlen & 0x7F
-
-        # Parse and validate the length.
+            return False
         if opcode_is_control and payloadlen >= 126:
-            # control frames must have payload < 126
-            self._abort()
-            return
+            return False
+        return True
+
+    async def _resolve_payload_length(self, payloadlen):
         if payloadlen < 126:
             self._frame_length = payloadlen
         elif payloadlen == 126:
@@ -1164,50 +1160,64 @@ class WebSocketProtocol13(WebSocketProtocol):
         elif payloadlen == 127:
             data = await self._read_bytes(8)
             payloadlen = struct.unpack("!Q", data)[0]
-        new_len = payloadlen
-        if self._fragmented_message_buffer is not None:
-            new_len += len(self._fragmented_message_buffer)
-        if new_len > self.params.max_message_size:
-            self.close(1009, "message too big")
-            self._abort()
-            return
+        return payloadlen
 
-        # Read the payload, unmasking if necessary.
+    async def _read_frame_payload(self, is_masked, payloadlen):
         if is_masked:
             self._frame_mask = await self._read_bytes(4)
         data = await self._read_bytes(payloadlen)
         if is_masked:
             assert self._frame_mask is not None
             data = _websocket_mask(self._frame_mask, data)
+        return data
 
-        # Decide what to do with this frame.
-        if opcode_is_control:
-            # control frames may be interleaved with a series of fragmented
-            # data frames, so control frames must not interact with
-            # self._fragmented_*
-            if not is_final_frame:
-                # control frames must not be fragmented
-                self._abort()
-                return
-        elif opcode == 0:  # continuation frame
+    async def _process_data_frame(self, opcode, is_final_frame, data):
+        if opcode == 0:
             if self._fragmented_message_buffer is None:
-                # nothing to continue
-                self._abort()
-                return
+                return -1, b""
             self._fragmented_message_buffer.extend(data)
             if is_final_frame:
                 opcode = self._fragmented_message_opcode
                 data = bytes(self._fragmented_message_buffer)
                 self._fragmented_message_buffer = None
-        else:  # start of new data message
+            else:
+                return -2, b""
+        else:
             if self._fragmented_message_buffer is not None:
-                # can't start new message until the old one is finished
-                self._abort()
-                return
+                return -3, b""
             if not is_final_frame:
                 self._fragmented_message_opcode = opcode
                 self._fragmented_message_buffer = bytearray(data)
+                return -2, b""
+        return opcode, data
 
+    async def _receive_frame(self) -> None:
+        is_final_frame, reserved_bits, opcode, opcode_is_control, payloadlen, is_masked = await self._parse_frame_header()
+        
+        if not self._validate_frame_header(reserved_bits, opcode, opcode_is_control, payloadlen):
+            self._abort()
+            return
+        
+        payloadlen = await self._resolve_payload_length(payloadlen)
+        new_len = payloadlen + (len(self._fragmented_message_buffer) if self._fragmented_message_buffer is not None else 0)
+        if new_len > self.params.max_message_size:
+            self.close(1009, "message too big")
+            self._abort()
+            return
+        
+        data = await self._read_frame_payload(is_masked, payloadlen)
+        
+        if not opcode_is_control:
+            result_opcode, result_data = await self._process_data_frame(opcode, is_final_frame, data)
+            if result_opcode < 0:
+                if result_opcode != -2:
+                    self._abort()
+                return
+            opcode, data = result_opcode, result_data
+        elif not is_final_frame:
+            self._abort()
+            return
+        
         if is_final_frame:
             handled_future = self._handle_message(opcode, data)
             if handled_future is not None:
