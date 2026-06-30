@@ -53,6 +53,131 @@ if hasattr(ssl, "OP_NO_COMPRESSION"):
 _DEFAULT_BACKLOG = 128
 
 
+def _validate_bind_args(reuse_port: bool) -> None:
+    """Validate arguments for bind_sockets.
+
+    Raises ValueError if the platform doesn't support SO_REUSEPORT
+    when reuse_port is True.
+    """
+    if reuse_port and not hasattr(socket, "SO_REUSEPORT"):
+        raise ValueError("the platform doesn't support SO_REUSEPORT")
+
+
+def _prepare_socket_config(
+    address: str | None, family: socket.AddressFamily, flags: int | None
+) -> tuple[str | None, socket.AddressFamily, int]:
+    """Prepare socket configuration parameters.
+
+    Returns normalized (address, family, flags) tuple.
+    """
+    # Normalize empty string address to None
+    if address == "":
+        address = None
+
+    # Check if IPv6 is available on this system
+    if not socket.has_ipv6 and family == socket.AF_UNSPEC:
+        # Python can be compiled with --disable-ipv6, which causes
+        # operations on AF_INET6 sockets to fail, but does not
+        # automatically exclude those results from getaddrinfo
+        # results.
+        # http://bugs.python.org/issue16208
+        family = socket.AF_INET
+
+    # Set default flags if not provided
+    if flags is None:
+        flags = socket.AI_PASSIVE
+
+    return address, family, flags
+
+
+def _should_skip_address(
+    res: tuple, address: str | None
+) -> bool:
+    """Check if an address should be skipped during binding.
+
+    Returns True if the address should be skipped, False otherwise.
+    """
+    af, socktype, proto, canonname, sockaddr = res
+
+    # Skip macOS-specific link-local IPv6 addresses for localhost
+    if (
+        sys.platform == "darwin"
+        and address == "localhost"
+        and af == socket.AF_INET6
+        and sockaddr[3] != 0  # type: ignore
+    ):
+        # Mac OS X includes a link-local address fe80::1%lo0 in the
+        # getaddrinfo results for 'localhost'.  However, the firewall
+        # doesn't understand that this is a local address and will
+        # prompt for access (often repeatedly, due to an apparent
+        # bug in its ability to remember granting access to an
+        # application). Skip these addresses.
+        return True
+
+    return False
+
+
+def _configure_socket_options(sock: socket.socket, af: socket.AddressFamily, reuse_port: bool) -> None:
+    """Configure socket options (SO_REUSEADDR, SO_REUSEPORT, IPV6_V6ONLY).
+
+    Applies platform-specific and address-family-specific options to the socket.
+    """
+    # Set SO_REUSEADDR on non-Windows platforms
+    if os.name != "nt":
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        except OSError as e:
+            if errno_from_exception(e) != errno.ENOPROTOOPT:
+                # Hurd doesn't support SO_REUSEADDR.
+                raise
+
+    # Set SO_REUSEPORT if requested
+    if reuse_port:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+
+    # Set IPV6_V6ONLY for IPv6 sockets
+    if af == socket.AF_INET6:
+        # On linux, ipv6 sockets accept ipv4 too by default,
+        # but this makes it impossible to bind to both
+        # 0.0.0.0 in ipv4 and :: in ipv6.  On other systems,
+        # separate sockets *must* be used to listen for both ipv4
+        # and ipv6.  For consistency, always disable ipv4 on our
+        # ipv6 sockets and use a separate ipv4 socket when needed.
+        #
+        # Python 2.x on windows doesn't have IPPROTO_IPV6.
+        if hasattr(socket, "IPPROTO_IPV6"):
+            sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+
+
+def _handle_bind_error(
+    sock: socket.socket, e: OSError, address: str | None, sockaddr: tuple
+) -> bool:
+    """Handle bind errors.
+
+    Returns True if the error was handled and the socket should be skipped,
+    False if the error should be re-raised.
+    """
+    if (
+        errno_from_exception(e) == errno.EADDRNOTAVAIL
+        and address == "localhost"
+        and sockaddr[0] == "::1"
+    ):
+        # On some systems (most notably docker with default
+        # configurations), ipv6 is partially disabled:
+        # socket.has_ipv6 is true, we can create AF_INET6
+        # sockets, and getaddrinfo("localhost", ...,
+        # AF_PASSIVE) resolves to ::1, but we get an error
+        # when binding.
+        #
+        # Swallow the error, but only for this specific case.
+        # If EADDRNOTAVAIL occurs in other situations, it
+        # might be a real problem like a typo in a
+        # configuration.
+        sock.close()
+        return True
+    return False
+
+
 def bind_sockets(
     port: int,
     address: str | None = None,
@@ -84,23 +209,13 @@ def bind_sockets(
     in the list. If your platform doesn't support this option ValueError will
     be raised.
     """
-    if reuse_port and not hasattr(socket, "SO_REUSEPORT"):
-        raise ValueError("the platform doesn't support SO_REUSEPORT")
+    _validate_bind_args(reuse_port)
+    address, family, flags = _prepare_socket_config(address, family, flags)
 
     sockets = []
-    if address == "":
-        address = None
-    if not socket.has_ipv6 and family == socket.AF_UNSPEC:
-        # Python can be compiled with --disable-ipv6, which causes
-        # operations on AF_INET6 sockets to fail, but does not
-        # automatically exclude those results from getaddrinfo
-        # results.
-        # http://bugs.python.org/issue16208
-        family = socket.AF_INET
-    if flags is None:
-        flags = socket.AI_PASSIVE
     bound_port = None
     unique_addresses: set = set()
+
     for res in sorted(
         socket.getaddrinfo(address, port, family, socket.SOCK_STREAM, 0, flags),
         key=lambda x: x[0],
@@ -111,79 +226,39 @@ def bind_sockets(
         unique_addresses.add(res)
 
         af, socktype, proto, canonname, sockaddr = res
-        if (
-            sys.platform == "darwin"
-            and address == "localhost"
-            and af == socket.AF_INET6
-            and sockaddr[3] != 0  # type: ignore
-        ):
-            # Mac OS X includes a link-local address fe80::1%lo0 in the
-            # getaddrinfo results for 'localhost'.  However, the firewall
-            # doesn't understand that this is a local address and will
-            # prompt for access (often repeatedly, due to an apparent
-            # bug in its ability to remember granting access to an
-            # application). Skip these addresses.
+
+        if _should_skip_address(res, address):
             continue
+
+        # Create socket
         try:
             sock = socket.socket(af, socktype, proto)
         except OSError as e:
             if errno_from_exception(e) == errno.EAFNOSUPPORT:
                 continue
             raise
-        if os.name != "nt":
-            try:
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            except OSError as e:
-                if errno_from_exception(e) != errno.ENOPROTOOPT:
-                    # Hurd doesn't support SO_REUSEADDR.
-                    raise
-        if reuse_port:
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-        if af == socket.AF_INET6:
-            # On linux, ipv6 sockets accept ipv4 too by default,
-            # but this makes it impossible to bind to both
-            # 0.0.0.0 in ipv4 and :: in ipv6.  On other systems,
-            # separate sockets *must* be used to listen for both ipv4
-            # and ipv6.  For consistency, always disable ipv4 on our
-            # ipv6 sockets and use a separate ipv4 socket when needed.
-            #
-            # Python 2.x on windows doesn't have IPPROTO_IPV6.
-            if hasattr(socket, "IPPROTO_IPV6"):
-                sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
 
-        # automatic port allocation with port=None
-        # should bind on the same port on IPv4 and IPv6
+        # Configure socket options
+        _configure_socket_options(sock, af, reuse_port)
+
+        # Automatic port allocation: bind on the same port for IPv4 and IPv6
         host, requested_port = sockaddr[:2]
         if requested_port == 0 and bound_port is not None:
             sockaddr = tuple([host, bound_port] + list(sockaddr[2:]))
 
+        # Bind socket
         sock.setblocking(False)
         try:
             sock.bind(sockaddr)
         except OSError as e:
-            if (
-                errno_from_exception(e) == errno.EADDRNOTAVAIL
-                and address == "localhost"
-                and sockaddr[0] == "::1"
-            ):
-                # On some systems (most notably docker with default
-                # configurations), ipv6 is partially disabled:
-                # socket.has_ipv6 is true, we can create AF_INET6
-                # sockets, and getaddrinfo("localhost", ...,
-                # AF_PASSIVE) resolves to ::1, but we get an error
-                # when binding.
-                #
-                # Swallow the error, but only for this specific case.
-                # If EADDRNOTAVAIL occurs in other situations, it
-                # might be a real problem like a typo in a
-                # configuration.
-                sock.close()
+            if _handle_bind_error(sock, e, address, sockaddr):
                 continue
-            else:
-                raise
+            raise
+
         bound_port = sock.getsockname()[1]
         sock.listen(backlog)
         sockets.append(sock)
+
     return sockets
 
 
