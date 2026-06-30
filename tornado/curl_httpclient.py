@@ -291,13 +291,8 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
     def _curl_create(self) -> pycurl.Curl:
         return pycurl.Curl()
 
-    def _curl_setup_request(
-        self,
-        curl: pycurl.Curl,
-        request: HTTPRequest,
-        buffer: BytesIO,
-        headers: httputil.HTTPHeaders,
-    ) -> None:
+    def _setup_curl_logging(self, curl: pycurl.Curl) -> None:
+        """Configure curl logging and debug options."""
         if curl_log.isEnabledFor(logging.DEBUG):
             curl.setopt(pycurl.VERBOSE, 1)
             curl.setopt(pycurl.DEBUGFUNCTION, self._curl_debug)
@@ -307,6 +302,13 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             curl.setopt(pycurl.PROTOCOLS, pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS)
             curl.setopt(pycurl.REDIR_PROTOCOLS, pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS)
 
+    def _setup_curl_url_and_headers(
+        self,
+        curl: pycurl.Curl,
+        request: HTTPRequest,
+        headers: httputil.HTTPHeaders,
+    ) -> None:
+        """Configure curl URL and HTTP headers."""
         curl.setopt(pycurl.URL, native_str(request.url))
 
         # libcurl's magic "Expect: 100-continue" behavior causes delays
@@ -340,8 +342,15 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 self._curl_header_callback, headers, request.header_callback
             ),
         )
-        if request.streaming_callback:
 
+    def _setup_curl_write_function(
+        self,
+        curl: pycurl.Curl,
+        request: HTTPRequest,
+        buffer: BytesIO,
+    ) -> None:
+        """Configure curl write callback function."""
+        if request.streaming_callback:
             if gen.is_coroutine_function(
                 request.streaming_callback
             ) or inspect.iscoroutinefunction(request.streaming_callback):
@@ -357,22 +366,38 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         else:
             write_function = buffer.write  # type: ignore
         curl.setopt(pycurl.WRITEFUNCTION, write_function)
+
+    def _setup_curl_redirect_and_timeout(
+        self, curl: pycurl.Curl, request: HTTPRequest
+    ) -> None:
+        """Configure curl redirection and timeout settings."""
         curl.setopt(pycurl.FOLLOWLOCATION, request.follow_redirects)
         curl.setopt(pycurl.MAXREDIRS, request.max_redirects)
         assert request.connect_timeout is not None
         curl.setopt(pycurl.CONNECTTIMEOUT_MS, int(1000 * request.connect_timeout))
         assert request.request_timeout is not None
         curl.setopt(pycurl.TIMEOUT_MS, int(1000 * request.request_timeout))
+
+    def _setup_curl_user_agent_and_interface(
+        self, curl: pycurl.Curl, request: HTTPRequest
+    ) -> None:
+        """Configure curl user agent and network interface."""
         if request.user_agent:
             curl.setopt(pycurl.USERAGENT, native_str(request.user_agent))
         else:
             curl.setopt(pycurl.USERAGENT, "Mozilla/5.0 (compatible; pycurl)")
         if request.network_interface:
             curl.setopt(pycurl.INTERFACE, request.network_interface)
+
+    def _setup_curl_encoding(self, curl: pycurl.Curl, request: HTTPRequest) -> None:
+        """Configure curl response compression encoding."""
         if request.decompress_response:
             curl.setopt(pycurl.ENCODING, "gzip,deflate")
         else:
             curl.setopt(pycurl.ENCODING, None)
+
+    def _setup_curl_proxy(self, curl: pycurl.Curl, request: HTTPRequest) -> None:
+        """Configure curl proxy settings."""
         if request.proxy_host and request.proxy_port:
             curl.setopt(pycurl.PROXY, request.proxy_host)
             curl.setopt(pycurl.PROXYPORT, request.proxy_port)
@@ -397,6 +422,11 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             except TypeError:  # not supported, disable proxy
                 curl.setopt(pycurl.PROXY, "")
             curl.unsetopt(pycurl.PROXYUSERPWD)
+
+    def _setup_curl_ssl_verification(
+        self, curl: pycurl.Curl, request: HTTPRequest
+    ) -> None:
+        """Configure curl SSL/TLS certificate verification."""
         if request.validate_cert:
             curl.setopt(pycurl.SSL_VERIFYPEER, 1)
             curl.setopt(pycurl.SSL_VERIFYHOST, 2)
@@ -405,15 +435,9 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             curl.setopt(pycurl.SSL_VERIFYHOST, 0)
         if request.ca_certs is not None:
             curl.setopt(pycurl.CAINFO, request.ca_certs)
-        else:
-            # There is no way to restore pycurl.CAINFO to its default value
-            # (Using unsetopt makes it reject all certificates).
-            # I don't see any way to read the default value from python so it
-            # can be restored later.  We'll have to just leave CAINFO untouched
-            # if no ca_certs file was specified, and require that if any
-            # request uses a custom ca_certs file, they all must.
-            pass
 
+    def _setup_curl_ipv6(self, curl: pycurl.Curl, request: HTTPRequest) -> None:
+        """Configure curl IPv6 resolution settings."""
         if request.allow_ipv6 is False:
             # Curl behaves reasonably when DNS resolution gives an ipv6 address
             # that we can't reach, so allow ipv6 unless the user asks to disable.
@@ -421,6 +445,8 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         else:
             curl.setopt(pycurl.IPRESOLVE, pycurl.IPRESOLVE_WHATEVER)
 
+    def _setup_curl_http_method(self, curl: pycurl.Curl, request: HTTPRequest) -> None:
+        """Configure curl HTTP request method."""
         # Set the request method through curl's irritating interface which makes
         # up names for almost every single method
         curl_options = {
@@ -440,6 +466,8 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         else:
             raise KeyError("unknown method " + request.method)
 
+    def _validate_request_body(self, request: HTTPRequest) -> None:
+        """Validate request body for the HTTP method."""
         body_expected = request.method in ("POST", "PATCH", "PUT")
         body_present = request.body is not None
         if not request.allow_nonstandard_methods:
@@ -454,6 +482,11 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                     "allow_nonstandard_methods is true)"
                     % ("not " if body_expected else "", request.method)
                 )
+
+    def _setup_curl_request_body(self, curl: pycurl.Curl, request: HTTPRequest) -> None:
+        """Configure curl request body and related settings."""
+        body_expected = request.method in ("POST", "PATCH", "PUT")
+        body_present = request.body is not None
 
         if body_expected or body_present:
             if request.method == "GET":
@@ -477,6 +510,8 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 curl.setopt(pycurl.UPLOAD, True)
                 curl.setopt(pycurl.INFILESIZE, len(request.body or ""))
 
+    def _setup_curl_auth(self, curl: pycurl.Curl, request: HTTPRequest) -> None:
+        """Configure curl HTTP basic/digest authentication."""
         if request.auth_username is not None:
             assert request.auth_password is not None
             if request.auth_mode is None or request.auth_mode == "basic":
@@ -500,6 +535,8 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             curl.unsetopt(pycurl.USERPWD)
             curl_log.debug("%s %s", request.method, request.url)
 
+    def _setup_curl_client_cert(self, curl: pycurl.Curl, request: HTTPRequest) -> None:
+        """Configure curl client certificate settings."""
         if request.client_cert is not None:
             curl.setopt(pycurl.SSLCERT, request.client_cert)
 
@@ -509,6 +546,10 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if request.ssl_options is not None:
             raise ValueError("ssl_options not supported in curl_httpclient")
 
+    def _setup_curl_threading_and_callback(
+        self, curl: pycurl.Curl, request: HTTPRequest
+    ) -> None:
+        """Configure curl threading safety and prepare callback."""
         if threading.active_count() > 1:
             # libcurl/pycurl is not thread-safe by default.  When multiple threads
             # are used, signals should be disabled.  This has the side effect
@@ -521,6 +562,34 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             curl.setopt(pycurl.NOSIGNAL, 1)
         if request.prepare_curl_callback is not None:
             request.prepare_curl_callback(curl)
+
+    def _curl_setup_request(
+        self,
+        curl: pycurl.Curl,
+        request: HTTPRequest,
+        buffer: BytesIO,
+        headers: httputil.HTTPHeaders,
+    ) -> None:
+        """Setup a curl handle for the given request.
+        
+        This method orchestrates the configuration of all curl settings
+        by delegating to specialized setup methods.
+        """
+        self._setup_curl_logging(curl)
+        self._setup_curl_url_and_headers(curl, request, headers)
+        self._setup_curl_write_function(curl, request, buffer)
+        self._setup_curl_redirect_and_timeout(curl, request)
+        self._setup_curl_user_agent_and_interface(curl, request)
+        self._setup_curl_encoding(curl, request)
+        self._setup_curl_proxy(curl, request)
+        self._setup_curl_ssl_verification(curl, request)
+        self._setup_curl_ipv6(curl, request)
+        self._setup_curl_http_method(curl, request)
+        self._validate_request_body(request)
+        self._setup_curl_request_body(curl, request)
+        self._setup_curl_auth(curl, request)
+        self._setup_curl_client_cert(curl, request)
+        self._setup_curl_threading_and_callback(curl, request)
 
     def _curl_header_callback(
         self,
