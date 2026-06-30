@@ -623,140 +623,140 @@ class RequestHandler:
     def get_cookie(self, name: str, default: None = None) -> str | None:
         pass
 
-     def get_cookie(self, name: str, default: str | None = None) -> str | None:
-         """Returns the value of the request cookie with the given name.
- 
-         If the named cookie is not present, returns ``default``.
- 
-         This method only returns cookies that were present in the request.
-         It does not see the outgoing cookies set by `set_cookie` in this
-         handler.
-         """
-         if self.request.cookies is not None and name in self.request.cookies:
-             return self.request.cookies[name].value
-         return default
+    def get_cookie(self, name: str, default: str | None = None) -> str | None:
+        """Returns the value of the request cookie with the given name.
 
-     def _validate_cookie_attributes(
-         self,
-         name: str,
-         value: str,
-         domain: str | None,
-         path: str,
-         samesite: str | None,
-     ) -> None:
-         """Validates cookie name, value, and attributes for invalid characters.
- 
-         Raises ValueError if the cookie value contains control characters.
-         Raises http.cookies.CookieError if attributes contain invalid characters.
-         """
-         if re.search(r"[\x00-\x20]", value):
-             # Legacy check for control characters in cookie values. This check is no longer needed
-             # since the cookie library escapes these characters correctly now. It will be removed
-             # in the next feature release.
-             raise ValueError(f"Invalid cookie {name!r}: {value!r}")
- 
-         for attr_name, attr_value in [
-             ("name", name),
-             ("domain", domain),
-             ("path", path),
-             ("samesite", samesite),
-         ]:
-             # Cookie attributes may not contain control characters or semicolons (except when
-             # escaped in the value). A check for control characters was added to the http.cookies
-             # library in a Feb 2026 security release; as of March it still does not check for
-             # semicolons.
-             #
-             # When a semicolon check is added to the standard library (and the release has had time
-             # for adoption), this check may be removed, but be mindful of the fact that this may
-             # change the timing of the exception (to the generation of the Set-Cookie header in
-             # flush()). We may want to add a call to self._new_cookie.output() at the end of this
-             # method to ensure that exceptions are raised when they will be most useful.
-             if attr_value is not None and re.search(r"[\x00-\x20\x3b\x7f]", attr_value):
-                 raise http.cookies.CookieError(
-                     f"Invalid cookie attribute {attr_name}={attr_value!r} for cookie {name!r}"
-                 )
+        If the named cookie is not present, returns ``default``.
 
-     def set_cookie(
-         self,
-         name: str,
-         value: str | bytes,
-         domain: str | None = None,
-         expires: float | tuple | datetime.datetime | None = None,
-         path: str = "/",
-         expires_days: float | None = None,
-         # Keyword-only args start here for historical reasons.
-         *,
-         max_age: int | None = None,
-         httponly: bool = False,
-         secure: bool = False,
-         samesite: str | None = None,
-         **kwargs: Any,
-     ) -> None:
-         """Sets an outgoing cookie name/value with the given options.
- 
-         Newly-set cookies are not immediately visible via `get_cookie`;
-         they are not present until the next request.
- 
-         Most arguments are passed directly to `http.cookies.Morsel` directly.
-         See https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie
-         for more information.
- 
-         ``expires`` may be a numeric timestamp as returned by `time.time`,
-         a time tuple as returned by `time.gmtime`, or a
-         `datetime.datetime` object. ``expires_days`` is provided as a convenience
-         to set an expiration time in days from today (if both are set, ``expires``
-         is used).
- 
-         .. deprecated:: 6.3
-            Keyword arguments are currently accepted case-insensitively.
-            In Tornado 7.0 this will be changed to only accept lowercase
-            arguments.
-         """
-         # The cookie library only accepts type str, in both python 2 and 3
-         name = escape.native_str(name)
-         value = escape.native_str(value)
- 
-         # Validate cookie name, value, and attributes
-         self._validate_cookie_attributes(name, value, domain, path, samesite)
- 
-         if not hasattr(self, "_new_cookie"):
-             self._new_cookie: http.cookies.SimpleCookie = http.cookies.SimpleCookie()
-         if name in self._new_cookie:
-             del self._new_cookie[name]
-         self._new_cookie[name] = value
-         morsel = self._new_cookie[name]
-         if domain:
-             morsel["domain"] = domain
-         if expires_days is not None and not expires:
-             expires = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
-                 days=expires_days
-             )
-         if expires:
-             morsel["expires"] = httputil.format_timestamp(expires)
-         if path:
-             morsel["path"] = path
-         if max_age:
-             # Note change from _ to -.
-             morsel["max-age"] = str(max_age)
-         if httponly:
-             # Note that SimpleCookie ignores the value here. The presence of an
-             # httponly (or secure) key is treated as true.
-             morsel["httponly"] = True
-         if secure:
-             morsel["secure"] = True
-         if samesite:
-             morsel["samesite"] = samesite
-         if kwargs:
-             # The setitem interface is case-insensitive, so continue to support
-             # kwargs for backwards compatibility until we can remove deprecated
-             # features.
-             for k, v in kwargs.items():
-                 morsel[k] = v
-             warnings.warn(
-                 f"Deprecated arguments to set_cookie: {set(kwargs.keys())} "
-                 "(should be lowercase)",
-                 DeprecationWarning,
-             )
+        This method only returns cookies that were present in the request.
+        It does not see the outgoing cookies set by `set_cookie` in this
+        handler.
+        """
+        if self.request.cookies is not None and name in self.request.cookies:
+            return self.request.cookies[name].value
+        return default
+
+    def _validate_cookie_attributes(
+        self,
+        name: str,
+        value: str,
+        domain: str | None,
+        path: str,
+        samesite: str | None,
+    ) -> None:
+        """Validates cookie name, value, and attributes for invalid characters.
+
+        Raises ValueError if the cookie value contains control characters.
+        Raises http.cookies.CookieError if attributes contain invalid characters.
+        """
+        if re.search(r"[\x00-\x20]", value):
+            # Legacy check for control characters in cookie values. This check is no longer needed
+            # since the cookie library escapes these characters correctly now. It will be removed
+            # in the next feature release.
+            raise ValueError(f"Invalid cookie {name!r}: {value!r}")
+
+        for attr_name, attr_value in [
+            ("name", name),
+            ("domain", domain),
+            ("path", path),
+            ("samesite", samesite),
+        ]:
+            # Cookie attributes may not contain control characters or semicolons (except when
+            # escaped in the value). A check for control characters was added to the http.cookies
+            # library in a Feb 2026 security release; as of March it still does not check for
+            # semicolons.
+            #
+            # When a semicolon check is added to the standard library (and the release has had time
+            # for adoption), this check may be removed, but be mindful of the fact that this may
+            # change the timing of the exception (to the generation of the Set-Cookie header in
+            # flush()). We may want to add a call to self._new_cookie.output() at the end of this
+            # method to ensure that exceptions are raised when they will be most useful.
+            if attr_value is not None and re.search(r"[\x00-\x20\x3b\x7f]", attr_value):
+                raise http.cookies.CookieError(
+                    f"Invalid cookie attribute {attr_name}={attr_value!r} for cookie {name!r}"
+                )
+
+    def set_cookie(
+        self,
+        name: str,
+        value: str | bytes,
+        domain: str | None = None,
+        expires: float | tuple | datetime.datetime | None = None,
+        path: str = "/",
+        expires_days: float | None = None,
+        # Keyword-only args start here for historical reasons.
+        *,
+        max_age: int | None = None,
+        httponly: bool = False,
+        secure: bool = False,
+        samesite: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """Sets an outgoing cookie name/value with the given options.
+
+        Newly-set cookies are not immediately visible via `get_cookie`;
+        they are not present until the next request.
+
+        Most arguments are passed directly to `http.cookies.Morsel` directly.
+        See https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie
+        for more information.
+
+        ``expires`` may be a numeric timestamp as returned by `time.time`,
+        a time tuple as returned by `time.gmtime`, or a
+        `datetime.datetime` object. ``expires_days`` is provided as a convenience
+        to set an expiration time in days from today (if both are set, ``expires``
+        is used).
+
+        .. deprecated:: 6.3
+           Keyword arguments are currently accepted case-insensitively.
+           In Tornado 7.0 this will be changed to only accept lowercase
+           arguments.
+        """
+        # The cookie library only accepts type str, in both python 2 and 3
+        name = escape.native_str(name)
+        value = escape.native_str(value)
+
+        # Validate cookie name, value, and attributes
+        self._validate_cookie_attributes(name, value, domain, path, samesite)
+
+        if not hasattr(self, "_new_cookie"):
+            self._new_cookie: http.cookies.SimpleCookie = http.cookies.SimpleCookie()
+        if name in self._new_cookie:
+            del self._new_cookie[name]
+        self._new_cookie[name] = value
+        morsel = self._new_cookie[name]
+        if domain:
+            morsel["domain"] = domain
+        if expires_days is not None and not expires:
+            expires = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+                days=expires_days
+            )
+        if expires:
+            morsel["expires"] = httputil.format_timestamp(expires)
+        if path:
+            morsel["path"] = path
+        if max_age:
+            # Note change from _ to -.
+            morsel["max-age"] = str(max_age)
+        if httponly:
+            # Note that SimpleCookie ignores the value here. The presence of an
+            # httponly (or secure) key is treated as true.
+            morsel["httponly"] = True
+        if secure:
+            morsel["secure"] = True
+        if samesite:
+            morsel["samesite"] = samesite
+        if kwargs:
+            # The setitem interface is case-insensitive, so continue to support
+            # kwargs for backwards compatibility until we can remove deprecated
+            # features.
+            for k, v in kwargs.items():
+                morsel[k] = v
+            warnings.warn(
+                f"Deprecated arguments to set_cookie: {set(kwargs.keys())} "
+                "(should be lowercase)",
+                DeprecationWarning,
+            )
 
     def clear_cookie(self, name: str, **kwargs: Any) -> None:
         """Deletes the cookie with the given name.
@@ -1007,6 +1007,68 @@ class RequestHandler:
         chunk = utf8(chunk)
         self._write_buffer.append(chunk)
 
+    def _add_if_present(self, container: list, value: Any) -> None:
+        """Adds a value to the container if it's not empty/None."""
+        if value:
+            container.append(utf8(value))
+
+    def _add_file_or_list(
+        self, container: list, value: Any
+    ) -> None:
+        """Adds a file path or list of paths to the container.
+        
+        If value is a string or bytes, appends the unicode version.
+        If value is a list/iterable, extends the container with all items.
+        """
+        if value:
+            if isinstance(value, (unicode_type, bytes)):
+                container.append(_unicode(value))
+            else:
+                container.extend(value)
+
+    def _process_module_assets(self, module: Any, assets: dict) -> None:
+        """Processes assets from a single module and adds them to the assets dict.
+        
+        Args:
+            module: A module object with embedded_javascript, javascript_files,
+                   embedded_css, css_files, html_head, and html_body methods.
+            assets: Dictionary to store collected assets with keys:
+                   'js_embed', 'js_files', 'css_embed', 'css_files',
+                   'html_heads', 'html_bodies'
+        """
+        self._add_if_present(assets["js_embed"], module.embedded_javascript())
+        self._add_file_or_list(assets["js_files"], module.javascript_files())
+        self._add_if_present(assets["css_embed"], module.embedded_css())
+        self._add_file_or_list(assets["css_files"], module.css_files())
+        self._add_if_present(assets["html_heads"], module.html_head())
+        self._add_if_present(assets["html_bodies"], module.html_body())
+
+    def _collect_module_assets(self) -> dict[str, list]:
+        """Collects all assets (JS, CSS, HTML) from active modules.
+        
+        Returns:
+            A dictionary containing lists of:
+            - 'js_embed': Embedded JavaScript code
+            - 'js_files': JavaScript file paths
+            - 'css_embed': Embedded CSS code
+            - 'css_files': CSS file paths
+            - 'html_heads': HTML to insert in <head>
+            - 'html_bodies': HTML to insert in <body>
+        """
+        assets = {
+            "js_embed": [],
+            "js_files": [],
+            "css_embed": [],
+            "css_files": [],
+            "html_heads": [],
+            "html_bodies": [],
+        }
+
+        for module in getattr(self, "_active_modules", {}).values():
+            self._process_module_assets(module, assets)
+
+        return assets
+
     def render(self, template_name: str, **kwargs: Any) -> "Future[None]":
         """Renders the template with the given arguments as the response.
 
@@ -1025,61 +1087,31 @@ class RequestHandler:
         html = self.render_string(template_name, **kwargs)
 
         # Insert the additional JS and CSS added by the modules on the page
-        js_embed = []
-        js_files = []
-        css_embed = []
-        css_files = []
-        html_heads = []
-        html_bodies = []
-        for module in getattr(self, "_active_modules", {}).values():
-            embed_part = module.embedded_javascript()
-            if embed_part:
-                js_embed.append(utf8(embed_part))
-            file_part = module.javascript_files()
-            if file_part:
-                if isinstance(file_part, (unicode_type, bytes)):
-                    js_files.append(_unicode(file_part))
-                else:
-                    js_files.extend(file_part)
-            embed_part = module.embedded_css()
-            if embed_part:
-                css_embed.append(utf8(embed_part))
-            file_part = module.css_files()
-            if file_part:
-                if isinstance(file_part, (unicode_type, bytes)):
-                    css_files.append(_unicode(file_part))
-                else:
-                    css_files.extend(file_part)
-            head_part = module.html_head()
-            if head_part:
-                html_heads.append(utf8(head_part))
-            body_part = module.html_body()
-            if body_part:
-                html_bodies.append(utf8(body_part))
+        assets = self._collect_module_assets()
 
-        if js_files:
+        if assets["js_files"]:
             # Maintain order of JavaScript files given by modules
-            js = self.render_linked_js(js_files)
+            js = self.render_linked_js(assets["js_files"])
             sloc = html.rindex(b"</body>")
             html = html[:sloc] + utf8(js) + b"\n" + html[sloc:]
-        if js_embed:
-            js_bytes = self.render_embed_js(js_embed)
+        if assets["js_embed"]:
+            js_bytes = self.render_embed_js(assets["js_embed"])
             sloc = html.rindex(b"</body>")
             html = html[:sloc] + js_bytes + b"\n" + html[sloc:]
-        if css_files:
-            css = self.render_linked_css(css_files)
+        if assets["css_files"]:
+            css = self.render_linked_css(assets["css_files"])
             hloc = html.index(b"</head>")
             html = html[:hloc] + utf8(css) + b"\n" + html[hloc:]
-        if css_embed:
-            css_bytes = self.render_embed_css(css_embed)
+        if assets["css_embed"]:
+            css_bytes = self.render_embed_css(assets["css_embed"])
             hloc = html.index(b"</head>")
             html = html[:hloc] + css_bytes + b"\n" + html[hloc:]
-        if html_heads:
+        if assets["html_heads"]:
             hloc = html.index(b"</head>")
-            html = html[:hloc] + b"".join(html_heads) + b"\n" + html[hloc:]
-        if html_bodies:
+            html = html[:hloc] + b"".join(assets["html_heads"]) + b"\n" + html[hloc:]
+        if assets["html_bodies"]:
             hloc = html.index(b"</body>")
-            html = html[:hloc] + b"".join(html_bodies) + b"\n" + html[hloc:]
+            html = html[:hloc] + b"".join(assets["html_bodies"]) + b"\n" + html[hloc:]
         return self.finish(html)
 
     def render_linked_js(self, js_files: Iterable[str]) -> str:
