@@ -1809,6 +1809,27 @@ class Header204Test(SimpleHandlerTestCase):
         self.assertNotIn("Transfer-Encoding", response.headers)
 
 
+class HTTPError204Test(SimpleHandlerTestCase):
+    """Regression test for issue #3360: raising HTTPError(204) used to
+    route through send_error -> write_error -> default HTML body, then
+    trip the "Cannot send body with 204" assertion in finish() (or, under
+    ``python -O``, produce a malformed response with a body and no
+    Content-Length header). send_error must skip write_error for status
+    codes that must not carry a body.
+    """
+
+    class Handler(RequestHandler):
+        def get(self):
+            raise HTTPError(204)
+
+    def test_http_error_204(self):
+        response = self.fetch("/")
+        self.assertEqual(response.code, 204)
+        self.assertNotIn("Content-Length", response.headers)
+        self.assertNotIn("Transfer-Encoding", response.headers)
+        self.assertEqual(response.body, b"")
+
+
 class Header304Test(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):

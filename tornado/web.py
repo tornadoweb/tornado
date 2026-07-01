@@ -1357,7 +1357,7 @@ class RequestHandler:
                 reason = exception.reason
         self.set_status(status_code, reason=reason)
         try:
-            if status_code != 304:
+            if status_code != 304 and status_code != 204:
                 self.write_error(status_code, **kwargs)
         except Exception:
             app_log.error("Uncaught exception in write_error", exc_info=True)
