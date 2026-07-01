@@ -273,12 +273,39 @@ class TCPClient:
         # the same host. (http://tools.ietf.org/html/rfc6555#section-4.2)
         if ssl_options is not None:
             if timeout is not None:
-                stream = await gen.with_timeout(
-                    timeout,
-                    stream.start_tls(
-                        False, ssl_options=ssl_options, server_hostname=host
-                    ),
+                # Issue #3614: IOStream.start_tls transfers socket ownership
+                # to a new SSLIOStream *before* the handshake completes and
+                # sets self.socket to None on the original stream. If the
+                # TLS handshake times out, gen.with_timeout raises
+                # TimeoutError to the caller; the original stream is now a
+                # no-op (its socket is gone) and the new SSLIOStream that
+                # actually owns the socket is only reachable through the
+                # inner future -- which gen.with_timeout deliberately
+                # leaves running. Without an explicit close, the socket
+                # is leaked.
+                #
+                # Capture the future returned by start_tls so that, on
+                # timeout, we can close the SSLIOStream that owns the
+                # underlying socket.
+                tls_future = stream.start_tls(
+                    False, ssl_options=ssl_options, server_hostname=host
                 )
+                try:
+                    stream = await gen.with_timeout(timeout, tls_future)
+                except TimeoutError:
+                    # The handshake is still pending (with_timeout does not
+                    # cancel the wrapped future). When it eventually
+                    # completes, the result is the SSLIOStream that owns
+                    # the underlying socket -- closing it releases the fd.
+                    # If the future ends up failing, the SSLIOStream
+                    # already closes its socket as part of the failure
+                    # path, so there is nothing to do.
+                    def _close_if_succeeded(f: Future[IOStream]) -> None:
+                        if f.exception() is None:
+                            f.result().close()
+
+                    future_add_done_callback(tls_future, _close_if_succeeded)
+                    raise
             else:
                 stream = await stream.start_tls(
                     False, ssl_options=ssl_options, server_hostname=host
