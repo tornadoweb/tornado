@@ -5,6 +5,7 @@ import sys
 import time
 import unittest
 
+from tornado import gen
 from tornado.process import Subprocess
 from tornado.test.util import skipIfNonUnix
 from tornado.testing import AsyncTestCase, gen_test
@@ -294,3 +295,23 @@ class SubprocessTest(AsyncTestCase):
         subproc = Subprocess([sys.executable, "-c", "import sys; sys.exit(1)"])
         ret = yield subproc.wait_for_exit(raise_error=False)
         self.assertEqual(ret, 1)
+
+    @gen_test
+    def test_wait_for_exit_after_proc_wait(self):
+        # Issue #3364: if the caller reaps the child via Popen.wait() or
+        # .communicate() before our SIGCHLD handler can pick it up, the
+        # subsequent os.waitpid(WNOHANG) raises ChildProcessError. The
+        # exit callback was previously dropped in that branch, so
+        # wait_for_exit() never resolved. Now we fall back to the
+        # returncode that Popen already observed, and the future resolves.
+        Subprocess.initialize()
+        self.addCleanup(Subprocess.uninitialize)
+        subproc = Subprocess([sys.executable, "-c", "import sys; sys.exit(7)"])
+        # Reap the child before our handler can: this is exactly the
+        # sequence that previously left wait_for_exit() hanging.
+        ret_code = subproc.proc.wait()
+        self.assertEqual(ret_code, 7)
+        # Give the IOLoop a turn so the signal handler can run.
+        yield gen.sleep(0.05)
+        ret = yield subproc.wait_for_exit(raise_error=False)
+        self.assertEqual(ret, 7)
