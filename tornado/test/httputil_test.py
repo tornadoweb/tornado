@@ -507,6 +507,22 @@ Foo: even
         headers2 = HTTPHeaders.parse(str(headers))
         self.assertEqual(headers, headers2)
 
+    def test_non_str_key_setitem(self):
+        # The indexers and delitem should reject non-str keys with a clear
+        # TypeError rather than leaking AttributeError from inside
+        # _normalize_header's name.split('-').
+        headers = HTTPHeaders()
+        for bad in [1, 1.5, ("X-Foo",), b"X-Foo", None]:
+            with self.assertRaises(TypeError):
+                headers[bad] = "value"
+            with self.assertRaises(TypeError):
+                _ = headers[bad]
+            with self.assertRaises(TypeError):
+                del headers[bad]
+        # __contains__ should still return False for non-str keys without raising.
+        self.assertNotIn(1, headers)
+        self.assertNotIn(b"Foo", headers)
+
     def test_invalid_header_names(self):
         invalid_names = [
             "",
