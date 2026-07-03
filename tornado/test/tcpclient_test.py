@@ -17,16 +17,19 @@ import socket
 import typing
 import unittest
 from contextlib import closing
+import ssl
 
+from tornado import gen
 from tornado.concurrent import Future
 from tornado.gen import TimeoutError
 from tornado.iostream import IOStream
+from tornado.log import app_log
 from tornado.netutil import Resolver, bind_sockets
 from tornado.queues import Queue
 from tornado.tcpclient import TCPClient, _Connector
 from tornado.tcpserver import TCPServer
 from tornado.test.util import refusing_port, skipIfNoIPv6, skipIfNonUnix
-from tornado.testing import AsyncTestCase, gen_test
+from tornado.testing import AsyncTestCase, ExpectLog, gen_test
 
 # Fake address families for testing.  Used in place of AF_INET
 # and AF_INET6 because some installations do not have AF_INET6.
@@ -172,6 +175,95 @@ class TCPClientTest(AsyncTestCase):
             yield TCPClient(resolver=TimeoutResolver()).connect(
                 "1.2.3.4", 12345, timeout=timeout
             )
+
+
+class TCPClientSSLTimeoutTest(AsyncTestCase):
+    # Regression test for https://github.com/tornadoweb/tornado/issues/3614.
+    # When a ``TCPClient.connect`` call has both ``ssl_options`` and a
+    # ``timeout``, and the TLS handshake does not complete in time, the
+    # underlying socket must be released. The pre-fix code left the
+    # ``SSLIOStream`` registered on the IOLoop forever, so the file
+    # descriptor stayed open until the process exited.
+    def setUp(self):
+        super().setUp()
+        self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.listener.bind(("127.0.0.1", 0))
+        self.listener.listen(1)
+        self.port = self.listener.getsockname()[1]
+        # Accept and drop the first connection in a background thread so
+        # the client sees an established TCP socket and then tries to
+        # perform the TLS handshake against a peer that never speaks.
+        import threading
+
+        self._accept_thread = threading.Thread(
+            target=self._accept_loop, daemon=True
+        )
+        self._accept_thread.start()
+
+    def _accept_loop(self):
+        try:
+            while True:
+                conn, _addr = self.listener.accept()
+                # Hold the server side open but do not send any TLS
+                # bytes. This is enough to wedge the client's
+                # ``start_tls`` handshake until the timeout fires.
+        except OSError:
+            return
+
+    def tearDown(self):
+        try:
+            self.listener.close()
+        except OSError:
+            pass
+        super().tearDown()
+
+    def _count_open_sockets(self):
+        # ``/proc/net/tcp`` is the most reliable cross-platform-ish
+        # signal that a socket is still in the kernel, even if the
+        # Python file descriptor has been closed via ``close_fd``.
+        import os
+
+        try:
+            text = open("/proc/net/tcp").read()
+        except FileNotFoundError:
+            self.skipTest("/proc/net/tcp not available on this platform")
+        target_hex = f"{self.port:04X}"
+        n = 0
+        for line in text.splitlines()[1:]:
+            parts = line.split()
+            # state "01" is ESTABLISHED -- this is what an un-closed
+            # leaked client socket will look like.
+            if len(parts) < 4 or parts[3] != "01":
+                continue
+            local = parts[1]
+            if local.upper() == target_hex:
+                n += 1
+        return n
+
+    @gen_test
+    def test_ssl_handshake_timeout_releases_socket(self):
+        ssl_ctx = ssl.create_default_context()
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
+
+        client = TCPClient()
+        # Suppress the expected "Exception in Future after timeout"
+        # error log from ``gen.with_timeout`` (the wrapped future will
+        # fail when its SSLIOStream is force-closed below).
+        with ExpectLog(app_log, "Exception in Future .* after timeout"):
+            with self.assertRaises(gen.TimeoutError):
+                yield client.connect(
+                    "127.0.0.1",
+                    self.port,
+                    ssl_options=ssl_ctx,
+                    timeout=0.2,
+                )
+        # Give the IOLoop a moment to run any pending close callbacks
+        # and to tear the SSLIOStream's socket down.
+        yield gen.sleep(0.1)
+        # If the leak is back, there will be a lingering ESTABLISHED
+        # entry in /proc/net/tcp that points at our local port.
+        self.assertEqual(self._count_open_sockets(), 0)
 
 
 class TestConnectorSplit(unittest.TestCase):

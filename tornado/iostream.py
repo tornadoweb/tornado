@@ -594,6 +594,7 @@ class BaseIOStream:
                 self._state = None
             self.close_fd()
             self._closed = True
+        _discard_pending_ssl_stream(self)
         self._signal_closed()
 
     def _signal_closed(self) -> None:
@@ -1092,6 +1093,8 @@ class IOStream(BaseIOStream):
         return self.socket
 
     def close_fd(self) -> None:
+        if self.socket is None:
+            return
         self.socket.close()
         self.socket = None  # type: ignore
 
@@ -1240,6 +1243,11 @@ class IOStream(BaseIOStream):
         socket = self.socket
         self.io_loop.remove_handler(socket)
         self.socket = None  # type: ignore
+        # The IOStream no longer owns any I/O resources; mark it as
+        # quiesced so a subsequent ``close()`` does not try to
+        # dereference the now-``None`` socket. See
+        # https://github.com/tornadoweb/tornado/issues/3614.
+        self._state = None
         socket = ssl_wrap_socket(
             socket,
             ssl_options,
@@ -1256,6 +1264,23 @@ class IOStream(BaseIOStream):
         ssl_stream._ssl_connect_future = future
         ssl_stream.max_buffer_size = self.max_buffer_size
         ssl_stream.read_chunk_size = self.read_chunk_size
+        # Expose the in-progress ``SSLIOStream`` on the original stream so
+        # callers (notably ``TCPClient.connect`` under a deadline) can
+        # close it if the handshake is abandoned. ``IOStream.close``
+        # looks at this attribute and releases the underlying socket
+        # if it is still set. See
+        # https://github.com/tornadoweb/tornado/issues/3614.
+        self._pending_ssl_stream = ssl_stream
+        # The ``start_tls`` future resolves when the handshake finishes
+        # (successfully or with an error). At that point the SSLIOStream
+        # is no longer ``in-flight`` from the perspective of the original
+        # IOStream: the caller has either received it as the result, or
+        # it has been closed as part of the failure path. Either way the
+        # original IOStream should not hold a reference to it any more.
+        # See https://github.com/tornadoweb/tornado/issues/3614.
+        future.add_done_callback(
+            lambda f: _discard_pending_ssl_stream(self, close_it=False)
+        )
         return future
 
     def _handle_connect(self) -> None:
@@ -1600,6 +1625,29 @@ class PipeIOStream(BaseIOStream):
                 raise
         finally:
             del buf
+
+
+def _discard_pending_ssl_stream(stream: IOStream, *, close_it: bool = True) -> None:
+    """Close or release any in-flight ``SSLIOStream`` created by ``start_tls``.
+
+    ``IOStream.start_tls`` transfers ownership of the underlying socket
+    to a new ``SSLIOStream`` *before* the TLS handshake completes. If a
+    caller (typically ``TCPClient.connect``) times out while the
+    handshake is in flight, the original ``IOStream`` is the only
+    reference still reachable from the caller's scope, but its
+    ``.socket`` is already ``None`` and calling ``close()`` on it is a
+    no-op. The new ``SSLIOStream`` (and the socket it owns) becomes
+    unreachable and leaks permanently.
+
+    This helper closes that in-flight ``SSLIOStream`` (if any) when the
+    original stream is closed, so its socket is released.
+    """
+    ssl_stream = getattr(stream, "_pending_ssl_stream", None)
+    if ssl_stream is None:
+        return
+    stream._pending_ssl_stream = None
+    if close_it and not ssl_stream.closed():
+        ssl_stream.close()
 
 
 def doctests() -> Any:
