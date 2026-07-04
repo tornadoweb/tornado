@@ -119,13 +119,13 @@ class PatchHandler(RequestHandler):
 
 
 class AllMethodsHandler(RequestHandler):
-    SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ("OTHER",)  # type: ignore
+    SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ("OTHER", "QUERY")  # type: ignore
 
     def method(self):
         assert self.request.method is not None
         self.write(self.request.method)
 
-    get = head = post = put = delete = options = patch = other = method  # type: ignore
+    get = head = post = put = delete = options = patch = other = query = method  # type: ignore
 
 
 class SetHeaderHandler(RequestHandler):
@@ -384,6 +384,22 @@ Transfer-Encoding: chunked
             resp = self.fetch(url, method="HEAD")
             self.assertEqual(200, resp.code)
             self.assertEqual(b"", resp.body)
+
+    def test_query_after_redirect(self):
+        # QUERY is a safe, idempotent, cacheable method (RFC 10008) so
+        # a 301/302/303 redirect from a QUERY request should turn the
+        # followed request into a GET, matching the behaviour of
+        # browsers and what Tornado already does for POST.
+        for status in [301, 302, 303]:
+            url = "/redirect?url=/all_methods&status=%d" % status
+            resp = self.fetch(url, method="QUERY", body=b"id=42")
+            self.assertEqual(b"GET", resp.body)
+
+        # Newer redirects preserve the original QUERY method.
+        for status in [307, 308]:
+            url = "/redirect?url=/all_methods&status=%d" % status
+            resp = self.fetch(url, method="QUERY", body=b"id=42")
+            self.assertEqual(b"QUERY", resp.body)
 
     def test_credentials_in_url(self):
         url = self.get_url("/auth").replace("http://", "http://me:secret@")
