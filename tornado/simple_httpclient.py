@@ -245,7 +245,16 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
 
 class _HTTPConnection(httputil.HTTPMessageDelegate):
-    _SUPPORTED_METHODS = {"GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"}
+    _SUPPORTED_METHODS = {
+        "GET",
+        "HEAD",
+        "POST",
+        "PUT",
+        "DELETE",
+        "PATCH",
+        "OPTIONS",
+        "QUERY",
+    }
 
     def __init__(
         self,
@@ -399,7 +408,12 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 # Some HTTP methods nearly always have bodies while others
                 # almost never do. Fail in this case unless the user has
                 # opted out of sanity checks with allow_nonstandard_methods.
-                body_expected = self.request.method in ("POST", "PATCH", "PUT")
+                body_expected = self.request.method in (
+                    "POST",
+                    "PATCH",
+                    "PUT",
+                    "QUERY",
+                )
                 body_present = (
                     self.request.body is not None
                     or self.request.body_producer is not None
@@ -673,7 +687,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             # for *all* methods, but libcurl < 7.70 only does this
             # for POST, while libcurl >= 7.70 does it for other methods.
             if (self.code == 303 and self.request.method != "HEAD") or (
-                self.code in (301, 302) and self.request.method == "POST"
+                self.code in (301, 302)
+                and self.request.method in ("POST", "QUERY")
             ):
                 new_request.method = "GET"
                 new_request.body = None  # type: ignore
