@@ -1256,6 +1256,7 @@ class IOStream(BaseIOStream):
         ssl_stream._ssl_connect_future = future
         ssl_stream.max_buffer_size = self.max_buffer_size
         ssl_stream.read_chunk_size = self.read_chunk_size
+        future._ssl_stream = ssl_stream
         return future
 
     def _handle_connect(self) -> None:
