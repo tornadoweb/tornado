@@ -1256,6 +1256,14 @@ class IOStream(BaseIOStream):
         ssl_stream._ssl_connect_future = future
         ssl_stream.max_buffer_size = self.max_buffer_size
         ssl_stream.read_chunk_size = self.read_chunk_size
+        # Stash a back-reference to the new stream on the returned future
+        # so callers that race the handshake against a timeout (e.g.
+        # TCPClient.connect with both ssl_options and timeout) can close
+        # the underlying socket if the handshake doesn't complete. Without
+        # this, gen.with_timeout leaves the SSLIOStream registered on the
+        # IOLoop with no reachable reference, and the socket file
+        # descriptor is leaked forever.
+        future._ssl_stream = ssl_stream  # type: ignore[attr-defined]
         return future
 
     def _handle_connect(self) -> None:

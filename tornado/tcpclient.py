@@ -273,12 +273,21 @@ class TCPClient:
         # the same host. (http://tools.ietf.org/html/rfc6555#section-4.2)
         if ssl_options is not None:
             if timeout is not None:
-                stream = await gen.with_timeout(
-                    timeout,
-                    stream.start_tls(
-                        False, ssl_options=ssl_options, server_hostname=host
-                    ),
+                tls_future = stream.start_tls(
+                    False, ssl_options=ssl_options, server_hostname=host
                 )
+                try:
+                    stream = await gen.with_timeout(timeout, tls_future)
+                except gen.TimeoutError:
+                    # gen.with_timeout does not cancel its inner future, so
+                    # the SSLIOStream is still registered on the IOLoop with
+                    # no reachable reference. IOStream.start_tls stashes a
+                    # back-reference on the returned future so we can close
+                    # the stream here and release the underlying socket.
+                    ssl_stream = getattr(tls_future, "_ssl_stream", None)
+                    if ssl_stream is not None:
+                        ssl_stream.close()
+                    raise
             else:
                 stream = await stream.start_tls(
                     False, ssl_options=ssl_options, server_hostname=host

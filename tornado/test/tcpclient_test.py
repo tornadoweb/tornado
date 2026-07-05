@@ -16,9 +16,12 @@ import getpass
 import socket
 import typing
 import unittest
+import os
+import ssl
 from contextlib import closing
 
 from tornado.concurrent import Future
+from tornado import gen
 from tornado.gen import TimeoutError
 from tornado.iostream import IOStream
 from tornado.netutil import Resolver, bind_sockets
@@ -26,7 +29,7 @@ from tornado.queues import Queue
 from tornado.tcpclient import TCPClient, _Connector
 from tornado.tcpserver import TCPServer
 from tornado.test.util import refusing_port, skipIfNoIPv6, skipIfNonUnix
-from tornado.testing import AsyncTestCase, gen_test
+from tornado.testing import AsyncTestCase, bind_unused_port, gen_test
 
 # Fake address families for testing.  Used in place of AF_INET
 # and AF_INET6 because some installations do not have AF_INET6.
@@ -172,6 +175,76 @@ class TCPClientTest(AsyncTestCase):
             yield TCPClient(resolver=TimeoutResolver()).connect(
                 "1.2.3.4", 12345, timeout=timeout
             )
+
+    @gen_test
+    def test_ssl_handshake_timeout_does_not_leak_socket(self):
+        # Regression test for #3614: when TCPClient.connect is called with
+        # both ssl_options and timeout, a TLS handshake timeout used to leak
+        # the underlying socket. gen.with_timeout doesn't cancel its inner
+        # future, so the SSLIOStream (which holds the real socket) was
+        # left registered on the IOLoop with no reachable reference.
+        # A server that accepts the TCP connection but never speaks TLS.
+        # The client will connect, kick off the TLS handshake, then wait
+        # forever for a response that never comes.
+        from tornado.netutil import bind_sockets
+
+        sockets = bind_sockets(0, "127.0.0.1", family=socket.AF_INET)
+        port = sockets[0].getsockname()[1]
+
+        def _accept(fd, events):
+            for sock in sockets:
+                try:
+                    conn, _ = sock.accept()
+                    # Hold the raw accepted socket open so it can be
+                    # counted separately, but never hand it to an SSL
+                    # server. The client's TLS handshake will hang
+                    # waiting for a ServerHello that never arrives.
+                    self._held_server_sockets.append(conn)
+                except BlockingIOError:
+                    pass
+
+        self._held_server_sockets: list[socket.socket] = []
+        for sock in sockets:
+            self.io_loop.add_handler(
+                sock.fileno(), _accept, self.io_loop.READ
+            )
+
+        try:
+            fd_dir = "/proc/self/fd"
+            before = len(os.listdir(fd_dir))
+
+            ssl_ctx = ssl.create_default_context()
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
+            with self.assertRaises(TimeoutError):
+                yield TCPClient().connect(
+                    "127.0.0.1",
+                    port,
+                    ssl_options=ssl_ctx,
+                    timeout=0.05,
+                )
+
+            # The IOLoop is responsible for closing the SSLIOStream's
+            # socket. Run a few iterations to give it the chance.
+            for _ in range(5):
+                yield gen.sleep(0.01)
+
+            # The raw accepted server sockets are still open; subtract
+            # those out so we're really measuring the client-side leak.
+            held = len(self._held_server_sockets)
+            after = len(os.listdir(fd_dir))
+            # Each accepted server connection accounts for one fd
+            # on the server side, and the TCPClient's connect did not
+            # open any new fds on the client side once the handshake
+            # is unwound on timeout. So the only delta should be the
+            # accepted connections.
+            self.assertEqual(after, before + held)
+        finally:
+            for sock in sockets:
+                self.io_loop.remove_handler(sock.fileno())
+                sock.close()
+            for sock in self._held_server_sockets:
+                sock.close()
 
 
 class TestConnectorSplit(unittest.TestCase):
