@@ -1564,7 +1564,7 @@ class RequestHandler:
                     ]
                 )
             else:
-                raise ValueError("unknown xsrf cookie version %d", output_version)
+                raise ValueError("unknown xsrf cookie version %d" % output_version)
             if version is None:
                 if self.current_user and "expires_days" not in cookie_kwargs:
                     cookie_kwargs["expires_days"] = 30
