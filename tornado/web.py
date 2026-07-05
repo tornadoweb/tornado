@@ -2001,14 +2001,14 @@ def stream_request_body(cls: type[_RequestHandlerType]) -> type[_RequestHandlerT
     for example usage.
     """  # noqa: E501
     if not issubclass(cls, RequestHandler):
-        raise TypeError("expected subclass of RequestHandler, got %r", cls)
+        raise TypeError("expected subclass of RequestHandler, got %r" % cls)
     cls._stream_request_body = True
     return cls
 
 
 def _has_stream_request_body(cls: type[RequestHandler]) -> bool:
     if not issubclass(cls, RequestHandler):
-        raise TypeError("expected subclass of RequestHandler, got %r", cls)
+        raise TypeError("expected subclass of RequestHandler, got %r" % cls)
     return cls._stream_request_body
 
 
