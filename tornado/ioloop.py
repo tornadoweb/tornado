@@ -654,7 +654,7 @@ class IOLoop(Configurable):
     ) -> None:
         """Calls the given callback on the next I/O loop iteration.
 
-        Intended to be afe for use from a Python signal handler; should not be
+        Intended to be safe for use from a Python signal handler; should not be
         used otherwise.
 
         .. deprecated:: 6.4
