@@ -929,6 +929,23 @@ class WaitIteratorTest(AsyncTestCase):
             datetime.timedelta(seconds=0.1), gen.WaitIterator(gen.sleep(0)).next()
         )
 
+    @gen_test
+    def test_iterator_accepts_coroutine(self):
+        # WaitIterator's constructor is documented to take any
+        # awaitable, not just Futures. Passing coroutines (e.g. the
+        # result of ``gen.sleep`` or ``tornado.locks.Event().wait()``)
+        # must work without raising and produce the awaited values.
+        async def produce(value: int, delay: float) -> int:
+            await gen.sleep(delay)
+            return value
+
+        g = gen.WaitIterator(produce(1, 0.01), produce(2, 0.02), produce(3, 0.0))
+        results: dict[int, int] = {}
+        while not g.done():
+            r = yield g.next()
+            results[g.current_index] = r
+        self.assertEqual(results, {0: 1, 1: 2, 2: 3})
+
 
 class RunnerGCTest(AsyncTestCase):
     def is_pypy3(self):
