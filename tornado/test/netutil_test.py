@@ -177,6 +177,11 @@ class IsValidIPTest(unittest.TestCase):
         self.assertTrue(is_valid_ip("4.4.4.4"))
         self.assertTrue(is_valid_ip("::1"))
         self.assertTrue(is_valid_ip("2620:0:1cfe:face:b00c::3"))
+        # IPv6 in RFC 3986 URI form (e.g. emitted by some load balancers
+        # in X-Forwarded-For headers, see issue #3561)
+        self.assertTrue(is_valid_ip("[::1]"))
+        self.assertTrue(is_valid_ip("[2620:0:d60:ac1a::10]"))
+        self.assertTrue(is_valid_ip("[2620:0:1cfe:face:b00c::3]"))
         self.assertFalse(is_valid_ip("www.google.com"))
         self.assertFalse(is_valid_ip("localhost"))
         self.assertFalse(is_valid_ip("4.4.4.4<"))
@@ -186,6 +191,10 @@ class IsValidIPTest(unittest.TestCase):
         self.assertFalse(is_valid_ip("\n"))
         self.assertFalse(is_valid_ip("\x00"))
         self.assertFalse(is_valid_ip("a" * 100))
+        # Malformed bracketed values are still rejected
+        self.assertFalse(is_valid_ip("[]"))
+        self.assertFalse(is_valid_ip("[not-an-ip]"))
+        self.assertFalse(is_valid_ip("[127.0.0.1"))
 
 
 class TestPortAllocation(unittest.TestCase):
