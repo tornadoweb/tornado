@@ -1692,6 +1692,40 @@ class RequestHandler:
             + '"/>'
         )
 
+    def check_allowed_origin(self) -> None:
+        """Check if a request should be rejected as cross-origin.
+
+        If the setting check_allowed_origin is True, this is called for non-safe
+        HTTP requests (i.e. not GET, HEAD or OPTIONS). It raises HTTPError 403
+        to reject a request.
+        """
+        origin = self.request.headers.get("Origin")
+        if origin is not None:
+            origin = origin.lower()
+            if origin in self.application.settings.get("allowed_origins", ()):
+                return  # Origin in explicit allowlist
+
+        if (sfs := self.request.headers.get("Sec-Fetch-Site")) is not None:
+            # All major browsers send the Sec-Fetch-Site header since ~2023
+            # for 'potentially trustworthy' URLs (roughly, HTTPS or localhost)
+            if sfs in ("same-origin", "none"):
+                return  # OK according to Sec-Fetch-Site
+            raise HTTPError(
+                403,
+                f"Cross-origin request with unsafe method (Sec-Fetch-Site: {sfs})",
+            )
+
+        if origin is None:  # Sec-Fetch-Site must also be missing to reach here
+            return  # Probably a non-browser request
+
+        host = self.request.headers.get("Host")
+        if urllib.parse.urlsplit(origin).netloc != host:
+            raise HTTPError(
+                403,
+                f"Cross-origin request with unsafe method (Origin {origin!r} does not "
+                f"match Host {host!r} or allowed_origins)",
+            )
+
     def static_url(
         self, path: str, include_host: bool | None = None, **kwargs: Any
     ) -> str:
@@ -1828,12 +1862,11 @@ class RequestHandler:
             }
             # If XSRF cookies are turned on, reject form submissions without
             # the proper cookie
-            if self.request.method not in (
-                "GET",
-                "HEAD",
-                "OPTIONS",
-            ) and self.application.settings.get("xsrf_cookies"):
-                self.check_xsrf_cookie()
+            if self.request.method not in ("GET", "HEAD", "OPTIONS"):
+                if self.application.settings.get("xsrf_cookies"):
+                    self.check_xsrf_cookie()
+                if self.application.settings.get("check_allowed_origin"):
+                    self.check_allowed_origin()
 
             result = self.prepare()
             if result is not None:
