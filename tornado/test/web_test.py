@@ -2337,6 +2337,35 @@ class PatchMethodTest(SimpleHandlerTestCase):
         self.assertEqual(response.body, b"other")
 
 
+class QueryMethodTest(SimpleHandlerTestCase):
+    """The QUERY method was standardised by RFC 10008. It is safe, idempotent
+    and cacheable, and carries its query in a request body rather than in
+    the URL. Tornado's RequestHandler should treat it like any other
+    standard method (responds with 405 when not implemented, dispatches to
+    ``query()`` when implemented).
+    """
+
+    class Handler(RequestHandler):
+        # Intentionally no ``query`` method. The default stub raises 405.
+        pass
+
+    def test_unimplemented_query(self):
+        # QUERY is now in SUPPORTED_METHODS by default, so the
+        # unimplemented-method stub should produce a 405.
+        response = self.fetch("/", method="QUERY", body=b"")
+        self.assertEqual(response.code, 405)
+
+
+class QueryMethodDispatchTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def query(self):
+            self.write("query")
+
+    def test_query(self):
+        response = self.fetch("/", method="QUERY", body=b"")
+        self.assertEqual(response.body, b"query")
+
+
 class FinishInPrepareTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def prepare(self):
