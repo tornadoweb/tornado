@@ -3438,3 +3438,48 @@ class AcceptLanguageTest(WebTestCase):
     def test_accept_language_invalid(self):
         response = self.fetch("/", headers={"Accept-Language": "fr-FR;q=-1"})
         self.assertEqual(response.headers["Content-Language"], "en-US")
+
+
+class ConvertHeaderValueTest(unittest.TestCase):
+    """Unit tests for ``RequestHandler._convert_header_value``."""
+
+    def _convert(self, value):
+        # ``_convert_header_value`` only uses ``self`` to look up the
+        # class-level regex, so any RequestHandler instance will do.
+        return RequestHandler._convert_header_value(self, value)
+
+    def test_str_passthrough(self):
+        self.assertEqual(self._convert("plain"), "plain")
+
+    def test_bytes_decoded_latin1(self):
+        # Non-ascii bytes should be passed through as latin1 so
+        # they round-trip identically.
+        self.assertEqual(self._convert(b"caf\xc3\xa9"), "caf\xc3\xa9")
+
+    def test_int_converted(self):
+        self.assertEqual(self._convert(42), "42")
+        self.assertEqual(self._convert(0), "0")
+        self.assertEqual(self._convert(-1), "-1")
+
+    def test_unsafe_value_message_includes_value(self):
+        # Regression test: ValueError used to be raised with the bad
+        # value as a second positional argument, so str(e) was the
+        # tuple repr "('Unsafe header value %r', 'foo\\r\\nbar')" and
+        # the offending value was unreachable from str(e). It must now
+        # be formatted into the message so callers can log it.
+        bad = "foo\r\nX-Inject: yes"
+        with self.assertRaises(ValueError) as cm:
+            self._convert(bad)
+        msg = str(cm.exception)
+        self.assertIn("Unsafe header value", msg)
+        # The bad value (or a recognisable chunk of it) must appear in
+        # the message, not be hiding in e.args as a separate element.
+        self.assertIn("foo", msg)
+        # And the exception should have exactly one args entry — the
+        # formatted message — not two.
+        self.assertEqual(len(cm.exception.args), 1)
+
+    def test_empty_string_is_safe(self):
+        # An empty header value is allowed (mirrors the existing
+        # SetHeaderHandler behaviour in the integration test).
+        self.assertEqual(self._convert(""), "")
