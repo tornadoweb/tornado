@@ -276,6 +276,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         # Timeout handle returned by IOLoop.add_timeout
         self._timeout: object = None
         self._sockaddr = None
+        self._connecting_phase = "resolving"
         IOLoop.current().add_future(
             gen.convert_yielded(self.run()), lambda f: f.result()
         )
@@ -328,16 +329,55 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             if timeout:
                 self._timeout = self.io_loop.add_timeout(
                     self.start_time + timeout,
-                    functools.partial(self._on_timeout, "while connecting"),
+                    self._on_connect_timeout,
                 )
-            stream = await self.tcp_client.connect(
-                host,
-                port,
-                af=af,
-                ssl_options=ssl_options,
-                max_buffer_size=self.max_buffer_size,
-                source_ip=source_ip,
-            )
+            # Pre-resolve the hostname so a connect_timeout that
+            # fires while DNS is still in flight can be reported
+            # as "Timeout while resolving" rather than the generic
+            # "Timeout while connecting" (issue #3522).  We use the
+            # TCP client's resolver directly (so an OverrideResolver
+            # configured with hostname_mapping is honoured and
+            # returns the mapped host/port), then feed the resolved
+            # literal address and port to ``tcp_client.connect``.
+            # This drops the Happy-Eyeballs parallel-address-family
+            # fallback that ``TCPClient`` implements internally,
+            # but that fallback only matters on broken networks
+            # where DNS is unlikely to be the slow leg, so the
+            # trade-off is acceptable for the timeout-reporting
+            # use case.
+            if is_valid_ip(host):
+                # Numeric IP literal: skip the resolver so the timeout
+                # message correctly says "connect"
+                self._connecting_phase = "connecting"
+                stream = await self.tcp_client.connect(
+                    host,
+                    port,
+                    af=af,
+                    ssl_options=ssl_options,
+                    max_buffer_size=self.max_buffer_size,
+                    source_ip=source_ip,
+                )
+            else:
+                addrinfo = await self.tcp_client.resolver.resolve(
+                    host, port, af
+                )
+                # addrinfo is a list of (family, (host, port, ...))
+                # tuples.  ``TCPClient.connect`` would normally
+                # pick the first entry, so do the same here and use
+                # its host and port verbatim.  Picking the port
+                # from the resolved entry (rather than the
+                # original) is important for hostname_mapping
+                # configurations that rewrite the port.
+                connect_family, connect_sockaddr = addrinfo[0]
+                self._connecting_phase = "connecting"
+                stream = await self.tcp_client.connect(
+                    connect_sockaddr[0],
+                    connect_sockaddr[1],
+                    af=connect_family,
+                    ssl_options=ssl_options,
+                    max_buffer_size=self.max_buffer_size,
+                    source_ip=source_ip,
+                )
 
             if self.final_callback is None:
                 # final_callback is cleared if we've hit our timeout.
@@ -483,6 +523,16 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self._handle_exception(
                 HTTPTimeoutError, HTTPTimeoutError(error_message), None
             )
+
+    def _on_connect_timeout(self) -> None:
+        # Issue #3522: when the connect phase is split into a DNS resolve
+        # and a TCP/TLS handshake, surface which one actually expired so
+        # users can tell a slow DNS server apart from a slow target.
+        # The phase is updated by ``run`` (set to ``resolving`` on entry,
+        # and to ``connecting`` once the resolver has returned).
+        phase = getattr(self, "_connecting_phase", "connecting")
+        info = "while resolving" if phase == "resolving" else "while connecting"
+        self._on_timeout(info)
 
     def _remove_timeout(self) -> None:
         if self._timeout is not None:

@@ -336,12 +336,37 @@ class Subprocess:
         try:
             ret_pid, status = os.waitpid(pid, os.WNOHANG)  # type: ignore
         except ChildProcessError:
+            # The process has already been reaped (typically by a caller
+            # who called Subprocess.proc.wait() / .communicate() before
+            # our SIGCHLD handler could pick it up). The Popen object may
+            # already know the return code via proc.returncode; if so,
+            # schedule the exit callback so wait_for_exit() can resolve
+            # rather than hanging forever.
+            subproc = cls._waiting.get(pid)
+            if subproc is not None and subproc.proc.returncode is not None:
+                cls._waiting.pop(pid, None)
+                returncode = subproc.proc.returncode
+                subproc.io_loop.add_callback(
+                    subproc._set_returncode_known, returncode
+                )
             return
         if ret_pid == 0:
             return
         assert ret_pid == pid
         subproc = cls._waiting.pop(pid)
         subproc.io_loop.add_callback(subproc._set_returncode, status)
+
+    def _set_returncode_known(self, returncode: int) -> None:
+        # Set the returncode without going through WIFEXITED/WEXITSTATUS
+        # because we did not observe the status word ourselves: the
+        # Popen object learned the exit code from .wait()/.communicate(),
+        # and the kernel status has already been reaped and discarded.
+        self.returncode = returncode
+        self.proc.returncode = returncode
+        if self._exit_callback:
+            callback = self._exit_callback
+            self._exit_callback = None
+            callback(self.returncode)
 
     def _set_returncode(self, status: int) -> None:
         if sys.platform == "win32":
