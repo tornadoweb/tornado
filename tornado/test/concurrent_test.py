@@ -227,5 +227,15 @@ class RunOnExecutorTest(AsyncTestCase):
         self.assertEqual(result, 42)
 
 
+class RunOnExecutorArgValidationTest(AsyncTestCase):
+    def test_run_on_executor_bad_args(self):
+        with self.assertRaisesRegex(ValueError, "expected 1 argument, got 2"):
+            @run_on_executor(1, 2)
+            def f():
+                pass
+
+        pass
+
+
 if __name__ == "__main__":
     unittest.main()
