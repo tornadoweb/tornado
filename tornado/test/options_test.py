@@ -254,6 +254,15 @@ class OptionsTest(unittest.TestCase):
         options.parse_command_line(["main.py", "--foo=1,3,5:7"])
         self.assertEqual(options.foo, [1, 3, 5, 6, 7])
 
+    def test_parse_timedelta_invalid_raises_options_error(self):
+        # Malformed timedelta input should raise options.Error with a
+        # human-readable message, not a bare Exception with no context.
+        options = OptionParser()
+        options.define("foo", type=datetime.timedelta)
+        with self.assertRaises(Error) as cm:
+            options.parse_command_line(["main.py", "--foo=xyz"])
+        self.assertIn("xyz", str(cm.exception))
+
     def test_error_redefine(self):
         options = OptionParser()
         options.define("foo")
