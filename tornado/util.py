@@ -164,7 +164,18 @@ def errno_from_exception(e: BaseException) -> int | None:
     if hasattr(e, "errno"):
         return e.errno  # type: ignore
     elif e.args:
-        return e.args[0]
+        # Some third-party exceptions subclass OSError but only set the
+        # human-readable message (a str) as the first argument rather
+        # than an int errno. Returning the raw value would let it flow
+        # into call sites that compare it to int errno constants
+        # (e.g. ``errno_from_exception(exc) == errno.EBADF``) and
+        # silently turn every comparison into False, which masks the
+        # error class instead of reporting it. Require an int so callers
+        # fall through to their "not a recognised errno" branch.
+        arg = e.args[0]
+        if isinstance(arg, int):
+            return arg
+        return None
     else:
         return None
 
