@@ -313,6 +313,36 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
         cleanup_event.set()
         yield gen.sleep(0.2)
 
+    @gen_test
+    def test_connect_timeout_reports_resolving_phase(self):
+        # When the connect_timeout fires while the resolver is still working
+        # (i.e., before the host has been translated to an address), the
+        # error message should explicitly say ``resolving`` rather than the
+        # generic ``connecting`` so a slow DNS server is identifiable from
+        # the message alone (issue #3522).  Use a non-IP hostname here:
+        # ``self.get_url`` returns 127.0.0.1, which would skip the resolver.
+        timeout = 0.1
+
+        cleanup_event = Event()
+        test = self
+
+        class HangingResolver(Resolver):
+            async def resolve(self, *args, **kwargs):
+                await cleanup_event.wait()
+                return [(socket.AF_INET, ("127.0.0.1", test.get_http_port()))]
+
+        with closing(self.create_client(resolver=HangingResolver())) as client:
+            with self.assertRaises(HTTPTimeoutError) as cm:
+                yield client.fetch(
+                    "http://hostname.invalid/hello",
+                    connect_timeout=timeout,
+                    request_timeout=3600,
+                    raise_error=True,
+                )
+        self.assertIn("resolving", str(cm.exception))
+        cleanup_event.set()
+        yield gen.sleep(0.2)
+
     def test_request_timeout(self):
         timeout = 0.1
         if os.name == "nt" or os.environ.get("EMULATION") == "1":
