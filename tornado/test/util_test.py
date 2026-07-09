@@ -1,4 +1,5 @@
 import datetime
+import gzip
 import re
 import sys
 import textwrap
@@ -15,6 +16,7 @@ from tornado.util import (
     raise_exc_info,
     re_unescape,
     timedelta_to_seconds,
+    GzipDecompressor,
 )
 
 
@@ -366,3 +368,57 @@ class VersionInfoTest(unittest.TestCase):
 
     def test_current_version(self):
         self.assert_version_info_compatible(tornado.version, tornado.version_info)
+
+
+class GzipDecompressorTest(unittest.TestCase):
+    def test_concatenated_gzip_members(self):
+        """Test that concatenated gzip members are fully decompressed."""
+        data1 = b"First gzip member content."
+        data2 = b"Second gzip member content."
+
+        member1 = gzip.compress(data1)
+        member2 = gzip.compress(data2)
+
+        concatenated = member1 + member2
+        decompressor = GzipDecompressor()
+        result = decompressor.decompress(concatenated)
+
+        expected = data1 + data2
+        self.assertEqual(
+            result, expected, "Concatenated gzip members should be fully decompressed"
+        )
+
+    def test_single_gzip_member(self):
+        """Test that single gzip member is decompressed correctly."""
+        data = b"This is some example data that will be compressed using gzip."
+        compressed = gzip.compress(data)
+
+        decompressor = GzipDecompressor()
+        result = decompressor.decompress(compressed)
+
+        self.assertEqual(result, data)
+
+    def test_multiple_concatenated_members(self):
+        """Test that three or more concatenated gzip members are fully decompressed."""
+        data1 = b"First member."
+        data2 = b"Second member."
+        data3 = b"Third member."
+
+        concatenated = gzip.compress(data1) + gzip.compress(data2) + gzip.compress(data3)
+        decompressor = GzipDecompressor()
+        result = decompressor.decompress(concatenated)
+
+        expected = data1 + data2 + data3
+        self.assertEqual(result, expected)
+
+    def test_decompress_after_flush_raises(self):
+        """Test that decompress() raises RuntimeError after flush()."""
+        data = b"Test data"
+        compressed = gzip.compress(data)
+
+        decompressor = GzipDecompressor()
+        decompressor.decompress(compressed)
+        decompressor.flush()
+
+        with self.assertRaises(RuntimeError):
+            decompressor.decompress(gzip.compress(b"More data"))
