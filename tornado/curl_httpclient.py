@@ -41,6 +41,31 @@ from tornado.log import app_log
 
 curl_log = logging.getLogger("tornado.curl_httpclient")
 
+
+def _curl_debug_to_unicode(debug_msg: str | bytes) -> str:
+    """Convert a pycurl DEBUGFUNCTION debug_msg argument to str.
+
+    pycurl passes the raw bytes curl produced (request/response framing,
+    TLS metadata, header dumps, etc.). Those bytes are not guaranteed to be
+    valid UTF-8, but native_str (to_unicode) decodes as UTF-8 and
+    raises UnicodeDecodeError on invalid sequences -- which previously
+    crashed the request entirely (see issue #3183, where a proxy that
+    echoed back binary bytes from the upstream response triggered the
+    crash).
+
+    Latin-1 round-trips every possible byte 0x00-0xFF to the matching
+    U+0000-U+00FF code point without raising, so a non-UTF-8 debug
+    message is preserved as its byte sequence (rendered as the latin-1
+    characters) instead of killing the request. Valid UTF-8 is decoded
+    losslessly; non-UTF-8 bytes are preserved as the latin-1
+    character rather than swallowed by errors="replace", which would
+    be silent and harder to debug.
+    """
+    if isinstance(debug_msg, bytes):
+        return native_str(debug_msg.decode("latin1"))
+    return native_str(debug_msg)
+
+
 CR_OR_LF_RE = re.compile(b"\r|\n")
 
 
@@ -551,10 +576,10 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
     def _curl_debug(self, debug_type: int, debug_msg: str) -> None:
         debug_types = ("I", "<", ">", "<", ">")
         if debug_type == 0:
-            debug_msg = native_str(debug_msg)
+            debug_msg = _curl_debug_to_unicode(debug_msg)
             curl_log.debug("%s", debug_msg.strip())
         elif debug_type in (1, 2):
-            debug_msg = native_str(debug_msg)
+            debug_msg = _curl_debug_to_unicode(debug_msg)
             for line in debug_msg.splitlines():
                 curl_log.debug("%s %s", debug_types[debug_type], line)
         elif debug_type == 4:
