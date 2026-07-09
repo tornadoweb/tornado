@@ -366,3 +366,42 @@ class VersionInfoTest(unittest.TestCase):
 
     def test_current_version(self):
         self.assert_version_info_compatible(tornado.version, tornado.version_info)
+
+
+class GzipDecompressorTest(unittest.TestCase):
+    def _compress(self, data: bytes) -> bytes:
+        import gzip
+
+        return gzip.compress(data)
+
+    def test_single_member(self) -> None:
+        data = b"hello world"
+        d = tornado.util.GzipDecompressor()
+        out = d.decompress(self._compress(data))
+        out += d.flush()
+        self.assertEqual(out, data)
+        self.assertEqual(d.unconsumed_tail, b"")
+
+    def test_concatenated_members_in_single_decompress(self) -> None:
+        members = [b"first message", b"second message", b"third message"]
+        blob = b"".join(self._compress(m) for m in members)
+        d = tornado.util.GzipDecompressor()
+        out = d.decompress(blob)
+        out += d.flush()
+        self.assertEqual(out, b"".join(members))
+
+    def test_concatenated_members_across_decompress_calls(self) -> None:
+        members = [b"alpha", b"beta", b"gamma", b"delta"]
+        blobs = [self._compress(m) for m in members]
+        d = tornado.util.GzipDecompressor()
+        out = bytearray()
+        # Split each member's bytes across separate decompress calls so we
+        # exercise the buffering path between calls.
+        for blob in blobs:
+            chunk_a = blob[: len(blob) // 2]
+            chunk_b = blob[len(blob) // 2 :]
+            out.extend(d.decompress(chunk_a))
+            out.extend(d.decompress(chunk_b))
+        out.extend(d.flush())
+        self.assertEqual(bytes(out), b"".join(members))
+        self.assertEqual(d.unconsumed_tail, b"")

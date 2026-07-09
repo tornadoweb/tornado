@@ -325,6 +325,14 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
     # MutableMapping abstract method implementations.
 
     def __setitem__(self, name: str, value: str) -> None:
+        # `MutableMapping` lets any object reach the indexer; non-string keys
+        # used to leak an `AttributeError` from inside `_normalize_header`
+        # (which is `lru_cache`d and splits on `-`). Reject them up-front with a
+        # clear message; `__contains__` already short-circuits the same way.
+        if not isinstance(name, str):
+            raise TypeError(
+                "HTTPHeaders keys must be str, not %s" % type(name).__name__
+            )
         norm_name = _normalize_header(name)
         self._combined_cache[norm_name] = value
         self._as_list[norm_name] = [value]
@@ -338,12 +346,20 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
         return norm_name in self._as_list
 
     def __getitem__(self, name: str) -> str:
+        if not isinstance(name, str):
+            raise TypeError(
+                "HTTPHeaders keys must be str, not %s" % type(name).__name__
+            )
         header = _normalize_header(name)
         if header not in self._combined_cache:
             self._combined_cache[header] = ",".join(self._as_list[header])
         return self._combined_cache[header]
 
     def __delitem__(self, name: str) -> None:
+        if not isinstance(name, str):
+            raise TypeError(
+                "HTTPHeaders keys must be str, not %s" % type(name).__name__
+            )
         norm_name = _normalize_header(name)
         del self._combined_cache[norm_name]
         del self._as_list[norm_name]
