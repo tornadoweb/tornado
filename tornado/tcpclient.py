@@ -273,12 +273,18 @@ class TCPClient:
         # the same host. (http://tools.ietf.org/html/rfc6555#section-4.2)
         if ssl_options is not None:
             if timeout is not None:
-                stream = await gen.with_timeout(
-                    timeout,
-                    stream.start_tls(
-                        False, ssl_options=ssl_options, server_hostname=host
-                    ),
+                tls_future = stream.start_tls(
+                    False, ssl_options=ssl_options, server_hostname=host
                 )
+                try:
+                    stream = await gen.with_timeout(timeout, tls_future)
+                except gen.TimeoutError:
+                    # The TLS handshake timed out. The start_tls() call
+                    # transfers socket ownership to a new SSLIOStream before
+                    # the handshake completes. Cancel the future to trigger
+                    # cleanup and prevent a socket leak.
+                    tls_future.cancel()
+                    raise
             else:
                 stream = await stream.start_tls(
                     False, ssl_options=ssl_options, server_hostname=host
