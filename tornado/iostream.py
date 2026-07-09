@@ -1366,7 +1366,7 @@ class SSLIOStream(IOStream):
                     peer = self.socket.getpeername()
                 except Exception:
                     peer = "(not connected)"
-                gen_log.warning(
+                gen_log.info(
                     "SSL Error on %s %s: %s", self.socket.fileno(), peer, err
                 )
                 return self.close(exc_info=err)
