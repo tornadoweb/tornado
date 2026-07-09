@@ -993,7 +993,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             if ext[0] == "permessage-deflate" and self._compression_options is not None:
                 self._create_compressors("client", ext[1])
             else:
-                raise ValueError("unsupported extension %r", ext)
+                raise ValueError("unsupported extension %r" % ext)
 
         self.selected_subprotocol = headers.get("Sec-WebSocket-Protocol", None)
 

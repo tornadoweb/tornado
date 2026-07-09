@@ -16,6 +16,7 @@ import urllib.parse
 from io import BytesIO
 
 from tornado import gen, locale
+import tornado.web
 from tornado.concurrent import Future
 from tornado.escape import (
     json_decode,
@@ -3438,3 +3439,36 @@ class AcceptLanguageTest(WebTestCase):
     def test_accept_language_invalid(self):
         response = self.fetch("/", headers={"Accept-Language": "fr-FR;q=-1"})
         self.assertEqual(response.headers["Content-Language"], "en-US")
+
+
+class StreamRequestBodyTypeErrorTest(unittest.TestCase):
+    def test_stream_request_body_rejects_non_handler(self):
+        # stream_request_body and _has_stream_request_body used to call
+        # ``raise TypeError("expected subclass of RequestHandler, got %r", cls)``
+        # with the format string as a separate argument. That puts the literal
+        # ``"%r"`` placeholder and the class object into ``e.args`` as a tuple
+        # rather than formatting the message, so ``str(e)`` was the tuple repr
+        # ``"('expected subclass of RequestHandler, got %r', <class>)"`` and
+        # ``e.args[0]`` did not even mention ``RequestHandler``.
+        class NotAHandler:
+            pass
+
+        with self.assertRaises(TypeError) as cm:
+            stream_request_body(NotAHandler)
+        msg = str(cm.exception)
+        self.assertIn("expected subclass of RequestHandler", msg)
+        self.assertIn("NotAHandler", msg)
+        self.assertNotIn("%r", msg)
+        self.assertEqual(cm.exception.args[0], msg)
+
+    def test_has_stream_request_body_rejects_non_handler(self):
+        class NotAHandler:
+            pass
+
+        with self.assertRaises(TypeError) as cm:
+            tornado.web._has_stream_request_body(NotAHandler)
+        msg = str(cm.exception)
+        self.assertIn("expected subclass of RequestHandler", msg)
+        self.assertIn("NotAHandler", msg)
+        self.assertNotIn("%r", msg)
+        self.assertEqual(cm.exception.args[0], msg)
