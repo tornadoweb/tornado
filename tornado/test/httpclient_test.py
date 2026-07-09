@@ -322,6 +322,32 @@ Transfer-Encoding: chunked
                     raise_error=True,
                 )
 
+    def test_unsupported_auth_mode_message_format(self):
+        # The "unsupported auth_mode" ValueError used to be raised with a
+        # two-arg form (ValueError("unsupported auth_mode %s", mode)) so
+        # str(e) rendered the literal format string with the mode tucked
+        # into e.args[1]. The simple client now formats the message before
+        # raising, so a user reading the traceback or log line sees the
+        # actual offending mode. Only assert the format on the simple
+        # client; the curl client wraps the same condition in an HTTPError
+        # so we skip the check there.
+        client_cls = self.http_client.__class__
+        if not client_cls.__name__.startswith("Simple"):
+            return
+        with ExpectLog(gen_log, "uncaught exception", required=False):
+            with self.assertRaises(ValueError) as cm:
+                self.fetch(
+                    "/auth",
+                    auth_username="Aladdin",
+                    auth_password="open sesame",
+                    auth_mode="asdf",
+                    raise_error=True,
+                )
+        self.assertIn("asdf", str(cm.exception))
+        self.assertNotIn("%s", str(cm.exception))
+        self.assertEqual(len(cm.exception.args), 1)
+        self.assertIsInstance(cm.exception.args[0], str)
+
     def test_follow_redirect(self):
         response = self.fetch("/countdown/2", follow_redirects=False)
         self.assertEqual(302, response.code)
