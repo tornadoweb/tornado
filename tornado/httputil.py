@@ -1321,6 +1321,8 @@ def split_host_and_port(netloc: str) -> tuple[str, int | None]:
     if match:
         host = match.group(1)
         port: int | None = int(match.group(2))
+        if port < 0 or port > 65535:
+            raise HTTPInputError("Invalid port number %r" % port)
     else:
         host = netloc
         port = None
