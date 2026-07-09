@@ -14,6 +14,7 @@ from tornado.httputil import (
     HTTPServerRequest,
     ParseMultipartConfig,
     RequestStartLine,
+    _parse_request_range,
     format_timestamp,
     parse_cookie,
     parse_multipart_form_data,
@@ -621,6 +622,31 @@ class ParseRequestStartLineTest(unittest.TestCase):
         self.assertEqual(parsed_start_line.method, self.METHOD)
         self.assertEqual(parsed_start_line.path, self.PATH)
         self.assertEqual(parsed_start_line.version, self.VERSION)
+
+
+class ParseRequestRangeTest(unittest.TestCase):
+    """Tests for httputil._parse_request_range."""
+
+    def test_lowercase_unit(self):
+        self.assertEqual(_parse_request_range("bytes=1-2"), (1, 3))
+
+    def test_uppercase_unit_accepted(self):
+        # Per RFC 7233 section 2.1: "all rules derived from token are to be
+        # compared case-insensitively, like range-unit and acceptable-ranges."
+        # Pre-fix, an uppercase "BYTES" unit returned None.
+        self.assertEqual(_parse_request_range("BYTES=1-2"), (1, 3))
+
+    def test_mixed_case_unit_accepted(self):
+        self.assertEqual(_parse_request_range("Bytes=1-2"), (1, 3))
+        self.assertEqual(_parse_request_range("bYtEs=1-2"), (1, 3))
+
+    def test_uppercase_unit_with_suffix_range(self):
+        self.assertEqual(_parse_request_range("BYTES=6-"), (6, None))
+        self.assertEqual(_parse_request_range("BYTES=-6"), (-6, None))
+
+    def test_non_bytes_unit_still_rejected(self):
+        # An unknown unit is rejected regardless of case.
+        self.assertIsNone(_parse_request_range("items=1-2"))
 
 
 class ParseCookieTest(unittest.TestCase):
