@@ -273,12 +273,16 @@ class TCPClient:
         # the same host. (http://tools.ietf.org/html/rfc6555#section-4.2)
         if ssl_options is not None:
             if timeout is not None:
-                stream = await gen.with_timeout(
-                    timeout,
-                    stream.start_tls(
-                        False, ssl_options=ssl_options, server_hostname=host
-                    ),
-                )
+                try:
+                    stream = await gen.with_timeout(
+                        timeout,
+                        stream.start_tls(
+                            False, ssl_options=ssl_options, server_hostname=host
+                        ),
+                    )
+                except Exception:
+                    stream.close()
+                    raise
             else:
                 stream = await stream.start_tls(
                     False, ssl_options=ssl_options, server_hostname=host
