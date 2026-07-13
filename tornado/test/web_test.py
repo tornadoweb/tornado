@@ -10,6 +10,7 @@ import logging
 import os
 import re
 import socket
+import tempfile
 import typing
 import unittest
 import urllib.parse
@@ -1172,6 +1173,11 @@ class StaticFileTest(WebTestCase):
     )
     static_dir = os.path.join(os.path.dirname(__file__), "static")
 
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        super().setUp()
+
     def get_handlers(self):
         class StaticUrlHandler(RequestHandler):
             def get(self, path):
@@ -1202,10 +1208,23 @@ class StaticFileTest(WebTestCase):
                     result = check_override == -1 and check_regular == 0
                 self.write(str(result))
 
+        class GrowingStaticFileHandler(StaticFileHandler):
+            def get_content_size(self):
+                size = super().get_content_size()
+                assert self.absolute_path is not None
+                with open(self.absolute_path, "ab") as file:
+                    file.write(b"-grew")
+                return size
+
         return [
             ("/static_url/(.*)", StaticUrlHandler),
             ("/abs_static_url/(.*)", AbsoluteStaticUrlHandler),
             ("/override_static_url/(.*)", OverrideStaticUrlHandler),
+            (
+                "/growing_static/(.*)",
+                GrowingStaticFileHandler,
+                dict(path=self.temp_dir.name),
+            ),
             ("/root_static/(.*)", StaticFileHandler, dict(path="/")),
         ]
 
@@ -1219,6 +1238,19 @@ class StaticFileTest(WebTestCase):
         response = self.fetch("/static/robots.txt")
         self.assertIn(b"Disallow: /", response.body)
         self.assertEqual(response.headers.get("Content-Type"), "text/plain")
+
+    def test_static_file_growing_during_request(self):
+        initial_content = b"before"
+        path = os.path.join(self.temp_dir.name, "data.txt")
+        with open(path, "wb") as file:
+            file.write(initial_content)
+
+        response = self.fetch("/growing_static/data.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(
+            response.headers.get("Content-Length"), str(len(initial_content))
+        )
+        self.assertEqual(response.body, initial_content)
 
     def test_static_files_cacheable(self):
         # Test that the version parameter triggers cache-control headers. This
