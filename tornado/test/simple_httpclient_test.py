@@ -570,6 +570,27 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, SimpleHTTPClientTestMixin):
     def create_client(self, **kwargs):
         return SimpleAsyncHTTPClient(force_instance=True, **kwargs)
 
+    @gen_test
+    def test_request_timeout_after_redirect(self):
+        timeout = 0.1
+        if os.name == "nt" or os.environ.get("EMULATION") == "1":
+            timeout = 0.5
+
+        with closing(self.create_client()) as client:
+            future = client.fetch(
+                self.get_url("/redirect?url=%2Ftrigger%3Fwake%3Dfalse"),
+                request_timeout=timeout,
+            )
+            try:
+                with self.assertRaisesRegex(HTTPTimeoutError, "Timeout during request"):
+                    yield gen.with_timeout(self.io_loop.time() + timeout * 5, future)
+            finally:
+                if not future.done():
+                    future.cancel()
+                if self.triggers:
+                    self.triggers.popleft()()
+                yield gen.sleep(0)
+
 
 class SimpleHTTPSClientTestCase(AsyncHTTPSTestCase, SimpleHTTPClientTestMixin):
     def setUp(self):

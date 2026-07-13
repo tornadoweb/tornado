@@ -11,7 +11,7 @@ import urllib.parse
 from collections.abc import Awaitable, Callable
 from io import BytesIO
 from types import TracebackType
-from typing import Any, Optional, Type
+from typing import Any, Optional, Type, cast
 
 from tornado import gen, httputil, version
 from tornado.escape import _unicode
@@ -688,12 +688,13 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     except KeyError:
                         pass
             new_request.original_request = original_request  # type: ignore
+            assert self.final_callback is not None
             final_callback = self.final_callback
             self.final_callback = None  # type: ignore
             self._release()
             assert self.client is not None
-            fut = self.client.fetch(new_request, raise_error=False)
-            fut.add_done_callback(lambda f: final_callback(f.result()))
+            request_proxy = _RequestProxy(new_request, self.client.defaults)
+            self.client.fetch_impl(cast(HTTPRequest, request_proxy), final_callback)
             self._on_end_request()
             return
         if self.request.streaming_callback:
