@@ -134,6 +134,22 @@ class QueueGetTest(AsyncTestCase):
         self.assertEqual(0, (yield get))
 
     @gen_test
+    async def test_cancelled_get_does_not_lose_item(self):
+        q: queues.Queue[int] = queues.Queue()
+
+        async def consume():
+            return await q.get()
+
+        consumer = asyncio.ensure_future(consume())
+        await asyncio.sleep(0)
+        q.put_nowait(0)
+        consumer.cancel()
+
+        with self.assertRaises(asyncio.CancelledError):
+            await consumer
+        self.assertEqual(0, q.get_nowait())
+
+    @gen_test
     def test_get_clears_timed_out_putters(self):
         q: queues.Queue[int] = queues.Queue(1)
         # First putter succeeds, remainder block.
