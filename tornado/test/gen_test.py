@@ -844,6 +844,25 @@ class WaitIteratorTest(AsyncTestCase):
         self.assertIsNone(g.current_index, "bad nil current index")
         self.assertIsNone(g.current_future, "bad nil current future")
 
+    @gen_test
+    def test_duplicate_futures(self):
+        future: Future[int] = Future()
+        future.set_result(42)
+
+        cases: list[tuple[gen.WaitIterator, list[int | str]]] = [
+            (gen.WaitIterator(future, future, future), [0, 1, 2]),
+            (gen.WaitIterator(first=future, second=future), ["first", "second"]),
+        ]
+        for iterator, expected_indices in cases:
+            results = []
+            indices = []
+            while not iterator.done():
+                results.append((yield iterator.next()))
+                indices.append(iterator.current_index)
+
+            self.assertEqual(results, [42] * len(expected_indices))
+            self.assertEqual(indices, expected_indices)
+
     def finish_coroutines(self, iteration, futures):
         if iteration == 3:
             futures[2].set_result(24)

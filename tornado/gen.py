@@ -348,18 +348,21 @@ class WaitIterator:
 
     """
 
-    _unfinished: dict[Future, int | str] = {}
+    _unfinished: dict[Future, collections.deque[int | str]] = {}
 
     def __init__(self, *args: Future, **kwargs: Future) -> None:
         if args and kwargs:
             raise ValueError("You must provide args or kwargs, not both")
 
+        self._unfinished = {}
         if kwargs:
-            self._unfinished = {f: k for (k, f) in kwargs.items()}
             futures: Sequence[Future] = list(kwargs.values())
+            for key, future in kwargs.items():
+                self._unfinished.setdefault(future, collections.deque()).append(key)
         else:
-            self._unfinished = {f: i for (i, f) in enumerate(args)}
             futures = args
+            for index, future in enumerate(args):
+                self._unfinished.setdefault(future, collections.deque()).append(index)
 
         self._finished: collections.deque[Future] = collections.deque()
         self.current_index: str | int | None = None
@@ -407,7 +410,10 @@ class WaitIterator:
         res = self._running_future
         self._running_future = None
         self.current_future = done
-        self.current_index = self._unfinished.pop(done)
+        indices = self._unfinished[done]
+        self.current_index = indices.popleft()
+        if not indices:
+            del self._unfinished[done]
 
         return res
 
