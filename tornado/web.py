@@ -2840,11 +2840,18 @@ class StaticFileHandler(RequestHandler):
             content = self.get_content(self.absolute_path, start, end)
             if isinstance(content, bytes):
                 content = [content]
+            remaining = content_length
             for chunk in content:
-                try:
-                    self.write(chunk)
-                    await self.flush()
-                except iostream.StreamClosedError:
+                # The file may have grown since Content-Length was calculated.
+                chunk = chunk[:remaining]
+                if chunk:
+                    try:
+                        self.write(chunk)
+                        await self.flush()
+                    except iostream.StreamClosedError:
+                        return
+                    remaining -= len(chunk)
+                if remaining == 0:
                     return
         else:
             assert self.request.method == "HEAD"
