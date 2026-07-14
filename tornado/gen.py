@@ -776,12 +776,24 @@ class Runner:
                         future = None
 
                     if exc is not None:
+                        original_tb = exc.__traceback__
                         try:
                             yielded = self.gen.throw(exc)
+                        except (StopIteration, Return):
+                            # If the generator handled the exception and
+                            # returned, don't retain its frame through the
+                            # exception stored on the yielded Future.
+                            exc.__traceback__ = original_tb
+                            raise
+                        else:
+                            # gen.throw() adds the receiving generator's frame
+                            # to the traceback even if it handles the exception
+                            # and yields again.
+                            exc.__traceback__ = original_tb
                         finally:
-                            # Break up a circular reference for faster GC on
+                            # Break up circular references for faster GC on
                             # CPython.
-                            del exc
+                            del exc, original_tb
                     else:
                         yielded = self.gen.send(value)
 
