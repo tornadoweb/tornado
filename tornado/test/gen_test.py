@@ -590,6 +590,37 @@ class GenCoroutineTest(AsyncTestCase):
         self.assertIsNone(self.local_ref())
         self.finished = True
 
+    @skipNotCPython
+    def test_coroutine_refcounting_caught_exception(self):
+        @gen.coroutine
+        def raise_exc():
+            yield gen.moment
+            raise ValueError("Some error")
+
+        for yield_after_catch in (False, True):
+            with self.subTest(yield_after_catch=yield_after_catch):
+
+                @gen.coroutine
+                def inner():
+                    class Foo:
+                        pass
+
+                    local_var = Foo()
+                    self.caught_local_ref = weakref.ref(local_var)
+                    try:
+                        yield raise_exc()
+                    except ValueError:
+                        if yield_after_catch:
+                            yield gen.moment
+
+                @gen.coroutine
+                def outer():
+                    yield inner()
+                    self.assertIsNone(self.caught_local_ref())
+
+                self.io_loop.run_sync(outer, timeout=3)
+        self.finished = True
+
     def test_asyncio_future_debug_info(self):
         self.finished = True
         # Enable debug mode
