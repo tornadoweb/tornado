@@ -56,6 +56,7 @@ the executor do not refer to Tornado objects.
 
 """
 
+import asyncio
 import base64
 import binascii
 import datetime
@@ -1861,7 +1862,7 @@ class RequestHandler:
                 result = await result
             if self._auto_finish and not self._finished:
                 self.finish()
-        except Exception as e:
+        except (Exception, asyncio.CancelledError) as e:
             try:
                 self._handle_request_exception(e)
             except Exception:
