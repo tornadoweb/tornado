@@ -120,13 +120,13 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         # [[[cog
         #   for minor in range(int(min_python_minor), int(max_python_minor) + 1):
-        #     cog.outl(f"\"Programming Language :: Python :: 3.{minor}\"")
+        #     cog.outl(f"\"Programming Language :: Python :: 3.{minor}\",")
         #   ]]]
-        "Programming Language :: Python :: 3.10"
-        "Programming Language :: Python :: 3.11"
-        "Programming Language :: Python :: 3.12"
-        "Programming Language :: Python :: 3.13"
-        "Programming Language :: Python :: 3.14"
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
+        "Programming Language :: Python :: 3.14",
         # [[[end]]]
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python :: Implementation :: PyPy",
