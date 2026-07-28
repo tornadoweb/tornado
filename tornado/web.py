@@ -180,6 +180,7 @@ class RequestHandler:
         "PATCH",
         "PUT",
         "OPTIONS",
+        "QUERY",
     )
 
     _template_loaders: dict[str, template.BaseLoader] = {}
