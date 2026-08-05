@@ -2904,6 +2904,49 @@ class SignedValueTest(unittest.TestCase):
         key_version = get_signature_key_version(signed)
         self.assertEqual(1, key_version)
 
+    def test_malformed_timestamp_v1(self):
+        # Construct a v1 signed value with a non-decimal timestamp.
+        # The signature is computed over the malformed timestamp, so it
+        # passes HMAC verification but int() conversion should fail
+        # gracefully (return None) instead of raising ValueError.
+        secret = b"s"
+        name = "a"
+        # Build: base64(value) | timestamp | signature
+        value_b64 = b"dg=="  # base64(b"v")
+        timestamp = b"not-a-number"
+        sig = _create_signature_v1(secret, name, value_b64, timestamp)
+        cookie = b"|".join([value_b64, timestamp, sig])
+        self.assertIsNone(
+            decode_signed_value(secret, name, cookie, clock=lambda: 1_500_000_000)
+        )
+
+    def test_malformed_timestamp_v2(self):
+        # Construct a v2 signed value with a non-decimal timestamp field.
+        # Same principle: valid HMAC but non-numeric timestamp must not
+        # raise ValueError.
+        from tornado.web import _create_signature_v2
+
+        secret = b"s"
+        name = "a"
+
+        def field(value: bytes) -> bytes:
+            return str(len(value)).encode("ascii") + b":" + value
+
+        prefix = b"|".join(
+            [
+                b"2",
+                field(b"0"),  # key_version
+                field(b"a"),  # non-decimal timestamp
+                field(utf8(name)),
+                field(b""),  # empty value
+                b"",
+            ]
+        )
+        cookie = prefix + _create_signature_v2(secret, prefix)
+        self.assertIsNone(
+            decode_signed_value(secret, name, cookie, clock=lambda: 1_500_000_000)
+        )
+
 
 class XSRFTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
