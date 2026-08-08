@@ -739,9 +739,8 @@ class _PerMessageDeflateCompressor:
         # There is no symbolic constant for the minimum wbits value.
         if not (8 <= max_wbits <= zlib.MAX_WBITS):
             raise ValueError(
-                "Invalid max_wbits value %r; allowed range 8-%d",
-                max_wbits,
-                zlib.MAX_WBITS,
+                "Invalid max_wbits value %r; allowed range 8-%d"
+                % (max_wbits, zlib.MAX_WBITS)
             )
         self._max_wbits = max_wbits
 
@@ -788,9 +787,8 @@ class _PerMessageDeflateDecompressor:
             max_wbits = zlib.MAX_WBITS
         if not (8 <= max_wbits <= zlib.MAX_WBITS):
             raise ValueError(
-                "Invalid max_wbits value %r; allowed range 8-%d",
-                max_wbits,
-                zlib.MAX_WBITS,
+                "Invalid max_wbits value %r; allowed range 8-%d"
+                % (max_wbits, zlib.MAX_WBITS)
             )
         self._max_wbits = max_wbits
         if persistent:
@@ -993,7 +991,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             if ext[0] == "permessage-deflate" and self._compression_options is not None:
                 self._create_compressors("client", ext[1])
             else:
-                raise ValueError("unsupported extension %r", ext)
+                raise ValueError("unsupported extension %r" % (ext,))
 
         self.selected_subprotocol = headers.get("Sec-WebSocket-Protocol", None)
 
