@@ -2866,6 +2866,35 @@ class SignedValueTest(unittest.TestCase):
             )
         )
 
+    def test_malformed_timestamp(self):
+        # A structurally valid v2 value carrying a correct signature but a
+        # non-decimal timestamp field must be rejected with None rather than
+        # raising ValueError from int(timestamp_bytes) after the signature has
+        # already verified.
+        from tornado.web import _create_signature_v2
+        from tornado.escape import utf8
+
+        def field(value):
+            return str(len(value)).encode("ascii") + b":" + value
+
+        name = "key"
+        prefix = b"|".join(
+            [
+                b"2",
+                field(b"0"),
+                field(b"a"),  # non-decimal timestamp
+                field(utf8(name)),
+                field(b""),
+                b"",
+            ]
+        )
+        cookie = prefix + _create_signature_v2(SignedValueTest.SECRET, prefix)
+        self.assertIsNone(
+            decode_signed_value(
+                SignedValueTest.SECRET, name, cookie, clock=self.present
+            )
+        )
+
     def test_non_ascii(self):
         value = b"\xe9"
         signed = create_signed_value(

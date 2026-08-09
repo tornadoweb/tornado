@@ -3767,7 +3767,13 @@ def _decode_signed_value_v2(
         return None
     if name_field != utf8(name):
         return None
-    timestamp = int(timestamp_bytes)
+    try:
+        timestamp = int(timestamp_bytes)
+    except ValueError:
+        # A malformed (non-decimal) timestamp field means an invalid signed
+        # value; reject it with None rather than raising, consistent with the
+        # rest of this function and get_signed_cookie's documented behavior.
+        return None
     if timestamp < clock() - max_age_days * 86400:
         # The signature has expired.
         return None
