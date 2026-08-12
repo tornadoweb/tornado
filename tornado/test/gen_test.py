@@ -467,6 +467,59 @@ class GenCoroutineTest(AsyncTestCase):
         self.finished = True
 
     @gen_test
+    def test_sync_raise_cancelled_error(self):
+        # A coroutine that raises asyncio.CancelledError synchronously
+        # (before its first yield) should still surface the cancellation
+        # on the returned future, the same way any other Exception is
+        # captured. Regression test for #3537.
+        @gen.coroutine
+        def f():
+            raise asyncio.CancelledError()
+
+        future = f()
+        with self.assertRaises(asyncio.CancelledError):
+            yield future
+        self.finished = True
+
+    @gen_test
+    def test_async_raise_cancelled_error(self):
+        # A coroutine that raises asyncio.CancelledError after a yield
+        # point should propagate the cancellation to the future through
+        # the Runner, matching the behaviour for plain Exception
+        # subclasses. Regression test for #3537.
+        @gen.coroutine
+        def f():
+            yield gen.moment
+            raise asyncio.CancelledError()
+
+        future = f()
+        with self.assertRaises(asyncio.CancelledError):
+            yield future
+        self.finished = True
+
+    @gen_test
+    def test_yield_cancelled_asyncio_future(self):
+        # Yielding an asyncio future that was cancelled before being
+        # awaited should propagate CancelledError to the parent
+        # coroutine. Without the fix the parent coroutine never
+        # completes and the test times out. Regression test for #3537.
+        async def cancellable():
+            await asyncio.sleep(10000.0)
+
+        cancellable_future = asyncio.ensure_future(cancellable())
+        cancellable_future.cancel()
+
+        @gen.coroutine
+        def child():
+            yield gen.moment
+            yield cancellable_future
+
+        future = child()
+        with self.assertRaises(asyncio.CancelledError):
+            yield future
+        self.finished = True
+
+    @gen_test
     def test_replace_yieldpoint_exception(self):
         # Test exception handling: a coroutine can catch one exception
         # raised by a yield point and raise a different one.
