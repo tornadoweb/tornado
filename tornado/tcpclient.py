@@ -272,17 +272,30 @@ class TCPClient:
         # information here and re-use it on subsequent connections to
         # the same host. (http://tools.ietf.org/html/rfc6555#section-4.2)
         if ssl_options is not None:
+            # ``IOStream.start_tls`` transfers ownership of the underlying
+            # socket to a new ``SSLIOStream`` *before* the TLS handshake
+            # completes. If a timeout fires while we are waiting on that
+            # handshake, ``gen.with_timeout`` raises ``TimeoutError`` to
+            # the caller but does not cancel the inner future, so the
+            # ``SSLIOStream`` (and its socket) becomes unreachable from
+            # the caller's reference to the original ``IOStream``
+            # (whose ``.socket`` is already ``None``) and leaks
+            # permanently. ``IOStream.close`` looks at
+            # ``self._pending_ssl_stream`` (set by ``start_tls``) and
+            # releases the SSLIOStream's socket, so close the original
+            # stream on timeout to give it a chance to clean up.
+            # See https://github.com/tornadoweb/tornado/issues/3614.
+            ssl_future = stream.start_tls(
+                False, ssl_options=ssl_options, server_hostname=host
+            )
             if timeout is not None:
-                stream = await gen.with_timeout(
-                    timeout,
-                    stream.start_tls(
-                        False, ssl_options=ssl_options, server_hostname=host
-                    ),
-                )
+                try:
+                    stream = await gen.with_timeout(timeout, ssl_future)
+                except gen.TimeoutError:
+                    stream.close()
+                    raise
             else:
-                stream = await stream.start_tls(
-                    False, ssl_options=ssl_options, server_hostname=host
-                )
+                stream = await ssl_future
         return stream
 
     def _create_stream(
