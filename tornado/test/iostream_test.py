@@ -1228,16 +1228,20 @@ class TestIOStreamCheckHostname(AsyncTestCase):
     @gen_test
     async def test_no_match(self):
         stream = SSLIOStream(socket.socket(), ssl_options=self.client_ssl_ctx)
+        # The exact error strings depend on the TLS implementation: OpenSSL
+        # spells them out in prose while AWS-LC (and BoringSSL) use the
+        # uppercase name of the error reason.
         with ExpectLog(
             gen_log,
-            ".*alert bad certificate",
+            ".*(alert bad certificate|SSLV3_ALERT_BAD_CERTIFICATE)",
             level=logging.WARNING,
             required=platform.system() != "Windows",
         ):
             with self.assertRaises(ssl.SSLCertVerificationError):
                 with ExpectLog(
                     gen_log,
-                    ".*(certificate verify failed: Hostname mismatch)",
+                    ".*(certificate verify failed|CERTIFICATE_VERIFY_FAILED)"
+                    ": Hostname mismatch",
                     level=logging.WARNING,
                 ):
                     await stream.connect(
