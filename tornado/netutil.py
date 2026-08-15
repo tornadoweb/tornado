@@ -396,7 +396,19 @@ def _resolve_addr(
     # one here.  The socket type used here doesn't seem to actually
     # matter (we discard the one we get back in the results),
     # so the addresses we return should still be usable with SOCK_DGRAM.
-    addrinfo = socket.getaddrinfo(host, port, family, socket.SOCK_STREAM)
+    # When ``host`` is already a literal IP address, request the
+    # numeric-only path with ``AI_NUMERICHOST`` so the resolver does
+    # not have to acquire the resolver lock or walk the DNS subsystem
+    # for a value it already knows.  ``AI_NUMERICSERV`` is paired
+    # with it because the port is always passed as an ``int`` here;
+    # if it ever becomes a service name in the future this flag will
+    # need to be reconsidered.  See tornado#3113.
+    flags = 0
+    if is_valid_ip(host):
+        flags |= socket.AI_NUMERICHOST | socket.AI_NUMERICSERV
+    addrinfo = socket.getaddrinfo(
+        host, port, family, socket.SOCK_STREAM, 0, flags
+    )
     results = []
     for fam, socktype, proto, canonname, address in addrinfo:
         results.append((fam, address))
@@ -433,10 +445,16 @@ class DefaultLoopResolver(Resolver):
         # one here.  The socket type used here doesn't seem to actually
         # matter (we discard the one we get back in the results),
         # so the addresses we return should still be usable with SOCK_DGRAM.
+        # When ``host`` is already a literal IP, ask the loop to take the
+        # numeric-only path so it does not have to walk the DNS subsystem
+        # for a value it already knows.  See tornado#3113.
+        flags = 0
+        if is_valid_ip(host):
+            flags |= socket.AI_NUMERICHOST | socket.AI_NUMERICSERV
         return [
             (fam, address)
             for fam, _, _, _, address in await asyncio.get_running_loop().getaddrinfo(
-                host, port, family=family, type=socket.SOCK_STREAM
+                host, port, family=family, type=socket.SOCK_STREAM, flags=flags
             )
         ]
 

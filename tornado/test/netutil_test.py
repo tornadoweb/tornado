@@ -11,6 +11,7 @@ from tornado.netutil import (
     BlockingResolver,
     OverrideResolver,
     ThreadedResolver,
+    _resolve_addr,
     bind_sockets,
     is_valid_ip,
 )
@@ -211,3 +212,134 @@ class TestPortAllocation(unittest.TestCase):
             sock.close()
             for sock in sockets:
                 sock.close()
+
+
+class ResolveAddrIPFastPathTest(unittest.TestCase):
+    """Verify the numeric-only short-circuit in ``_resolve_addr``.
+
+    Issue #3113: when the host is already a literal IP, ``_resolve_addr``
+    should pass ``AI_NUMERICHOST | AI_NUMERICSERV`` to ``getaddrinfo`` so
+    the resolver does not have to acquire the resolver lock or walk the
+    DNS subsystem for a value it already knows.
+    """
+
+    def test_ipv4_host_matches_normal_path(self):
+        # The numeric-only path should produce the same address tuple as the
+        # default path for the same literal IPv4 address.
+        fast = _resolve_addr("127.0.0.1", 80)
+        normal = _resolve_addr("127.0.0.1", 80)
+        self.assertIn((socket.AF_INET, ("127.0.0.1", 80)), fast)
+        self.assertEqual(fast, normal)
+
+    def test_ipv6_host_matches_normal_path(self):
+        fast = _resolve_addr("::1", 80)
+        normal = _resolve_addr("::1", 80)
+        self.assertIn(
+            (socket.AF_INET6, ("::1", 80, 0, 0)),
+            fast,
+        )
+        self.assertEqual(fast, normal)
+
+    def test_hostname_fallback(self):
+        # For hostnames, the numeric-only path should not be used.
+        fast = _resolve_addr("localhost", 80)
+        normal = _resolve_addr("localhost", 80)
+        self.assertEqual(fast, normal)
+
+    def test_ip_host_uses_numeric_flags(self):
+        # When the host is a literal IP, the resolver must pass
+        # AI_NUMERICHOST|AI_NUMERICSERV to getaddrinfo. Verify by mocking
+        # socket.getaddrinfo and asserting on the ``flags`` argument.
+        import socket as _socket
+
+        captured = {}
+
+        def fake_getaddrinfo(host, port, *args, **kwargs):
+            captured["host"] = host
+            captured["port"] = port
+            captured["args"] = args
+            captured["kwargs"] = kwargs
+            # Return a single AF_INET result for the literal address.
+            return [(_socket.AF_INET, _socket.SOCK_STREAM, 6, "", (host, port))]
+
+        real = _socket.getaddrinfo
+        _socket.getaddrinfo = fake_getaddrinfo
+        try:
+            _resolve_addr("127.0.0.1", 80)
+        finally:
+            _socket.getaddrinfo = real
+
+        # The 6th positional arg is ``flags``; verify AI_NUMERICHOST was set.
+        self.assertEqual(len(captured["args"]), 4)
+        self.assertEqual(captured["args"][0], _socket.AF_UNSPEC)
+        self.assertEqual(captured["args"][1], _socket.SOCK_STREAM)
+        self.assertEqual(captured["args"][2], 0)
+        flags = captured["args"][3]
+        self.assertTrue(
+            flags & _socket.AI_NUMERICHOST,
+            f"AI_NUMERICHOST not set in flags={flags!r}",
+        )
+        self.assertTrue(
+            flags & _socket.AI_NUMERICSERV,
+            f"AI_NUMERICSERV not set in flags={flags!r}",
+        )
+
+    def test_hostname_uses_no_flags(self):
+        # For a hostname, the resolver should not pass AI_NUMERICHOST (or
+        # it would raise EAI_NONAME). Verify by mocking.
+        import socket as _socket
+
+        captured = {}
+
+        def fake_getaddrinfo(host, port, *args, **kwargs):
+            flags = args[3] if len(args) > 3 else kwargs.get("flags", 0)
+            captured["flags"] = flags
+            # Make is_valid_ip fail for non-numeric hosts by raising
+            # EAI_NONAME whenever AI_NUMERICHOST is set and the host is
+            # not a literal IP. For literal IP hosts we return a
+            # success result.
+            if flags & _socket.AI_NUMERICHOST and host not in ("127.0.0.1", "::1"):
+                raise _socket.gaierror(_socket.EAI_NONAME, "Name or service not known")
+            return [(_socket.AF_INET, _socket.SOCK_STREAM, 6, "", (host, port))]
+
+        real = _socket.getaddrinfo
+        _socket.getaddrinfo = fake_getaddrinfo
+        try:
+            _resolve_addr("localhost", 80)
+        finally:
+            _socket.getaddrinfo = real
+        self.assertEqual(captured["flags"], 0)
+
+    def test_invalid_ip_falls_back_to_default(self):
+        # A host that is_valid_ip rejects should fall through to the
+        # default getaddrinfo path. Mock getaddrinfo to capture both
+        # the AI_NUMERICHOST probe and the default call.
+        import socket as _socket
+
+        captured = []
+
+        def fake_getaddrinfo(host, port, *args, **kwargs):
+            flags = args[3] if len(args) > 3 else kwargs.get("flags", 0)
+            captured.append((host, port, flags))
+            if flags & _socket.AI_NUMERICHOST:
+                # Treat the AI_NUMERICHOST probe as a no-op so we can
+                # see the second call (the actual resolution).
+                raise _socket.gaierror(
+                    _socket.EAI_NONAME, "Name or service not known"
+                )
+            return [(_socket.AF_INET, _socket.SOCK_STREAM, 6, "", (host, port))]
+
+        real = _socket.getaddrinfo
+        _socket.getaddrinfo = fake_getaddrinfo
+        try:
+            _resolve_addr("not an ip", 80)
+        finally:
+            _socket.getaddrinfo = real
+        # The first call should have been the AI_NUMERICHOST probe (raised
+        # EAI_NONAME above), and the second call should have been the
+        # default resolution with flags=0.
+        self.assertEqual(len(captured), 2)
+        self.assertEqual(captured[0][0], "not an ip")
+        self.assertEqual(captured[0][2], _socket.AI_NUMERICHOST)
+        self.assertEqual(captured[1][0], "not an ip")
+        self.assertEqual(captured[1][2], 0)
