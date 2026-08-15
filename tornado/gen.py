@@ -350,23 +350,24 @@ class WaitIterator:
 
     _unfinished: dict[Future, int | str] = {}
 
-    def __init__(self, *args: Future, **kwargs: Future) -> None:
+    def __init__(self, *args: _Yieldable, **kwargs: _Yieldable) -> None:
         if args and kwargs:
             raise ValueError("You must provide args or kwargs, not both")
 
         if kwargs:
-            self._unfinished = {f: k for (k, f) in kwargs.items()}
-            futures: Sequence[Future] = list(kwargs.values())
+            self._unfinished = {convert_yielded(fut): k for (k, fut) in kwargs.items()}
         else:
-            self._unfinished = {f: i for (i, f) in enumerate(args)}
-            futures = args
+            items = args
+            self._unfinished = {
+                convert_yielded(item): i for i, item in enumerate(items)
+            }
 
         self._finished: collections.deque[Future] = collections.deque()
         self.current_index: str | int | None = None
         self.current_future: Future | None = None
         self._running_future: Future | None = None
 
-        for future in futures:
+        for future in list(self._unfinished):
             future_add_done_callback(future, self._done_callback)
 
     def done(self) -> bool:
