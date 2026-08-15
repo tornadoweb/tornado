@@ -221,7 +221,7 @@ if hasattr(socket, "AF_UNIX"):
                 if stat.S_ISSOCK(st.st_mode):
                     os.remove(file)
                 else:
-                    raise ValueError("File %s exists and is not a socket", file)
+                    raise ValueError("File %s exists and is not a socket" % file)
             sock.bind(file)
             os.chmod(file, mode)
         else:

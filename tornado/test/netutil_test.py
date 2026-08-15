@@ -1,7 +1,9 @@
 import errno
+import os
 import signal
 import socket
 import sys
+import tempfile
 import time
 import typing
 import unittest
@@ -211,3 +213,46 @@ class TestPortAllocation(unittest.TestCase):
             sock.close()
             for sock in sockets:
                 sock.close()
+
+
+@unittest.skipIf(not hasattr(socket, "AF_UNIX"), "AF_UNIX is not supported")
+class TestBindUnixSocket(unittest.TestCase):
+    def test_existing_non_socket_file_message_includes_path(self) -> None:
+        from tornado.netutil import bind_unix_socket
+
+        path = os.path.join(
+            tempfile.mkdtemp(),
+            "tornado-bind-unix-not-a-socket",
+        )
+        self.addCleanup(os.rmdir, os.path.dirname(path))
+        with open(path, "w") as f:
+            f.write("not a socket")
+        self.addCleanup(os.remove, path)
+        # bind_unix_socket creates the AF_UNIX socket before it inspects the
+        # path, so on the "exists and is not a socket" error path the socket fd
+        # is leaked. Monkey-patch the constructor to capture and close it.
+        leaked_socks: list[socket.socket] = []
+        original_socket = socket.socket
+
+        def capturing_socket(*args: typing.Any, **kwargs: typing.Any) -> socket.socket:
+            s = original_socket(*args, **kwargs)
+            leaked_socks.append(s)
+            return s
+
+        socket.socket = capturing_socket  # type: ignore[assignment]
+        self.addCleanup(setattr, socket, "socket", original_socket)
+        try:
+            with self.assertRaises(ValueError) as cm:
+                bind_unix_socket(path)
+        finally:
+            for s in leaked_socks:
+                s.close()
+        # The exception message must be a single, formatted string that names
+        # the offending path. Pre-fix it was the two-arg form
+        # ValueError("File %s exists and is not a socket", file) which made
+        # str(e) render the literal format string instead of the path.
+        self.assertIn(path, str(cm.exception))
+        self.assertIn("exists and is not a socket", str(cm.exception))
+        self.assertNotIn("%s", str(cm.exception))
+        self.assertEqual(len(cm.exception.args), 1)
+        self.assertIsInstance(cm.exception.args[0], str)
