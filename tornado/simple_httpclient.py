@@ -328,7 +328,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             if timeout:
                 self._timeout = self.io_loop.add_timeout(
                     self.start_time + timeout,
-                    functools.partial(self._on_timeout, "while connecting"),
+                    functools.partial(self._on_timeout, f"while connecting to {host}:{port}"),
                 )
             stream = await self.tcp_client.connect(
                 host,
