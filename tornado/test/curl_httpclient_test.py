@@ -237,3 +237,23 @@ class CurlHTTPClientReuseCertsTestCase(AsyncHTTPSTestCase):
         )
         response = self.fetch(self.get_url("/client_cert"))
         self.assertEqual(response.body, b"no client cert")
+
+
+@unittest.skipIf(pycurl is None, "pycurl module not present")
+class CurlDebugTest(unittest.TestCase):
+    """Tests for CurlAsyncHTTPClient._curl_debug.
+
+    See issue #3183: a proxy that echoes back binary bytes from the
+    upstream response can produce a non-UTF-8 debug message, which
+    used to crash the request with UnicodeDecodeError because the
+    pre-fix code passed the raw bytes through ``native_str`` (which
+    decodes as UTF-8).
+    """
+
+    def test_curl_debug_handles_non_utf8_bytes(self):
+        client = CurlAsyncHTTPClient()
+        # debug_type == 0 is the "info" callback.
+        client._curl_debug(0, b"hello \xff world")
+        # debug_type in (1, 2) is the "header in" / "data in" callback.
+        client._curl_debug(1, b"header \xff value")
+        client._curl_debug(2, b"data \xff value")
