@@ -491,6 +491,52 @@ bar
         )
         self.assertEqual(json_decode(response), {"foo": ["bar"]})
 
+    def test_chunked_request_body_bare_extension_rejected(self):
+        # A line that is only an extension (no size prefix) is still malformed
+        # and must raise HTTPInputError. We send `;ext=val` as the chunk header
+        # and expect a 400 with the standard "invalid chunk size" log message.
+        self.stream.write(b"""\
+POST /echo HTTP/1.1
+Host: 127.0.0.1
+Transfer-Encoding: chunked
+
+;ext=val
+foo=
+3
+bar
+0
+
+""".replace(b"\n", b"\r\n"))
+        with ExpectLog(gen_log, ".*invalid chunk size", level=logging.INFO):
+            start_line, headers, response = self.io_loop.run_sync(
+                lambda: read_stream_body(self.stream)
+            )
+        self.assertEqual(400, start_line.code)
+
+    def test_chunked_request_body_with_extensions(self):
+        # Per RFC 7230 section 4.1.1 a chunk may carry zero or more chunk
+        # extensions after the size: `chunk-size [ ";" chunk-ext ] CRLF`.
+        # Tornado previously raised HTTPInputError on `5;ext=val` because the
+        # size parser saw the full header. Accept the extension and parse
+        # only the size prefix; a bare extension (no size) is still rejected.
+        self.stream.write(b"""\
+POST /echo HTTP/1.1
+Host: 127.0.0.1
+Transfer-Encoding: chunked
+Content-Type: application/x-www-form-urlencoded
+
+4;ext=val
+foo=
+3
+bar
+0
+
+""".replace(b"\n", b"\r\n"))
+        start_line, headers, response = self.io_loop.run_sync(
+            lambda: read_stream_body(self.stream)
+        )
+        self.assertEqual(json_decode(response), {"foo": ["bar"]})
+
     def test_chunked_request_uppercase(self):
         # As per RFC 2616 section 3.6, "Transfer-Encoding" header's value is
         # case-insensitive.

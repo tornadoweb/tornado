@@ -657,12 +657,35 @@ class HTTP1Connection(httputil.HTTPConnection):
                         await ret
 
     async def _read_chunked_body(self, delegate: httputil.HTTPMessageDelegate) -> None:
-        # TODO: "chunk extensions" http://tools.ietf.org/html/rfc2616#section-3.6.1
+        # Per RFC 7230 section 4.1.1, a chunk is `chunk-size [ chunk-ext ] CRLF
+        # chunk-data CRLF`. The chunk-size is hex digits; the chunk-ext is
+        # optional and starts with ';' followed by any number of ';'-separated
+        # `name[=value]` pairs. We only use the chunk-size, so the extension
+        # is dropped after a sanity check. Both with and without an extension
+        # share the same trailing CRLF, so we still strip the last two bytes
+        # of the read line.
         total_size = 0
         while True:
             chunk_len_str = await self.stream.read_until(b"\r\n", max_bytes=64)
+            # Strip the trailing CRLF, then if a chunk extension is present
+            # ('5;ext=val' or '5;ext' or '5;ext=val;foo=bar'), take only the
+            # chunk-size prefix. Reject the line if it is empty or starts with
+            # ';' (no size, only an extension) or contains whitespace inside
+            # the size or extension portion, which would mask a smuggling
+            # attempt or a malformed client.
+            chunk_header = native_str(chunk_len_str[:-2])
+            # Reject an empty chunk header or one that begins with ';' (no
+            # chunk-size, only an extension). A size with a trailing
+            # extension (`5;ext=val`) is valid; we just take the size prefix.
+            if not chunk_header or chunk_header.startswith(";"):
+                raise httputil.HTTPInputError("invalid chunk size")
+            chunk_size_str = chunk_header.partition(";")[0]
+            # The size must be all hex digits; an empty partition result
+            # (chunk header was just ';ext=val') is invalid.
+            if not chunk_size_str:
+                raise httputil.HTTPInputError("invalid chunk size")
             try:
-                chunk_len = parse_hex_int(native_str(chunk_len_str[:-2]))
+                chunk_len = parse_hex_int(chunk_size_str)
             except ValueError:
                 raise httputil.HTTPInputError("invalid chunk size")
             if chunk_len == 0:
