@@ -874,6 +874,8 @@ def _parse_request_range(
     (None, 0)
     >>> _parse_request_range("bytes=")
     (None, None)
+    >>> _parse_request_range("BYTES=1-2")
+    (1, 3)
     >>> _parse_request_range("foo=42")
     >>> _parse_request_range("bytes=1-2,6-10")
 
@@ -885,7 +887,7 @@ def _parse_request_range(
     """
     unit, _, value = range_header.partition("=")
     unit, value = unit.strip(), value.strip()
-    if unit != "bytes":
+    if unit.lower() != "bytes":
         return None
     start_b, _, end_b = value.partition("-")
     try:
