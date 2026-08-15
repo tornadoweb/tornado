@@ -10,6 +10,7 @@ from tornado.escape import utf8
 from tornado.util import (
     ArgReplacer,
     Configurable,
+    errno_from_exception,
     exec_in,
     import_object,
     raise_exc_info,
@@ -366,3 +367,58 @@ class VersionInfoTest(unittest.TestCase):
 
     def test_current_version(self):
         self.assert_version_info_compatible(tornado.version, tornado.version_info)
+
+
+class ErrnoFromExceptionTest(unittest.TestCase):
+    """Tests for tornado.util.errno_from_exception.
+
+    errno_from_exception has two branches: it returns the exception's
+    ``errno`` attribute when present, otherwise it falls back to
+    ``args[0]``. Every internal caller compares the result against
+    an int errno constant (e.g. ``errno_from_exception(e) == errno.EBADF``).
+    The args fallback therefore must return an int, otherwise a
+    str/float/None in args[0] silently turns every comparison into
+    False and the real error is hidden from the caller. Each test
+    below pins one shape of the fallback contract.
+    """
+
+    def test_errno_attr_wins_over_args(self):
+        # The errno attribute takes precedence even if args[0] is
+        # something else entirely.
+        e = OSError("not the errno", 5)
+        e.errno = 42
+        self.assertEqual(errno_from_exception(e), 42)
+
+    def test_args0_int_returned_when_no_errno_attr(self):
+        # A bare exception with an int first arg is the documented
+        # "use args[0] as the errno" path.
+        e = ValueError(7)
+        self.assertEqual(errno_from_exception(e), 7)
+
+    def test_empty_args_returns_none(self):
+        # An exception with no args must not raise (the function used
+        # to raise ``TypeError: tuple index out of range`` here).
+        e = ValueError()
+        self.assertIsNone(errno_from_exception(e))
+
+    def test_non_int_args0_returns_none(self):
+        # The pre-fix behaviour: any non-empty args returned args[0]
+        # as-is, so a human-readable message (str) flowed into the
+        # int-comparison call sites. This test would have asserted
+        # ``errno_from_exception(ValueError("not an errno")) == 7``
+        # (always False) and the bug stayed invisible.
+        e = ValueError("not an errno")
+        self.assertIsNone(errno_from_exception(e))
+
+    def test_non_int_args0_with_int_args1_returns_none(self):
+        # ``args[0]`` is the only fallback slot -- a stray int tucked
+        # into ``args[1]`` (e.g. by ``OSError(errno, message)``) must
+        # not be picked up here when ``args[0]`` is a message.
+        e = ValueError("not an errno", 7)
+        self.assertIsNone(errno_from_exception(e))
+
+    def test_message_only_args_returns_none(self):
+        # The most common real-world shape: an exception whose only
+        # argument is a human-readable message and no errno attribute.
+        e = RuntimeError("connection broken")
+        self.assertIsNone(errno_from_exception(e))
