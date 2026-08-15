@@ -62,7 +62,13 @@ class GzipDecompressor:
     """Streaming gzip decompressor.
 
     The interface is like that of `zlib.decompressobj` (without some of the
-    optional arguments, but it understands gzip headers and checksums.
+    optional arguments, but it understands gzip headers and checksums).
+
+    .. versionchanged:: 6.6
+       Concatenated gzip members are now decompressed: after one member is
+       fully flushed, any remaining bytes in the stream are automatically
+       fed to a fresh decompressor for the next member. Previously, the
+       trailing members were silently dropped.
     """
 
     def __init__(self) -> None:
@@ -70,6 +76,10 @@ class GzipDecompressor:
         # http://stackoverflow.com/questions/1838699/how-can-i-decompress-a-gzip-stream-with-zlib
         # This works on cpython and pypy, but not jython.
         self.decompressobj = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        # Buffer for bytes that come in after the current member has been
+        # flushed; they belong to the next gzip member and are processed
+        # lazily on the next call to `decompress`.
+        self._pending: bytes = b""
 
     def decompress(self, value: bytes, max_length: int = 0) -> bytes:
         """Decompress a chunk, returning newly-available data.
@@ -81,21 +91,73 @@ class GzipDecompressor:
         If ``max_length`` is given, some input data may be left over
         in ``unconsumed_tail``; you must retrieve this value and pass
         it back to a future call to `decompress` if it is not empty.
+
+        .. versionchanged:: 6.6
+           If the previous member ended and ``value`` contains the start of
+           a new gzip member, the new member is decompressed transparently
+           rather than being buffered until the next call.
         """
-        return self.decompressobj.decompress(value, max_length)
+        # Combine any bytes left over from a previous call with the new
+        # input so we can advance through consecutive members in one pass.
+        if self._pending:
+            value = self._pending + value
+            self._pending = b""
+        result = bytearray()
+        if max_length == 0:
+            # Drain the entire stream, advancing across concatenated
+            # members transparently. This is the legacy behaviour that
+            # callers get when they don't impose a per-call cap.
+            while True:
+                chunk = self.decompressobj.decompress(value)
+                result.extend(chunk)
+                value = self.decompressobj.unconsumed_tail
+                if not self.decompressobj.eof:
+                    break
+                next_member = self.decompressobj.unused_data + value
+                if not next_member:
+                    break
+                self.decompressobj = zlib.decompressobj(16 + zlib.MAX_WBITS)
+                value = next_member
+            self._pending = b""
+            return bytes(result)
+        # When max_length is set the caller drives the loop via
+        # `unconsumed_tail`, so we return after a single inner call.
+        chunk = self.decompressobj.decompress(value, max_length)
+        result.extend(chunk)
+        trailing = self.decompressobj.unconsumed_tail
+        if self.decompressobj.eof:
+            # `unused_data` holds bytes past the current member's
+            # trailer that belong to the next concatenated member.
+            trailing = self.decompressobj.unused_data + trailing
+            self.decompressobj = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        self._pending = trailing
+        return bytes(result)
 
     @property
     def unconsumed_tail(self) -> bytes:
         """Returns the unconsumed portion left over"""
-        return self.decompressobj.unconsumed_tail
+        return self._pending + self.decompressobj.unconsumed_tail
 
     def flush(self) -> bytes:
         """Return any remaining buffered data not yet returned by decompress.
 
         Also checks for errors such as truncated input.
         No other methods may be called on this object after `flush`.
+
+        .. versionchanged:: 6.6
+           If the stream contains concatenated gzip members, all members
+           are flushed and concatenated into the returned bytes.
         """
-        return self.decompressobj.flush()
+        result = bytearray()
+        while True:
+            result.extend(self.decompressobj.flush())
+            next_member = self.decompressobj.unused_data
+            self.decompressobj = zlib.decompressobj(16 + zlib.MAX_WBITS)
+            if not next_member:
+                break
+            # Drain the next member fully and append its output.
+            self.decompressobj.decompress(next_member)
+        return bytes(result)
 
 
 def import_object(name: str) -> Any:
