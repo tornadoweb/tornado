@@ -82,7 +82,32 @@ class GzipDecompressor:
         in ``unconsumed_tail``; you must retrieve this value and pass
         it back to a future call to `decompress` if it is not empty.
         """
-        return self.decompressobj.decompress(value, max_length)
+        data = value
+        out = bytearray()
+        remaining = max_length
+
+        while True:
+            if remaining:
+                chunk = self.decompressobj.decompress(data, remaining)
+            else:
+                chunk = self.decompressobj.decompress(data)
+
+            out.extend(chunk)
+
+            if remaining:
+                remaining = max(0, max_length - len(out))
+                if remaining == 0:
+                    break
+
+            unused = getattr(self.decompressobj, "unused_data", b"")
+            if unused:
+                data = unused
+                self.decompressobj = zlib.decompressobj(16 + zlib.MAX_WBITS)
+                continue
+
+            break
+
+        return bytes(out)
 
     @property
     def unconsumed_tail(self) -> bytes:
