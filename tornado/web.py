@@ -422,7 +422,7 @@ class RequestHandler:
         # If \n is allowed into the header, it is possible to inject
         # additional headers or split the request.
         if RequestHandler._VALID_HEADER_CHARS.fullmatch(retval) is None:
-            raise ValueError("Unsafe header value %r", retval)
+            raise ValueError("Unsafe header value %r" % retval)
         return retval
 
     @overload
