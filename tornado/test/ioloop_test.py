@@ -715,6 +715,21 @@ class TestPeriodicCallbackMath(unittest.TestCase):
         expected_callback_time = 83000
         self.assertEqual(pc.callback_time, expected_callback_time)
 
+    def test_timedelta_zero_raises(self):
+        # Zero timedelta previously fell through the numeric-only check
+        # and produced callback_time = 0.0, which the start() loop would
+        # re-schedule immediately. Now it raises ValueError up front.
+        with self.assertRaises(ValueError) as cm:
+            PeriodicCallback(lambda: None, datetime.timedelta(0))
+        self.assertIn("positive", str(cm.exception))
+
+    def test_timedelta_negative_raises(self):
+        # Negative timedelta previously produced a negative callback_time
+        # (no error at construction time), which silently broke scheduling.
+        with self.assertRaises(ValueError) as cm:
+            PeriodicCallback(lambda: None, datetime.timedelta(microseconds=-1))
+        self.assertIn("positive", str(cm.exception))
+
 
 class TestPeriodicCallbackAsync(AsyncTestCase):
     def test_periodic_plain(self):
