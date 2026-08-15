@@ -23,6 +23,7 @@ from tornado.simple_httpclient import (
     HTTPStreamClosedError,
     HTTPTimeoutError,
     SimpleAsyncHTTPClient,
+    TCPClient,
 )
 from tornado.test import httpclient_test
 from tornado.test.httpclient_test import (
@@ -299,13 +300,66 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
                 return [(socket.AF_INET, ("127.0.0.1", test.get_http_port()))]
 
         with closing(self.create_client(resolver=TimeoutResolver())) as client:
-            with self.assertRaises(HTTPTimeoutError):
+            with self.assertRaises(HTTPTimeoutError) as cm:
                 yield client.fetch(
                     self.get_url("/hello"),
                     connect_timeout=timeout,
                     request_timeout=3600,
                     raise_error=True,
                 )
+            self.assertEqual(str(cm.exception), "Timeout during DNS resolution while connecting")
+
+        # Let the hanging coroutine clean up after itself. We need to
+        # wait more than a single IOLoop iteration for the SSL case,
+        # which logs errors on unexpected EOF.
+        cleanup_event.set()
+        yield gen.sleep(0.2)
+
+    @gen_test
+    def test_connect_timeout_tcp_conn(self):
+        timeout = 0.1
+
+        cleanup_event = Event()
+        test = self
+
+        class TimeoutTCPClient(TCPClient):
+            async def connect(
+                    self,
+                    host,
+                    port,
+                    af=socket.AF_UNSPEC,
+                    ssl_options=None,
+                    max_buffer_size=None,
+                    source_ip=None,
+                    source_port=None,
+                    timeout=None,
+                    on_phase_change=None,
+            ):
+                if on_phase_change is not None:
+                    on_phase_change("tcp_connect")
+                await cleanup_event.wait()
+                # Return something valid so the test doesn't raise during shutdown.
+                return await super().connect(
+                    host,
+                    port,
+                    af=af,
+                    ssl_options=ssl_options,
+                    max_buffer_size=max_buffer_size,
+                    source_ip=source_ip,
+                    source_port=source_port,
+                    timeout=timeout,
+                )
+
+        with closing(self.create_client()) as client:
+            client.tcp_client = TimeoutTCPClient(resolver=client.resolver)
+            with self.assertRaises(HTTPTimeoutError) as cm:
+                yield client.fetch(
+                    self.get_url("/hello"),
+                    connect_timeout=timeout,
+                    request_timeout=3600,
+                    raise_error=True,
+                )
+            self.assertEqual(str(cm.exception),"Timeout during TCP connection while connecting")
 
         # Let the hanging coroutine clean up after itself. We need to
         # wait more than a single IOLoop iteration for the SSL case,
@@ -772,8 +826,9 @@ class ResolveTimeoutTestCase(AsyncHTTPTestCase):
         return Application([url("/hello", HelloWorldHandler)])
 
     def test_resolve_timeout(self):
-        with self.assertRaises(HTTPTimeoutError):
+        with self.assertRaises(HTTPTimeoutError) as cm:
             self.fetch("/hello", connect_timeout=0.1, raise_error=True)
+        self.assertEqual(str(cm.exception), "Timeout during DNS resolution while connecting")
 
         # Let the hanging coroutine clean up after itself
         self.cleanup_event.set()
