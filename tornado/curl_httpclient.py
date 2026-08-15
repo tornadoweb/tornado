@@ -441,7 +441,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         else:
             raise KeyError("unknown method " + request.method)
 
-        body_expected = request.method in ("POST", "PATCH", "PUT")
+        body_expected = request.method in ("POST", "PATCH", "PUT", "QUERY")
         body_present = request.body is not None
         if not request.allow_nonstandard_methods:
             # Some HTTP methods nearly always have bodies while others

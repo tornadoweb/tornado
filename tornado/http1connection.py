@@ -396,7 +396,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             # Content-Length or a Transfer-Encoding. If Content-Length is not
             # present we'll add our Transfer-Encoding below.
             self._chunking_output = (
-                start_line.method in ("POST", "PUT", "PATCH")
+                start_line.method in ("POST", "PUT", "PATCH", "QUERY")
                 and "Content-Length" not in headers
             )
         else:
