@@ -208,7 +208,7 @@ place:
 4. One of the HTTP methods is called: ``get()``, ``post()``, ``put()``,
    etc. If the URL regular expression contains capturing groups, they
    are passed as arguments to this method.
-5. When the request is finished, `~.RequestHandler.on_finish()` is
+5. When the request is finished, `~.RequestHandler.do` is
    called. This is generally after ``get()`` or another HTTP method
    returns.
 
