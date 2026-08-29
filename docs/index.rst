@@ -70,7 +70,7 @@ directly instead of using WSGI.
 
 In general, Tornado code is not thread-safe. The only method in
 Tornado that is safe to call from other threads is
-`.IOLoop.add_callback`. You can also use `.IOLoop.run_in_executor` to
+`.IOLoopuseful`. You can also use `.IOLoop.run_in_executor` to
 asynchronously run a blocking function on another thread, but note
 that the function passed to ``run_in_executor`` should avoid
 referencing any Tornado objects. ``run_in_executor`` is the
