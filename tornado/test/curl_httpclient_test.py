@@ -12,7 +12,12 @@ from tornado.escape import utf8
 from tornado.log import app_log
 from tornado.netutil import ssl_options_to_context
 from tornado.test import httpclient_test
-from tornado.testing import AsyncHTTPSTestCase, AsyncHTTPTestCase, ExpectLog
+from tornado.testing import (
+    AsyncHTTPSTestCase,
+    AsyncHTTPTestCase,
+    AsyncTestCase,
+    ExpectLog,
+)
 from tornado.web import Application, RequestHandler
 
 try:
@@ -344,3 +349,30 @@ class CurlHTTPClientStreamingTestCase(AsyncHTTPTestCase):
                 response = self.fetch("/large", streaming_callback=streaming_callback)
         self.assertEqual(response.code, 200)
         self.assertEqual(b"".join(chunks), large_body())
+
+
+@unittest.skipIf(pycurl is None, "pycurl module not present")
+class CurlStreamingBufferTest(AsyncTestCase):
+    def test_unpause_error_is_ignored(self):
+        # When a transfer fails while it is paused, libcurl reports the
+        # failure from curl_easy_pause instead of from the write callback.
+        # That is not an error in the flush itself, and must not be raised
+        # into the IOLoop: _finish will pass the failure to the callback.
+        class FakeCurl:
+            def pause(self, flags):
+                raise pycurl.error(pycurl.E_WRITE_ERROR, "write error")
+
+        chunks: list[bytes] = []
+        buf = _CurlStreamingBuffer(
+            self.io_loop,
+            FakeCurl(),  # type: ignore[arg-type]
+            chunks.append,
+        )
+        with mock.patch.object(_CurlStreamingBuffer, "max_buffer_size", 4):
+            self.assertEqual(buf.write(b"hello"), 5)
+            # The buffer is full, so this chunk is left with libcurl.
+            self.assertEqual(buf.write(b"world"), pycurl.WRITEFUNC_PAUSE)
+        self.assertTrue(buf.paused)
+        buf.flush()
+        self.assertEqual(chunks, [b"hello"])
+        self.assertFalse(buf.paused)

@@ -116,10 +116,17 @@ class _CurlStreamingBuffer:
             elif self.paused:
                 self.paused = False
                 if self.curl is not None:
-                    # Note that this may call write() again (synchronously)
-                    # with data libcurl buffered while paused, so it must
-                    # come after our own buffer has been drained.
-                    self.curl.pause(pycurl.PAUSE_CONT)
+                    try:
+                        # Note that this may call write() again
+                        # (synchronously) with data libcurl buffered while
+                        # paused, so it must come after our own buffer has
+                        # been drained.
+                        self.curl.pause(pycurl.PAUSE_CONT)
+                    except pycurl.error:
+                        # The transfer failed while it was paused (libcurl
+                        # reports the pending error here). Nothing to do:
+                        # _finish will pass the error to the callback.
+                        pass
 
     def finish(self) -> None:
         """Deliver any remaining data at the end of the request.
