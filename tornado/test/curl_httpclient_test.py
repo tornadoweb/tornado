@@ -1,13 +1,18 @@
+import functools
 from hashlib import md5
 import os
 import ssl
+import tracemalloc
 import unittest
+from unittest import mock
+import zlib
 
 from tornado import gen
 from tornado.escape import utf8
+from tornado.log import app_log
 from tornado.netutil import ssl_options_to_context
 from tornado.test import httpclient_test
-from tornado.testing import AsyncHTTPSTestCase, AsyncHTTPTestCase
+from tornado.testing import AsyncHTTPSTestCase, AsyncHTTPTestCase, ExpectLog
 from tornado.web import Application, RequestHandler
 
 try:
@@ -16,7 +21,7 @@ except ImportError:
     pycurl = None  # type: ignore
 
 if pycurl is not None:
-    from tornado.curl_httpclient import CurlAsyncHTTPClient
+    from tornado.curl_httpclient import CurlAsyncHTTPClient, _CurlStreamingBuffer
 
 
 @unittest.skipIf(pycurl is None, "pycurl module not present")
@@ -237,3 +242,105 @@ class CurlHTTPClientReuseCertsTestCase(AsyncHTTPSTestCase):
         )
         response = self.fetch(self.get_url("/client_cert"))
         self.assertEqual(response.body, b"no client cert")
+
+
+# Size of the decompressed response used by CurlHTTPClientStreamingTestCase.
+# Large enough that buffering all of it would be obvious, small enough that
+# the test stays fast.
+BOMB_SIZE = 256 * 1024 * 1024
+
+
+@functools.lru_cache(maxsize=None)
+def gzip_bomb() -> bytes:
+    """Returns a small gzip stream that expands to `BOMB_SIZE` bytes."""
+    compressor = zlib.compressobj(9, zlib.DEFLATED, 16 + zlib.MAX_WBITS)
+    block = b"\0" * (1024 * 1024)
+    pieces = [compressor.compress(block) for _ in range(BOMB_SIZE // len(block))]
+    pieces.append(compressor.flush())
+    return b"".join(pieces)
+
+
+@functools.lru_cache(maxsize=None)
+def large_body() -> bytes:
+    """Returns a body whose contents are non-repeating.
+
+    This makes it possible to detect chunks that were dropped or delivered
+    twice.
+    """
+    return b"".join(b"%09d\n" % i for i in range(100000))
+
+
+class GzipBombHandler(RequestHandler):
+    """Sends a tiny response that decompresses to a very large one."""
+
+    def get(self):
+        self.set_header("Content-Encoding", "gzip")
+        self.write(gzip_bomb())
+
+
+class LargeHandler(RequestHandler):
+    def get(self):
+        self.write(large_body())
+
+
+@unittest.skipIf(pycurl is None, "pycurl module not present")
+class CurlHTTPClientStreamingTestCase(AsyncHTTPTestCase):
+    def get_app(self):
+        return Application([("/bomb", GzipBombHandler), ("/large", LargeHandler)])
+
+    def get_http_client(self):
+        return CurlAsyncHTTPClient(force_instance=True, defaults=dict(allow_ipv6=False))
+
+    def test_streaming_decompression_bomb(self):
+        # A malicious server can turn a small compressed response into an
+        # arbitrarily large decompressed one. A streaming_callback must be
+        # able to consume the whole thing without the client buffering more
+        # than a bounded amount of it at a time.
+        gzip_bomb()  # Precompute so it isn't counted in the measurement.
+        received = 0
+
+        def streaming_callback(chunk):
+            nonlocal received
+            received += len(chunk)
+
+        tracemalloc.start()
+        try:
+            tracemalloc.reset_peak()
+            response = self.fetch("/bomb", streaming_callback=streaming_callback)
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+
+        self.assertEqual(response.code, 200)
+        self.assertEqual(received, BOMB_SIZE)
+        self.assertEqual(response.body, b"")
+        # The client used to queue every chunk libcurl produced for later
+        # delivery, so this used to hold a large fraction of BOMB_SIZE.
+        self.assertLess(peak, 16 * 1024 * 1024)
+
+    def test_streaming_pause_and_resume(self):
+        # Exercise many pause/resume cycles and verify that the body is
+        # delivered exactly once, in order. libcurl re-delivers the chunk
+        # that was in flight when the transfer was paused, so it must not be
+        # consumed twice.
+        chunks: list[bytes] = []
+        with mock.patch.object(_CurlStreamingBuffer, "max_buffer_size", 1024):
+            response = self.fetch("/large", streaming_callback=chunks.append)
+        self.assertEqual(response.code, 200)
+        self.assertEqual(b"".join(chunks), large_body())
+
+    def test_streaming_callback_exception(self):
+        # An exception in the streaming_callback is logged and does not stop
+        # the transfer or leave it paused forever.
+        chunks: list[bytes] = []
+
+        def streaming_callback(chunk):
+            chunks.append(chunk)
+            if len(chunks) == 1:
+                raise ZeroDivisionError()
+
+        with mock.patch.object(_CurlStreamingBuffer, "max_buffer_size", 1024):
+            with ExpectLog(app_log, "Exception in callback"):
+                response = self.fetch("/large", streaming_callback=streaming_callback)
+        self.assertEqual(response.code, 200)
+        self.assertEqual(b"".join(chunks), large_body())

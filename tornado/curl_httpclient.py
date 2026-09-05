@@ -44,6 +44,94 @@ curl_log = logging.getLogger("tornado.curl_httpclient")
 CR_OR_LF_RE = re.compile(b"\r|\n")
 
 
+class _CurlStreamingBuffer:
+    """Delivers response body chunks from libcurl to a ``streaming_callback``.
+
+    libcurl runs its write callback from inside
+    ``curl_multi_socket_action``, where it is not safe to run application
+    code (which may reenter this client, or raise exceptions that libcurl
+    would turn into transfer errors). Chunks are therefore queued here and
+    delivered later from the `.IOLoop`.
+
+    Queuing alone would let the amount of buffered data grow with whatever
+    the server chooses to send, which is a problem when
+    ``decompress_response`` is in use: a "decompression bomb" lets a server
+    turn a few kilobytes on the wire into gigabytes of decompressed data,
+    all of which would pile up in the `.IOLoop`'s callback queue before any
+    of it reached the application. To bound this, the transfer is paused
+    once more than `max_buffer_size` bytes are waiting, and resumed after
+    the callback has consumed them.
+    """
+
+    # Pause the transfer while at least this many bytes are waiting to be
+    # delivered. libcurl does its own buffering of the paused transfer, so
+    # the actual high-water mark is somewhat larger than this.
+    max_buffer_size = 1024 * 1024
+
+    def __init__(
+        self,
+        io_loop: ioloop.IOLoop,
+        curl: pycurl.Curl,
+        callback: Callable[[bytes], Any],
+    ) -> None:
+        self.io_loop = io_loop
+        # Set to None in finish(); the handle may be reused after that.
+        self.curl: pycurl.Curl | None = curl
+        self.callback = callback
+        self.chunks: collections.deque[bytes] = collections.deque()
+        self.size = 0
+        self.paused = False
+        self.flush_scheduled = False
+
+    def write(self, chunk: bytes) -> int:
+        """libcurl ``WRITEFUNCTION`` callback."""
+        if self.size >= self.max_buffer_size:
+            # Tell libcurl to stop reading from the socket until flush()
+            # resumes it. This chunk is not consumed here: libcurl holds
+            # on to it and passes it to us again when we unpause.
+            self.paused = True
+            return pycurl.WRITEFUNC_PAUSE
+        self.chunks.append(chunk)
+        self.size += len(chunk)
+        self._schedule_flush()
+        return len(chunk)
+
+    def _schedule_flush(self) -> None:
+        if not self.flush_scheduled:
+            self.flush_scheduled = True
+            self.io_loop.add_callback(self.flush)
+
+    def flush(self) -> None:
+        """Pass everything we have buffered to the ``streaming_callback``."""
+        self.flush_scheduled = False
+        try:
+            while self.chunks:
+                chunk = self.chunks.popleft()
+                self.size -= len(chunk)
+                self.callback(chunk)
+        finally:
+            if self.chunks:
+                # The callback raised; deliver the rest (and unpause) later.
+                self._schedule_flush()
+            elif self.paused:
+                self.paused = False
+                if self.curl is not None:
+                    # Note that this may call write() again (synchronously)
+                    # with data libcurl buffered while paused, so it must
+                    # come after our own buffer has been drained.
+                    self.curl.pause(pycurl.PAUSE_CONT)
+
+    def finish(self) -> None:
+        """Deliver any remaining data at the end of the request.
+
+        The curl handle may be reset and reused after this, so we must not
+        touch it again.
+        """
+        self.curl = None
+        self.paused = False
+        self.flush()
+
+
 class CurlAsyncHTTPClient(AsyncHTTPClient):
     def initialize(  # type: ignore
         self, max_clients: int = 10, defaults: dict[str, Any] | None = None
@@ -200,6 +288,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 curl.info = {  # type: ignore
                     "headers": httputil.HTTPHeaders(),
                     "buffer": BytesIO(),
+                    "streaming_buffer": None,
                     "request": request,
                     "callback": callback,
                     "queue_start_time": queue_start_time,
@@ -240,6 +329,13 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         info = curl.info  # type: ignore
         curl.info = None  # type: ignore
         self._multi.remove_handle(curl)
+        if info["streaming_buffer"] is not None:
+            # Make sure everything that was received reaches the
+            # streaming_callback before the final response.
+            try:
+                info["streaming_buffer"].finish()
+            except Exception:
+                self.handle_callback_exception(info["request"].streaming_callback)
         buffer = info["buffer"]
         if curl_error:
             assert curl_message is not None
@@ -341,6 +437,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 self._curl_header_callback, headers, request.header_callback
             ),
         )
+        write_function: Callable[[bytes], int]
         if request.streaming_callback:
 
             if gen.is_coroutine_function(
@@ -350,13 +447,13 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                     "'CurlAsyncHTTPClient' does not support async streaming_callbacks."
                 )
 
-            def write_function(b: bytes | bytearray) -> int:
-                assert request.streaming_callback is not None
-                self.io_loop.add_callback(request.streaming_callback, b)
-                return len(b)
-
+            streaming_buffer = _CurlStreamingBuffer(
+                self.io_loop, curl, request.streaming_callback
+            )
+            curl.info["streaming_buffer"] = streaming_buffer  # type: ignore
+            write_function = streaming_buffer.write
         else:
-            write_function = buffer.write  # type: ignore
+            write_function = buffer.write
         curl.setopt(pycurl.WRITEFUNCTION, write_function)
         curl.setopt(pycurl.FOLLOWLOCATION, request.follow_redirects)
         curl.setopt(pycurl.MAXREDIRS, request.max_redirects)
