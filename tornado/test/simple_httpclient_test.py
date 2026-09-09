@@ -23,6 +23,7 @@ from tornado.simple_httpclient import (
     HTTPStreamClosedError,
     HTTPTimeoutError,
     SimpleAsyncHTTPClient,
+    _HTTPConnection,
 )
 from tornado.test import httpclient_test
 from tornado.test.httpclient_test import (
@@ -646,6 +647,106 @@ class CreateAsyncHTTPClientTestCase(AsyncTestCase):
             self.assertEqual(client.max_clients, 13)  # type: ignore
         with closing(AsyncHTTPClient(max_clients=14, force_instance=True)) as client:
             self.assertEqual(client.max_clients, 14)  # type: ignore
+
+
+class MalformedResponseTestCase(AsyncHTTPTestCase):
+    http_client: SimpleAsyncHTTPClient
+    response = b""
+
+    def get_app(self):
+        def respond(request):
+            stream = request.connection.detach()
+            self.io_loop.spawn_callback(self.write_response, stream)
+
+        return respond
+
+    async def write_response(self, stream):
+        try:
+            await stream.write(self.response)
+        finally:
+            stream.close()
+
+    def get_http_client(self):
+        test = self
+
+        class RecordingConnection(_HTTPConnection):
+            close_count = 0
+            callback_count = 0
+
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                test.connections.append(self)
+
+            def on_connection_close(self):
+                self.close_count += 1
+                super().on_connection_close()
+
+            def _run_callback(self, response):
+                if self.final_callback is not None:
+                    self.callback_count += 1
+                super()._run_callback(response)
+
+        self.connections: list[RecordingConnection] = []
+
+        class Client(SimpleAsyncHTTPClient):
+            def _connection_class(self):
+                return RecordingConnection
+
+        return Client(force_instance=True, max_clients=1)
+
+    def check_cleanup(self, close_count):
+        connection = self.connections[-1]
+        self.assertEqual(connection.close_count, close_count)
+        self.assertEqual(connection.callback_count, 1)
+        self.assertIsNone(connection._timeout)
+        self.assertFalse(self.http_client.active)
+        self.assertFalse(self.http_client.queue)
+        self.assertFalse(self.http_client.waiting)
+
+    def check_malformed_response(self, response):
+        self.response = response
+        # A parser error must release the request immediately, not wait for
+        # the request timer and report HTTPTimeoutError instead.
+        with ExpectLog(gen_log, "Malformed HTTP message", level=logging.INFO):
+            with self.assertRaises(HTTPStreamClosedError):
+                self.fetch("/", request_timeout=1, raise_error=True)
+        self.check_cleanup(close_count=1)
+        # The single client slot must also be available for the next request.
+        self.response = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"
+        self.assertEqual(self.fetch("/").code, 200)
+        self.check_cleanup(close_count=0)
+
+    def test_malformed_start_line(self):
+        self.check_malformed_response(b"HTTP/1.1 301\r\nContent-Length: 0\r\n\r\n")
+
+    def test_malformed_header(self):
+        self.check_malformed_response(b"HTTP/1.1 200 OK\r\nInvalidHeader\r\n\r\n")
+
+    def test_malformed_start_line_after_100_continue(self):
+        self.check_malformed_response(
+            b"HTTP/1.1 100 Continue\r\n\r\n"
+            b"HTTP/1.1 301\r\nContent-Length: 0\r\n\r\n"
+        )
+
+    def test_malformed_header_after_100_continue(self):
+        self.check_malformed_response(
+            b"HTTP/1.1 100 Continue\r\n\r\n"
+            b"HTTP/1.1 100 Continue\r\n\r\n"
+            b"HTTP/1.1 200 OK\r\nInvalidHeader\r\n\r\n"
+        )
+
+    def test_valid_responses(self):
+        for start_line in (
+            b"HTTP/1.1 200 OK\r\n",
+            b"HTTP/1.1 200 \r\n",
+            b"HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 200 OK\r\n",
+        ):
+            with self.subTest(start_line=start_line):
+                self.response = start_line + b"Content-Length: 2\r\n\r\nok"
+                result = self.fetch("/")
+                self.assertEqual(result.code, 200)
+                self.assertEqual(result.body, b"ok")
+                self.check_cleanup(close_count=0)
 
 
 class HTTP100ContinueTestCase(AsyncHTTPTestCase):
