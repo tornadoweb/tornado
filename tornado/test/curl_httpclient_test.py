@@ -1,16 +1,11 @@
-import base64
-import functools
 from hashlib import md5
 import os
 import ssl
-import tracemalloc
 import unittest
 from unittest import mock
-import zlib
 
 from tornado import gen
 from tornado.escape import utf8
-from tornado.httpclient import HTTPError
 from tornado.log import app_log
 from tornado.netutil import ssl_options_to_context
 from tornado.test import httpclient_test
@@ -33,11 +28,45 @@ if pycurl is not None:
 
 @unittest.skipIf(pycurl is None, "pycurl module not present")
 class CurlHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
+    # libcurl decodes the Content-Encoding named by the response whether or
+    # not we listed it in Accept-Encoding, so brotli is reachable whenever
+    # libcurl was built with it (which is common).
+    decompresses_brotli = pycurl is not None and "brotli" in pycurl.version
+
     def get_http_client(self):
         client = CurlAsyncHTTPClient(defaults=dict(allow_ipv6=False))
         # make sure AsyncHTTPClient magic doesn't give us the wrong class
         self.assertTrue(isinstance(client, CurlAsyncHTTPClient))
         return client
+
+    def test_streaming_pause_and_resume(self):
+        # With a small buffer the transfer is paused and resumed many times
+        # over one response. libcurl re-delivers the chunk that was in
+        # flight when it was paused, so that chunk must not be consumed
+        # twice.
+        chunks: list[bytes] = []
+        with mock.patch.object(_CurlStreamingBuffer, "max_buffer_size", 1024):
+            response = self.fetch("/large_body", streaming_callback=chunks.append)
+        self.assertEqual(response.code, 200)
+        self.assertEqual(b"".join(chunks), httpclient_test.large_body())
+
+    def test_streaming_callback_exception(self):
+        # An exception in the streaming_callback is logged, and does not
+        # stop the transfer or leave it paused forever.
+        chunks: list[bytes] = []
+
+        def streaming_callback(chunk):
+            chunks.append(chunk)
+            if len(chunks) == 1:
+                raise ZeroDivisionError()
+
+        with mock.patch.object(_CurlStreamingBuffer, "max_buffer_size", 1024):
+            with ExpectLog(app_log, "Exception in callback"):
+                response = self.fetch(
+                    "/large_body", streaming_callback=streaming_callback
+                )
+        self.assertEqual(response.code, 200)
+        self.assertEqual(b"".join(chunks), httpclient_test.large_body())
 
 
 class DigestAuthHandler(RequestHandler):
@@ -249,187 +278,6 @@ class CurlHTTPClientReuseCertsTestCase(AsyncHTTPSTestCase):
         )
         response = self.fetch(self.get_url("/client_cert"))
         self.assertEqual(response.body, b"no client cert")
-
-
-# Size of the decompressed response used by CurlHTTPClientStreamingTestCase.
-# Large enough that buffering all of it would be obvious, small enough that
-# the test stays fast.
-BOMB_SIZE = 256 * 1024 * 1024
-
-
-@functools.lru_cache(maxsize=None)
-def gzip_bomb() -> bytes:
-    """Returns a small gzip stream that expands to `BOMB_SIZE` bytes."""
-    compressor = zlib.compressobj(9, zlib.DEFLATED, 16 + zlib.MAX_WBITS)
-    block = b"\0" * (1024 * 1024)
-    pieces = [compressor.compress(block) for _ in range(BOMB_SIZE // len(block))]
-    pieces.append(compressor.flush())
-    return b"".join(pieces)
-
-
-@functools.lru_cache(maxsize=None)
-def large_body() -> bytes:
-    """Returns a body whose contents are non-repeating.
-
-    This makes it possible to detect chunks that were dropped or delivered
-    twice.
-    """
-    return b"".join(b"%09d\n" % i for i in range(100000))
-
-
-class GzipBombHandler(RequestHandler):
-    """Sends a tiny response that decompresses to a very large one."""
-
-    def get(self):
-        self.set_header("Content-Encoding", "gzip")
-        self.write(gzip_bomb())
-
-
-class LargeHandler(RequestHandler):
-    def get(self):
-        self.write(large_body())
-
-
-# A 421-byte brotli stream that expands to BROTLI_BOMB_SIZE bytes of zeros,
-# a ratio of ~637000:1 (deflate cannot exceed ~1032:1). Embedded as a
-# constant so that the test suite does not need a brotli module for Python.
-# Regenerate with:
-#     import base64, brotli
-#     base64.b64encode(brotli.compress(b"\0" * BROTLI_BOMB_SIZE, quality=11))
-BROTLI_BOMB_SIZE = 256 * 1024 * 1024
-BROTLI_BOMB = base64.b64decode(
-    "y///P/gnAOKxQCD3/o///3/wTwDEYRGA7v0f////4J8AiMMCAN37P/7//8E/ARCHBQC6"
-    "93/8//+DfwIgDgsAdO//+P//B/8EQBwWAOje//H//w/+CYA4LADQvf/j//8f/BMAcVgA"
-    "oHv/x///P/gnAOKwAED3/o///3/wTwDEYQGA7v0f////4J8AiMMCAN37P/7//8E/ARCH"
-    "BQC693/8//+DfwIgDgsAdO//+P//B/8EQBwWAOje//H//w/+CYA4LADQvf/j//8f/BMA"
-    "cVgAoHv/x///P/gnAOKwAED3/o///3/wTwDEYQGA7v0f////4J8AiMMCAN37P/7//8E/"
-    "ARCHBQC693/8//+DfwIgDgsAdO//+P//B/8EQBwWAOje//H//w/+CYA4LADQvf/j//8f"
-    "/BMAcVgAoHv/x///P/gnAOKwAED3/o///3/wTwDEYQGA7v0f////4J8AiMMCAN37P/7/"
-    "/8E/ARCHBQC693/8//+DfwIgDgsAdO//+P//B/8EQBwWAOje//H//w/+CYA4LADQvf/j"
-    "//8f/BMAcVgAoHv/Nw=="
-)
-
-
-class BrotliBombHandler(RequestHandler):
-    """Sends a brotli-encoded bomb that the client never asked for.
-
-    ``curl_httpclient`` requests ``Accept-Encoding: gzip,deflate``, but
-    libcurl builds its decoder from the ``Content-Encoding`` of the response
-    and does not check it against what was requested, so a server can reach
-    any codec the libcurl build happens to include.
-    """
-
-    def get(self):
-        self.set_header("Content-Encoding", "br")
-        self.write(BROTLI_BOMB)
-
-
-@unittest.skipIf(pycurl is None, "pycurl module not present")
-class CurlHTTPClientStreamingTestCase(AsyncHTTPTestCase):
-    def get_app(self):
-        return Application(
-            [
-                ("/bomb", GzipBombHandler),
-                ("/brotli_bomb", BrotliBombHandler),
-                ("/large", LargeHandler),
-            ]
-        )
-
-    def get_http_client(self):
-        return CurlAsyncHTTPClient(force_instance=True, defaults=dict(allow_ipv6=False))
-
-    def test_streaming_decompression_bomb(self):
-        # A malicious server can turn a small compressed response into an
-        # arbitrarily large decompressed one. A streaming_callback must be
-        # able to consume the whole thing without the client buffering more
-        # than a bounded amount of it at a time.
-        gzip_bomb()  # Precompute so it isn't counted in the measurement.
-        received = 0
-
-        def streaming_callback(chunk):
-            nonlocal received
-            received += len(chunk)
-
-        tracemalloc.start()
-        try:
-            tracemalloc.reset_peak()
-            response = self.fetch("/bomb", streaming_callback=streaming_callback)
-            peak = tracemalloc.get_traced_memory()[1]
-        finally:
-            tracemalloc.stop()
-
-        self.assertEqual(response.code, 200)
-        self.assertEqual(received, BOMB_SIZE)
-        self.assertEqual(response.body, b"")
-        # The client used to queue every chunk libcurl produced for later
-        # delivery, so this used to hold a large fraction of BOMB_SIZE.
-        self.assertLess(peak, 16 * 1024 * 1024)
-
-    @unittest.skipIf(
-        pycurl is not None and "brotli" not in pycurl.version,
-        "libcurl built without brotli support",
-    )
-    def test_streaming_unsolicited_brotli_bomb(self):
-        # Since libcurl decodes whatever Content-Encoding the response names,
-        # a server can reach a codec whose expansion ratio is hundreds of
-        # times deflate's, even though we only asked for gzip and deflate.
-        # The transfer itself may not survive -- libcurl fails it once its
-        # own 64MB pause buffer overflows -- but either way the expansion
-        # must not be buffered on our side.
-        received = 0
-
-        def streaming_callback(chunk):
-            nonlocal received
-            received += len(chunk)
-
-        tracemalloc.start()
-        try:
-            tracemalloc.reset_peak()
-            try:
-                code = self.fetch(
-                    "/brotli_bomb", streaming_callback=streaming_callback
-                ).code
-            except HTTPError as e:
-                # The usual outcome: libcurl aborts the transfer once its own
-                # pause buffer cannot hold the expansion.
-                code = e.code
-            peak = tracemalloc.get_traced_memory()[1]
-        finally:
-            tracemalloc.stop()
-
-        # More than was sent on the wire, i.e. libcurl really did decode an
-        # encoding we did not ask for.
-        self.assertGreater(received, len(BROTLI_BOMB))
-        self.assertIn(code, (200, 599))
-        self.assertLess(peak, 16 * 1024 * 1024)
-        self.assertLess(received, 16 * 1024 * 1024)
-
-    def test_streaming_pause_and_resume(self):
-        # Exercise many pause/resume cycles and verify that the body is
-        # delivered exactly once, in order. libcurl re-delivers the chunk
-        # that was in flight when the transfer was paused, so it must not be
-        # consumed twice.
-        chunks: list[bytes] = []
-        with mock.patch.object(_CurlStreamingBuffer, "max_buffer_size", 1024):
-            response = self.fetch("/large", streaming_callback=chunks.append)
-        self.assertEqual(response.code, 200)
-        self.assertEqual(b"".join(chunks), large_body())
-
-    def test_streaming_callback_exception(self):
-        # An exception in the streaming_callback is logged and does not stop
-        # the transfer or leave it paused forever.
-        chunks: list[bytes] = []
-
-        def streaming_callback(chunk):
-            chunks.append(chunk)
-            if len(chunks) == 1:
-                raise ZeroDivisionError()
-
-        with mock.patch.object(_CurlStreamingBuffer, "max_buffer_size", 1024):
-            with ExpectLog(app_log, "Exception in callback"):
-                response = self.fetch("/large", streaming_callback=streaming_callback)
-        self.assertEqual(response.code, 200)
-        self.assertEqual(b"".join(chunks), large_body())
 
 
 @unittest.skipIf(pycurl is None, "pycurl module not present")

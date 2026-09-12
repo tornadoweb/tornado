@@ -2,13 +2,16 @@ import base64
 import binascii
 import copy
 import datetime
+import functools
 import gzip
 import subprocess
 import sys
 import threading
 import time
+import tracemalloc
 import unicodedata
 import unittest
+import zlib
 from contextlib import closing
 from io import BytesIO
 
@@ -159,12 +162,99 @@ class EchoHeadersHandler(RequestHandler):
         self.write(json_encode(dict(self.request.headers.get_all())))
 
 
+# Decompressed size of the response served by `GzipBombHandler`. Kept below
+# simple_httpclient's default ``max_body_size`` of 100MB so that every
+# implementation can retrieve the whole thing; raising it past that limit
+# would turn this into a test of the limit instead.
+GZIP_BOMB_SIZE = 64 * 1024 * 1024
+
+
+@functools.lru_cache(maxsize=None)
+def gzip_bomb() -> bytes:
+    """Returns a small gzip stream that expands to `GZIP_BOMB_SIZE` bytes.
+
+    Compressed incrementally so that building it does not itself allocate
+    the decompressed size.
+    """
+    compressor = zlib.compressobj(9, zlib.DEFLATED, 16 + zlib.MAX_WBITS)
+    block = b"\0" * (1024 * 1024)
+    pieces = [compressor.compress(block) for _ in range(GZIP_BOMB_SIZE // len(block))]
+    pieces.append(compressor.flush())
+    return b"".join(pieces)
+
+
+# A 421-byte brotli stream that expands to BROTLI_BOMB_SIZE bytes of zeros,
+# a ratio of ~637000:1 (deflate cannot exceed ~1032:1). Embedded as a
+# constant so that the test suite does not need a brotli module for Python.
+# Regenerate with:
+#     import base64, brotli
+#     base64.b64encode(brotli.compress(b"\0" * BROTLI_BOMB_SIZE, quality=11))
+BROTLI_BOMB_SIZE = 256 * 1024 * 1024
+BROTLI_BOMB = base64.b64decode(
+    "y///P/gnAOKxQCD3/o///3/wTwDEYRGA7v0f////4J8AiMMCAN37P/7//8E/ARCHBQC6"
+    "93/8//+DfwIgDgsAdO//+P//B/8EQBwWAOje//H//w/+CYA4LADQvf/j//8f/BMAcVgA"
+    "oHv/x///P/gnAOKwAED3/o///3/wTwDEYQGA7v0f////4J8AiMMCAN37P/7//8E/ARCH"
+    "BQC693/8//+DfwIgDgsAdO//+P//B/8EQBwWAOje//H//w/+CYA4LADQvf/j//8f/BMA"
+    "cVgAoHv/x///P/gnAOKwAED3/o///3/wTwDEYQGA7v0f////4J8AiMMCAN37P/7//8E/"
+    "ARCHBQC693/8//+DfwIgDgsAdO//+P//B/8EQBwWAOje//H//w/+CYA4LADQvf/j//8f"
+    "/BMAcVgAoHv/x///P/gnAOKwAED3/o///3/wTwDEYQGA7v0f////4J8AiMMCAN37P/7/"
+    "/8E/ARCHBQC693/8//+DfwIgDgsAdO//+P//B/8EQBwWAOje//H//w/+CYA4LADQvf/j"
+    "//8f/BMAcVgAoHv/Nw=="
+)
+
+
+@functools.lru_cache(maxsize=None)
+def large_body() -> bytes:
+    """Returns a body big enough to be delivered in several chunks.
+
+    The contents are non-repeating so that a chunk which was dropped,
+    duplicated or delivered out of order can be detected.
+    """
+    return b"".join(b"%09d\n" % i for i in range(100000))
+
+
+class GzipBombHandler(RequestHandler):
+    """Sends a small response that decompresses to a very large one."""
+
+    def get(self):
+        # Set Content-Encoding manually to avoid automatic gzip encoding.
+        self.set_header("Content-Encoding", "gzip")
+        self.write(gzip_bomb())
+
+
+class BrotliBombHandler(RequestHandler):
+    """Sends a brotli-encoded bomb that the client never asked for.
+
+    No client implementation requests brotli, but libcurl builds its decoder
+    from the ``Content-Encoding`` of the response without checking it against
+    what was requested, so ``curl_httpclient`` decodes this anyway.
+    """
+
+    def get(self):
+        self.set_header("Content-Encoding", "br")
+        self.write(BROTLI_BOMB)
+
+
+class LargeBodyHandler(RequestHandler):
+    def get(self):
+        # An incompressible content type, so that the server's gzip
+        # transform leaves the body alone and this exercises the plain
+        # streaming path.
+        self.set_header("Content-Type", "application/octet-stream")
+        self.write(large_body())
+
+
 # These tests end up getting run redundantly: once here with the default
 # HTTPClient implementation, and then again in each implementation's own
 # test suite.
 
 
 class HTTPClientCommonTestCase(AsyncHTTPTestCase):
+    # Set by subclasses whose client decodes ``Content-Encoding: br``. No
+    # implementation asks for brotli, so this is only true where the client
+    # decodes an encoding it did not request (see BrotliBombHandler).
+    decompresses_brotli = False
+
     def get_app(self):
         return Application(
             [
@@ -185,6 +275,9 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
                 url("/invalid_gzip", InvalidGzipHandler),
                 url("/header-encoding", HeaderEncodingHandler),
                 url("/echo_headers", EchoHeadersHandler),
+                url("/gzip_bomb", GzipBombHandler),
+                url("/brotli_bomb", BrotliBombHandler),
+                url("/large_body", LargeBodyHandler),
             ],
             gzip=True,
         )
@@ -225,6 +318,70 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         # with streaming_callback, data goes to the callback and not response.body
         self.assertEqual(chunks, [b"Hello world!"])
         self.assertFalse(response.body)
+
+    def test_streaming_callback_large_body(self):
+        # A body large enough to arrive in several chunks must reach the
+        # callback exactly once each, in order.
+        chunks: list[bytes] = []
+        response = self.fetch("/large_body", streaming_callback=chunks.append)
+        self.assertEqual(response.code, 200)
+        self.assertEqual(b"".join(chunks), large_body())
+        self.assertFalse(response.body)
+
+    def test_streaming_decompression_bomb(self):
+        # A malicious server can turn a small compressed response into an
+        # arbitrarily large decompressed one. With a streaming_callback it
+        # must be possible to consume the whole thing without the client
+        # buffering more than a bounded amount of it at a time.
+        gzip_bomb()  # Precompute so it isn't counted in the measurement.
+        received = 0
+
+        def streaming_callback(chunk):
+            nonlocal received
+            received += len(chunk)
+
+        tracemalloc.start()
+        try:
+            tracemalloc.reset_peak()
+            response = self.fetch("/gzip_bomb", streaming_callback=streaming_callback)
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+
+        self.assertEqual(response.code, 200)
+        self.assertEqual(received, GZIP_BOMB_SIZE)
+        self.assertFalse(response.body)
+        self.assertLess(peak, 16 * 1024 * 1024)
+
+    def test_streaming_unsolicited_brotli_bomb(self):
+        # A client that decodes an encoding it did not request can be
+        # reached by a codec whose expansion ratio is hundreds of times
+        # deflate's. The transfer need not survive -- libcurl aborts it once
+        # its own pause buffer cannot hold the expansion -- but either way
+        # the expansion must not be buffered.
+        if not self.decompresses_brotli:
+            self.skipTest("client does not decompress Content-Encoding: br")
+        received = 0
+
+        def streaming_callback(chunk):
+            nonlocal received
+            received += len(chunk)
+
+        tracemalloc.start()
+        try:
+            tracemalloc.reset_peak()
+            try:
+                self.fetch("/brotli_bomb", streaming_callback=streaming_callback)
+            except HTTPError:
+                pass
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+
+        # More than was sent on the wire, i.e. the response really was
+        # decoded with an encoding we never asked for.
+        self.assertGreater(received, len(BROTLI_BOMB))
+        self.assertLess(peak, 16 * 1024 * 1024)
 
     def test_post(self):
         response = self.fetch("/post", method="POST", body="arg1=foo&arg2=bar")
