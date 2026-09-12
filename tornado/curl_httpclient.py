@@ -87,11 +87,20 @@ class _CurlStreamingBuffer:
         self.callback = callback
         self.chunks: collections.deque[bytes] = collections.deque()
         self.size = 0
+        self.total = 0
+        self.body_too_large = False
         self.paused = False
         self.flush_scheduled = False
 
     def write(self, chunk: bytes) -> int:
         """libcurl ``WRITEFUNCTION`` callback."""
+        if self.total + len(chunk) > self.client.max_body_size:
+            # max_body_size applies here as well as to a buffered response:
+            # it is a safeguard for applications that do not impose a limit
+            # of their own on what they do with the chunks. Writing less
+            # than we were given makes libcurl fail the transfer.
+            self.body_too_large = True
+            return 0
         if self.size >= self.max_buffer_size:
             # Tell libcurl to stop reading from the socket until flush()
             # resumes it. This chunk is not consumed here: libcurl holds
@@ -100,6 +109,7 @@ class _CurlStreamingBuffer:
             return pycurl.WRITEFUNC_PAUSE
         self.chunks.append(chunk)
         self.size += len(chunk)
+        self.total += len(chunk)
         self._schedule_flush()
         return len(chunk)
 
@@ -359,17 +369,20 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         info = curl.info  # type: ignore
         curl.info = None  # type: ignore
         self._multi.remove_handle(curl)
-        if info["streaming_buffer"] is not None:
+        streaming_buffer = info["streaming_buffer"]
+        body_too_large = info["body_too_large"]
+        if streaming_buffer is not None:
+            body_too_large = body_too_large or streaming_buffer.body_too_large
             # Make sure everything that was received reaches the
             # streaming_callback before the final response.
             try:
-                info["streaming_buffer"].finish()
+                streaming_buffer.finish()
             except Exception:
                 self.handle_callback_exception(info["request"].streaming_callback)
         buffer = info["buffer"]
         if curl_error:
             assert curl_message is not None
-            if info["body_too_large"]:
+            if body_too_large:
                 curl_message = "body exceeded max_body_size of %d bytes" % (
                     self.max_body_size,
                 )
@@ -487,12 +500,13 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             curl.info["streaming_buffer"] = streaming_buffer  # type: ignore
             write_function = streaming_buffer.write
         else:
-            # Without a streaming_callback the whole body is buffered, so a
-            # response that decompresses to more than we are prepared to
-            # hold cannot be retrieved at all -- only refused before it
-            # exhausts memory. libcurl's CURLOPT_MAXFILESIZE is no help
-            # here: outside of very recent versions it is measured against
-            # the compressed size, which a "decompression bomb" keeps small.
+            # Count the buffered body against max_body_size, as
+            # _CurlStreamingBuffer does for the streaming case. Here the
+            # whole body is held in memory, so a response that decompresses
+            # past the limit cannot be retrieved at all -- only refused
+            # before it exhausts memory. libcurl's CURLOPT_MAXFILESIZE is
+            # no help: outside of very recent versions it is measured
+            # against the compressed size, which a bomb keeps small.
             def write_function(chunk: bytes) -> int:
                 if buffer.tell() + len(chunk) > self.max_body_size:
                     curl.info["body_too_large"] = True  # type: ignore

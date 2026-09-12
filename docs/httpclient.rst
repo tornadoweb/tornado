@@ -67,15 +67,15 @@ Implementations
    ``defaults`` is a dict of parameters that will be used as defaults on all
    `.HTTPRequest` objects submitted to this client.
 
-   ``max_body_size`` (default 100MB) is the largest response body that will be
-   buffered in memory. It is measured against the decompressed size, so that a
-   compressed response cannot expand past it. It does not apply to requests
-   using a ``streaming_callback``: those never buffer the whole body, and so
-   can retrieve a response of any size.
+   ``max_body_size`` (default 100MB) is the largest response body that the
+   client will accept, measured after decompression so that a compressed
+   response cannot expand past it. As in `.SimpleAsyncHTTPClient`, it applies
+   whether or not a ``streaming_callback`` is used; raise it to retrieve
+   responses larger than that.
 
    .. versionchanged:: 6.5.9
       Added the ``max_body_size`` argument. Previously a response body was
-      buffered without limit, so a server could exhaust the client's memory
+      accepted without limit, so a server could exhaust the client's memory
       with a compressed response.
 
 Example Code

@@ -165,9 +165,10 @@ class EchoHeadersHandler(RequestHandler):
 
 
 # Decompressed size of the response served by `GzipBombHandler`. Kept below
-# simple_httpclient's default ``max_body_size`` of 100MB so that every
-# implementation can retrieve the whole thing; raising it past that limit
-# would turn this into a test of the limit instead.
+# every implementation's default ``max_body_size`` of 100MB so that a
+# streaming_callback can retrieve the whole thing; raising it past that limit
+# would turn this into a test of the limit instead (see
+# `HTTPClientMaxBodySizeTestCase`).
 GZIP_BOMB_SIZE = 64 * 1024 * 1024
 
 
@@ -1268,7 +1269,7 @@ class HTTPClientMaxBodySizeTestCase(AsyncHTTPTestCase):
             ]
         )
 
-    def assert_refused(self, path, reason):
+    def assert_refused(self, path, reason, **fetch_kwargs):
         with contextlib.ExitStack() as stack:
             if self.refusal_log_format is not None:
                 stack.enter_context(
@@ -1279,8 +1280,19 @@ class HTTPClientMaxBodySizeTestCase(AsyncHTTPTestCase):
                     )
                 )
             with self.assertRaises(HTTPError) as cm:
-                self.fetch(path, raise_error=True)
+                self.fetch(path, raise_error=True, **fetch_kwargs)
         self.assertEqual(cm.exception.code, 599)
+
+    def assert_streaming_refused(self, path, reason):
+        received = 0
+
+        def streaming_callback(chunk):
+            nonlocal received
+            received += len(chunk)
+
+        self.assert_refused(path, reason=reason, streaming_callback=streaming_callback)
+        # Nothing past the limit reached the callback.
+        self.assertLessEqual(received, MAX_BODY_SIZE)
 
     def test_small_body(self):
         # A body of exactly max_body_size is accepted.
@@ -1296,6 +1308,18 @@ class HTTPClientMaxBodySizeTestCase(AsyncHTTPTestCase):
         # The limit is measured after decompression, so a compressed
         # response cannot expand past it.
         self.assert_refused("/bomb", reason="decompressed body too large")
+
+    def test_streaming_callback_over_limit(self):
+        # max_body_size applies to a streaming_callback as well as to a
+        # buffered response. It is a safeguard for applications that do not
+        # impose a limit of their own on what they do with the chunks
+        # (writing them to disk, say), so retrieving a response larger than
+        # this means raising the limit deliberately.
+        self.assert_streaming_refused("/large", reason="Content-Length too long")
+
+    def test_streaming_callback_decompressed_over_limit(self):
+        # As above, measured after decompression.
+        self.assert_streaming_refused("/bomb", reason="decompressed body too large")
 
     def test_reuse_after_refusal(self):
         # Refusing a body must not leave the client unable to make the next

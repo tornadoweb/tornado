@@ -360,21 +360,6 @@ class CurlHTTPClientMaxBodySizeTestCase(httpclient_test.HTTPClientMaxBodySizeTes
         response.rethrow()
         self.assertEqual(response.body, b"a" * httpclient_test.MAX_BODY_SIZE)
 
-    def test_streaming_callback_not_limited(self):
-        # A streaming_callback never buffers the whole body, so it is not
-        # subject to max_body_size: the point of streaming is being able to
-        # retrieve a response of any size. Note that simple_httpclient does
-        # apply the limit to streaming responses, so this is not shared.
-        received = 0
-
-        def streaming_callback(chunk):
-            nonlocal received
-            received += len(chunk)
-
-        response = self.fetch("/bomb", streaming_callback=streaming_callback)
-        response.rethrow()
-        self.assertEqual(received, httpclient_test.GZIP_BOMB_SIZE)
-
 
 @unittest.skipIf(pycurl is None, "pycurl module not present")
 class CurlStreamingBufferTest(AsyncTestCase):
@@ -387,6 +372,7 @@ class CurlStreamingBufferTest(AsyncTestCase):
 
         class FakeClient:
             io_loop = test.io_loop
+            max_body_size = 1024 * 1024
 
             def _set_timeout(self, msecs):
                 test.timeouts_requested.append(msecs)
@@ -419,6 +405,25 @@ class CurlStreamingBufferTest(AsyncTestCase):
         self.assertEqual(chunks, [b"hello"])
         self.assertEqual(paused, [pycurl.PAUSE_CONT])
         self.assertEqual(self.timeouts_requested, [0])
+
+    def test_body_too_large(self):
+        # Exceeding the client's max_body_size makes write() report a short
+        # write, which libcurl turns into a failed transfer, and records why
+        # so that _finish can say so.
+        class FakeCurl:
+            def pause(self, flags):
+                raise AssertionError("should not pause")
+
+        chunks: list[bytes] = []
+        buf = self.make_buffer(FakeCurl(), chunks.append)
+        self.client.max_body_size = 8
+        self.assertEqual(buf.write(b"12345"), 5)
+        self.assertFalse(buf.body_too_large)
+        # 5 + 5 > 8, so this chunk is refused rather than truncated.
+        self.assertEqual(buf.write(b"67890"), 0)
+        self.assertTrue(buf.body_too_large)
+        buf.flush()
+        self.assertEqual(chunks, [b"12345"])
 
     def test_unpause_error_is_ignored(self):
         # When a transfer fails while it is paused, libcurl reports the
