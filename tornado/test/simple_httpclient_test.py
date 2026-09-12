@@ -808,34 +808,13 @@ class MaxHeaderSizeTest(AsyncHTTPTestCase):
                 self.fetch("/large", raise_error=True)
 
 
-class MaxBodySizeTest(AsyncHTTPTestCase):
-    def get_app(self):
-        class SmallBody(RequestHandler):
-            def get(self):
-                self.write("a" * 1024 * 64)
-
-        class LargeBody(RequestHandler):
-            def get(self):
-                self.write("a" * 1024 * 100)
-
-        return Application([("/small", SmallBody), ("/large", LargeBody)])
+class SimpleHTTPClientMaxBodySizeTestCase(
+    httpclient_test.HTTPClientMaxBodySizeTestCase
+):
+    refusal_log_format = "Malformed HTTP message from None: {reason}"
 
     def get_http_client(self):
-        return SimpleAsyncHTTPClient(max_body_size=1024 * 64)
-
-    def test_small_body(self):
-        response = self.fetch("/small")
-        response.rethrow()
-        self.assertEqual(response.body, b"a" * 1024 * 64)
-
-    def test_large_body(self):
-        with ExpectLog(
-            gen_log,
-            "Malformed HTTP message from None: Content-Length too long",
-            level=logging.INFO,
-        ):
-            with self.assertRaises(HTTPStreamClosedError):
-                self.fetch("/large", raise_error=True)
+        return SimpleAsyncHTTPClient(max_body_size=httpclient_test.MAX_BODY_SIZE)
 
 
 class MaxBufferSizeTest(AsyncHTTPTestCase):

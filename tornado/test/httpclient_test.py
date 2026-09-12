@@ -1,9 +1,11 @@
 import base64
 import binascii
+import contextlib
 import copy
 import datetime
 import functools
 import gzip
+import logging
 import subprocess
 import sys
 import threading
@@ -29,7 +31,7 @@ from tornado.httputil import HTTPHeaders, format_timestamp
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado.log import app_log, gen_log
-from tornado.test.util import ignore_deprecation
+from tornado.test.util import abstract_base_test, ignore_deprecation
 from tornado.testing import AsyncHTTPTestCase, ExpectLog, bind_unused_port, gen_test
 from tornado.web import Application, RequestHandler, url
 
@@ -1208,3 +1210,98 @@ class HTTPErrorTestCase(unittest.TestCase):
         e = cm.exception
         self.assertEqual(str(e), "HTTP 403: Forbidden")
         self.assertEqual(repr(e), "HTTP 403: Forbidden")
+
+
+# Limit used by `HTTPClientMaxBodySizeTestCase`. Subclasses configure their
+# client with it.
+MAX_BODY_SIZE = 1024 * 64
+
+
+class MaxBodySizeSmallHandler(RequestHandler):
+    def get(self):
+        self.set_header("Content-Type", "application/octet-stream")
+        self.write(b"a" * MAX_BODY_SIZE)
+
+
+class MaxBodySizeLargeHandler(RequestHandler):
+    def get(self):
+        self.set_header("Content-Type", "application/octet-stream")
+        self.write(b"a" * (MAX_BODY_SIZE + 1))
+
+
+class BodyBearingRedirectHandler(RequestHandler):
+    """A redirect carrying a body of its own, larger than the limit.
+
+    Implementations differ here: libcurl discards the body of a redirect it
+    follows, while simple_httpclient applies ``max_body_size`` to every
+    response including the redirect, and so refuses this one before
+    following it.
+    """
+
+    def prepare(self):
+        self.write("x" * (MAX_BODY_SIZE * 2))
+        self.redirect("/small")
+
+
+@abstract_base_test
+class HTTPClientMaxBodySizeTestCase(AsyncHTTPTestCase):
+    """Tests for the limit on a response body held in memory.
+
+    Without a ``streaming_callback`` the whole body is buffered, so a
+    response larger than the client is prepared to hold cannot be retrieved
+    at all -- it can only be refused. Subclasses supply a client configured
+    with `MAX_BODY_SIZE`.
+    """
+
+    # Format of the message the implementation logs to `.gen_log` when it
+    # refuses a body, or None if it does not log one. ``{reason}`` is filled
+    # in with why the body was refused.
+    refusal_log_format: str | None = None
+
+    def get_app(self):
+        return Application(
+            [
+                url("/small", MaxBodySizeSmallHandler),
+                url("/large", MaxBodySizeLargeHandler),
+                url("/bomb", GzipBombHandler),
+                url("/body_bearing_redirect", BodyBearingRedirectHandler),
+            ]
+        )
+
+    def assert_refused(self, path, reason):
+        with contextlib.ExitStack() as stack:
+            if self.refusal_log_format is not None:
+                stack.enter_context(
+                    ExpectLog(
+                        gen_log,
+                        self.refusal_log_format.format(reason=reason),
+                        level=logging.INFO,
+                    )
+                )
+            with self.assertRaises(HTTPError) as cm:
+                self.fetch(path, raise_error=True)
+        self.assertEqual(cm.exception.code, 599)
+
+    def test_small_body(self):
+        # A body of exactly max_body_size is accepted.
+        response = self.fetch("/small")
+        response.rethrow()
+        self.assertEqual(response.body, b"a" * MAX_BODY_SIZE)
+
+    def test_large_body(self):
+        # One byte more is not.
+        self.assert_refused("/large", reason="Content-Length too long")
+
+    def test_decompressed_body_size(self):
+        # The limit is measured after decompression, so a compressed
+        # response cannot expand past it.
+        self.assert_refused("/bomb", reason="decompressed body too large")
+
+    def test_reuse_after_refusal(self):
+        # Refusing a body must not leave the client unable to make the next
+        # request. This matters most for curl_httpclient, which reuses a
+        # pool of curl handles.
+        self.assert_refused("/large", reason="Content-Length too long")
+        response = self.fetch("/small")
+        response.rethrow()
+        self.assertEqual(response.body, b"a" * MAX_BODY_SIZE)

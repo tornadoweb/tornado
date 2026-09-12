@@ -333,77 +333,38 @@ class CurlHTTPClientReuseCertsTestCase(AsyncHTTPSTestCase):
         self.assertEqual(response.body, b"no client cert")
 
 
-# Mirrors simple_httpclient_test.MaxBodySizeTest.
-CURL_MAX_BODY_SIZE = 1024 * 64
-
-
-class SmallBodyHandler(RequestHandler):
-    def get(self):
-        self.set_header("Content-Type", "application/octet-stream")
-        self.write(b"a" * CURL_MAX_BODY_SIZE)
-
-
-class LargeBodyHandler(RequestHandler):
-    def get(self):
-        self.set_header("Content-Type", "application/octet-stream")
-        self.write(b"a" * (CURL_MAX_BODY_SIZE + 1))
-
-
-class BombHandler(RequestHandler):
-    def get(self):
-        self.set_header("Content-Encoding", "gzip")
-        self.write(httpclient_test.gzip_bomb())
-
-
-class BodyBearingRedirectHandler(RequestHandler):
-    def prepare(self):
-        # A redirect carrying a body of its own, larger than the limit.
-        self.write("x" * (CURL_MAX_BODY_SIZE * 2))
-        self.redirect("/small")
-
-
 @unittest.skipIf(pycurl is None, "pycurl module not present")
-class CurlMaxBodySizeTest(AsyncHTTPTestCase):
-    def get_app(self):
-        return Application(
-            [
-                ("/small", SmallBodyHandler),
-                ("/large", LargeBodyHandler),
-                ("/bomb", BombHandler),
-                ("/body_bearing_redirect", BodyBearingRedirectHandler),
-            ]
-        )
-
+class CurlHTTPClientMaxBodySizeTestCase(httpclient_test.HTTPClientMaxBodySizeTestCase):
+    # curl_httpclient does not log when it refuses a body; the message is
+    # carried by the CurlError instead.
     def get_http_client(self):
         # max_clients=1 so that each test also reuses the curl handle left
         # behind by the one before it.
-        return create_client(max_body_size=CURL_MAX_BODY_SIZE, max_clients=1)
+        return create_client(max_body_size=httpclient_test.MAX_BODY_SIZE, max_clients=1)
 
-    def test_small_body(self):
-        # A body of exactly max_body_size is accepted.
-        response = self.fetch("/small")
-        response.rethrow()
-        self.assertEqual(response.body, b"a" * CURL_MAX_BODY_SIZE)
-
-    def test_large_body(self):
-        # One byte more is not.
-        with self.assertRaises(CurlError) as cm:
-            self.fetch("/large", raise_error=True)
-        self.assertIn("max_body_size", str(cm.exception))
-
-    def test_decompressed_body_size(self):
-        # The limit is measured against the decompressed size, so a
-        # decompression bomb is refused even though almost nothing was sent
-        # on the wire. (libcurl's own CURLOPT_MAXFILESIZE counts the
-        # compressed size except on very recent versions.)
+    def test_refusal_message(self):
+        # The generic test only checks that the body was refused; make sure
+        # the error says why, since libcurl's own message for a short write
+        # ("Failure writing output to destination") would not.
         with self.assertRaises(CurlError) as cm:
             self.fetch("/bomb", raise_error=True)
         self.assertIn("max_body_size", str(cm.exception))
 
+    def test_redirect_body_not_counted(self):
+        # libcurl discards the body of a redirect that it follows, so a
+        # redirect carrying a large body of its own does not count towards
+        # the limit for the response that follows it. Not shared:
+        # simple_httpclient applies max_body_size to the redirect response
+        # too, and refuses this one before following it.
+        response = self.fetch("/body_bearing_redirect")
+        response.rethrow()
+        self.assertEqual(response.body, b"a" * httpclient_test.MAX_BODY_SIZE)
+
     def test_streaming_callback_not_limited(self):
         # A streaming_callback never buffers the whole body, so it is not
         # subject to max_body_size: the point of streaming is being able to
-        # retrieve a response of any size.
+        # retrieve a response of any size. Note that simple_httpclient does
+        # apply the limit to streaming responses, so this is not shared.
         received = 0
 
         def streaming_callback(chunk):
@@ -413,23 +374,6 @@ class CurlMaxBodySizeTest(AsyncHTTPTestCase):
         response = self.fetch("/bomb", streaming_callback=streaming_callback)
         response.rethrow()
         self.assertEqual(received, httpclient_test.GZIP_BOMB_SIZE)
-
-    def test_reuse_after_rejection(self):
-        # Refusing a body must not leave anything behind on the recycled
-        # curl handle that affects the next request.
-        with self.assertRaises(CurlError):
-            self.fetch("/large", raise_error=True)
-        response = self.fetch("/small")
-        response.rethrow()
-        self.assertEqual(response.body, b"a" * CURL_MAX_BODY_SIZE)
-
-    def test_redirect_body_not_counted(self):
-        # libcurl discards the body of a redirect that it follows, so a
-        # redirect carrying a large body of its own does not count towards
-        # the limit for the response that follows it.
-        response = self.fetch("/body_bearing_redirect")
-        response.rethrow()
-        self.assertEqual(response.body, b"a" * CURL_MAX_BODY_SIZE)
 
 
 @unittest.skipIf(pycurl is None, "pycurl module not present")
