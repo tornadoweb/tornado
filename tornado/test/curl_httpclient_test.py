@@ -23,7 +23,17 @@ except ImportError:
     pycurl = None  # type: ignore
 
 if pycurl is not None:
-    from tornado.curl_httpclient import CurlAsyncHTTPClient, _CurlStreamingBuffer
+    from tornado.curl_httpclient import (
+        CurlAsyncHTTPClient,
+        CurlError,
+        _CurlStreamingBuffer,
+    )
+
+
+def create_client(**kwargs):
+    return CurlAsyncHTTPClient(
+        force_instance=True, defaults=dict(allow_ipv6=False), **kwargs
+    )
 
 
 @unittest.skipIf(pycurl is None, "pycurl module not present")
@@ -49,6 +59,41 @@ class CurlHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
             response = self.fetch("/large_body", streaming_callback=chunks.append)
         self.assertEqual(response.code, 200)
         self.assertEqual(b"".join(chunks), httpclient_test.large_body())
+
+    def test_max_body_size(self):
+        # The limit is measured against the decompressed size, so a
+        # decompression bomb is refused even though almost nothing was sent
+        # on the wire. (libcurl's own CURLOPT_MAXFILESIZE counts the
+        # compressed size except on very recent versions.)
+        client = create_client(max_body_size=1024)
+        try:
+            with self.assertRaises(CurlError) as cm:
+                self.io_loop.run_sync(lambda: client.fetch(self.get_url("/gzip_bomb")))
+            self.assertIn("max_body_size", str(cm.exception))
+        finally:
+            client.close()
+
+    def test_max_body_size_not_applied_to_streaming_callback(self):
+        # A streaming_callback never buffers the whole body, so it is not
+        # subject to max_body_size: the point of streaming is to be able to
+        # retrieve a response of any size.
+        received = 0
+
+        def streaming_callback(chunk):
+            nonlocal received
+            received += len(chunk)
+
+        client = create_client(max_body_size=1024)
+        try:
+            response = self.io_loop.run_sync(
+                lambda: client.fetch(
+                    self.get_url("/gzip_bomb"), streaming_callback=streaming_callback
+                )
+            )
+        finally:
+            client.close()
+        self.assertEqual(response.code, 200)
+        self.assertEqual(received, httpclient_test.GZIP_BOMB_SIZE)
 
     def test_streaming_callback_exception(self):
         # An exception in the streaming_callback is logged, and does not
@@ -124,7 +169,7 @@ class CustomFailReasonHandler(RequestHandler):
 class CurlHTTPClientTestCase(AsyncHTTPTestCase):
     def setUp(self):
         super().setUp()
-        self.http_client = self.create_client()
+        self.http_client = create_client()
 
     def get_app(self):
         return Application(
@@ -138,11 +183,6 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
                 ("/custom_reason", CustomReasonHandler),
                 ("/custom_fail_reason", CustomFailReasonHandler),
             ]
-        )
-
-    def create_client(self, **kwargs):
-        return CurlAsyncHTTPClient(
-            force_instance=True, defaults=dict(allow_ipv6=False), **kwargs
         )
 
     def test_digest_auth(self):

@@ -147,9 +147,13 @@ class _CurlStreamingBuffer:
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):
     def initialize(  # type: ignore
-        self, max_clients: int = 10, defaults: dict[str, Any] | None = None
+        self,
+        max_clients: int = 10,
+        defaults: dict[str, Any] | None = None,
+        max_body_size: int = 104857600,
     ) -> None:
         super().initialize(defaults=defaults)
+        self.max_body_size = max_body_size
         self._multi = pycurl.CurlMulti()
         self._multi.setopt(pycurl.M_TIMERFUNCTION, self._set_timeout)
         self._multi.setopt(pycurl.M_SOCKETFUNCTION, self._handle_socket)
@@ -302,6 +306,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                     "headers": httputil.HTTPHeaders(),
                     "buffer": BytesIO(),
                     "streaming_buffer": None,
+                    "body_too_large": False,
                     "request": request,
                     "callback": callback,
                     "queue_start_time": queue_start_time,
@@ -352,6 +357,10 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         buffer = info["buffer"]
         if curl_error:
             assert curl_message is not None
+            if info["body_too_large"]:
+                curl_message = "body exceeded max_body_size of %d bytes" % (
+                    self.max_body_size,
+                )
             error: CurlError | None = CurlError(curl_error, curl_message)
             assert error is not None
             code = error.code
@@ -466,7 +475,21 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             curl.info["streaming_buffer"] = streaming_buffer  # type: ignore
             write_function = streaming_buffer.write
         else:
-            write_function = buffer.write
+            # Without a streaming_callback the whole body is buffered, so a
+            # response that decompresses to more than we are prepared to
+            # hold cannot be retrieved at all -- only refused before it
+            # exhausts memory. libcurl's CURLOPT_MAXFILESIZE is no help
+            # here: outside of very recent versions it is measured against
+            # the compressed size, which a "decompression bomb" keeps small.
+            def write_function(chunk: bytes) -> int:
+                if buffer.tell() + len(chunk) > self.max_body_size:
+                    curl.info["body_too_large"] = True  # type: ignore
+                    # Writing less than we were given makes libcurl fail
+                    # the transfer with CURLE_WRITE_ERROR; _finish uses the
+                    # flag above to replace its message with ours.
+                    return 0
+                return buffer.write(chunk)
+
         curl.setopt(pycurl.WRITEFUNCTION, write_function)
         curl.setopt(pycurl.FOLLOWLOCATION, request.follow_redirects)
         curl.setopt(pycurl.MAXREDIRS, request.max_redirects)

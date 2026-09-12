@@ -53,7 +53,7 @@ Implementations
 
 .. module:: tornado.curl_httpclient
 
-.. class:: CurlAsyncHTTPClient(max_clients=10, defaults=None)
+.. class:: CurlAsyncHTTPClient(max_clients=10, defaults=None, max_body_size=104857600)
 
    ``libcurl``-based HTTP client.
 
@@ -66,6 +66,17 @@ Implementations
 
    ``defaults`` is a dict of parameters that will be used as defaults on all
    `.HTTPRequest` objects submitted to this client.
+
+   ``max_body_size`` (default 100MB) is the largest response body that will be
+   buffered in memory. It is measured against the decompressed size, so that a
+   compressed response cannot expand past it. It does not apply to requests
+   using a ``streaming_callback``: those never buffer the whole body, and so
+   can retrieve a response of any size.
+
+   .. versionchanged:: 6.6
+      Added the ``max_body_size`` argument. Previously a response body was
+      buffered without limit, so a server could exhaust the client's memory
+      with a compressed response.
 
 Example Code
 ~~~~~~~~~~~~

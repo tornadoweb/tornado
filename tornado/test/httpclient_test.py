@@ -169,16 +169,23 @@ class EchoHeadersHandler(RequestHandler):
 GZIP_BOMB_SIZE = 64 * 1024 * 1024
 
 
+# Decompressed size of the bomb used for the buffered (no
+# streaming_callback) case. Larger than any implementation is willing to
+# hold in memory, so such a request cannot complete and can only be
+# refused.
+UNBUFFERABLE_BOMB_SIZE = 256 * 1024 * 1024
+
+
 @functools.lru_cache(maxsize=None)
-def gzip_bomb() -> bytes:
-    """Returns a small gzip stream that expands to `GZIP_BOMB_SIZE` bytes.
+def gzip_bomb(size: int = GZIP_BOMB_SIZE) -> bytes:
+    """Returns a small gzip stream that expands to ``size`` bytes.
 
     Compressed incrementally so that building it does not itself allocate
     the decompressed size.
     """
     compressor = zlib.compressobj(9, zlib.DEFLATED, 16 + zlib.MAX_WBITS)
     block = b"\0" * (1024 * 1024)
-    pieces = [compressor.compress(block) for _ in range(GZIP_BOMB_SIZE // len(block))]
+    pieces = [compressor.compress(block) for _ in range(size // len(block))]
     pieces.append(compressor.flush())
     return b"".join(pieces)
 
@@ -217,9 +224,10 @@ class GzipBombHandler(RequestHandler):
     """Sends a small response that decompresses to a very large one."""
 
     def get(self):
+        size = int(self.get_argument("size", str(GZIP_BOMB_SIZE)))
         # Set Content-Encoding manually to avoid automatic gzip encoding.
         self.set_header("Content-Encoding", "gzip")
-        self.write(gzip_bomb())
+        self.write(gzip_bomb(size))
 
 
 class BrotliBombHandler(RequestHandler):
@@ -352,6 +360,27 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         self.assertEqual(received, GZIP_BOMB_SIZE)
         self.assertFalse(response.body)
         self.assertLess(peak, 16 * 1024 * 1024)
+
+    def test_decompression_bomb_without_streaming_callback(self):
+        # Without a streaming_callback the whole body has to be buffered, so
+        # a bomb this size cannot be retrieved at all. It has to be refused
+        # before it exhausts memory rather than buffered in full.
+        gzip_bomb(UNBUFFERABLE_BOMB_SIZE)  # Precompute.
+
+        tracemalloc.start()
+        try:
+            tracemalloc.reset_peak()
+            with self.assertRaises(HTTPError):
+                self.fetch(
+                    "/gzip_bomb?size=%d" % UNBUFFERABLE_BOMB_SIZE, raise_error=True
+                )
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+
+        # Well short of the decompressed size: the point is that the body
+        # was refused, not accumulated.
+        self.assertLess(peak, UNBUFFERABLE_BOMB_SIZE // 2)
 
     def test_streaming_unsolicited_brotli_bomb(self):
         # A client that decodes an encoding it did not request can be
