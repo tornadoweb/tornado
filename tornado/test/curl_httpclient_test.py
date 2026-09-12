@@ -1,14 +1,17 @@
+import gc
 from hashlib import md5
 import os
 import ssl
 import unittest
 from unittest import mock
+import weakref
 
 from tornado import gen
 from tornado.escape import utf8
 from tornado.log import app_log
 from tornado.netutil import ssl_options_to_context
 from tornado.test import httpclient_test
+from tornado.test.util import skipNotCPython
 from tornado.testing import (
     AsyncHTTPSTestCase,
     AsyncHTTPTestCase,
@@ -60,40 +63,50 @@ class CurlHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
         self.assertEqual(response.code, 200)
         self.assertEqual(b"".join(chunks), httpclient_test.large_body())
 
-    def test_max_body_size(self):
-        # The limit is measured against the decompressed size, so a
-        # decompression bomb is refused even though almost nothing was sent
-        # on the wire. (libcurl's own CURLOPT_MAXFILESIZE counts the
-        # compressed size except on very recent versions.)
-        client = create_client(max_body_size=1024)
+    def test_concurrent_paused_streams(self):
+        # Several streaming requests in flight at once, each pausing and
+        # resuming repeatedly: pausing one transfer must not disturb another.
+        client = create_client(max_clients=4)
+        buffers = [bytearray() for _ in range(8)]
         try:
-            with self.assertRaises(CurlError) as cm:
-                self.io_loop.run_sync(lambda: client.fetch(self.get_url("/gzip_bomb")))
-            self.assertIn("max_body_size", str(cm.exception))
+            with mock.patch.object(_CurlStreamingBuffer, "max_buffer_size", 1024):
+                self.io_loop.run_sync(
+                    lambda: gen.multi(
+                        [
+                            client.fetch(
+                                self.get_url("/large_body"),
+                                streaming_callback=buf.extend,
+                            )
+                            for buf in buffers
+                        ]
+                    )
+                )
         finally:
             client.close()
+        for buf in buffers:
+            self.assertEqual(bytes(buf), httpclient_test.large_body())
 
-    def test_max_body_size_not_applied_to_streaming_callback(self):
-        # A streaming_callback never buffers the whole body, so it is not
-        # subject to max_body_size: the point of streaming is to be able to
-        # retrieve a response of any size.
-        received = 0
+    @skipNotCPython
+    def test_client_not_leaked_by_write_callbacks(self):
+        # The WRITEFUNCTION callbacks installed for both the buffered and
+        # the streaming path hold references to the client and to the curl
+        # handle. They must not keep the client alive after close().
 
-        def streaming_callback(chunk):
-            nonlocal received
-            received += len(chunk)
-
-        client = create_client(max_body_size=1024)
-        try:
-            response = self.io_loop.run_sync(
+        def use_and_close_a_client():
+            client = create_client()
+            self.io_loop.run_sync(lambda: client.fetch(self.get_url("/hello")))
+            self.io_loop.run_sync(
                 lambda: client.fetch(
-                    self.get_url("/gzip_bomb"), streaming_callback=streaming_callback
+                    self.get_url("/large_body"),
+                    streaming_callback=lambda chunk: None,
                 )
             )
-        finally:
             client.close()
-        self.assertEqual(response.code, 200)
-        self.assertEqual(received, httpclient_test.GZIP_BOMB_SIZE)
+            return weakref.ref(client)
+
+        ref = use_and_close_a_client()
+        gc.collect()
+        self.assertIsNone(ref())
 
     def test_streaming_callback_exception(self):
         # An exception in the streaming_callback is logged, and does not
@@ -320,8 +333,149 @@ class CurlHTTPClientReuseCertsTestCase(AsyncHTTPSTestCase):
         self.assertEqual(response.body, b"no client cert")
 
 
+# Mirrors simple_httpclient_test.MaxBodySizeTest.
+CURL_MAX_BODY_SIZE = 1024 * 64
+
+
+class SmallBodyHandler(RequestHandler):
+    def get(self):
+        self.set_header("Content-Type", "application/octet-stream")
+        self.write(b"a" * CURL_MAX_BODY_SIZE)
+
+
+class LargeBodyHandler(RequestHandler):
+    def get(self):
+        self.set_header("Content-Type", "application/octet-stream")
+        self.write(b"a" * (CURL_MAX_BODY_SIZE + 1))
+
+
+class BombHandler(RequestHandler):
+    def get(self):
+        self.set_header("Content-Encoding", "gzip")
+        self.write(httpclient_test.gzip_bomb())
+
+
+class BodyBearingRedirectHandler(RequestHandler):
+    def prepare(self):
+        # A redirect carrying a body of its own, larger than the limit.
+        self.write("x" * (CURL_MAX_BODY_SIZE * 2))
+        self.redirect("/small")
+
+
+@unittest.skipIf(pycurl is None, "pycurl module not present")
+class CurlMaxBodySizeTest(AsyncHTTPTestCase):
+    def get_app(self):
+        return Application(
+            [
+                ("/small", SmallBodyHandler),
+                ("/large", LargeBodyHandler),
+                ("/bomb", BombHandler),
+                ("/body_bearing_redirect", BodyBearingRedirectHandler),
+            ]
+        )
+
+    def get_http_client(self):
+        # max_clients=1 so that each test also reuses the curl handle left
+        # behind by the one before it.
+        return create_client(max_body_size=CURL_MAX_BODY_SIZE, max_clients=1)
+
+    def test_small_body(self):
+        # A body of exactly max_body_size is accepted.
+        response = self.fetch("/small")
+        response.rethrow()
+        self.assertEqual(response.body, b"a" * CURL_MAX_BODY_SIZE)
+
+    def test_large_body(self):
+        # One byte more is not.
+        with self.assertRaises(CurlError) as cm:
+            self.fetch("/large", raise_error=True)
+        self.assertIn("max_body_size", str(cm.exception))
+
+    def test_decompressed_body_size(self):
+        # The limit is measured against the decompressed size, so a
+        # decompression bomb is refused even though almost nothing was sent
+        # on the wire. (libcurl's own CURLOPT_MAXFILESIZE counts the
+        # compressed size except on very recent versions.)
+        with self.assertRaises(CurlError) as cm:
+            self.fetch("/bomb", raise_error=True)
+        self.assertIn("max_body_size", str(cm.exception))
+
+    def test_streaming_callback_not_limited(self):
+        # A streaming_callback never buffers the whole body, so it is not
+        # subject to max_body_size: the point of streaming is being able to
+        # retrieve a response of any size.
+        received = 0
+
+        def streaming_callback(chunk):
+            nonlocal received
+            received += len(chunk)
+
+        response = self.fetch("/bomb", streaming_callback=streaming_callback)
+        response.rethrow()
+        self.assertEqual(received, httpclient_test.GZIP_BOMB_SIZE)
+
+    def test_reuse_after_rejection(self):
+        # Refusing a body must not leave anything behind on the recycled
+        # curl handle that affects the next request.
+        with self.assertRaises(CurlError):
+            self.fetch("/large", raise_error=True)
+        response = self.fetch("/small")
+        response.rethrow()
+        self.assertEqual(response.body, b"a" * CURL_MAX_BODY_SIZE)
+
+    def test_redirect_body_not_counted(self):
+        # libcurl discards the body of a redirect that it follows, so a
+        # redirect carrying a large body of its own does not count towards
+        # the limit for the response that follows it.
+        response = self.fetch("/body_bearing_redirect")
+        response.rethrow()
+        self.assertEqual(response.body, b"a" * CURL_MAX_BODY_SIZE)
+
+
 @unittest.skipIf(pycurl is None, "pycurl module not present")
 class CurlStreamingBufferTest(AsyncTestCase):
+    """Unit tests for the buffer that feeds a ``streaming_callback``."""
+
+    def setUp(self):
+        super().setUp()
+        self.timeouts_requested: list[int] = []
+        test = self
+
+        class FakeClient:
+            io_loop = test.io_loop
+
+            def _set_timeout(self, msecs):
+                test.timeouts_requested.append(msecs)
+
+        self.client = FakeClient()
+
+    def make_buffer(self, curl, callback):
+        return _CurlStreamingBuffer(
+            self.client,  # type: ignore[arg-type]
+            curl,
+            callback,
+        )
+
+    def test_unpause_asks_for_a_socket_action(self):
+        # Only libcurl 8.x reports through the timer callback that an
+        # unpaused transfer is runnable again; older versions leave it
+        # stalled unless we ask for a socket_action ourselves.
+        paused = []
+
+        class FakeCurl:
+            def pause(self, flags):
+                paused.append(flags)
+
+        chunks: list[bytes] = []
+        buf = self.make_buffer(FakeCurl(), chunks.append)
+        with mock.patch.object(_CurlStreamingBuffer, "max_buffer_size", 4):
+            self.assertEqual(buf.write(b"hello"), 5)
+            self.assertEqual(buf.write(b"world"), pycurl.WRITEFUNC_PAUSE)
+        buf.flush()
+        self.assertEqual(chunks, [b"hello"])
+        self.assertEqual(paused, [pycurl.PAUSE_CONT])
+        self.assertEqual(self.timeouts_requested, [0])
+
     def test_unpause_error_is_ignored(self):
         # When a transfer fails while it is paused, libcurl reports the
         # failure from curl_easy_pause instead of from the write callback.
@@ -332,11 +486,7 @@ class CurlStreamingBufferTest(AsyncTestCase):
                 raise pycurl.error(pycurl.E_WRITE_ERROR, "write error")
 
         chunks: list[bytes] = []
-        buf = _CurlStreamingBuffer(
-            self.io_loop,
-            FakeCurl(),  # type: ignore[arg-type]
-            chunks.append,
-        )
+        buf = self.make_buffer(FakeCurl(), chunks.append)
         with mock.patch.object(_CurlStreamingBuffer, "max_buffer_size", 4):
             self.assertEqual(buf.write(b"hello"), 5)
             # The buffer is full, so this chunk is left with libcurl.
@@ -345,3 +495,5 @@ class CurlStreamingBufferTest(AsyncTestCase):
         buf.flush()
         self.assertEqual(chunks, [b"hello"])
         self.assertFalse(buf.paused)
+        # A failed unpause is not worth a socket_action.
+        self.assertEqual(self.timeouts_requested, [])

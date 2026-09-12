@@ -73,7 +73,7 @@ Implementations
    using a ``streaming_callback``: those never buffer the whole body, and so
    can retrieve a response of any size.
 
-   .. versionchanged:: 6.6
+   .. versionchanged:: 6.5.9
       Added the ``max_body_size`` argument. Previously a response body was
       buffered without limit, so a server could exhaust the client's memory
       with a compressed response.

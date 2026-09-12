@@ -76,11 +76,12 @@ class _CurlStreamingBuffer:
 
     def __init__(
         self,
-        io_loop: ioloop.IOLoop,
+        client: "CurlAsyncHTTPClient",
         curl: pycurl.Curl,
         callback: Callable[[bytes], Any],
     ) -> None:
-        self.io_loop = io_loop
+        self.client = client
+        self.io_loop = client.io_loop
         # Set to None in finish(); the handle may be reused after that.
         self.curl: pycurl.Curl | None = curl
         self.callback = callback
@@ -133,6 +134,17 @@ class _CurlStreamingBuffer:
                         # reports the pending error here). Nothing to do:
                         # _finish will pass the error to the callback.
                         pass
+                    else:
+                        # Ask for a socket_action so the unpaused transfer
+                        # makes progress. libcurl has notified us of this
+                        # itself (through the timer callback) since 7.69,
+                        # which is below the version we require, so this is
+                        # redundant there and costs one timeout per
+                        # max_buffer_size of body. But without it a libcurl
+                        # older than that stalls until unrelated socket
+                        # activity happens to wake the transfer, and a
+                        # streaming fetch that used to work would hang.
+                        self.client._set_timeout(0)
 
     def finish(self) -> None:
         """Deliver any remaining data at the end of the request.
@@ -470,7 +482,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 )
 
             streaming_buffer = _CurlStreamingBuffer(
-                self.io_loop, curl, request.streaming_callback
+                self, curl, request.streaming_callback
             )
             curl.info["streaming_buffer"] = streaming_buffer  # type: ignore
             write_function = streaming_buffer.write
