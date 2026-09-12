@@ -64,8 +64,14 @@ class _CurlStreamingBuffer:
     """
 
     # Pause the transfer while at least this many bytes are waiting to be
-    # delivered. libcurl does its own buffering of the paused transfer, so
-    # the actual high-water mark is somewhat larger than this.
+    # delivered. This bounds our own queue only: a paused libcurl still
+    # finishes decoding the socket read it already has (there is no way to
+    # tell its decoder to stop) and buffers the result internally, so the
+    # real high-water mark is one read's worth of expansion -- roughly 16MB
+    # for gzip at libcurl's default CURLOPT_BUFFERSIZE. libcurl limits that
+    # buffer to 64MB and fails the transfer with CURLE_TOO_LARGE past it,
+    # which a codec with a higher ratio than deflate's (brotli, say) will
+    # reach. That is libcurl's call to make; we just avoid holding a copy.
     max_buffer_size = 1024 * 1024
 
     def __init__(
