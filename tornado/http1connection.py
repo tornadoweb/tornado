@@ -265,7 +265,15 @@ class HTTP1Connection(httputil.HTTPConnection):
                         raise httputil.HTTPInputError("Too many 1xx responses")
                     # TODO: client delegates will get headers_received twice
                     # in the case of a 100-continue.  Document or change?
-                    await self._read_message(delegate, num_1xx + 1)
+                    #
+                    # The recursive call reads the real response and owns
+                    # the delegate from here on, so there is nothing left
+                    # for this frame to do. Clear need_delegate_close so
+                    # that the finally block does not call
+                    # on_connection_close() on an already-finished
+                    # delegate.
+                    need_delegate_close = False
+                    return await self._read_message(delegate, num_1xx + 1)
             else:
                 if headers.get("Expect") == "100-continue" and not self._write_finished:
                     self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")

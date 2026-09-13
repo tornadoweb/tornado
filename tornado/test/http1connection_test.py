@@ -34,6 +34,39 @@ class HTTP1ConnectionTest(AsyncTestCase):
         listener.close()
 
     @gen_test
+    def test_1xx_does_not_read_a_second_body(self):
+        # An informational (1xx) response is followed by the real response,
+        # which is read by a recursive call to _read_message. Once that
+        # returns, the outer call has nothing left to do: it must not fall
+        # through and read a second body, which would finish the delegate
+        # a second time and start a spurious read-until-close.
+        conn = HTTP1Connection(self.client_stream, True)
+        self.server_stream.write(b"HTTP/1.1 100 CONTINUE\r\n\r\n")
+        self.server_stream.write(b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello")
+        self.server_stream.close()
+
+        body = []
+        finish_count = []
+        close_count = []
+
+        class Delegate(HTTPMessageDelegate):
+            def data_received(self, data):
+                body.append(data)
+
+            def finish(self):
+                finish_count.append(1)
+
+            def on_connection_close(self):
+                close_count.append(1)
+
+        yield conn.read_response(Delegate())
+        self.assertEqual(b"".join(body), b"hello")
+        self.assertEqual(len(finish_count), 1)
+        # The delegate finished normally, so it must not also be told the
+        # connection closed on it.
+        self.assertEqual(len(close_count), 0)
+
+    @gen_test
     def test_http10_no_content_length(self):
         # Regression test for a bug in which can_keep_alive would crash
         # for an HTTP/1.0 (not 1.1) response with no content-length.
