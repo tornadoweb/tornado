@@ -7,6 +7,7 @@ from tornado.iostream import (
     SSLIOStream,
     PipeIOStream,
     StreamClosedError,
+    StreamBufferFullError,
     _StreamBuffer,
 )
 from tornado.httpclient import AsyncHTTPClient, HTTPResponse
@@ -822,6 +823,43 @@ class TestIOStreamMixin(TestReadWriteMixin):
             ):
                 with self.assertRaisesRegex(IOError, "boom"):
                     client.read_until_close()
+        finally:
+            server.close()
+            client.close()
+
+    @gen_test
+    def test_read_until_close_after_error_close(self):
+        # If the stream is closed with an error while a read_until_close
+        # is pending, the error must be reported rather than resolving the
+        # read successfully with whatever happened to be buffered. The
+        # caller otherwise cannot distinguish a complete body from one
+        # truncated by a connection error.
+        server, client = yield self.make_iostream_pair()
+        try:
+            fut = client.read_until_close()
+            server.write(b"hello")
+            yield gen.sleep(0.01)
+            client.close(exc_info=IOError("boom"))
+            with self.assertRaises(StreamClosedError) as cm:
+                yield fut
+            self.assertIsInstance(cm.exception.real_error, IOError)
+        finally:
+            server.close()
+            client.close()
+
+    @gen_test
+    def test_read_until_close_with_buffer_overflow(self):
+        # Overflowing the read buffer during a read_until_close must raise
+        # rather than silently returning a truncated result.
+        server, client = yield self.make_iostream_pair(max_buffer_size=1024)
+        try:
+            fut = client.read_until_close()
+            server.write(b"a" * 4096)
+            with ExpectLog(gen_log, "Reached maximum read buffer size"):
+                with ExpectLog(gen_log, "error on read"):
+                    with self.assertRaises(StreamClosedError) as cm:
+                        yield fut
+            self.assertIsInstance(cm.exception.real_error, StreamBufferFullError)
         finally:
             server.close()
             client.close()
