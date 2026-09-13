@@ -723,11 +723,15 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
     ) -> Awaitable[None] | None:
         if headers.get("Content-Encoding", "").lower() == "gzip":
             self._decompressor = GzipDecompressor()
-            # Downstream delegates will only see uncompressed data,
-            # so rename the content-encoding header.
+            # Keep the framing headers intact for HTTP1Connection while downstream
+            # delegates see headers that describe the uncompressed data.
+            headers = headers.copy()
             # (but note that curl_httpclient doesn't do this).
             headers.add("X-Consumed-Content-Encoding", headers["Content-Encoding"])
             del headers["Content-Encoding"]
+            if "Content-Length" in headers:
+                headers.add("X-Consumed-Content-Length", headers["Content-Length"])
+                del headers["Content-Length"]
         return self._delegate.headers_received(start_line, headers)
 
     async def data_received(self, chunk: bytes) -> None:
