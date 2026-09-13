@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from hashlib import md5
 import os
 import ssl
@@ -6,7 +7,11 @@ import unittest
 from tornado.escape import utf8
 from tornado.netutil import ssl_options_to_context
 from tornado.test import httpclient_test
-from tornado.testing import AsyncHTTPSTestCase, AsyncHTTPTestCase
+from tornado.testing import (
+    AsyncHTTPSTestCase,
+    AsyncHTTPTestCase,
+    setup_with_context_manager,
+)
 from tornado.web import Application, RequestHandler
 
 try:
@@ -127,6 +132,30 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
         self.assertEqual(response.body, b"ok")
 
 
+@contextmanager
+def _ignore_proxy_env_vars():
+    # libcurl consults the (lowercase or uppercase) *_proxy environment
+    # variables to decide whether and how to proxy a request, which can
+    # override or interfere with the proxy settings the tests configure
+    # explicitly. Hide them for the duration of the test so the results
+    # don't depend on the environment the tests happen to run in.
+    proxy_vars = [
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "no_proxy",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "NO_PROXY",
+    ]
+    saved = {name: os.environ.pop(name) for name in proxy_vars if name in os.environ}
+    try:
+        yield
+    finally:
+        os.environ.update(saved)
+
+
 class ProxyAuthEchoHandler(RequestHandler):
     def get(self):
         if self.request.headers.get("Proxy-Authorization", None) is not None:
@@ -137,6 +166,10 @@ class ProxyAuthEchoHandler(RequestHandler):
 
 @unittest.skipIf(pycurl is None, "pycurl module not present")
 class CurlHTTPClientReuseProxyAuthTestCase(AsyncHTTPTestCase):
+    def setUp(self):
+        setup_with_context_manager(self, _ignore_proxy_env_vars())
+        super().setUp()
+
     def get_app(self):
         # Note that we don't properly support proxy-style requests, but it works well enough
         # for this test if we start the url matcher with a wildcard.
@@ -184,6 +217,10 @@ class ClientCertEchoHandler(RequestHandler):
 
 @unittest.skipIf(pycurl is None, "pycurl module not present")
 class CurlHTTPClientReuseCertsTestCase(AsyncHTTPSTestCase):
+    def setUp(self):
+        setup_with_context_manager(self, _ignore_proxy_env_vars())
+        super().setUp()
+
     def get_app(self):
         return Application([(".*/client_cert", ClientCertEchoHandler)])
 
