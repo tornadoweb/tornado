@@ -1,3 +1,4 @@
+import asyncio
 import binascii
 import contextlib
 import copy
@@ -1136,10 +1137,15 @@ class ErrorResponseTest(WebTestCase):
             def write_error(self, status_code, **kwargs):
                 raise Exception("exception in write_error")
 
+        class CancelledErrorHandler(RequestHandler):
+            async def get(self):
+                raise asyncio.CancelledError()
+
         return [
             url("/default", DefaultHandler),
             url("/write_error", WriteErrorHandler),
             url("/failed_write_error", FailedWriteErrorHandler),
+            url("/cancelled_error", CancelledErrorHandler),
         ]
 
     def test_default(self):
@@ -1171,6 +1177,11 @@ class ErrorResponseTest(WebTestCase):
             response = self.fetch("/failed_write_error")
             self.assertEqual(response.code, 500)
             self.assertEqual(b"", response.body)
+
+    def test_cancelled_error(self):
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = self.fetch("/cancelled_error", request_timeout=1.0)
+        self.assertEqual(response.code, 500)
 
 
 class StaticFileTest(WebTestCase):
