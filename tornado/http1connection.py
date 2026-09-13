@@ -38,6 +38,13 @@ from tornado.util import GzipDecompressor
 CR_OR_LF_RE = re.compile(b"\r|\n")
 
 
+# The maximum number of informational (1xx) responses to accept before the
+# real response. Each one is processed with a recursive call to
+# _read_message, so an unbounded number of them would exhaust the stack.
+# There is no legitimate use for more than a handful.
+_MAX_1XX_RESPONSES = 10
+
+
 class _QuietException(Exception):
     def __init__(self) -> None:
         pass
@@ -184,7 +191,9 @@ class HTTP1Connection(httputil.HTTPConnection):
             )
         return self._read_message(delegate)
 
-    async def _read_message(self, delegate: httputil.HTTPMessageDelegate) -> bool:
+    async def _read_message(
+        self, delegate: httputil.HTTPMessageDelegate, num_1xx: int = 0
+    ) -> bool:
         need_delegate_close = False
         try:
             header_future = self.stream.read_until_regex(
@@ -249,9 +258,11 @@ class HTTP1Connection(httputil.HTTPConnection):
                         raise httputil.HTTPInputError(
                             "Response code %d cannot have body" % code
                         )
+                    if num_1xx >= _MAX_1XX_RESPONSES:
+                        raise httputil.HTTPInputError("Too many 1xx responses")
                     # TODO: client delegates will get headers_received twice
                     # in the case of a 100-continue.  Document or change?
-                    await self._read_message(delegate)
+                    await self._read_message(delegate, num_1xx + 1)
             else:
                 if headers.get("Expect") == "100-continue" and not self._write_finished:
                     self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
