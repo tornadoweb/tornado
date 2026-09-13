@@ -13,6 +13,7 @@ from tornado.escape import to_unicode, utf8
 from tornado import gen, version
 from tornado.httpclient import AsyncHTTPClient, HTTPResponse
 from tornado.httpserver import HTTPServer
+from tornado.http1connection import _MAX_1XX_RESPONSES
 from tornado.httputil import HTTPHeaders, ResponseStartLine
 from tornado.ioloop import IOLoop
 from tornado.iostream import UnsatisfiableReadError
@@ -658,6 +659,49 @@ class HTTP100ContinueTestCase(AsyncHTTPTestCase):
         if not self.http1:
             self.skipTest("requires HTTP/1.x")
         self.assertEqual(res.body, b"A")
+
+
+class HTTP1xxLimitTestCase(AsyncHTTPTestCase):
+    """A server may send informational (1xx) responses before the real one,
+    but only a small number of them.
+    """
+
+    def get_app(self):
+        # Not a full Application, but works as an HTTPServer callback
+        def respond(request):
+            self.http1 = request.version.startswith("HTTP/1.")
+            if not self.http1:
+                request.connection.write_headers(
+                    ResponseStartLine("", 200, "OK"), HTTPHeaders()
+                )
+                request.connection.finish()
+                return
+            num_1xx = int(request.arguments["num"][-1])
+            stream = request.connection.detach()
+            stream.write(b"HTTP/1.1 100 CONTINUE\r\n\r\n" * num_1xx)
+            stream.write(b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA")
+            stream.close()
+
+        return respond
+
+    def test_1xx_within_limit(self):
+        # A handful of 1xx responses is allowed.
+        res = self.fetch("/?num=%d" % _MAX_1XX_RESPONSES)
+        if not self.http1:
+            self.skipTest("requires HTTP/1.x")
+        self.assertEqual(res.body, b"A")
+
+    def test_too_many_1xx(self):
+        # Each 1xx response is processed recursively, so an unbounded
+        # number of them would exhaust the stack. Past the limit this must
+        # be reported as an error instead.
+        with ExpectLog(
+            gen_log,
+            "Malformed HTTP message from None: Too many 1xx responses",
+            level=logging.INFO,
+        ):
+            with self.assertRaises(HTTPStreamClosedError):
+                self.fetch("/?num=%d" % (_MAX_1XX_RESPONSES + 1), raise_error=True)
 
 
 class HTTP204NoContentTestCase(AsyncHTTPTestCase):
