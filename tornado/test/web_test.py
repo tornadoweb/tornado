@@ -9,7 +9,9 @@ import itertools
 import logging
 import os
 import re
+import shutil
 import socket
+import tempfile
 import typing
 import unittest
 import urllib.parse
@@ -1531,6 +1533,14 @@ class StaticFileTest(WebTestCase):
         response = self.get_and_head("/static/blarg")
         self.assertEqual(response.code, 404)
 
+    def test_static_directory_without_default_filename(self):
+        # Without a default_filename, a directory is not servable. This
+        # shares the stat() that validate_absolute_path performs, so it is
+        # worth pinning the status it produces.
+        with ExpectLog(gen_log, ".*is not a file"):
+            response = self.get_and_head("/static/dir/")
+        self.assertEqual(response.code, 403)
+
     def test_path_traversal_protection(self):
         # curl_httpclient processes ".." on the client side, so we
         # must test this with simple_httpclient.
@@ -1555,6 +1565,166 @@ class StaticFileTest(WebTestCase):
         )
         response = self.get_and_head("/root_static" + urllib.parse.quote(path))
         self.assertEqual(response.code, 200)
+
+
+@unittest.skipIf(os.name != "posix", "non-posix OS")
+class StaticFileSymlinkTest(WebTestCase):
+    """Symlinks must not be followed out of the static directory unless the
+    application opts in with ``allowed_symlink_directory``.
+    """
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmpdir)
+        self.root = os.path.join(self.tmpdir, "static")
+        self.outside = os.path.join(self.tmpdir, "outside")
+        os.mkdir(self.root)
+        os.mkdir(self.outside)
+        with open(os.path.join(self.root, "inside.txt"), "w") as f:
+            f.write("inside")
+        with open(os.path.join(self.outside, "secret.txt"), "w") as f:
+            f.write("secret")
+        with open(os.path.join(self.root, "index.html"), "w") as f:
+            f.write("root index")
+        # A symlink to a file outside the root.
+        os.symlink(
+            os.path.join(self.outside, "secret.txt"),
+            os.path.join(self.root, "link.txt"),
+        )
+        # A symlink to a directory outside the root.
+        os.symlink(self.outside, os.path.join(self.root, "linkdir"))
+        # Out-of-bounds symlink targets, one existing and one not, for the
+        # existence-oracle test below.
+        os.mkdir(os.path.join(self.outside, "realdir"))
+        os.symlink(
+            os.path.join(self.outside, "realdir"),
+            os.path.join(self.root, "link_exists"),
+        )
+        os.symlink(
+            os.path.join(self.outside, "nope"),
+            os.path.join(self.root, "link_missing"),
+        )
+        # A symlink that stays inside the root.
+        os.symlink(
+            os.path.join(self.root, "inside.txt"),
+            os.path.join(self.root, "internal.txt"),
+        )
+        super().setUp()
+
+    def get_handlers(self):
+        return [
+            ("/default/(.*)", StaticFileHandler, dict(path=self.root)),
+            (
+                "/permissive/(.*)",
+                StaticFileHandler,
+                dict(path=self.root, allowed_symlink_directory=self.tmpdir),
+            ),
+            (
+                "/default_filename/(.*)",
+                StaticFileHandler,
+                dict(path=self.root, default_filename="index.html"),
+            ),
+        ]
+
+    def get_app_kwargs(self):
+        return dict()
+
+    def test_regular_file(self):
+        response = self.fetch("/default/inside.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"inside")
+
+    def test_symlink_within_root(self):
+        # A symlink is fine as long as it resolves inside the root.
+        response = self.fetch("/default/internal.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"inside")
+
+    def test_symlinked_file_escaping_root(self):
+        with ExpectLog(gen_log, ".*is not in root static directory"):
+            response = self.fetch("/default/link.txt")
+        self.assertEqual(response.code, 403)
+
+    def test_symlinked_directory_escaping_root(self):
+        with ExpectLog(gen_log, ".*is not in root static directory"):
+            response = self.fetch("/default/linkdir/secret.txt")
+        self.assertEqual(response.code, 403)
+
+    def test_served_directory_itself(self):
+        # A request for the served directory itself resolves to the allowed
+        # directory exactly, rather than to something beneath it. That must
+        # still be allowed.
+        response = self.fetch("/default_filename/")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"root index")
+
+    def test_symlinked_default_filename(self):
+        # The default filename is appended after the directory has been
+        # resolved, so it must be checked in its own right.
+        os.mkdir(os.path.join(self.root, "dir"))
+        os.symlink(
+            os.path.join(self.outside, "secret.txt"),
+            os.path.join(self.root, "dir", "index.html"),
+        )
+        with ExpectLog(gen_log, ".*is not in root static directory"):
+            response = self.fetch("/default_filename/dir/")
+        self.assertEqual(response.code, 403)
+
+    def test_no_existence_oracle_for_symlinked_directory(self):
+        # A symlink pointing out of bounds must be rejected identically
+        # whether or not its target exists, so that it cannot be used to
+        # probe the server's filesystem. This pins the ordering in
+        # validate_absolute_path: resolving only after the isdir() check
+        # would let an existing directory trigger a redirect (301) while a
+        # missing one still gave 403.
+        codes = []
+        for name in ("link_exists", "link_missing"):
+            with ExpectLog(gen_log, ".*is not in root static directory"):
+                codes.append(
+                    self.fetch("/default_filename/" + name, follow_redirects=False).code
+                )
+        self.assertEqual(codes, [403, 403])
+
+    def test_allowed_symlink_directory(self):
+        # With an explicit allowed_symlink_directory that contains the
+        # target, the same symlinks are served.
+        response = self.fetch("/permissive/link.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"secret")
+
+        response = self.fetch("/permissive/linkdir/secret.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"secret")
+
+
+class StaticFileSymlinkedRootTest(WebTestCase):
+    """The root itself may be reached through a symlink; that must not make
+    every request look like an escape.
+    """
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmpdir)
+        real_root = os.path.join(self.tmpdir, "real")
+        os.mkdir(real_root)
+        with open(os.path.join(real_root, "inside.txt"), "w") as f:
+            f.write("inside")
+        # Serve through a symlink to the real directory.
+        self.root = os.path.join(self.tmpdir, "link")
+        os.symlink(real_root, self.root)
+        super().setUp()
+
+    def get_handlers(self):
+        return [("/static/(.*)", StaticFileHandler, dict(path=self.root))]
+
+    def get_app_kwargs(self):
+        return dict()
+
+    @unittest.skipIf(os.name != "posix", "non-posix OS")
+    def test_symlinked_root(self):
+        response = self.fetch("/static/inside.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"inside")
 
 
 class StaticDefaultFilenameTest(WebTestCase):
