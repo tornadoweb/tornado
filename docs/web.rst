@@ -244,6 +244,11 @@
 
          Authentication and security settings:
 
+         * ``allowed_origins``: A list of origins (as in the HTTP Origin header)
+           from which to allow non-safe requests when ``check_allowed_origin``
+           is enabled. New in Tornado 6.6.
+         * ``check_allowed_origin``: If ``True``, :ref:`xsrf` is enabled.
+           New in Tornado 6.6.
          * ``cookie_secret``: Used by `RequestHandler.get_signed_cookie`
            and `.set_signed_cookie` to sign cookies.
          * ``key_version``: Used by requestHandler `.set_signed_cookie`
@@ -252,7 +257,7 @@
          * ``login_url``: The `authenticated` decorator will redirect
            to this url if the user is not logged in.  Can be further
            customized by overriding `RequestHandler.get_login_url`
-         * ``xsrf_cookies``: If ``True``, :ref:`xsrf` will be enabled.
+         * ``xsrf_cookies``: If ``True``, :ref:`xsrf-cookies` will be enabled.
          * ``xsrf_cookie_version``: Controls the version of new XSRF
            cookies produced by this server.  Should generally be left
            at the default (which will always be the highest supported
