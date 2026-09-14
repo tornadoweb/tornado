@@ -12,7 +12,6 @@ from io import BytesIO
 import subprocess
 import sys
 import time
-import tracemalloc
 import typing  # noqa: F401
 import unicodedata
 import unittest
@@ -36,6 +35,16 @@ from tornado.testing import AsyncHTTPTestCase, bind_unused_port, gen_test, Expec
 from tornado.test.util import abstract_base_test, ignore_deprecation
 from tornado.web import Application, RequestHandler, url
 from tornado.httputil import format_timestamp, HTTPHeaders
+
+try:
+    import tracemalloc
+except ImportError:
+    # Not available on pypy.
+    tracemalloc = None  # type: ignore
+
+skipIfNoTracemalloc = unittest.skipIf(
+    tracemalloc is None, "tracemalloc module not present"
+)
 
 
 class HelloWorldHandler(RequestHandler):
@@ -341,6 +350,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         self.assertEqual(b"".join(chunks), large_body())
         self.assertFalse(response.body)
 
+    @skipIfNoTracemalloc
     def test_streaming_decompression_bomb(self):
         # A malicious server can turn a small compressed response into an
         # arbitrarily large decompressed one. With a streaming_callback it
@@ -366,6 +376,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         self.assertFalse(response.body)
         self.assertLess(peak, 16 * 1024 * 1024)
 
+    @skipIfNoTracemalloc
     def test_decompression_bomb_without_streaming_callback(self):
         # Without a streaming_callback the whole body has to be buffered, so
         # a bomb this size cannot be retrieved at all. It has to be refused
@@ -390,6 +401,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         # was refused, not accumulated.
         self.assertLess(peak, UNBUFFERABLE_BOMB_SIZE // 2)
 
+    @skipIfNoTracemalloc
     def test_streaming_unsolicited_brotli_bomb(self):
         # A client that decodes an encoding it did not request can be
         # reached by a codec whose expansion ratio is hundreds of times
