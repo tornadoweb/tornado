@@ -375,7 +375,10 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         tracemalloc.start()
         try:
             tracemalloc.reset_peak()
-            with self.assertRaises(HTTPError):
+            with (
+                self.assertRaises(HTTPError),
+                ExpectLog(gen_log, ".*decompressed body too large"),
+            ):
                 self.fetch(
                     "/gzip_bomb?size=%d" % UNBUFFERABLE_BOMB_SIZE, raise_error=True
                 )
