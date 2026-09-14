@@ -666,6 +666,11 @@ class HTTP1xxLimitTestCase(AsyncHTTPTestCase):
     but only a small number of them.
     """
 
+    def get_http_client(self):
+        client = SimpleAsyncHTTPClient(force_instance=True)
+        self.assertTrue(isinstance(client, SimpleAsyncHTTPClient))
+        return client
+
     def get_app(self):
         # Not a full Application, but works as an HTTPServer callback
         def respond(request):
