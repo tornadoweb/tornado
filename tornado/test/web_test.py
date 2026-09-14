@@ -1271,7 +1271,16 @@ class StaticFileTest(WebTestCase):
         ]
         for filename in filenames:
             with self.subTest(filename=filename):
-                response = self.fetch(f"/static/{filename}")
+                # The 403 below is raised with a log message, so it must be
+                # expected here. It is not required because the 404 path (and
+                # every platform other than windows) does not log anything.
+                with ExpectLog(
+                    gen_log,
+                    ".*is not in root static directory",
+                    required=False,
+                    level=logging.WARNING,
+                ):
+                    response = self.fetch(f"/static/{filename}")
                 # The exact behavior of these filenames differs across versions of
                 # Windows and Python.
                 # https://github.com/python/cpython/issues/90520#issuecomment-1093942179

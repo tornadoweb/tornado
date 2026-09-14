@@ -17,9 +17,11 @@ from tornado.util import (
 )
 
 
+import logging
 import unittest
 
-from tornado.test.util import TestCase
+from tornado.testing import ExpectLog
+from tornado.test.util import TestCase, skip_log_check
 
 
 class RaiseExcInfoTest(TestCase):
@@ -406,3 +408,33 @@ class LogCheckCoverageTest(TestCase):
             if not issubclass(cls, (TestCase, UtilAsyncTestCase)):
                 uncovered.add(f"{cls.__module__}.{cls.__qualname__}")
         self.assertEqual(uncovered, set())
+
+
+class SkipLogCheckTest(TestCase):
+    def test_decorator_exempts_a_method(self):
+        events = []
+
+        class Inner(TestCase):
+            @skip_log_check
+            def test_noisy(self):
+                logging.getLogger("tornado.general").warning("deliberate")
+                events.append("ran")
+
+        result = unittest.TestResult()
+        # The inner test does not suppress its own log output, so it reaches
+        # this test's check and must be expected here.
+        with ExpectLog("tornado.general", "deliberate", level=logging.WARNING):
+            Inner("test_noisy").run(result)
+        self.assertEqual(events, ["ran"])
+        self.assertEqual(result.failures, [])
+        self.assertEqual(result.errors, [])
+
+    def test_check_is_on_by_default(self):
+        class Inner(TestCase):
+            def test_noisy(self):
+                logging.getLogger("tornado.general").warning("deliberate")
+
+        result = unittest.TestResult()
+        Inner("test_noisy").run(result)
+        self.assertEqual(len(result.failures), 1)
+        self.assertIn("Unexpected logs found", result.failures[0][1])

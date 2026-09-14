@@ -478,6 +478,7 @@ class SelectorThread:
         ) = None
         self._closing_selector = False
         self._thread: threading.Thread | None = None
+        self._thread_manager_task: asyncio.Task | None = None
         self._thread_manager_handle = self._thread_manager()
 
         async def thread_manager_anext() -> None:
@@ -485,11 +486,19 @@ class SelectorThread:
             # this generator one step.
             await self._thread_manager_handle.__anext__()
 
+        def start_thread_manager() -> None:
+            # Keep a reference to the task: asyncio only holds a weak one, and a
+            # task that is garbage collected before it runs reports itself as
+            # having been destroyed while pending.
+            self._thread_manager_task = self._real_loop.create_task(
+                thread_manager_anext()
+            )
+
         # When the loop starts, start the thread. Not too soon because we can't
         # clean up if we get to this point but the event loop is closed without
         # starting.
         self._real_loop.call_soon(
-            lambda: self._real_loop.create_task(thread_manager_anext()),
+            start_thread_manager,
             context=self._main_thread_ctx,
         )
 
@@ -513,6 +522,24 @@ class SelectorThread:
         self._wake_selector()
         if self._thread is not None:
             self._thread.join()
+        if self._thread_manager_task is not None:
+            if not self._thread_manager_task.done():
+                # The event loop stopped before the task got a chance to run its
+                # first step (once it runs, it finishes as soon as the async
+                # generator reaches its yield, so a task that is not done here
+                # never started at all).
+                #
+                # Cancelling is not enough to get it out of the PENDING state --
+                # that would require running the loop again, which we cannot do
+                # here -- so also tell it not to report itself as destroyed
+                # while pending, and close the coroutine it never entered.
+                # Otherwise closing such a loop logs an asyncio error and emits
+                # a "coroutine was never awaited" warning when the task is
+                # garbage collected, at an unpredictable later point.
+                self._thread_manager_task._log_destroy_pending = False  # type: ignore[attr-defined]
+                self._thread_manager_task.cancel()
+                self._thread_manager_task.get_coro().close()
+            self._thread_manager_task = None
         _selector_loops.discard(self)
         self.remove_reader(self._waker_r)
         self._waker_r.close()

@@ -11,7 +11,10 @@
 # under the License.
 
 import asyncio
+import contextlib
 import contextvars
+import gc
+import io
 import threading
 import time
 import warnings
@@ -23,6 +26,7 @@ from tornado.ioloop import IOLoop
 from tornado.platform.asyncio import (
     AddThreadSelectorEventLoop,
     AsyncIOLoop,
+    SelectorThread,
     to_asyncio_future,
 )
 from tornado.test.util import (
@@ -203,6 +207,34 @@ class SelectorThreadLeakTest(TestCase):
             loop.run_sync(self.dummy_tornado_coroutine)
             loop.close()
         self.assert_no_thread_leak()
+
+    def test_close_before_thread_manager_starts(self):
+        # The task that starts the selector thread is created by a call_soon
+        # callback, so a loop that stops immediately can close with that task
+        # created but never run. Closing must clean it up; otherwise it is
+        # reported as "Task was destroyed but it is pending", and its coroutine
+        # as "never awaited", whenever it is eventually garbage collected --
+        # which is at an unpredictable point, quite possibly during an
+        # unrelated test.
+        loop = asyncio.new_event_loop()
+        selector = SelectorThread(loop)
+        loop.call_soon(loop.stop)
+        loop.run_forever()
+        task = selector._thread_manager_task
+        self.assertIsNotNone(task)
+        # Once the task runs it completes immediately, so a task that is not
+        # done here is one that never started.
+        self.assertFalse(task.done())  # type: ignore[union-attr]
+        selector.close()
+        loop.close()
+        del loop, selector, task
+        # An asyncio error logged here would be caught by the log check in
+        # tornado.test.util.TestCase, but only if the collection happens while
+        # this test is running, so force it.
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            gc.collect()
+        self.assertNotIn("never awaited", stderr.getvalue())
 
 
 class AnyThreadEventLoopPolicyTest(TestCase):
