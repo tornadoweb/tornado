@@ -21,6 +21,7 @@ import warnings
 from concurrent.futures import ThreadPoolExecutor
 
 import tornado.platform.asyncio
+from tornado.platform import asyncio as platform_asyncio
 from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.platform.asyncio import (
@@ -207,6 +208,25 @@ class SelectorThreadLeakTest(TestCase):
             loop.run_sync(self.dummy_tornado_coroutine)
             loop.close()
         self.assert_no_thread_leak()
+
+    def test_atexit_closes_waker_sockets(self):
+        # The atexit hook is the backstop for selectors whose loop was never
+        # closed. It has to close the waker socketpair as well as shut the
+        # thread down: otherwise the sockets survive until the interpreter
+        # finalizes them, and each one is reported as an unclosed socket after
+        # the test suite has finished.
+        loop = asyncio.new_event_loop()
+        selector = SelectorThread(loop)
+        try:
+            loop.run_until_complete(asyncio.sleep(0.05))
+            self.assertIn(selector, platform_asyncio._selector_loops)
+            platform_asyncio._atexit_callback()
+            self.assertEqual(selector._waker_r.fileno(), -1)
+            self.assertEqual(selector._waker_w.fileno(), -1)
+            self.assertFalse(selector._thread.is_alive())  # type: ignore[union-attr]
+        finally:
+            selector.close()
+            loop.close()
 
     def test_close_before_thread_manager_starts(self):
         # The task that starts the selector thread is created by a call_soon

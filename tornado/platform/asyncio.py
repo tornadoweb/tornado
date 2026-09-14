@@ -66,20 +66,17 @@ _selector_loops: set["SelectorThread"] = set()
 
 
 def _atexit_callback() -> None:
-    for loop in _selector_loops:
-        with loop._select_cond:
-            loop._closing_selector = True
-            loop._select_cond.notify()
-        try:
-            loop._waker_w.send(b"a")
-        except BlockingIOError:
-            pass
-        if loop._thread is not None:
-            # If we don't join our (daemon) thread here, we may get a deadlock
-            # during interpreter shutdown. I don't really understand why. This
-            # deadlock happens every time in CI (both travis and appveyor) but
-            # I've never been able to reproduce locally.
-            loop._thread.join()
+    # Iterate over a copy: closing a selector removes it from _selector_loops.
+    for loop in list(_selector_loops):
+        # SelectorThread.close joins our (daemon) thread. If we don't join it
+        # here, we may get a deadlock during interpreter shutdown. I don't
+        # really understand why. This deadlock happens every time in CI (both
+        # travis and appveyor) but I've never been able to reproduce locally.
+        #
+        # It also closes the waker socketpair. Shutting the thread down without
+        # closing those leaks them until the interpreter finalizes them, which
+        # reports every one as an unclosed socket.
+        loop.close()
     _selector_loops.clear()
 
 
