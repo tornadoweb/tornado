@@ -38,6 +38,7 @@ Bug fixes
 `tornado.iostream`
 ~~~~~~~~~~~~~~~~~~
 
-- ``.IOStream.read_until_close`` now reports errors correctly when a stream closes uncleanly
-  or exceeds a memory limit. Previously it would report a successful read of whatever was in the
-  buffer.
+- ``.IOStream.read_until_close`` now reports errors correctly when a stream is closed due to
+  an error or exceeds a memory limit. Previously it would report a successful read of whatever
+  was in the buffer. Connection resets are still treated as a normal close (as they are
+  elsewhere in `.IOStream`), since some platforms report a clean shutdown by the peer this way.
