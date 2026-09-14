@@ -198,7 +198,62 @@ Cross-site request forgery protection
 forgery <http://en.wikipedia.org/wiki/Cross-site_request_forgery>`_, or
 XSRF, is a common problem for personalized web applications.
 
-The generally accepted solution to prevent XSRF is to cookie every user
+Modern browsers send a header which the server can use to identify and block
+cross-site requests. Tornado from version 6.6 can check this for you, if you
+enable the application setting ``check_allowed_origin``:
+
+.. testcode::
+
+    settings = {
+        "login_url": "/login",
+        "check_allowed_origin": True,
+    }
+    application = tornado.web.Application([
+        (r"/", MainHandler),
+        (r"/login", LoginHandler),
+    ], **settings)
+
+With this setting, the application will reject state-changing requests if the
+`Sec-Fetch-Site <https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Sec-Fetch-Site>`_
+header is set to something other than ``same-origin`` or ``none``. If that
+header is missing, it rejects these requests if the ``Origin`` and ``Host``
+headers do not match. You can allow specific additional origins with the
+``allowed_origins`` application setting (a list).
+
+.. note::
+
+   These checks apply to HTTP verbs like ``POST`` or ``PUT``, which typically
+   modify application state. ``GET``, ``HEAD`` and ``OPTIONS`` requests should
+   not affect application state, and are not checked on the server, but the
+   browser can still keep the response from leaking.
+
+This protection is convenient, because it requires no changes in the HTML or
+Javascript making the requests. It should be sufficient for many web
+applications, but there are some caveats:
+
+- Browsers only send the ``Sec-Fetch-Site`` header for encrypted (HTTPS) sites
+  (plus localhost). Plain HTTP sites will use the fallback based on the
+  ``Origin`` & ``Host`` headers.
+- All major browsers have supported ``Sec-Fetch-Site`` since 2023, but users
+  of niche browsers and users stuck on old versions will likewise rely on the
+  fallback check.
+- Misbehaving reverse proxies may strip the ``Sec-Fetch-Site`` header.
+- Reverse proxies will often rewrite the ``Host`` header, which will mean the
+  fallback check rejects valid requests. This can be worked around by putting
+  the expected domain that the browser will see in the ``allowed_origins`` list.
+- Lastly, if you rely on this protection, be sure that your site is running with
+  Tornado 6.6 or newer.
+
+If any of these points are a concern, or you want an extra line of defence,
+you can combine this form of XSRF protection with the older method using a
+cookie. If both mechanisms are enabled, requests must pass both checks.
+
+.. _xsrf-cookies:
+
+XSRF cookies
+^^^^^^^^^^^^
+
+The longer-standing solution to prevent XSRF is to cookie every user
 with an unpredictable value and include that value as an additional
 argument with every form submission on your site. If the cookie and the
 value in the form submission do not match, then the request is likely
