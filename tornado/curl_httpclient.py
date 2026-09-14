@@ -37,7 +37,7 @@ from tornado.httpclient import (
 )
 from tornado.log import app_log
 
-from typing import Dict, Any, Callable, Union, Optional
+from typing import Dict, Any, Callable, Optional
 import typing
 
 if typing.TYPE_CHECKING:
@@ -48,11 +48,138 @@ curl_log = logging.getLogger("tornado.curl_httpclient")
 CR_OR_LF_RE = re.compile(b"\r|\n")
 
 
+class _CurlStreamingBuffer:
+    """Delivers response body chunks from libcurl to a ``streaming_callback``.
+
+    libcurl runs its write callback from inside
+    ``curl_multi_socket_action``, where it is not safe to run application
+    code (which may reenter this client, or raise exceptions that libcurl
+    would turn into transfer errors). Chunks are therefore queued here and
+    delivered later from the `.IOLoop`.
+
+    Queuing alone would let the amount of buffered data grow with whatever
+    the server chooses to send, which is a problem when
+    ``decompress_response`` is in use: a "decompression bomb" lets a server
+    turn a few kilobytes on the wire into gigabytes of decompressed data,
+    all of which would pile up in the `.IOLoop`'s callback queue before any
+    of it reached the application. To bound this, the transfer is paused
+    once more than `max_buffer_size` bytes are waiting, and resumed after
+    the callback has consumed them.
+    """
+
+    # Pause the transfer while at least this many bytes are waiting to be
+    # delivered. This bounds our own queue only: a paused libcurl still
+    # finishes decoding the socket read it already has (there is no way to
+    # tell its decoder to stop) and buffers the result internally, so the
+    # real high-water mark is one read's worth of expansion -- roughly 16MB
+    # for gzip at libcurl's default CURLOPT_BUFFERSIZE. libcurl limits that
+    # buffer to 64MB and fails the transfer with CURLE_TOO_LARGE past it,
+    # which a codec with a higher ratio than deflate's (brotli, say) will
+    # reach. That is libcurl's call to make; we just avoid holding a copy.
+    max_buffer_size = 1024 * 1024
+
+    def __init__(
+        self,
+        client: "CurlAsyncHTTPClient",
+        curl: pycurl.Curl,
+        callback: Callable[[bytes], Any],
+    ) -> None:
+        self.client = client
+        self.io_loop = client.io_loop
+        # Set to None in finish(); the handle may be reused after that.
+        self.curl = curl  # type: Optional[pycurl.Curl]
+        self.callback = callback
+        self.chunks = collections.deque()  # type: Deque[bytes]
+        self.size = 0
+        self.total = 0
+        self.body_too_large = False
+        self.paused = False
+        self.flush_scheduled = False
+
+    def write(self, chunk: bytes) -> int:
+        """libcurl ``WRITEFUNCTION`` callback."""
+        if self.total + len(chunk) > self.client.max_body_size:
+            # max_body_size applies here as well as to a buffered response:
+            # it is a safeguard for applications that do not impose a limit
+            # of their own on what they do with the chunks. Writing less
+            # than we were given makes libcurl fail the transfer.
+            self.body_too_large = True
+            return 0
+        if self.size >= self.max_buffer_size:
+            # Tell libcurl to stop reading from the socket until flush()
+            # resumes it. This chunk is not consumed here: libcurl holds
+            # on to it and passes it to us again when we unpause.
+            self.paused = True
+            return pycurl.WRITEFUNC_PAUSE
+        self.chunks.append(chunk)
+        self.size += len(chunk)
+        self.total += len(chunk)
+        self._schedule_flush()
+        return len(chunk)
+
+    def _schedule_flush(self) -> None:
+        if not self.flush_scheduled:
+            self.flush_scheduled = True
+            self.io_loop.add_callback(self.flush)
+
+    def flush(self) -> None:
+        """Pass everything we have buffered to the ``streaming_callback``."""
+        self.flush_scheduled = False
+        try:
+            while self.chunks:
+                chunk = self.chunks.popleft()
+                self.size -= len(chunk)
+                self.callback(chunk)
+        finally:
+            if self.chunks:
+                # The callback raised; deliver the rest (and unpause) later.
+                self._schedule_flush()
+            elif self.paused:
+                self.paused = False
+                if self.curl is not None:
+                    try:
+                        # Note that this may call write() again
+                        # (synchronously) with data libcurl buffered while
+                        # paused, so it must come after our own buffer has
+                        # been drained.
+                        self.curl.pause(pycurl.PAUSE_CONT)
+                    except pycurl.error:
+                        # The transfer failed while it was paused (libcurl
+                        # reports the pending error here). Nothing to do:
+                        # _finish will pass the error to the callback.
+                        pass
+                    else:
+                        # Ask for a socket_action so the unpaused transfer
+                        # makes progress. libcurl has notified us of this
+                        # itself (through the timer callback) since 7.69,
+                        # which is below the version we require, so this is
+                        # redundant there and costs one timeout per
+                        # max_buffer_size of body. But without it a libcurl
+                        # older than that stalls until unrelated socket
+                        # activity happens to wake the transfer, and a
+                        # streaming fetch that used to work would hang.
+                        self.client._set_timeout(0)
+
+    def finish(self) -> None:
+        """Deliver any remaining data at the end of the request.
+
+        The curl handle may be reset and reused after this, so we must not
+        touch it again.
+        """
+        self.curl = None
+        self.paused = False
+        self.flush()
+
+
 class CurlAsyncHTTPClient(AsyncHTTPClient):
     def initialize(  # type: ignore
-        self, max_clients: int = 10, defaults: Optional[Dict[str, Any]] = None
+        self,
+        max_clients: int = 10,
+        defaults: Optional[Dict[str, Any]] = None,
+        max_body_size: int = 104857600,
     ) -> None:
         super().initialize(defaults=defaults)
+        self.max_body_size = max_body_size
         # Typeshed is incomplete for CurlMulti, so just use Any for now.
         self._multi = pycurl.CurlMulti()  # type: Any
         self._multi.setopt(pycurl.M_TIMERFUNCTION, self._set_timeout)
@@ -203,6 +330,8 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 curl.info = {  # type: ignore
                     "headers": httputil.HTTPHeaders(),
                     "buffer": BytesIO(),
+                    "streaming_buffer": None,
+                    "body_too_large": False,
                     "request": request,
                     "callback": callback,
                     "queue_start_time": queue_start_time,
@@ -243,9 +372,23 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         info = curl.info  # type: ignore
         curl.info = None  # type: ignore
         self._multi.remove_handle(curl)
+        streaming_buffer = info["streaming_buffer"]
+        body_too_large = info["body_too_large"]
+        if streaming_buffer is not None:
+            body_too_large = body_too_large or streaming_buffer.body_too_large
+            # Make sure everything that was received reaches the
+            # streaming_callback before the final response.
+            try:
+                streaming_buffer.finish()
+            except Exception:
+                self.handle_callback_exception(info["request"].streaming_callback)
         buffer = info["buffer"]
         if curl_error:
             assert curl_message is not None
+            if body_too_large:
+                curl_message = "body exceeded max_body_size of %d bytes" % (
+                    self.max_body_size,
+                )
             error = CurlError(curl_error, curl_message)  # type: Optional[CurlError]
             assert error is not None
             code = error.code
@@ -344,15 +487,31 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 self._curl_header_callback, headers, request.header_callback
             ),
         )
+        write_function: Callable[[bytes], int]
         if request.streaming_callback:
 
-            def write_function(b: Union[bytes, bytearray]) -> int:
-                assert request.streaming_callback is not None
-                self.io_loop.add_callback(request.streaming_callback, b)
-                return len(b)
-
+            streaming_buffer = _CurlStreamingBuffer(
+                self, curl, request.streaming_callback
+            )
+            curl.info["streaming_buffer"] = streaming_buffer  # type: ignore
+            write_function = streaming_buffer.write
         else:
-            write_function = buffer.write  # type: ignore
+            # Count the buffered body against max_body_size, as
+            # _CurlStreamingBuffer does for the streaming case. Here the
+            # whole body is held in memory, so a response that decompresses
+            # past the limit cannot be retrieved at all -- only refused
+            # before it exhausts memory. libcurl's CURLOPT_MAXFILESIZE is
+            # no help: outside of very recent versions it is measured
+            # against the compressed size, which a bomb keeps small.
+            def write_function(chunk: bytes) -> int:
+                if buffer.tell() + len(chunk) > self.max_body_size:
+                    curl.info["body_too_large"] = True  # type: ignore
+                    # Writing less than we were given makes libcurl fail
+                    # the transfer with CURLE_WRITE_ERROR; _finish uses the
+                    # flag above to replace its message with ours.
+                    return 0
+                return buffer.write(chunk)
+
         curl.setopt(pycurl.WRITEFUNCTION, write_function)
         curl.setopt(pycurl.FOLLOWLOCATION, request.follow_redirects)
         curl.setopt(pycurl.MAXREDIRS, request.max_redirects)

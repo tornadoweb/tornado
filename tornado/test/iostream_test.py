@@ -7,6 +7,7 @@ from tornado.iostream import (
     SSLIOStream,
     PipeIOStream,
     StreamClosedError,
+    StreamBufferFullError,
     _StreamBuffer,
 )
 from tornado.httpclient import AsyncHTTPClient, HTTPResponse
@@ -822,6 +823,72 @@ class TestIOStreamMixin(TestReadWriteMixin):
             ):
                 with self.assertRaisesRegex(IOError, "boom"):
                     client.read_until_close()
+        finally:
+            server.close()
+            client.close()
+
+    @gen_test
+    def test_read_until_close_after_error_close(self):
+        # If the stream is closed with an error while a read_until_close
+        # is pending, the error must be reported rather than resolving the
+        # read successfully with whatever happened to be buffered. The
+        # caller otherwise cannot distinguish a complete body from one
+        # truncated by a connection error.
+        server, client = yield self.make_iostream_pair()
+        try:
+            fut = client.read_until_close()
+            server.write(b"hello")
+            yield gen.sleep(0.01)
+            client.close(exc_info=IOError("boom"))
+            with self.assertRaises(StreamClosedError) as cm:
+                yield fut
+            self.assertIsInstance(cm.exception.real_error, IOError)
+        finally:
+            server.close()
+            client.close()
+
+    @gen_test
+    def test_read_until_close_after_connection_reset(self):
+        # A connection reset is treated as a normal close throughout
+        # IOStream: on some platforms (notably windows) a peer that closes
+        # cleanly may be reported to us as a reset, so a pending
+        # read_until_close must still return the buffered data instead of
+        # failing.
+        rs, ws = yield self.make_iostream_pair()
+        try:
+            real_read_from_fd = rs.read_from_fd
+
+            def read_from_fd(buf):
+                result = real_read_from_fd(buf)
+                if result == 0:
+                    # Report the EOF as a reset instead.
+                    raise ConnectionResetError(errno.ECONNRESET, "Connection reset")
+                return result
+
+            rs.read_from_fd = read_from_fd  # type: ignore[method-assign]
+            ws.write(b"1234")
+            data = yield rs.read_bytes(1)
+            self.assertEqual(data, b"1")
+            ws.close()
+            data = yield rs.read_until_close()
+            self.assertEqual(data, b"234")
+        finally:
+            ws.close()
+            rs.close()
+
+    @gen_test
+    def test_read_until_close_with_buffer_overflow(self):
+        # Overflowing the read buffer during a read_until_close must raise
+        # rather than silently returning a truncated result.
+        server, client = yield self.make_iostream_pair(max_buffer_size=1024)
+        try:
+            fut = client.read_until_close()
+            server.write(b"a" * 4096)
+            with ExpectLog(gen_log, "Reached maximum read buffer size"):
+                with ExpectLog(gen_log, "error on read"):
+                    with self.assertRaises(StreamClosedError) as cm:
+                        yield fut
+            self.assertIsInstance(cm.exception.real_error, StreamBufferFullError)
         finally:
             server.close()
             client.close()

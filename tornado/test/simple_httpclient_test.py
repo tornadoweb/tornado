@@ -13,6 +13,7 @@ from tornado.escape import to_unicode, utf8
 from tornado import gen, version
 from tornado.httpclient import AsyncHTTPClient, HTTPResponse
 from tornado.httpserver import HTTPServer
+from tornado.http1connection import _MAX_1XX_RESPONSES
 from tornado.httputil import HTTPHeaders, ResponseStartLine
 from tornado.ioloop import IOLoop
 from tornado.iostream import UnsatisfiableReadError
@@ -660,6 +661,54 @@ class HTTP100ContinueTestCase(AsyncHTTPTestCase):
         self.assertEqual(res.body, b"A")
 
 
+class HTTP1xxLimitTestCase(AsyncHTTPTestCase):
+    """A server may send informational (1xx) responses before the real one,
+    but only a small number of them.
+    """
+
+    def get_http_client(self):
+        client = SimpleAsyncHTTPClient(force_instance=True)
+        self.assertTrue(isinstance(client, SimpleAsyncHTTPClient))
+        return client
+
+    def get_app(self):
+        # Not a full Application, but works as an HTTPServer callback
+        def respond(request):
+            self.http1 = request.version.startswith("HTTP/1.")
+            if not self.http1:
+                request.connection.write_headers(
+                    ResponseStartLine("", 200, "OK"), HTTPHeaders()
+                )
+                request.connection.finish()
+                return
+            num_1xx = int(request.arguments["num"][-1])
+            stream = request.connection.detach()
+            stream.write(b"HTTP/1.1 100 CONTINUE\r\n\r\n" * num_1xx)
+            stream.write(b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA")
+            stream.close()
+
+        return respond
+
+    def test_1xx_within_limit(self):
+        # A handful of 1xx responses is allowed.
+        res = self.fetch("/?num=%d" % _MAX_1XX_RESPONSES)
+        if not self.http1:
+            self.skipTest("requires HTTP/1.x")
+        self.assertEqual(res.body, b"A")
+
+    def test_too_many_1xx(self):
+        # Each 1xx response is processed recursively, so an unbounded
+        # number of them would exhaust the stack. Past the limit this must
+        # be reported as an error instead.
+        with ExpectLog(
+            gen_log,
+            "Malformed HTTP message from None: Too many 1xx responses",
+            level=logging.INFO,
+        ):
+            with self.assertRaises(HTTPStreamClosedError):
+                self.fetch("/?num=%d" % (_MAX_1XX_RESPONSES + 1), raise_error=True)
+
+
 class HTTP204NoContentTestCase(AsyncHTTPTestCase):
     def respond_204(self, request):
         self.http1 = request.version.startswith("HTTP/1.")
@@ -789,34 +838,76 @@ class MaxHeaderSizeTest(AsyncHTTPTestCase):
                 self.fetch("/large", raise_error=True)
 
 
-class MaxBodySizeTest(AsyncHTTPTestCase):
-    def get_app(self):
-        class SmallBody(RequestHandler):
-            def get(self):
-                self.write("a" * 1024 * 64)
+class SimpleHTTPClientMaxBodySizeTestCase(
+    httpclient_test.HTTPClientMaxBodySizeTestCase
+):
+    refusal_log_format = "Malformed HTTP message from None: {reason}"
 
+    def get_http_client(self):
+        return SimpleAsyncHTTPClient(max_body_size=httpclient_test.MAX_BODY_SIZE)
+
+
+class MaxBodySizeUntilCloseTest(AsyncHTTPTestCase):
+    """Responses without Content-Length or Transfer-Encoding are read until
+    the connection closes; ``max_body_size`` must still be enforced there.
+    """
+
+    def get_app(self):
         class LargeBody(RequestHandler):
             def get(self):
-                self.write("a" * 1024 * 100)
+                # Tornado manages Content-Length at the framework level, so
+                # detach the stream to emulate an HTTP/1.0 server that
+                # signals the end of the body by closing the connection.
+                stream = self.detach()
+                stream.write(b"HTTP/1.0 200 OK\r\n\r\n" + b"a" * (1024 * 100))
+                stream.close()
 
-        return Application([("/small", SmallBody), ("/large", LargeBody)])
+        return Application([("/large", LargeBody)])
 
     def get_http_client(self):
         return SimpleAsyncHTTPClient(max_body_size=1024 * 64)
 
-    def test_small_body(self):
-        response = self.fetch("/small")
-        response.rethrow()
-        self.assertEqual(response.body, b"a" * 1024 * 64)
-
-    def test_large_body(self):
+    def test_large_body_until_close(self):
+        # The body exceeds max_body_size, so this must be reported as an
+        # error rather than silently returning an over-large body.
         with ExpectLog(
             gen_log,
-            "Malformed HTTP message from None: Content-Length too long",
+            "Malformed HTTP message from None: Body too long",
             level=logging.INFO,
         ):
             with self.assertRaises(HTTPStreamClosedError):
                 self.fetch("/large", raise_error=True)
+
+
+class MaxBufferSizeUntilCloseTest(AsyncHTTPTestCase):
+    """A read-until-close body that overflows the stream's read buffer must
+    be an error, not a silently truncated response.
+    """
+
+    def get_app(self):
+        class LargeBody(RequestHandler):
+            def get(self):
+                stream = self.detach()
+                stream.write(b"HTTP/1.0 200 OK\r\n\r\n" + b"a" * (1024 * 100))
+                stream.close()
+
+        return Application([("/large", LargeBody)])
+
+    def get_http_client(self):
+        # 100KB body with a 64KB buffer. max_body_size is large enough to
+        # allow the body; it is the buffer that overflows.
+        return SimpleAsyncHTTPClient(
+            max_body_size=1024 * 1024, max_buffer_size=1024 * 64
+        )
+
+    def test_large_body_until_close(self):
+        # The body fits within max_body_size, so it must be delivered in
+        # full: the stream's read buffer limit applies to a single read,
+        # not to the total size of the body. This matches the behavior of
+        # MaxBufferSizeTest for responses with a Content-Length.
+        response = self.fetch("/large")
+        response.rethrow()
+        self.assertEqual(response.body, b"a" * (1024 * 100))
 
 
 class MaxBufferSizeTest(AsyncHTTPTestCase):
