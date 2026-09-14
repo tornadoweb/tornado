@@ -10,7 +10,8 @@ Security fixes
 - `.StaticFileHandler` no longer follows symlinks outside of the static root directory.
   Applications that wish to continue the previous behavior may set the new argument
   ``allowed_symlink_directory`` to the directory (an ancestor of the static root) that
-  should be used for symlink validation. Thanks to `afldl <https://github.com/afldl>`_ and
+  should be used for symlink validation. Thanks to `Yasha-ops <https://github.com/Yasha-ops>`_,
+  `afldl <https://github.com/afldl>`_ and
   `iaokhut-from-NightWolf-Team <https://github.com/iaokhut-from-NightWolf-Team>`_ for 
   reporting this issue.
 - ``curl_httpclient`` has a new ``max_body_size`` argument (default 100MB, same as
