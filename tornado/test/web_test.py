@@ -1580,11 +1580,11 @@ class StaticFileSymlinkTest(WebTestCase):
         self.outside = os.path.join(self.tmpdir, "outside")
         os.mkdir(self.root)
         os.mkdir(self.outside)
-        with open(os.path.join(self.root, "inside.txt"), "w") as f:
+        with open(os.path.join(self.root, "inside.txt"), "w", encoding="utf-8") as f:
             f.write("inside")
-        with open(os.path.join(self.outside, "secret.txt"), "w") as f:
+        with open(os.path.join(self.outside, "secret.txt"), "w", encoding="utf-8") as f:
             f.write("secret")
-        with open(os.path.join(self.root, "index.html"), "w") as f:
+        with open(os.path.join(self.root, "index.html"), "w", encoding="utf-8") as f:
             f.write("root index")
         # A symlink to a file outside the root.
         os.symlink(
@@ -1707,7 +1707,7 @@ class StaticFileSymlinkedRootTest(WebTestCase):
         self.addCleanup(shutil.rmtree, self.tmpdir)
         real_root = os.path.join(self.tmpdir, "real")
         os.mkdir(real_root)
-        with open(os.path.join(real_root, "inside.txt"), "w") as f:
+        with open(os.path.join(real_root, "inside.txt"), "w", encoding="utf-8") as f:
             f.write("inside")
         # Serve through a symlink to the real directory.
         self.root = os.path.join(self.tmpdir, "link")
