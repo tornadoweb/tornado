@@ -37,14 +37,14 @@ from tornado.iostream import IOStream
 from tornado.locks import Event
 from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.test.util import abstract_base_test
-from tornado.testing import (
+from tornado.test.util import (
     AsyncHTTPSTestCase,
     AsyncHTTPTestCase,
     AsyncTestCase,
-    ExpectLog,
-    gen_test,
+    TestCase,
+    abstract_base_test,
 )
+from tornado.testing import ExpectLog, gen_test
 from tornado.web import Application, RequestHandler, stream_request_body
 
 
@@ -137,7 +137,7 @@ class SSLTest(AsyncHTTPSTestCase):
         self.assertFalse(expect_log.logged_stack)
 
 
-class BadSSLOptionsTest(unittest.TestCase):
+class BadSSLOptionsTest(TestCase):
     def test_missing_arguments(self):
         application = Application()
         self.assertRaises(

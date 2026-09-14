@@ -5,7 +5,8 @@ from tornado.httputil import HTTPMessageDelegate
 from tornado.iostream import IOStream
 from tornado.locks import Event
 from tornado.netutil import add_accept_handler
-from tornado.testing import AsyncTestCase, bind_unused_port, gen_test
+from tornado.test.util import AsyncTestCase
+from tornado.testing import bind_unused_port, gen_test
 
 
 class HTTP1ConnectionTest(AsyncTestCase):

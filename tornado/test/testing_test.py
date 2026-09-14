@@ -11,7 +11,9 @@ import warnings
 from tornado import gen, ioloop
 from tornado.httpserver import HTTPServer
 from tornado.locks import Event
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, gen_test
+import tornado.testing
+from tornado.test.util import AsyncHTTPTestCase, AsyncTestCase, TestCase
+from tornado.testing import bind_unused_port, gen_test
 from tornado.web import Application
 
 
@@ -118,13 +120,13 @@ class AsyncHTTPTestCaseTest(AsyncHTTPTestCase):
         super().tearDown()
 
 
-class AsyncTestCaseReturnAssertionsTest(unittest.TestCase):
+class AsyncTestCaseReturnAssertionsTest(TestCase):
     # These tests verify that tests that return non-None values (without being decorated with
     # @gen_test) raise errors instead of incorrectly succeeding. These tests should be removed or
     # updated when the _callTestMethod method is removed from AsyncTestCase (the same checks will
     # still happen, but they'll be performed in the stdlib as DeprecationWarnings)
     def test_undecorated_generator(self):
-        class Test(AsyncTestCase):
+        class Test(tornado.testing.AsyncTestCase):
             def test_gen(self):
                 yield
 
@@ -145,7 +147,7 @@ class AsyncTestCaseReturnAssertionsTest(unittest.TestCase):
         "py312 has its own check for test case returns",
     )
     def test_undecorated_coroutine(self):
-        class Test(AsyncTestCase):
+        class Test(tornado.testing.AsyncTestCase):
             async def test_coro(self):
                 pass
 
@@ -161,7 +163,7 @@ class AsyncTestCaseReturnAssertionsTest(unittest.TestCase):
         self.assertIn("should be decorated", result.errors[0][1])
 
     def test_undecorated_generator_with_skip(self):
-        class Test(AsyncTestCase):
+        class Test(tornado.testing.AsyncTestCase):
             @unittest.skip("don't run this")
             def test_gen(self):
                 yield
@@ -173,7 +175,7 @@ class AsyncTestCaseReturnAssertionsTest(unittest.TestCase):
         self.assertEqual(len(result.skipped), 1)
 
     def test_other_return(self):
-        class Test(AsyncTestCase):
+        class Test(tornado.testing.AsyncTestCase):
             def test_other_return(self):
                 return 42
 
@@ -184,7 +186,7 @@ class AsyncTestCaseReturnAssertionsTest(unittest.TestCase):
         self.assertIn("Return value from test method ignored", result.errors[0][1])
 
 
-class SetUpTearDownTest(unittest.TestCase):
+class SetUpTearDownTest(TestCase):
     def test_set_up_tear_down(self):
         """
         This test makes sure that AsyncTestCase calls super methods for
@@ -204,7 +206,7 @@ class SetUpTearDownTest(unittest.TestCase):
             def tearDown(self):
                 events.append("tearDown")
 
-        class InheritBoth(AsyncTestCase, SetUpTearDown):
+        class InheritBoth(tornado.testing.AsyncTestCase, SetUpTearDown):
             def test(self):
                 events.append("test")
 
@@ -213,11 +215,11 @@ class SetUpTearDownTest(unittest.TestCase):
         self.assertEqual(expected, events)
 
 
-class AsyncHTTPTestCaseSetUpTearDownTest(unittest.TestCase):
+class AsyncHTTPTestCaseSetUpTearDownTest(TestCase):
     def test_tear_down_releases_app_and_http_server(self):
         result = unittest.TestResult()
 
-        class SetUpTearDown(AsyncHTTPTestCase):
+        class SetUpTearDown(tornado.testing.AsyncHTTPTestCase):
             def get_app(self):
                 return Application()
 

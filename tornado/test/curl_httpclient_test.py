@@ -7,7 +7,7 @@ from tornado import gen
 from tornado.escape import utf8
 from tornado.netutil import ssl_options_to_context
 from tornado.test import httpclient_test
-from tornado.testing import AsyncHTTPSTestCase, AsyncHTTPTestCase
+from tornado.test.util import AsyncHTTPSTestCase, AsyncHTTPTestCase
 from tornado.web import Application, RequestHandler
 
 try:

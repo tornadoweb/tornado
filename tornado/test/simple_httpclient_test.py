@@ -33,17 +33,14 @@ from tornado.test.httpclient_test import (
     UserAgentHandler,
 )
 from tornado.test.util import (
+    AsyncHTTPSTestCase,
+    AsyncHTTPTestCase,
+    AsyncTestCase,
     abstract_base_test,
     refusing_port,
     skipIfNoIPv6,
 )
-from tornado.testing import (
-    AsyncHTTPSTestCase,
-    AsyncHTTPTestCase,
-    AsyncTestCase,
-    ExpectLog,
-    gen_test,
-)
+from tornado.testing import ExpectLog, gen_test
 from tornado.web import Application, RequestHandler, stream_request_body, url
 
 

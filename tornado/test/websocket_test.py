@@ -15,8 +15,13 @@ from tornado.log import app_log, gen_log
 from tornado.netutil import Resolver
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
-from tornado.test.util import abstract_base_test, ignore_deprecation
-from tornado.testing import AsyncHTTPTestCase, ExpectLog, bind_unused_port, gen_test
+from tornado.test.util import (
+    AsyncHTTPTestCase,
+    TestCase,
+    abstract_base_test,
+    ignore_deprecation,
+)
+from tornado.testing import ExpectLog, bind_unused_port, gen_test
 from tornado.web import Application, RequestHandler
 
 try:
@@ -772,7 +777,7 @@ class DefaultCompressionTest(CompressionTestMixin):
 
 
 @abstract_base_test
-class MaskFunctionMixin(unittest.TestCase):
+class MaskFunctionMixin(TestCase):
     # Subclasses should define self.mask(mask, data)
     def mask(self, mask: bytes, data: bytes) -> bytes:
         raise NotImplementedError()
@@ -930,7 +935,7 @@ class ServerPingTimeoutTest(WebSocketBaseTestCase):
         self.assertEqual(ws.protocol.close_code, 1000)
 
 
-class PingCalculationTest(unittest.TestCase):
+class PingCalculationTest(TestCase):
     def test_ping_sleep_time(self):
         from tornado.websocket import WebSocketProtocol13
 

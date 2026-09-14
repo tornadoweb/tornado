@@ -12,8 +12,8 @@ from concurrent import futures
 from tornado import gen
 from tornado.concurrent import Future
 from tornado.log import app_log
-from tornado.test.util import skipNotCPython
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
+from tornado.test.util import AsyncHTTPTestCase, AsyncTestCase, skipNotCPython
+from tornado.testing import ExpectLog, gen_test
 from tornado.web import Application, HTTPError, RequestHandler
 
 

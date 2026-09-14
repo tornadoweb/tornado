@@ -14,7 +14,6 @@ import asyncio
 import contextvars
 import threading
 import time
-import unittest
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 
@@ -26,13 +25,13 @@ from tornado.platform.asyncio import (
     AsyncIOLoop,
     to_asyncio_future,
 )
-from tornado.test.util import ignore_deprecation
-from tornado.testing import (
+from tornado.test.util import (
     AsyncHTTPTestCase,
     AsyncTestCase,
-    gen_test,
-    setup_with_context_manager,
+    TestCase,
+    ignore_deprecation,
 )
+from tornado.testing import gen_test, setup_with_context_manager
 from tornado.web import Application, RequestHandler
 
 
@@ -115,7 +114,7 @@ class AsyncIOLoopTest(AsyncTestCase):
         loop.close()
 
 
-class LeakTest(unittest.TestCase):
+class LeakTest(TestCase):
     def setUp(self):
         # Trigger a cleanup of the mapping so we start with a clean slate.
         AsyncIOLoop(make_current=False).close()
@@ -155,7 +154,7 @@ class LeakTest(unittest.TestCase):
         self.assertEqual(new_count, 1)
 
 
-class SelectorThreadLeakTest(unittest.TestCase):
+class SelectorThreadLeakTest(TestCase):
     # These tests are only relevant on windows, but they should pass anywhere.
     def setUp(self):
         # As a precaution, ensure that we've run an event loop at least once
@@ -206,7 +205,7 @@ class SelectorThreadLeakTest(unittest.TestCase):
         self.assert_no_thread_leak()
 
 
-class AnyThreadEventLoopPolicyTest(unittest.TestCase):
+class AnyThreadEventLoopPolicyTest(TestCase):
     def setUp(self):
         setup_with_context_manager(self, ignore_deprecation())
         # Referencing the event loop policy attributes raises deprecation warnings,
