@@ -538,7 +538,11 @@ class SelectorThread:
                 # garbage collected, at an unpredictable later point.
                 self._thread_manager_task._log_destroy_pending = False  # type: ignore[attr-defined]
                 self._thread_manager_task.cancel()
-                self._thread_manager_task.get_coro().close()
+                # get_coro returns None for a task whose coroutine has already
+                # been cleared, which cannot happen for a task that never ran.
+                coro = self._thread_manager_task.get_coro()
+                if coro is not None:
+                    coro.close()
             self._thread_manager_task = None
         _selector_loops.discard(self)
         self.remove_reader(self._waker_r)
