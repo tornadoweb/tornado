@@ -74,6 +74,21 @@ class TranslationLoaderTest(unittest.TestCase):
         self.assertEqual(locale.pgettext("stick", "club", "clubs", 1), "le b\xe2ton")
         self.assertEqual(locale.pgettext("stick", "club", "clubs", 2), "les b\xe2tons")
 
+    def test_fallback_preserves_requested_territory(self):
+        tornado.locale._translations = {
+            "de": {"unknown": {"school": "Schule"}},
+        }
+        tornado.locale._supported_locales = frozenset(["de", "en_US"])
+
+        locale = tornado.locale.get("de-DE")
+
+        self.assertEqual(locale.code, "de_DE")
+        self.assertEqual(locale.translate("school"), "Schule")
+
+    def test_get_rejects_unsupported_locale(self):
+        with self.assertRaises(ValueError):
+            tornado.locale.Locale.get("de_DE")
+
 
 class LocaleDataTest(unittest.TestCase):
     def test_non_ascii_name(self):
