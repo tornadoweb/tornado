@@ -15,29 +15,6 @@ from tornado.testing import bind_unused_port
 _TestCaseType = typing.TypeVar("_TestCaseType", bound=type[unittest.TestCase])
 
 
-def skip_log_check(obj):
-    """Exempt a test method or class from `TestCase`'s unexpected-log check.
-
-    Use this sparingly, and prefer either silencing the log or wrapping it in
-    `tornado.testing.ExpectLog`. It is meant for log output that cannot be
-    attributed to the test that caused it -- most often output produced from a
-    destructor, which runs whenever the garbage collector gets to it and so may
-    land on an unrelated test. In that situation exempting one test is a guess,
-    not a fix.
-    """
-    obj._tornado_skip_log_check = True
-    return obj
-
-
-def _set_up_log_check(case: unittest.TestCase) -> None:
-    if getattr(type(case), "_tornado_skip_log_check", False):
-        return
-    method = getattr(case, case._testMethodName, None)
-    if getattr(method, "_tornado_skip_log_check", False):
-        return
-    case.enterContext(case.assertNoLogs())
-
-
 class TestCase(unittest.TestCase):
     """`unittest.TestCase` that fails if the test logs anything unexpected.
 
@@ -52,7 +29,7 @@ class TestCase(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        _set_up_log_check(self)
+        self.enterContext(self.assertNoLogs())
         super().setUp()
 
 
@@ -65,7 +42,7 @@ class AsyncTestCase(tornado.testing.AsyncTestCase):
     """
 
     def setUp(self) -> None:
-        _set_up_log_check(self)
+        self.enterContext(self.assertNoLogs())
         super().setUp()
 
 

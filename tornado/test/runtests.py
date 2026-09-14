@@ -12,7 +12,7 @@ from functools import reduce
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 from tornado.netutil import Resolver
-from tornado.options import add_parse_callback, define, options
+from tornado.options import add_parse_callback, define
 from tornado.test.util import ABT_SKIP_MESSAGE
 
 TEST_MODULES = [
@@ -163,11 +163,6 @@ def main():
             reduce(operator.or_, (getattr(gc, v) for v in values))
         ),
     )
-    define(
-        "fail-if-logs",
-        default=True,
-        help="If true, fail the tests if any log output is produced (unless captured by ExpectLog)",
-    )
 
     def set_locale(x):
         locale.setlocale(locale.LC_ALL, x)
@@ -214,8 +209,7 @@ def main():
                 log_counter.error_count,
                 counting_stderr.byte_count,
             )
-            if options.fail_if_logs:
-                sys.exit(1)
+            sys.exit(1)
 
 
 if __name__ == "__main__":

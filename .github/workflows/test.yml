@@ -131,8 +131,7 @@ jobs:
           python-version: '3.13'
           # [[[end]]]
       - name: Run test suite
-        # TODO: figure out what's up with these log messages
-        run: py -m tornado.test --fail-if-logs=false
+        run: py -m tornado.test
 
   zizmor:
     name: Analyze action configs with zizmor
