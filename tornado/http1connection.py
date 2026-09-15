@@ -296,6 +296,10 @@ class HTTP1Connection(httputil.HTTPConnection):
             gen_log.info("Malformed HTTP message from %s: %s", self.context, e)
             if not self.is_client:
                 await self.stream.write(b"HTTP/1.1 400 Bad Request\r\n\r\n")
+            else:
+                # Parsing may fail before headers_received, but the client
+                # still needs to be notified that its request has failed.
+                need_delegate_close = True
             self.close()
             return False
         finally:
