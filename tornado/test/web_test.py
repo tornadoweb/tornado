@@ -1588,6 +1588,24 @@ class StaticFileSymlinkTest(WebTestCase):
             os.path.join(self.root, "inside.txt"),
             os.path.join(self.root, "internal.txt"),
         )
+        # A second out-of-bounds directory, for the list form of
+        # allowed_symlink_directory, plus a target that is in neither.
+        self.outside2 = os.path.join(self.tmpdir, "outside2")
+        os.mkdir(self.outside2)
+        with open(os.path.join(self.outside2, "other.txt"), "w", encoding="utf-8") as f:
+            f.write("other")
+        os.symlink(
+            os.path.join(self.outside2, "other.txt"),
+            os.path.join(self.root, "link2.txt"),
+        )
+        with open(
+            os.path.join(self.tmpdir, "elsewhere.txt"), "w", encoding="utf-8"
+        ) as f:
+            f.write("elsewhere")
+        os.symlink(
+            os.path.join(self.tmpdir, "elsewhere.txt"),
+            os.path.join(self.root, "link_elsewhere.txt"),
+        )
         super().setUp()
 
     def get_handlers(self):
@@ -1597,6 +1615,18 @@ class StaticFileSymlinkTest(WebTestCase):
                 "/permissive/(.*)",
                 StaticFileHandler,
                 dict(path=self.root, allowed_symlink_directory=self.tmpdir),
+            ),
+            (
+                "/permissive_list/(.*)",
+                StaticFileHandler,
+                dict(
+                    path=self.root,
+                    allowed_symlink_directory=[
+                        self.root,
+                        self.outside,
+                        self.outside2,
+                    ],
+                ),
             ),
             (
                 "/default_filename/(.*)",
@@ -1674,6 +1704,26 @@ class StaticFileSymlinkTest(WebTestCase):
         response = self.fetch("/permissive/linkdir/secret.txt")
         self.assertEqual(response.code, 200)
         self.assertEqual(response.body, b"secret")
+
+    def test_allowed_symlink_directory_list(self):
+        # A list allows symlinks into any of the listed directories. The
+        # list replaces the root rather than adding to it, so it must
+        # include the root for ordinary files to be served.
+        for path, expected in [
+            ("inside.txt", b"inside"),
+            ("link.txt", b"secret"),
+            ("link2.txt", b"other"),
+        ]:
+            response = self.fetch("/permissive_list/" + path)
+            self.assertEqual(response.code, 200)
+            self.assertEqual(response.body, expected)
+
+    def test_allowed_symlink_directory_list_rejects_others(self):
+        # A target in none of the listed directories is still rejected,
+        # even though it is in a directory that contains them all.
+        with ExpectLog(gen_log, ".*is not in root static directory"):
+            response = self.fetch("/permissive_list/link_elsewhere.txt")
+        self.assertEqual(response.code, 403)
 
 
 class MultiRootStaticFileHandler(StaticFileHandler):
