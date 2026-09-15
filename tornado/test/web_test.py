@@ -1588,6 +1588,24 @@ class StaticFileSymlinkTest(WebTestCase):
             os.path.join(self.root, "inside.txt"),
             os.path.join(self.root, "internal.txt"),
         )
+        # A second out-of-bounds directory, for the list form of
+        # allowed_symlink_directory, plus a target that is in neither.
+        self.outside2 = os.path.join(self.tmpdir, "outside2")
+        os.mkdir(self.outside2)
+        with open(os.path.join(self.outside2, "other.txt"), "w", encoding="utf-8") as f:
+            f.write("other")
+        os.symlink(
+            os.path.join(self.outside2, "other.txt"),
+            os.path.join(self.root, "link2.txt"),
+        )
+        with open(
+            os.path.join(self.tmpdir, "elsewhere.txt"), "w", encoding="utf-8"
+        ) as f:
+            f.write("elsewhere")
+        os.symlink(
+            os.path.join(self.tmpdir, "elsewhere.txt"),
+            os.path.join(self.root, "link_elsewhere.txt"),
+        )
         super().setUp()
 
     def get_handlers(self):
@@ -1597,6 +1615,18 @@ class StaticFileSymlinkTest(WebTestCase):
                 "/permissive/(.*)",
                 StaticFileHandler,
                 dict(path=self.root, allowed_symlink_directory=self.tmpdir),
+            ),
+            (
+                "/permissive_list/(.*)",
+                StaticFileHandler,
+                dict(
+                    path=self.root,
+                    allowed_symlink_directory=[
+                        self.root,
+                        self.outside,
+                        self.outside2,
+                    ],
+                ),
             ),
             (
                 "/default_filename/(.*)",
@@ -1674,6 +1704,123 @@ class StaticFileSymlinkTest(WebTestCase):
         response = self.fetch("/permissive/linkdir/secret.txt")
         self.assertEqual(response.code, 200)
         self.assertEqual(response.body, b"secret")
+
+    def test_allowed_symlink_directory_list(self):
+        # A list allows symlinks into any of the listed directories. The
+        # list replaces the root rather than adding to it, so it must
+        # include the root for ordinary files to be served.
+        for path, expected in [
+            ("inside.txt", b"inside"),
+            ("link.txt", b"secret"),
+            ("link2.txt", b"other"),
+        ]:
+            response = self.fetch("/permissive_list/" + path)
+            self.assertEqual(response.code, 200)
+            self.assertEqual(response.body, expected)
+
+    def test_allowed_symlink_directory_list_rejects_others(self):
+        # A target in none of the listed directories is still rejected,
+        # even though it is in a directory that contains them all.
+        with ExpectLog(gen_log, ".*is not in root static directory"):
+            response = self.fetch("/permissive_list/link_elsewhere.txt")
+        self.assertEqual(response.code, 403)
+
+
+class MultiRootStaticFileHandler(StaticFileHandler):
+    """A subclass that searches a list of directories.
+
+    It replaces ``initialize`` without calling ``super().initialize()``, so
+    ``allowed_symlink_directory`` is never set, and it puts something other
+    than a string in ``self.root``, passing the directory that matched to
+    ``validate_absolute_path``. The symlink check must run against that
+    directory. Jupyter's ``FileFindHandler`` is built this way.
+    """
+
+    root: tuple  # type: ignore[assignment]
+
+    def initialize(self, path):  # type: ignore[override]
+        self.root = tuple(os.path.abspath(p) + os.path.sep for p in path)
+        self.default_filename = None
+
+    @classmethod
+    def get_absolute_path(cls, roots, path):  # type: ignore[override]
+        for root in roots:
+            candidate = os.path.abspath(os.path.join(root, path))
+            if os.path.exists(candidate):
+                return candidate
+        return os.path.abspath(os.path.join(roots[0], path))
+
+    def validate_absolute_path(self, root, absolute_path):  # type: ignore[override]
+        for candidate in self.root:
+            if (absolute_path + os.path.sep).startswith(candidate):
+                root = candidate
+                break
+        return super().validate_absolute_path(root, absolute_path)
+
+
+@unittest.skipIf(os.name != "posix", "non-posix OS")
+class StaticFileMultiRootTest(WebTestCase):
+    """Subclasses that search several directories and never set
+    ``allowed_symlink_directory`` must keep working (issue #3724).
+    """
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmpdir)
+        self.root1 = os.path.join(self.tmpdir, "static1")
+        self.root2 = os.path.join(self.tmpdir, "static2")
+        self.outside = os.path.join(self.tmpdir, "outside")
+        for d in (self.root1, self.root2, self.outside):
+            os.mkdir(d)
+        with open(os.path.join(self.root1, "one.txt"), "w", encoding="utf-8") as f:
+            f.write("one")
+        with open(os.path.join(self.root2, "two.txt"), "w", encoding="utf-8") as f:
+            f.write("two")
+        with open(os.path.join(self.outside, "secret.txt"), "w", encoding="utf-8") as f:
+            f.write("secret")
+        os.symlink(
+            os.path.join(self.root1, "one.txt"),
+            os.path.join(self.root2, "internal.txt"),
+        )
+        os.symlink(
+            os.path.join(self.outside, "secret.txt"),
+            os.path.join(self.root1, "link.txt"),
+        )
+        super().setUp()
+
+    def get_handlers(self):
+        return [
+            (
+                "/multi/(.*)",
+                MultiRootStaticFileHandler,
+                dict(path=[self.root1, self.root2]),
+            )
+        ]
+
+    def get_app_kwargs(self):
+        return dict()
+
+    def test_first_root(self):
+        response = self.fetch("/multi/one.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"one")
+
+    def test_second_root(self):
+        response = self.fetch("/multi/two.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"two")
+
+    def test_symlink_to_other_root_rejected(self):
+        # Each root is validated on its own: a link from one search directory
+        # into another is still an escape from the directory it lives in.
+        with ExpectLog(gen_log, ".*is not in root static directory"):
+            response = self.fetch("/multi/internal.txt")
+        self.assertEqual(response.code, 403)
+
+    def test_symlink_escaping_roots_rejected(self):
+        with ExpectLog(gen_log, ".*is not in root static directory"):
+            response = self.fetch("/multi/link.txt")
+        self.assertEqual(response.code, 403)
 
 
 class StaticFileSymlinkedRootTest(WebTestCase):
