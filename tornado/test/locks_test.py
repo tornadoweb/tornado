@@ -16,7 +16,8 @@ from datetime import timedelta
 
 from tornado import gen, locks
 from tornado.gen import TimeoutError
-from tornado.testing import AsyncTestCase, gen_test
+from tornado.test.util import AsyncTestCase
+from tornado.testing import gen_test
 
 
 class ConditionTest(AsyncTestCase):

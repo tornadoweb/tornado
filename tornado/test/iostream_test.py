@@ -30,19 +30,16 @@ from tornado.netutil import ssl_options_to_context, ssl_wrap_socket
 from tornado.platform.asyncio import AddThreadSelectorEventLoop
 from tornado.tcpserver import TCPServer
 from tornado.test.util import (
+    AsyncHTTPSTestCase,
+    AsyncHTTPTestCase,
+    AsyncTestCase,
+    TestCase,
     abstract_base_test,
     ignore_deprecation,
     refusing_port,
     skipIfNonUnix,
 )
-from tornado.testing import (
-    AsyncHTTPSTestCase,
-    AsyncHTTPTestCase,
-    AsyncTestCase,
-    ExpectLog,
-    bind_unused_port,
-    gen_test,
-)
+from tornado.testing import ExpectLog, bind_unused_port, gen_test
 from tornado.web import Application, RequestHandler
 
 
@@ -1373,7 +1370,7 @@ class TestPipeIOStream(TestReadWriteMixin, AsyncTestCase):
         rs.close()
 
 
-class TestStreamBuffer(unittest.TestCase):
+class TestStreamBuffer(TestCase):
     """
     Unit tests for the private _StreamBuffer class.
     """

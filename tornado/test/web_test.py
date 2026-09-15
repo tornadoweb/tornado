@@ -34,8 +34,13 @@ from tornado.locks import Event
 from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
-from tornado.test.util import ignore_deprecation
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
+from tornado.test.util import (
+    AsyncHTTPTestCase,
+    AsyncTestCase,
+    TestCase,
+    ignore_deprecation,
+)
+from tornado.testing import ExpectLog, gen_test
 from tornado.util import ObjectDict, unicode_type
 from tornado.web import (
     Application,
@@ -123,7 +128,7 @@ class CookieTestRequestHandler(RequestHandler):
 
 
 # See SignedValueTest below for more.
-class SecureCookieV1Test(unittest.TestCase):
+class SecureCookieV1Test(TestCase):
     def test_round_trip(self):
         handler = CookieTestRequestHandler()
         handler.set_signed_cookie("foo", b"bar", version=1)
@@ -177,7 +182,7 @@ class SecureCookieV1Test(unittest.TestCase):
 
 
 # See SignedValueTest below for more.
-class SecureCookieV2Test(unittest.TestCase):
+class SecureCookieV2Test(TestCase):
     KEY_VERSIONS = {0: "ajklasdf0ojaisdf", 1: "aslkjasaolwkjsdf"}
 
     def test_round_trip(self):
@@ -1268,7 +1273,16 @@ class StaticFileTest(WebTestCase):
         ]
         for filename in filenames:
             with self.subTest(filename=filename):
-                response = self.fetch(f"/static/{filename}")
+                # The 403 below is raised with a log message, so it must be
+                # expected here. It is not required because the 404 path (and
+                # every platform other than windows) does not log anything.
+                with ExpectLog(
+                    gen_log,
+                    ".*is not in root static directory",
+                    required=False,
+                    level=logging.WARNING,
+                ):
+                    response = self.fetch(f"/static/{filename}")
                 # The exact behavior of these filenames differs across versions of
                 # Windows and Python.
                 # https://github.com/python/cpython/issues/90520#issuecomment-1093942179
@@ -3062,7 +3076,7 @@ class ClientCloseTest(SimpleHandlerTestCase):
             self.assertEqual(response.code, 599)
 
 
-class SignedValueTest(unittest.TestCase):
+class SignedValueTest(TestCase):
     SECRET = "It's a secret to everybody"
     SECRET_DICT = {0: "asdfbasdf", 1: "12312312", 2: "2342342"}
 
@@ -3651,7 +3665,7 @@ class RequestSummaryTest(SimpleHandlerTestCase):
         self.assertEqual(resp.body, b"GET / (None)")
 
 
-class HTTPErrorTest(unittest.TestCase):
+class HTTPErrorTest(TestCase):
     def test_copy(self):
         e = HTTPError(403, reason="Go away")
         e2 = copy.copy(e)
@@ -3667,7 +3681,7 @@ class ApplicationTest(AsyncTestCase):
         server.stop()
 
 
-class URLSpecReverseTest(unittest.TestCase):
+class URLSpecReverseTest(TestCase):
     def test_reverse(self):
         self.assertEqual("/favicon.ico", url(r"/favicon\.ico", None).reverse())
         self.assertEqual("/favicon.ico", url(r"^/favicon\.ico$", None).reverse())

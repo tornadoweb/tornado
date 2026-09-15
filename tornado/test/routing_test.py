@@ -26,9 +26,11 @@ from tornado.routing import (
     Rule,
     RuleRouter,
 )
-from tornado.testing import AsyncHTTPTestCase
 from tornado.web import Application, HTTPError, RequestHandler
 from tornado.wsgi import WSGIContainer
+
+
+from tornado.test.util import AsyncHTTPTestCase
 
 
 class BasicRouter(Router):

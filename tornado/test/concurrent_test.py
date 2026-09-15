@@ -28,7 +28,8 @@ from tornado.concurrent import (
 from tornado.escape import to_unicode, utf8
 from tornado.iostream import IOStream
 from tornado.tcpserver import TCPServer
-from tornado.testing import AsyncTestCase, bind_unused_port, gen_test
+from tornado.test.util import AsyncTestCase
+from tornado.testing import bind_unused_port, gen_test
 
 
 class MiscFutureTest(AsyncTestCase):

@@ -9,9 +9,55 @@ import typing
 import unittest
 import warnings
 
+import tornado.testing
 from tornado.testing import bind_unused_port
 
 _TestCaseType = typing.TypeVar("_TestCaseType", bound=type[unittest.TestCase])
+
+
+class TestCase(unittest.TestCase):
+    """`unittest.TestCase` that fails if the test logs anything unexpected.
+
+    The check is registered with `unittest.TestCase.enterContext` before
+    ``super().setUp()`` runs, so it covers ``setUp`` as well as the test
+    itself. Cleanups run in LIFO order after ``tearDown``, so it covers
+    ``tearDown`` too.
+
+    Note that ``assertNoLogs`` replaces the root logger's handlers for the
+    duration of the test, so unexpected log output appears in the failure
+    message instead of being printed as it happens.
+    """
+
+    def setUp(self) -> None:
+        self.enterContext(self.assertNoLogs())
+        super().setUp()
+
+
+class AsyncTestCase(tornado.testing.AsyncTestCase):
+    """`tornado.testing.AsyncTestCase` with the `TestCase` log check.
+
+    Covering ``tearDown`` matters here in particular: it is
+    `tornado.testing.AsyncTestCase.tearDown` that closes the `.IOLoop`, which
+    is itself a common source of stray log output.
+    """
+
+    def setUp(self) -> None:
+        self.enterContext(self.assertNoLogs())
+        super().setUp()
+
+
+# These two list their tornado.testing base first so that it keeps its place
+# ahead of any mixin in the method resolution order of the concrete test
+# classes (see the comment on TestIOStreamWebMixin in iostream_test.py). The
+# log check is inherited from AsyncTestCase, which stays late in the MRO, so
+# it is set up exactly once.
+class AsyncHTTPTestCase(tornado.testing.AsyncHTTPTestCase, AsyncTestCase):
+    pass
+
+
+class AsyncHTTPSTestCase(tornado.testing.AsyncHTTPSTestCase, AsyncHTTPTestCase):
+    pass
+
 
 skipIfNonUnix = unittest.skipIf(
     os.name != "posix" or sys.platform == "cygwin", "non-unix platform"

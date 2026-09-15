@@ -12,13 +12,13 @@ from tornado.escape import utf8
 from tornado.log import app_log
 from tornado.netutil import ssl_options_to_context
 from tornado.test import httpclient_test
-from tornado.test.util import skipNotCPython
-from tornado.testing import (
+from tornado.test.util import (
     AsyncHTTPSTestCase,
     AsyncHTTPTestCase,
     AsyncTestCase,
-    ExpectLog,
+    skipNotCPython,
 )
+from tornado.testing import ExpectLog
 from tornado.web import Application, RequestHandler
 
 try:

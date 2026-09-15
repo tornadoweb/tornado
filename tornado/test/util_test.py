@@ -2,7 +2,6 @@ import datetime
 import re
 import sys
 import textwrap
-import unittest
 from typing import Any, cast
 
 import tornado
@@ -18,7 +17,12 @@ from tornado.util import (
 )
 
 
-class RaiseExcInfoTest(unittest.TestCase):
+import unittest
+
+from tornado.test.util import TestCase
+
+
+class RaiseExcInfoTest(TestCase):
     def test_two_arg_exception(self):
         # This test would fail on python 3 if raise_exc_info were simply
         # a three-argument raise statement, because TwoArgException
@@ -82,7 +86,7 @@ class TestConfig3B(TestConfig3):
         self.b = b
 
 
-class ConfigurableTest(unittest.TestCase):
+class ConfigurableTest(TestCase):
     def setUp(self):
         self.saved = TestConfigurable._save_configuration()
         self.saved3 = TestConfig3._save_configuration()
@@ -206,12 +210,12 @@ class ConfigurableTest(unittest.TestCase):
         self.assertIsInstance(obj, TestConfig3B)
 
 
-class UnicodeLiteralTest(unittest.TestCase):
+class UnicodeLiteralTest(TestCase):
     def test_unicode_escapes(self):
         self.assertEqual(utf8("\u00e9"), b"\xc3\xa9")
 
 
-class ExecInTest(unittest.TestCase):
+class ExecInTest(TestCase):
     def test_no_inherit_future(self):
         # Two files: the first has "from __future__ import annotations", and it executes the second
         # which doesn't. The second file should not be affected by the first's __future__ imports.
@@ -239,7 +243,7 @@ class ExecInTest(unittest.TestCase):
         self.assertEqual(output[0], {"x": int, "return": int})
 
 
-class ArgReplacerTest(unittest.TestCase):
+class ArgReplacerTest(TestCase):
     def setUp(self):
         def function(x, y, callback=None, z=None):
             pass
@@ -274,13 +278,13 @@ class ArgReplacerTest(unittest.TestCase):
         )
 
 
-class TimedeltaToSecondsTest(unittest.TestCase):
+class TimedeltaToSecondsTest(TestCase):
     def test_timedelta_to_seconds(self):
         time_delta = datetime.timedelta(hours=1)
         self.assertEqual(timedelta_to_seconds(time_delta), 3600.0)
 
 
-class ImportObjectTest(unittest.TestCase):
+class ImportObjectTest(TestCase):
     def test_import_member(self):
         self.assertIs(import_object("tornado.escape.utf8"), utf8)
 
@@ -297,7 +301,7 @@ class ImportObjectTest(unittest.TestCase):
         self.assertIs(import_object("tornado.escape"), tornado.escape)
 
 
-class ReUnescapeTest(unittest.TestCase):
+class ReUnescapeTest(TestCase):
     def test_re_unescape(self):
         test_strings = ("/favicon.ico", "index.html", "Hello, World!", "!$@#%;")
         for string in test_strings:
@@ -312,7 +316,7 @@ class ReUnescapeTest(unittest.TestCase):
             re_unescape("\\Z")
 
 
-class VersionInfoTest(unittest.TestCase):
+class VersionInfoTest(TestCase):
     def assert_version_info_compatible(self, version, version_info):
         # We map our version identifier string (a subset of
         # https://packaging.python.org/en/latest/specifications/version-specifiers/#public-version-identifiers)
@@ -366,3 +370,39 @@ class VersionInfoTest(unittest.TestCase):
 
     def test_current_version(self):
         self.assert_version_info_compatible(tornado.version, tornado.version_info)
+
+
+class LogCheckCoverageTest(TestCase):
+    def test_all_test_classes_check_logs(self):
+        """Every test in the suite must fail if it logs something unexpected.
+
+        New test classes must derive from the base classes in
+        `tornado.test.util` rather than from `unittest` or `tornado.testing`
+        directly, so that the check in `.TestCase.setUp` applies to them.
+        """
+        import doctest
+
+        from tornado.test.runtests import all as all_tests
+        from tornado.test.util import AsyncTestCase as UtilAsyncTestCase
+
+        def flatten(suite):
+            for test in suite:
+                if isinstance(test, unittest.TestSuite):
+                    yield from flatten(test)
+                else:
+                    yield test
+
+        uncovered = set()
+        for test in flatten(all_tests()):
+            cls = type(test)
+            if cls.__module__ == "unittest.loader":
+                # Placeholders for modules that failed to import; these are
+                # reported as errors by the tests that use them.
+                continue
+            if issubclass(cls, doctest.DocTestCase):
+                # Doctests are built by doctest.DocTestSuite and cannot be
+                # given a base class of our own.
+                continue
+            if not issubclass(cls, (TestCase, UtilAsyncTestCase)):
+                uncovered.add(f"{cls.__module__}.{cls.__qualname__}")
+        self.assertEqual(uncovered, set())

@@ -14,8 +14,13 @@ from tornado.netutil import (
     bind_sockets,
     is_valid_ip,
 )
-from tornado.test.util import abstract_base_test, skipIfNoNetwork
-from tornado.testing import AsyncTestCase, bind_unused_port, gen_test
+from tornado.test.util import (
+    AsyncTestCase,
+    TestCase,
+    abstract_base_test,
+    skipIfNoNetwork,
+)
+from tornado.testing import bind_unused_port, gen_test
 
 try:
     import pycares  # type: ignore
@@ -134,7 +139,7 @@ class ThreadedResolverErrorTest(_ResolverErrorTestMixin):
 
 @skipIfNoNetwork
 @unittest.skipIf(sys.platform == "win32", "preexec_fn not available on win32")
-class ThreadedResolverImportTest(unittest.TestCase):
+class ThreadedResolverImportTest(TestCase):
     def test_import(self):
         TIMEOUT = 5
 
@@ -171,7 +176,7 @@ class CaresResolverTest(_ResolverTestMixin):
         self.resolver = CaresResolver()
 
 
-class IsValidIPTest(unittest.TestCase):
+class IsValidIPTest(TestCase):
     def test_is_valid_ip(self):
         self.assertTrue(is_valid_ip("127.0.0.1"))
         self.assertTrue(is_valid_ip("4.4.4.4"))
@@ -188,7 +193,7 @@ class IsValidIPTest(unittest.TestCase):
         self.assertFalse(is_valid_ip("a" * 100))
 
 
-class TestPortAllocation(unittest.TestCase):
+class TestPortAllocation(TestCase):
     def test_same_port_allocation(self):
         sockets = bind_sockets(0, "localhost")
         try:

@@ -31,8 +31,13 @@ from tornado.httputil import HTTPHeaders, format_timestamp
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado.log import app_log, gen_log
-from tornado.test.util import abstract_base_test, ignore_deprecation
-from tornado.testing import AsyncHTTPTestCase, ExpectLog, bind_unused_port, gen_test
+from tornado.test.util import (
+    AsyncHTTPTestCase,
+    TestCase,
+    abstract_base_test,
+    ignore_deprecation,
+)
+from tornado.testing import ExpectLog, bind_unused_port, gen_test
 from tornado.web import Application, RequestHandler, url
 
 try:
@@ -1032,7 +1037,7 @@ X-XSS-Protection: 1;
                     )
 
 
-class RequestProxyTest(unittest.TestCase):
+class RequestProxyTest(TestCase):
     def test_request_set(self):
         proxy = _RequestProxy(
             HTTPRequest("http://example.com/", user_agent="foo"), dict()
@@ -1065,7 +1070,7 @@ class RequestProxyTest(unittest.TestCase):
         self.assertIsNone(proxy.auth_username)
 
 
-class HTTPResponseTestCase(unittest.TestCase):
+class HTTPResponseTestCase(TestCase):
     def test_str(self):
         response = HTTPResponse(  # type: ignore
             HTTPRequest("http://example.com"), 200, buffer=BytesIO()
@@ -1075,7 +1080,7 @@ class HTTPResponseTestCase(unittest.TestCase):
         self.assertIn("code=200", s)
 
 
-class SyncHTTPClientTest(unittest.TestCase):
+class SyncHTTPClientTest(TestCase):
     def setUp(self):
         self.server_ioloop = IOLoop(make_current=False)
         event = threading.Event()
@@ -1138,7 +1143,7 @@ class SyncHTTPClientTest(unittest.TestCase):
         self.assertEqual(assertion.exception.code, 404)
 
 
-class SyncHTTPClientSubprocessTest(unittest.TestCase):
+class SyncHTTPClientSubprocessTest(TestCase):
     def test_destructor_log(self):
         # Regression test for
         # https://github.com/tornadoweb/tornado/issues/2539
@@ -1168,7 +1173,7 @@ class SyncHTTPClientSubprocessTest(unittest.TestCase):
             self.fail("subprocess produced unexpected output")
 
 
-class HTTPRequestTestCase(unittest.TestCase):
+class HTTPRequestTestCase(TestCase):
     def test_headers(self):
         request = HTTPRequest("http://example.com", headers={"foo": "bar"})
         self.assertEqual(request.headers, {"foo": "bar"})
@@ -1208,7 +1213,7 @@ class HTTPRequestTestCase(unittest.TestCase):
         )
 
 
-class HTTPErrorTestCase(unittest.TestCase):
+class HTTPErrorTestCase(TestCase):
     def test_copy(self):
         e = HTTPError(403)
         e2 = copy.copy(e)

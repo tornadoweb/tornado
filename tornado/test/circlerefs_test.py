@@ -18,7 +18,7 @@ import unittest
 
 import tornado
 from tornado import gen, httpclient, web
-from tornado.test.util import skipNotCPython
+from tornado.test.util import TestCase, skipNotCPython
 
 try:
     import pycurl
@@ -114,7 +114,7 @@ class OkHandler(web.RequestHandler):
 
 # GC behavior is cpython-specific
 @skipNotCPython
-class CircleRefsTest(unittest.TestCase):
+class CircleRefsTest(TestCase):
     def test_known_leak(self):
         # Construct a known leak scenario to make sure the test harness works.
         class C:

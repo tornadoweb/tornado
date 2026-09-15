@@ -3,7 +3,6 @@ import datetime
 import logging
 import pickle
 import time
-import unittest
 import urllib.parse
 
 from tornado.escape import native_str, utf8
@@ -24,7 +23,7 @@ from tornado.httputil import (
     url_concat,
 )
 from tornado.log import gen_log
-from tornado.test.util import ignore_deprecation, skipIfEmulated
+from tornado.test.util import TestCase, ignore_deprecation, skipIfEmulated
 
 
 def form_data_args() -> tuple[dict[str, list[bytes]], dict[str, list[HTTPFile]]]:
@@ -36,7 +35,7 @@ def form_data_args() -> tuple[dict[str, list[bytes]], dict[str, list[HTTPFile]]]
     return {}, {}
 
 
-class TestUrlConcat(unittest.TestCase):
+class TestUrlConcat(TestCase):
     def test_url_concat_no_query_params(self):
         url = url_concat("https://localhost/path", [("y", "y"), ("z", "z")])
         self.assertEqual(url, "https://localhost/path?y=y&z=z")
@@ -86,7 +85,7 @@ class TestUrlConcat(unittest.TestCase):
         self.assertEqual(url, "https://localhost/path?y=y")
 
 
-class QsParseTest(unittest.TestCase):
+class QsParseTest(TestCase):
     def test_parsing(self):
         qsstring = "a=1&b=2&a=3"
         qs = urllib.parse.parse_qs(qsstring)
@@ -96,7 +95,7 @@ class QsParseTest(unittest.TestCase):
         self.assertIn(("b", "2"), qsl)
 
 
-class UrlEncodedDataTest(unittest.TestCase):
+class UrlEncodedDataTest(TestCase):
     def test_urlencoded_data(self):
         data = b"a=1&b=2&a=3"
         args, files = form_data_args()
@@ -113,7 +112,7 @@ class UrlEncodedDataTest(unittest.TestCase):
         self.assertIn("Max number of fields exceeded", str(cm.exception))
 
 
-class MultipartFormDataTest(unittest.TestCase):
+class MultipartFormDataTest(TestCase):
     def test_file_upload(self):
         data = b"""\
 --1234
@@ -350,7 +349,7 @@ Content-Disposition: form-data; name="files"; filename="ab.txt"
         self.assertIn("multipart/form-data parsing is disabled", str(cm.exception))
 
 
-class HTTPHeadersTest(unittest.TestCase):
+class HTTPHeadersTest(TestCase):
     def test_multi_line(self):
         # Lines beginning with whitespace are appended to the previous line
         # with any leading whitespace replaced by a single space.
@@ -558,7 +557,7 @@ Foo: even
             self.fail(f"HTTPHeaders.add() does not scale linearly: {d1=} vs {d2=}")
 
 
-class FormatTimestampTest(unittest.TestCase):
+class FormatTimestampTest(TestCase):
     # Make sure that all the input types are supported.
     TIMESTAMP = 1359312200.503611
     EXPECTED = "Sun, 27 Jan 2013 18:43:20 GMT"
@@ -605,7 +604,7 @@ class FormatTimestampTest(unittest.TestCase):
 
 # HTTPServerRequest is mainly tested incidentally to the server itself,
 # but this tests the parts of the class that can be tested in isolation.
-class HTTPServerRequestTest(unittest.TestCase):
+class HTTPServerRequestTest(TestCase):
     def test_default_constructor(self):
         # All parameters are formally optional, but uri is required
         # (and has been for some time).  This test ensures that no
@@ -643,7 +642,7 @@ class HTTPServerRequestTest(unittest.TestCase):
         self.assertIn("Max number of fields exceeded", str(cm.exception))
 
 
-class ParseRequestStartLineTest(unittest.TestCase):
+class ParseRequestStartLineTest(TestCase):
     METHOD = "GET"
     PATH = "/foo"
     VERSION = "HTTP/1.1"
@@ -656,7 +655,7 @@ class ParseRequestStartLineTest(unittest.TestCase):
         self.assertEqual(parsed_start_line.version, self.VERSION)
 
 
-class ParseCookieTest(unittest.TestCase):
+class ParseCookieTest(TestCase):
     # These tests copied from Django:
     # https://github.com/django/django/pull/6277/commits/da810901ada1cae9fc1f018f879f11a7fb467b28
     def test_python_cookies(self):
