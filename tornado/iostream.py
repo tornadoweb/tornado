@@ -579,7 +579,18 @@ class BaseIOStream:
                         self.error = exc_info[1]
             if self._read_until_close:
                 self._read_until_close = False
-                self._finish_read(self._read_buffer_size)
+                if self.error is None or self._is_connreset(self.error):
+                    # A connection reset is treated as a normal close
+                    # throughout this class (on some platforms, notably
+                    # windows, a peer that closes cleanly may still be
+                    # reported as a reset), so deliver the buffered data as
+                    # the result of the read.
+                    self._finish_read(self._read_buffer_size)
+                # Otherwise the stream is closing because of a real error, so
+                # leave the read future pending for _signal_closed() to fail
+                # with StreamClosedError(real_error=self.error). Resolving it
+                # with the buffered data would report a truncated result as if
+                # it were complete.
             elif self._read_future is not None:
                 # resolve reads that are pending and ready to complete
                 try:
@@ -875,8 +886,11 @@ class BaseIOStream:
             del buf
         if self._read_buffer_size > self.max_buffer_size:
             gen_log.error("Reached maximum read buffer size")
-            self.close()
-            raise StreamBufferFullError("Reached maximum read buffer size")
+            buffer_full_error = StreamBufferFullError(
+                "Reached maximum read buffer size"
+            )
+            self.close(exc_info=buffer_full_error)
+            raise buffer_full_error
         return bytes_read
 
     def _read_from_buffer(self, pos: int) -> None:
