@@ -14,6 +14,7 @@ from tornado.httputil import (
     HTTPServerRequest,
     ParseMultipartConfig,
     RequestStartLine,
+    _DEFAULT_PARSE_BODY_CONFIG,
     format_timestamp,
     parse_body_arguments,
     parse_cookie,
@@ -624,6 +625,22 @@ class HTTPServerRequestTest(unittest.TestCase):
             headers=HTTPHeaders({"Canary": ["Coal Mine"]}),
         )
         self.assertNotIn("Canary", repr(request))
+
+    def test_query_arguments_within_limit(self):
+        n = _DEFAULT_PARSE_BODY_CONFIG.urlencoded.max_arguments
+        uri = "/?" + "&".join("a=%d" % i for i in range(n))
+        request = HTTPServerRequest(start_line=RequestStartLine("GET", uri, "HTTP/1.0"))
+        self.assertEqual(len(request.arguments["a"]), n)
+
+    def test_max_query_arguments(self):
+        # The query string is subject to the same limit on the number of
+        # arguments as a urlencoded body: parsing is superlinear enough in
+        # the number of fields to be worth bounding.
+        n = _DEFAULT_PARSE_BODY_CONFIG.urlencoded.max_arguments + 1
+        uri = "/?" + "&".join("a=%d" % i for i in range(n))
+        with self.assertRaises(HTTPInputError) as cm:
+            HTTPServerRequest(start_line=RequestStartLine("GET", uri, "HTTP/1.0"))
+        self.assertIn("Max number of fields exceeded", str(cm.exception))
 
 
 class ParseRequestStartLineTest(unittest.TestCase):
