@@ -1,13 +1,19 @@
 import base64
 import binascii
+import contextlib
 import copy
 import datetime
+import functools
 import gzip
+import logging
 import subprocess
 import sys
 import threading
 import time
+import typing  # noqa: F401
 import unicodedata
+import unittest
+import zlib
 from contextlib import closing
 from io import BytesIO
 
@@ -25,9 +31,24 @@ from tornado.httputil import HTTPHeaders, format_timestamp
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado.log import app_log, gen_log
-from tornado.test.util import AsyncHTTPTestCase, TestCase, ignore_deprecation
+from tornado.test.util import (
+    AsyncHTTPTestCase,
+    TestCase,
+    abstract_base_test,
+    ignore_deprecation,
+)
 from tornado.testing import ExpectLog, bind_unused_port, gen_test
 from tornado.web import Application, RequestHandler, url
+
+try:
+    import tracemalloc
+except ImportError:
+    # Not available on pypy.
+    tracemalloc = None  # type: ignore
+
+skipIfNoTracemalloc = unittest.skipIf(
+    tracemalloc is None, "tracemalloc module not present"
+)
 
 
 class HelloWorldHandler(RequestHandler):
@@ -158,12 +179,108 @@ class EchoHeadersHandler(RequestHandler):
         self.write(json_encode(dict(self.request.headers.get_all())))
 
 
+# Decompressed size of the response served by `GzipBombHandler`. Kept below
+# every implementation's default ``max_body_size`` of 100MB so that a
+# streaming_callback can retrieve the whole thing; raising it past that limit
+# would turn this into a test of the limit instead (see
+# `HTTPClientMaxBodySizeTestCase`).
+GZIP_BOMB_SIZE = 64 * 1024 * 1024
+
+
+# Decompressed size of the bomb used for the buffered (no
+# streaming_callback) case. Larger than any implementation is willing to
+# hold in memory, so such a request cannot complete and can only be
+# refused.
+UNBUFFERABLE_BOMB_SIZE = 256 * 1024 * 1024
+
+
+@functools.lru_cache(maxsize=None)
+def gzip_bomb(size: int = GZIP_BOMB_SIZE) -> bytes:
+    """Returns a small gzip stream that expands to ``size`` bytes.
+
+    Compressed incrementally so that building it does not itself allocate
+    the decompressed size.
+    """
+    compressor = zlib.compressobj(9, zlib.DEFLATED, 16 + zlib.MAX_WBITS)
+    block = b"\0" * (1024 * 1024)
+    pieces = [compressor.compress(block) for _ in range(size // len(block))]
+    pieces.append(compressor.flush())
+    return b"".join(pieces)
+
+
+# A 421-byte brotli stream that expands to BROTLI_BOMB_SIZE bytes of zeros,
+# a ratio of ~637000:1 (deflate cannot exceed ~1032:1). Embedded as a
+# constant so that the test suite does not need a brotli module for Python.
+# Regenerate with:
+#     import base64, brotli
+#     base64.b64encode(brotli.compress(b"\0" * BROTLI_BOMB_SIZE, quality=11))
+BROTLI_BOMB_SIZE = 256 * 1024 * 1024
+BROTLI_BOMB = base64.b64decode(
+    "y///P/gnAOKxQCD3/o///3/wTwDEYRGA7v0f////4J8AiMMCAN37P/7//8E/ARCHBQC6"
+    "93/8//+DfwIgDgsAdO//+P//B/8EQBwWAOje//H//w/+CYA4LADQvf/j//8f/BMAcVgA"
+    "oHv/x///P/gnAOKwAED3/o///3/wTwDEYQGA7v0f////4J8AiMMCAN37P/7//8E/ARCH"
+    "BQC693/8//+DfwIgDgsAdO//+P//B/8EQBwWAOje//H//w/+CYA4LADQvf/j//8f/BMA"
+    "cVgAoHv/x///P/gnAOKwAED3/o///3/wTwDEYQGA7v0f////4J8AiMMCAN37P/7//8E/"
+    "ARCHBQC693/8//+DfwIgDgsAdO//+P//B/8EQBwWAOje//H//w/+CYA4LADQvf/j//8f"
+    "/BMAcVgAoHv/x///P/gnAOKwAED3/o///3/wTwDEYQGA7v0f////4J8AiMMCAN37P/7/"
+    "/8E/ARCHBQC693/8//+DfwIgDgsAdO//+P//B/8EQBwWAOje//H//w/+CYA4LADQvf/j"
+    "//8f/BMAcVgAoHv/Nw=="
+)
+
+
+@functools.lru_cache(maxsize=None)
+def large_body() -> bytes:
+    """Returns a body big enough to be delivered in several chunks.
+
+    The contents are non-repeating so that a chunk which was dropped,
+    duplicated or delivered out of order can be detected.
+    """
+    return b"".join(b"%09d\n" % i for i in range(100000))
+
+
+class GzipBombHandler(RequestHandler):
+    """Sends a small response that decompresses to a very large one."""
+
+    def get(self):
+        size = int(self.get_argument("size", str(GZIP_BOMB_SIZE)))
+        # Set Content-Encoding manually to avoid automatic gzip encoding.
+        self.set_header("Content-Encoding", "gzip")
+        self.write(gzip_bomb(size))
+
+
+class BrotliBombHandler(RequestHandler):
+    """Sends a brotli-encoded bomb that the client never asked for.
+
+    No client implementation requests brotli, but libcurl builds its decoder
+    from the ``Content-Encoding`` of the response without checking it against
+    what was requested, so ``curl_httpclient`` decodes this anyway.
+    """
+
+    def get(self):
+        self.set_header("Content-Encoding", "br")
+        self.write(BROTLI_BOMB)
+
+
+class LargeBodyHandler(RequestHandler):
+    def get(self):
+        # An incompressible content type, so that the server's gzip
+        # transform leaves the body alone and this exercises the plain
+        # streaming path.
+        self.set_header("Content-Type", "application/octet-stream")
+        self.write(large_body())
+
+
 # These tests end up getting run redundantly: once here with the default
 # HTTPClient implementation, and then again in each implementation's own
 # test suite.
 
 
 class HTTPClientCommonTestCase(AsyncHTTPTestCase):
+    # Set by subclasses whose client decodes ``Content-Encoding: br``. No
+    # implementation asks for brotli, so this is only true where the client
+    # decodes an encoding it did not request (see BrotliBombHandler).
+    decompresses_brotli = False
+
     def get_app(self):
         return Application(
             [
@@ -184,6 +301,9 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
                 url("/invalid_gzip", InvalidGzipHandler),
                 url("/header-encoding", HeaderEncodingHandler),
                 url("/echo_headers", EchoHeadersHandler),
+                url("/gzip_bomb", GzipBombHandler),
+                url("/brotli_bomb", BrotliBombHandler),
+                url("/large_body", LargeBodyHandler),
             ],
             gzip=True,
         )
@@ -224,6 +344,97 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         # with streaming_callback, data goes to the callback and not response.body
         self.assertEqual(chunks, [b"Hello world!"])
         self.assertFalse(response.body)
+
+    def test_streaming_callback_large_body(self):
+        # A body large enough to arrive in several chunks must reach the
+        # callback exactly once each, in order.
+        chunks: list[bytes] = []
+        response = self.fetch("/large_body", streaming_callback=chunks.append)
+        self.assertEqual(response.code, 200)
+        self.assertEqual(b"".join(chunks), large_body())
+        self.assertFalse(response.body)
+
+    @skipIfNoTracemalloc
+    def test_streaming_decompression_bomb(self):
+        # A malicious server can turn a small compressed response into an
+        # arbitrarily large decompressed one. With a streaming_callback it
+        # must be possible to consume the whole thing without the client
+        # buffering more than a bounded amount of it at a time.
+        gzip_bomb()  # Precompute so it isn't counted in the measurement.
+        received = 0
+
+        def streaming_callback(chunk):
+            nonlocal received
+            received += len(chunk)
+
+        tracemalloc.start()
+        try:
+            tracemalloc.reset_peak()
+            response = self.fetch("/gzip_bomb", streaming_callback=streaming_callback)
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+
+        self.assertEqual(response.code, 200)
+        self.assertEqual(received, GZIP_BOMB_SIZE)
+        self.assertFalse(response.body)
+        self.assertLess(peak, 16 * 1024 * 1024)
+
+    @skipIfNoTracemalloc
+    def test_decompression_bomb_without_streaming_callback(self):
+        # Without a streaming_callback the whole body has to be buffered, so
+        # a bomb this size cannot be retrieved at all. It has to be refused
+        # before it exhausts memory rather than buffered in full.
+        gzip_bomb(UNBUFFERABLE_BOMB_SIZE)  # Precompute.
+
+        tracemalloc.start()
+        try:
+            tracemalloc.reset_peak()
+            with (
+                self.assertRaises(HTTPError),
+                ExpectLog(gen_log, ".*decompressed body too large"),
+            ):
+                self.fetch(
+                    "/gzip_bomb?size=%d" % UNBUFFERABLE_BOMB_SIZE, raise_error=True
+                )
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+
+        # Well short of the decompressed size: the point is that the body
+        # was refused, not accumulated.
+        self.assertLess(peak, UNBUFFERABLE_BOMB_SIZE // 2)
+
+    @skipIfNoTracemalloc
+    def test_streaming_unsolicited_brotli_bomb(self):
+        # A client that decodes an encoding it did not request can be
+        # reached by a codec whose expansion ratio is hundreds of times
+        # deflate's. The transfer need not survive -- libcurl aborts it once
+        # its own pause buffer cannot hold the expansion -- but either way
+        # the expansion must not be buffered.
+        if not self.decompresses_brotli:
+            self.skipTest("client does not decompress Content-Encoding: br")
+        received = 0
+
+        def streaming_callback(chunk):
+            nonlocal received
+            received += len(chunk)
+
+        tracemalloc.start()
+        try:
+            tracemalloc.reset_peak()
+            try:
+                self.fetch("/brotli_bomb", streaming_callback=streaming_callback)
+            except HTTPError:
+                pass
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+
+        # More than was sent on the wire, i.e. the response really was
+        # decoded with an encoding we never asked for.
+        self.assertGreater(received, len(BROTLI_BOMB))
+        self.assertLess(peak, 16 * 1024 * 1024)
 
     def test_post(self):
         response = self.fetch("/post", method="POST", body="arg1=foo&arg2=bar")
@@ -1021,3 +1232,121 @@ class HTTPErrorTestCase(TestCase):
         e = cm.exception
         self.assertEqual(str(e), "HTTP 403: Forbidden")
         self.assertEqual(repr(e), "HTTP 403: Forbidden")
+
+
+# Limit used by `HTTPClientMaxBodySizeTestCase`. Subclasses configure their
+# client with it.
+MAX_BODY_SIZE = 1024 * 64
+
+
+class MaxBodySizeSmallHandler(RequestHandler):
+    def get(self):
+        self.set_header("Content-Type", "application/octet-stream")
+        self.write(b"a" * MAX_BODY_SIZE)
+
+
+class MaxBodySizeLargeHandler(RequestHandler):
+    def get(self):
+        self.set_header("Content-Type", "application/octet-stream")
+        self.write(b"a" * (MAX_BODY_SIZE + 1))
+
+
+class BodyBearingRedirectHandler(RequestHandler):
+    """A redirect carrying a body of its own, larger than the limit.
+
+    Implementations differ here: libcurl discards the body of a redirect it
+    follows, while simple_httpclient applies ``max_body_size`` to every
+    response including the redirect, and so refuses this one before
+    following it.
+    """
+
+    def prepare(self):
+        self.write("x" * (MAX_BODY_SIZE * 2))
+        self.redirect("/small")
+
+
+@abstract_base_test
+class HTTPClientMaxBodySizeTestCase(AsyncHTTPTestCase):
+    """Tests for the limit on a response body held in memory.
+
+    Without a ``streaming_callback`` the whole body is buffered, so a
+    response larger than the client is prepared to hold cannot be retrieved
+    at all -- it can only be refused. Subclasses supply a client configured
+    with `MAX_BODY_SIZE`.
+    """
+
+    # Format of the message the implementation logs to `.gen_log` when it
+    # refuses a body, or None if it does not log one. ``{reason}`` is filled
+    # in with why the body was refused.
+    refusal_log_format: str | None = None
+
+    def get_app(self):
+        return Application(
+            [
+                url("/small", MaxBodySizeSmallHandler),
+                url("/large", MaxBodySizeLargeHandler),
+                url("/bomb", GzipBombHandler),
+                url("/body_bearing_redirect", BodyBearingRedirectHandler),
+            ]
+        )
+
+    def assert_refused(self, path, reason, **fetch_kwargs):
+        with contextlib.ExitStack() as stack:
+            if self.refusal_log_format is not None:
+                stack.enter_context(
+                    ExpectLog(
+                        gen_log,
+                        self.refusal_log_format.format(reason=reason),
+                        level=logging.INFO,
+                    )
+                )
+            with self.assertRaises(HTTPError) as cm:
+                self.fetch(path, raise_error=True, **fetch_kwargs)
+        self.assertEqual(cm.exception.code, 599)
+
+    def assert_streaming_refused(self, path, reason):
+        received = 0
+
+        def streaming_callback(chunk):
+            nonlocal received
+            received += len(chunk)
+
+        self.assert_refused(path, reason=reason, streaming_callback=streaming_callback)
+        # Nothing past the limit reached the callback.
+        self.assertLessEqual(received, MAX_BODY_SIZE)
+
+    def test_small_body(self):
+        # A body of exactly max_body_size is accepted.
+        response = self.fetch("/small")
+        response.rethrow()
+        self.assertEqual(response.body, b"a" * MAX_BODY_SIZE)
+
+    def test_large_body(self):
+        # One byte more is not.
+        self.assert_refused("/large", reason="Content-Length too long")
+
+    def test_decompressed_body_size(self):
+        # The limit is measured after decompression, so a compressed
+        # response cannot expand past it.
+        self.assert_refused("/bomb", reason="decompressed body too large")
+
+    def test_streaming_callback_over_limit(self):
+        # max_body_size applies to a streaming_callback as well as to a
+        # buffered response. It is a safeguard for applications that do not
+        # impose a limit of their own on what they do with the chunks
+        # (writing them to disk, say), so retrieving a response larger than
+        # this means raising the limit deliberately.
+        self.assert_streaming_refused("/large", reason="Content-Length too long")
+
+    def test_streaming_callback_decompressed_over_limit(self):
+        # As above, measured after decompression.
+        self.assert_streaming_refused("/bomb", reason="decompressed body too large")
+
+    def test_reuse_after_refusal(self):
+        # Refusing a body must not leave the client unable to make the next
+        # request. This matters most for curl_httpclient, which reuses a
+        # pool of curl handles.
+        self.assert_refused("/large", reason="Content-Length too long")
+        response = self.fetch("/small")
+        response.rethrow()
+        self.assertEqual(response.body, b"a" * MAX_BODY_SIZE)
