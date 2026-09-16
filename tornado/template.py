@@ -194,6 +194,19 @@ To include a literal ``{{``, ``{%``, or ``{#`` in the output, escape them as
     Sets the whitespace mode for the remainder of the current file
     (or until the next ``{% whitespace %}`` directive). See
     `filter_whitespace` for available options. New in Tornado 4.3.
+
+Security Considerations
+-----------------------
+
+Tornado templates may include arbitrary Python code to be run in the
+server process, which means they should generally be controlled and
+deployed with the same security practices you would use for source code.
+
+Autoescaping is only performed when processing expressions using ``{{ }}``.
+Other template directives, including `{% module %}` does not perform
+autoescaping - it is the responsibility of the module to do its own
+escaping (which may be done automatically if the module uses ``render_string``
+and ``{{ }}``).
 """
 
 import datetime
@@ -448,7 +461,13 @@ class BaseLoader:
 
 
 class Loader(BaseLoader):
-    """A template loader that loads from a single root directory."""
+    """A template loader that loads from the filesystem.
+
+    The ``load()`` method accepts both absolute and relative paths,
+    with relative paths being resolved relative to the ``root_directory``.
+    Relative paths in other template directives (such as ``{% include %}``)
+    are resolved relative to the including file's directory.
+    """
 
     def __init__(self, root_directory: str, **kwargs: Any) -> None:
         super().__init__(**kwargs)
