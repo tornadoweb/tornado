@@ -1,3 +1,14 @@
+# Test cases for Tornado HTTPClients.
+#
+# Most tests in this file are methods on HTTPClientCommonTestCase. Tests in this class run more
+# than once: once with each HTTP client implementation, plus one more time with the default
+# HTTP client (which is normally redundant, unless this feature is being used to inject a
+# third-party HTTP implementation, as in the tornado_http2 package). Most tests should be
+# added as methods on HTTPClientCommonTestCase. Tests that are not a part of that class
+# will not be automatically run on all client implementations.
+#
+# Test cases that are for specific implementation details of one of the client implementations
+# should go into the respective test file (simple_httpclient_test.py, curl_httpclient_test.py).
 import base64
 import binascii
 import contextlib
