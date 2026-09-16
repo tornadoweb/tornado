@@ -203,7 +203,7 @@ server process, which means they should generally be controlled and
 deployed with the same security practices you would use for source code.
 
 Autoescaping is only performed when processing expressions using ``{{ }}``.
-Other template directives, including `{% module %}` does not perform
+Other template directives, including ``{% module %}`` do not perform
 autoescaping - it is the responsibility of the module to do its own
 escaping (which may be done automatically if the module uses ``render_string``
 and ``{{ }}``).
