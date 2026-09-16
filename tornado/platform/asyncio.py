@@ -42,7 +42,7 @@ from typing import (
     Union,
 )
 
-from tornado.gen import convert_yielded
+from tornado.gen import convert_yielded, _Yieldable
 from tornado.ioloop import IOLoop, _Selectable
 
 if typing.TYPE_CHECKING:
@@ -363,7 +363,7 @@ def to_tornado_future(asyncio_future: asyncio.Future) -> asyncio.Future:
     return asyncio_future
 
 
-def to_asyncio_future(tornado_future: asyncio.Future) -> asyncio.Future:
+def to_asyncio_future(tornado_future: _Yieldable) -> asyncio.Future:
     """Convert a Tornado yieldable object to an `asyncio.Future`.
 
     .. versionadded:: 4.1
