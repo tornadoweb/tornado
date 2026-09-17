@@ -3211,7 +3211,7 @@ class CheckSameOriginTest(SimpleHandlerTestCase):
         self.assertEqual(response.code, 200)
 
     def test_sec_fetch_site_fail(self):
-        with ExpectLog(gen_log, ".*Cross-origin request"):
+        with ExpectLog(gen_log, ".*Sec-Fetch-Site .* not allowed"):
             response = self._post({"Sec-Fetch-Site": "cross-site"})
         self.assertEqual(response.code, 403)
 
@@ -3224,7 +3224,7 @@ class CheckSameOriginTest(SimpleHandlerTestCase):
         self.assertEqual(response.code, 200)
 
     def test_fallback_fail(self):
-        with ExpectLog(gen_log, ".*Cross-origin request"):
+        with ExpectLog(gen_log, ".*Origin .* not allowed"):
             response = self._post({"Origin": "https://evil.example.com/"})
         self.assertEqual(response.code, 403)
 
