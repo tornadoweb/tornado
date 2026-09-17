@@ -200,13 +200,13 @@ XSRF, is a common problem for personalized web applications.
 
 Modern browsers send a header which the server can use to identify and block
 cross-site requests. Tornado from version 6.6 can check this for you, if you
-enable the application setting ``check_allowed_origin``:
+enable the application setting ``xsrf_protection``:
 
 .. testcode::
 
     settings = {
         "login_url": "/login",
-        "check_allowed_origin": True,
+        "xsrf_protection": True,
     }
     application = tornado.web.Application([
         (r"/", MainHandler),

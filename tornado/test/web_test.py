@@ -3201,7 +3201,7 @@ class CheckSameOriginTest(SimpleHandlerTestCase):
             self.write("ok")
 
     def get_app_kwargs(self):
-        return dict(check_allowed_origin=True)
+        return dict(xsrf_protection=True)
 
     def _post(self, headers):
         return self.fetch("/", method="POST", body="x=1", headers=headers)

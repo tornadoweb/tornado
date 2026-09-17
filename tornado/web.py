@@ -1695,7 +1695,7 @@ class RequestHandler:
     def _cross_origin_protection(self) -> None:
         if self.application.settings.get("xsrf_cookies"):
             self.check_xsrf_cookie()
-        if self.application.settings.get("check_allowed_origin"):
+        if self.application.settings.get("xsrf_protection"):
             match sfs := self.request.headers.get("sec-fetch-site"):
                 # hey, we can finally use this now!
                 case "same-origin" | "none":
