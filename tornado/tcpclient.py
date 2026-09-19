@@ -21,7 +21,7 @@ import numbers
 import socket
 import ssl
 from collections.abc import Callable, Iterator
-from typing import Any, Tuple
+from typing import Any, Tuple, Optional
 
 from tornado import gen
 from tornado.concurrent import Future, future_add_done_callback
@@ -219,6 +219,7 @@ class TCPClient:
         source_ip: str | None = None,
         source_port: int | None = None,
         timeout: float | datetime.timedelta | None = None,
+        on_phase_change: Optional[Callable[[str], None]] = None,
     ) -> IOStream:
         """Connect to the given host and port.
 
@@ -252,6 +253,10 @@ class TCPClient:
                 timeout = IOLoop.current().time() + timeout.total_seconds()
             else:
                 raise TypeError("Unsupported timeout %r" % timeout)
+
+        if on_phase_change:
+            on_phase_change("dns")
+
         if timeout is not None:
             addrinfo = await gen.with_timeout(
                 timeout, self.resolver.resolve(host, port, af)
@@ -267,6 +272,10 @@ class TCPClient:
                 source_port=source_port,
             ),
         )
+
+        if on_phase_change:
+            on_phase_change("tcp_connect")
+
         af, addr, stream = await connector.start(connect_timeout=timeout)
         # TODO: For better performance we could cache the (af, addr)
         # information here and re-use it on subsequent connections to
