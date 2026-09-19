@@ -23,7 +23,12 @@ from tornado.httputil import (
     url_concat,
 )
 from tornado.log import gen_log
-from tornado.test.util import TestCase, ignore_deprecation, skipIfEmulated
+from tornado.test.util import (
+    TestCase,
+    assert_linear_scaling,
+    ignore_deprecation,
+    skipIfEmulated,
+)
 
 
 def form_data_args() -> tuple[dict[str, list[bytes]], dict[str, list[HTTPFile]]]:
@@ -297,7 +302,6 @@ Foo
         # to the content-disposition header, specifically for semicolons within
         # quoted strings.
         def f(n):
-            start = time.perf_counter()
             message = (
                 b"--1234\r\nContent-Disposition: form-data; "
                 + b'x="'
@@ -308,13 +312,16 @@ Foo
             args: dict[str, list[bytes]] = {}
             files: dict[str, list[HTTPFile]] = {}
             parse_multipart_form_data(b"1234", message, args, files)
-            return time.perf_counter() - start
 
-        d1 = f(1_000)
-        # Note that headers larger than this are blocked by the default configuration.
-        d2 = f(10_000)
-        if d2 / d1 > 20:
-            self.fail(f"Disposition param parsing is not linear: {d1=} vs {d2=}")
+        # Note that headers larger than 10_000 are blocked by the default
+        # configuration.
+        assert_linear_scaling(
+            f,
+            1_000,
+            10_000,
+            max_ratio=20,
+            msg="Disposition param parsing is not linear",
+        )
 
     def test_multipart_config(self):
         boundary = b"1234"
@@ -543,18 +550,20 @@ Foo: even
 
     def test_linear_performance(self):
         def f(n):
-            start = time.perf_counter()
             headers = HTTPHeaders()
             for i in range(n):
                 headers.add("X-Foo", "bar")
-            return time.perf_counter() - start
 
-        # This runs under 50ms on my laptop as of 2025-12-09.
-        d1 = f(10_000)
-        d2 = f(100_000)
-        if d2 / d1 > 20:
-            # d2 should be about 10x d1 but allow a wide margin for variability.
-            self.fail(f"HTTPHeaders.add() does not scale linearly: {d1=} vs {d2=}")
+        # This runs under 50ms on my laptop as of 2025-12-09. The ratio
+        # between the two sizes should be about 10x, but allow a wide margin
+        # for variability.
+        assert_linear_scaling(
+            f,
+            10_000,
+            100_000,
+            max_ratio=20,
+            msg="HTTPHeaders.add() does not scale linearly",
+        )
 
 
 class FormatTimestampTest(TestCase):
