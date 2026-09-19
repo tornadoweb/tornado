@@ -635,7 +635,10 @@ class BaseIOStream:
                     self._ssl_connect_future.set_exception(self.error)
                 else:
                     self._ssl_connect_future.set_exception(StreamClosedError())
-            self._ssl_connect_future.exception()
+            try:
+                self._ssl_connect_future.exception()
+            except asyncio.CancelledError:
+                pass
             self._ssl_connect_future = None
         if self._close_callback is not None:
             cb = self._close_callback
@@ -1270,6 +1273,9 @@ class IOStream(BaseIOStream):
         ssl_stream._ssl_connect_future = future
         ssl_stream.max_buffer_size = self.max_buffer_size
         ssl_stream.read_chunk_size = self.read_chunk_size
+        future.add_done_callback(
+            lambda f: ssl_stream.close() if f.cancelled() else None
+        )
         return future
 
     def _handle_connect(self) -> None:
