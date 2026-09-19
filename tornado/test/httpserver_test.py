@@ -698,6 +698,22 @@ class XHeaderTest(HandlerBaseTestCase):
             "2620:0:1cfe:face:b00c::3",
         )
 
+        # Some load balancers (e.g. Fortigate) emit IPv6 in the RFC 3986
+        # bracketed URI form. The bracketed form should be accepted and
+        # unwrapped to the bare address.
+        bracketed_ipv6 = {"X-Forwarded-For": "[2620:0:1cfe:face:b00c::3]"}
+        self.assertEqual(
+            self.fetch_json("/", headers=bracketed_ipv6)["remote_ip"],
+            "2620:0:1cfe:face:b00c::3",
+        )
+        bracketed_ipv6_in_list = {
+            "X-Forwarded-For": "::1, [2620:0:1cfe:face:b00c::3]"
+        }
+        self.assertEqual(
+            self.fetch_json("/", headers=bracketed_ipv6_in_list)["remote_ip"],
+            "2620:0:1cfe:face:b00c::3",
+        )
+
         invalid_chars = {"X-Real-IP": "4.4.4.4<script>"}
         self.assertEqual(
             self.fetch_json("/", headers=invalid_chars)["remote_ip"], "127.0.0.1"

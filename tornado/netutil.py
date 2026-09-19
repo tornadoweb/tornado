@@ -293,12 +293,18 @@ def add_accept_handler(
 def is_valid_ip(ip: str) -> bool:
     """Returns ``True`` if the given string is a well-formed IP address.
 
-    Supports IPv4 and IPv6.
+    Supports IPv4 and IPv6. IPv6 addresses wrapped in ``[`` and ``]`` (as
+    used in URI references per RFC 3986) are also accepted.
     """
     if not ip or "\x00" in ip:
         # getaddrinfo resolves empty strings to localhost, and truncates
         # on zero bytes.
         return False
+    # Accept the RFC 3986 URI form for IPv6 addresses, e.g. "[::1]".
+    if len(ip) >= 2 and ip[0] == "[" and ip[-1] == "]":
+        ip = ip[1:-1]
+        if not ip:
+            return False
     try:
         res = socket.getaddrinfo(
             ip, 0, socket.AF_UNSPEC, socket.SOCK_STREAM, 0, socket.AI_NUMERICHOST

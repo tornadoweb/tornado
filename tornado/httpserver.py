@@ -346,6 +346,10 @@ class _HTTPRequestContext:
                 break
         ip = headers.get("X-Real-Ip", ip)
         if netutil.is_valid_ip(ip):
+            # Unwrap the RFC 3986 bracketed IPv6 form so the stored
+            # remote_ip is always the bare address.
+            if len(ip) >= 2 and ip[0] == "[" and ip[-1] == "]":
+                ip = ip[1:-1]
             self.remote_ip = ip
         # AWS uses X-Forwarded-Proto
         proto_header = headers.get(
