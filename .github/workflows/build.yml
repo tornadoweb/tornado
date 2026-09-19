@@ -87,7 +87,7 @@ jobs:
           platforms: ${{ matrix.arch }}
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v3.4.0
+        uses: pypa/cibuildwheel@v4.2.1
         env:
           CIBW_ARCHS: ${{ matrix.emulated && matrix.arch || '' }}
           # Increase timeouts for emulated archs
