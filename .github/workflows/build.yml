@@ -20,8 +20,8 @@ on:
 permissions: {}
 
 env:
-  # [[[cog cog.outl(f"python-version: '3.{default_python_minor}'")]]]
-  python-version: '3.13'
+  # [[[cog cog.outl(f"python-version: &python-version '3.{default_python_minor}'")]]]
+  python-version: &python-version '3.13'
   # [[[end]]]
 
 jobs:
@@ -102,6 +102,29 @@ jobs:
         with:
           name: artifacts-${{ matrix.os }}${{ matrix.name_suffix || '' }}
           path: ./wheelhouse/*.whl
+
+  downstream:
+    name: Downstream testbed
+    needs: [build_wheels, build_sdist]
+    # Only meaningful on the canonical repo; forks have no reason to spend an
+    # hour of CI on downstream suites.
+    if: github.repository == 'tornadoweb/tornado'
+    # Runs the test suites of the ten most popular packages that depend on
+    # tornado against the wheel this run just built. Because a called workflow
+    # shares this run, the testbed downloads that artifact directly rather than
+    # re-resolving a git ref -- so what the downstream suites import is exactly
+    # what we are about to publish.
+    #
+    # Deliberately NOT in upload_pypi's `needs`: this is a signal to read before
+    # pushing a tag, not a gate that a flaky downstream suite can use to wedge a
+    # release. build.yml already runs on release-branch pushes, which is the
+    # point at which there is still time to act on it.
+    uses: tornadoweb/tornado-testbed/.github/workflows/testbed.yml@main
+    with:
+      tornado_artifact: artifacts-ubuntu-24.04
+      python_version: *python-version
+    permissions:
+      contents: read
 
   upload_pypi_test:
     name: Upload to PyPI (test)
