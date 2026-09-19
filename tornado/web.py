@@ -181,6 +181,7 @@ class RequestHandler:
         "PATCH",
         "PUT",
         "OPTIONS",
+        "QUERY",
     )
 
     _template_loaders: dict[str, template.BaseLoader] = {}
@@ -264,6 +265,7 @@ class RequestHandler:
     patch: Callable[..., Awaitable[None] | None] = _unimplemented_method
     put: Callable[..., Awaitable[None] | None] = _unimplemented_method
     options: Callable[..., Awaitable[None] | None] = _unimplemented_method
+    query: Callable[..., Awaitable[None] | None] = _unimplemented_method
 
     def prepare(self) -> Awaitable[None] | None:
         """Called at the beginning of a request before  `get`/`post`/etc.
