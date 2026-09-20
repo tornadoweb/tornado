@@ -1,3 +1,4 @@
+import platform
 import socket
 import subprocess
 import sys
@@ -121,9 +122,24 @@ class TestMultiprocess(TestCase):
     # byte, so we don't have to worry about atomicity of the shared
     # stdout stream) and then exits.
     def run_subproc(self, code: str) -> tuple[str, str]:
+        args = [sys.executable, "-Werror::DeprecationWarning"]
+        if sys.platform == "darwin" and platform.machine() == "x86_64":
+            # os.fork() warns when the process is multi-threaded, but it asks
+            # the OS for the thread count, so OS-level threads that have no
+            # Python state are counted too. An x86_64 interpreter on macOS
+            # starts with a second such thread before any user code runs, so
+            # the warning says nothing about what tornado is doing:
+            #     arch -x86_64 python3.15 -Werror -c 'import os; os.fork()'
+            # fails, while the arm64 half of the same universal2 build passes.
+            # Reported as https://github.com/python/cpython/issues/157870; run
+            # that one-liner to check whether this is still needed. Ignore just
+            # that one message; every other DeprecationWarning stays fatal, and
+            # arm64 macOS keeps the strict check. A filter's message field
+            # matches the start of the warning text.
+            args.append("-Wignore:This process (pid=:DeprecationWarning")
         try:
             result = subprocess.run(
-                [sys.executable, "-Werror::DeprecationWarning"],
+                args,
                 capture_output=True,
                 input=code,
                 encoding="utf8",

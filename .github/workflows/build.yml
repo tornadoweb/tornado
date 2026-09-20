@@ -82,21 +82,16 @@ jobs:
 
       - name: Set up QEMU
         if: matrix.emulated
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
         with:
           platforms: ${{ matrix.arch }}
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v3.4.0
+        uses: pypa/cibuildwheel@v4.2.1
         env:
           CIBW_ARCHS: ${{ matrix.emulated && matrix.arch || '' }}
           # Increase timeouts for emulated archs
           CIBW_ENVIRONMENT: ${{ matrix.emulated && 'ASYNC_TEST_TIMEOUT=30 EMULATION=1' || '' }}
-
-      - name: Audit ABI3 compliance
-        # This may be moved into cibuildwheel itself in the future. See
-        # https://github.com/pypa/cibuildwheel/issues/1342
-        run: python -m pip install abi3audit && abi3audit --verbose --summary ./wheelhouse/*abi3*.whl
 
       - uses: actions/upload-artifact@v7
         with:
