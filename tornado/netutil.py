@@ -18,6 +18,7 @@
 import asyncio
 import concurrent.futures
 import errno
+import functools
 import os
 import socket
 import ssl
@@ -30,14 +31,32 @@ from tornado.concurrent import dummy_executor, run_on_executor
 from tornado.ioloop import IOLoop
 from tornado.util import Configurable, errno_from_exception
 
+
 # Note that the naming of ssl.Purpose is confusing; the purpose
 # of a context is to authenticate the opposite side of the connection.
-_client_ssl_defaults = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-_server_ssl_defaults = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-if hasattr(ssl, "OP_NO_COMPRESSION"):
-    # See netutil.ssl_options_to_context
-    _client_ssl_defaults.options |= ssl.OP_NO_COMPRESSION
-    _server_ssl_defaults.options |= ssl.OP_NO_COMPRESSION
+#
+# These are created lazily (rather than at import time) because
+# ssl.create_default_context() loads the platform's default certificate
+# store, which on some platforms (e.g. macOS) may start background
+# threads. Creating these contexts eagerly at import time could leave
+# such threads running at a call to os.fork() (e.g. in
+# tornado.process.fork_processes), which is unsafe.
+@functools.lru_cache(maxsize=1)
+def _client_ssl_defaults() -> ssl.SSLContext:
+    ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+    if hasattr(ssl, "OP_NO_COMPRESSION"):
+        # See netutil.ssl_options_to_context
+        ctx.options |= ssl.OP_NO_COMPRESSION
+    return ctx
+
+
+@functools.lru_cache(maxsize=1)
+def _server_ssl_defaults() -> ssl.SSLContext:
+    ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    if hasattr(ssl, "OP_NO_COMPRESSION"):
+        ctx.options |= ssl.OP_NO_COMPRESSION
+    return ctx
+
 
 # ThreadedResolver runs getaddrinfo on a thread. If the hostname is unicode,
 # getaddrinfo attempts to import encodings.idna. If this is done at
