@@ -1247,9 +1247,9 @@ class IOStream(BaseIOStream):
             raise ValueError("IOStream is not idle; cannot convert to SSL")
         if ssl_options is None:
             if server_side:
-                ssl_options = _server_ssl_defaults
+                ssl_options = _server_ssl_defaults()
             else:
-                ssl_options = _client_ssl_defaults
+                ssl_options = _client_ssl_defaults()
 
         socket = self.socket
         self.io_loop.remove_handler(socket)
@@ -1336,7 +1336,9 @@ class SSLIOStream(IOStream):
         `ssl.SSLContext` object or a dictionary of keywords arguments
         for `ssl.SSLContext.wrap_socket`
         """
-        self._ssl_options = kwargs.pop("ssl_options", _client_ssl_defaults)
+        self._ssl_options = kwargs.pop("ssl_options", None)
+        if self._ssl_options is None:
+            self._ssl_options = _client_ssl_defaults()
         super().__init__(*args, **kwargs)
         self._ssl_accepting = True
         self._handshake_reading = False
