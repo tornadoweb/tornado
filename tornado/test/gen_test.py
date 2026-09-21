@@ -753,7 +753,7 @@ class WithTimeoutTest(AsyncTestCase):
         with futures.ThreadPoolExecutor(1) as executor:
             with self.assertRaises(gen.TimeoutError):
                 yield gen.with_timeout(
-                    self.io_loop.time(), executor.submit(time.sleep, 1)
+                    self.io_loop.time(), executor.submit(time.sleep, 0.2)
                 )
 
     @gen_test
