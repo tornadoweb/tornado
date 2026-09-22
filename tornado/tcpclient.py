@@ -269,7 +269,7 @@ class TCPClient:
         )
         af, addr, stream = await connector.start(connect_timeout=timeout)
         # TODO: For better performance we could cache the (af, addr)
-        # information here and re-use it on subsequent connections to
+        # information here and reuse it on subsequent connections to
         # the same host. (http://tools.ietf.org/html/rfc6555#section-4.2)
         if ssl_options is not None:
             if timeout is not None:
