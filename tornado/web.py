@@ -3526,7 +3526,7 @@ def authenticated(
 
 
 class UIModule:
-    """A re-usable, modular UI unit on a page.
+    """A reusable, modular UI unit on a page.
 
     UI modules often execute additional queries, and they can include
     additional CSS and JavaScript that will be included in the output
