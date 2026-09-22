@@ -467,7 +467,7 @@ class HTTPServerRequest:
     .. deprecated:: 6.5.2
        The ``host`` argument to the ``HTTPServerRequest`` constructor is deprecated. Use
        ``headers["Host"]`` instead. This argument was mistakenly removed in Tornado 6.5.0 and
-       temporarily restored in 6.5.2.
+       temporarily restored in 6.5.2. It will be removed in Tornado 6.7.
 
     .. deprecated:: 6.6
        Creating a ``HTTPServerRequest`` with out a ``start_line`` argument is deprecated.
