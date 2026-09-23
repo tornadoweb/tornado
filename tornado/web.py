@@ -1697,6 +1697,50 @@ class RequestHandler:
             + '"/>'
         )
 
+    def _cross_origin_protection(self) -> None:
+        if self.application.settings.get("xsrf_cookies"):
+            self.check_xsrf_cookie()
+        if self.application.settings.get("xsrf_protection"):
+            match sfs := self.request.headers.get("sec-fetch-site"):
+                # hey, we can finally use this now!
+                case "same-origin" | "none":
+                    return
+                case None:
+                    if (origin := self.request.headers.get("origin")) is not None:
+                        if self._origin_matches_host(
+                            origin
+                        ) or self.check_allowed_origin(origin):
+                            return
+                        else:
+                            raise HTTPError(403, "Origin %r not allowed", origin)
+                    else:
+                        return  # probably non-browser client
+                case _:  # cross-site, same-site
+                    origin = self.request.headers.get("origin")
+                    if origin and self.check_allowed_origin(origin):
+                        return
+                    else:
+                        raise HTTPError(
+                            403,
+                            "Sec-Fetch-Site %s & origin %r not allowed",
+                            sfs,
+                            origin,
+                        )
+
+    def _origin_matches_host(self, origin: str) -> bool:
+        host = self.request.headers.get("Host")
+        return urllib.parse.urlsplit(origin).netloc == host
+
+    def check_allowed_origin(self, origin: str) -> bool:
+        """Check if a request should be allowed based on its origin
+
+        This is called for requests with an unsafe method that appear to be
+        cross-origin. By default, it checks if the origin is found in the
+        application setting ``allowed_origins``, but it may be overridden.
+        Return True to allow the request, or False to reject it.
+        """
+        return origin in self.application.settings.get("allowed_origins", [])
+
     def static_url(
         self, path: str, include_host: bool | None = None, **kwargs: Any
     ) -> str:
@@ -1831,14 +1875,9 @@ class RequestHandler:
             self.path_kwargs = {
                 k: self.decode_argument(v, name=k) for (k, v) in kwargs.items()
             }
-            # If XSRF cookies are turned on, reject form submissions without
-            # the proper cookie
-            if self.request.method not in (
-                "GET",
-                "HEAD",
-                "OPTIONS",
-            ) and self.application.settings.get("xsrf_cookies"):
-                self.check_xsrf_cookie()
+            # XSRF checks (if enabled) - header based & cookie based
+            if self.request.method not in ("GET", "HEAD", "OPTIONS"):
+                self._cross_origin_protection()
 
             result = self.prepare()
             if result is not None:
