@@ -635,7 +635,10 @@ class BaseIOStream:
                     self._ssl_connect_future.set_exception(self.error)
                 else:
                     self._ssl_connect_future.set_exception(StreamClosedError())
-            self._ssl_connect_future.exception()
+            try:
+                self._ssl_connect_future.exception()
+            except asyncio.CancelledError:
+                pass
             self._ssl_connect_future = None
         if self._close_callback is not None:
             cb = self._close_callback
@@ -1201,7 +1204,7 @@ class IOStream(BaseIOStream):
         server_side: bool,
         ssl_options: dict[str, Any] | ssl.SSLContext | None = None,
         server_hostname: str | None = None,
-    ) -> Awaitable["SSLIOStream"]:
+    ) -> "Future[SSLIOStream]":
         """Convert this `IOStream` to an `SSLIOStream`.
 
         This enables protocols that begin in clear-text mode and
@@ -1235,6 +1238,10 @@ class IOStream(BaseIOStream):
            SSL certificates are validated by default; pass
            ``ssl_options=dict(cert_reqs=ssl.CERT_NONE)`` or a
            suitably-configured `ssl.SSLContext` to disable.
+
+        .. versionchanged:: 6.6
+           Cancelling the returned `.Future` before the handshake completes
+           now closes the new stream and its socket.
         """
         if (
             self._read_future
@@ -1270,6 +1277,13 @@ class IOStream(BaseIOStream):
         ssl_stream._ssl_connect_future = future
         ssl_stream.max_buffer_size = self.max_buffer_size
         ssl_stream.read_chunk_size = self.read_chunk_size
+        # The socket now belongs to ssl_stream, which the caller can't see
+        # until the handshake completes. If the caller gives up (e.g. on a
+        # timeout) and cancels the future, close the stream so the socket
+        # is not leaked.
+        future.add_done_callback(
+            lambda f: ssl_stream.close() if f.cancelled() else None
+        )
         return future
 
     def _handle_connect(self) -> None:

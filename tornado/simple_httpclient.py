@@ -325,19 +325,22 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 timeout = self.request.request_timeout
             else:
                 timeout = 0
-            if timeout:
-                self._timeout = self.io_loop.add_timeout(
-                    self.start_time + timeout,
-                    functools.partial(self._on_timeout, "while connecting"),
+            try:
+                stream = await self.tcp_client.connect(
+                    host,
+                    port,
+                    af=af,
+                    ssl_options=ssl_options,
+                    max_buffer_size=self.max_buffer_size,
+                    source_ip=source_ip,
+                    timeout=(
+                        self.start_time + timeout - self.io_loop.time()
+                        if timeout
+                        else None
+                    ),
                 )
-            stream = await self.tcp_client.connect(
-                host,
-                port,
-                af=af,
-                ssl_options=ssl_options,
-                max_buffer_size=self.max_buffer_size,
-                source_ip=source_ip,
-            )
+            except gen.TimeoutError:
+                raise HTTPTimeoutError("Timeout while connecting") from None
 
             if self.final_callback is None:
                 # final_callback is cleared if we've hit our timeout.

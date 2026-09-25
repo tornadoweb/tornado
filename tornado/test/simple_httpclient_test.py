@@ -28,15 +28,17 @@ from tornado.httpserver import HTTPServer
 from tornado.http1connection import _MAX_1XX_RESPONSES
 from tornado.httputil import HTTPHeaders, ResponseStartLine
 from tornado.ioloop import IOLoop
-from tornado.iostream import UnsatisfiableReadError
+from tornado.iostream import IOStream, UnsatisfiableReadError
 from tornado.locks import Event
 from tornado.log import gen_log
 from tornado.netutil import Resolver, bind_sockets
+from tornado.queues import Queue
 from tornado.simple_httpclient import (
     HTTPStreamClosedError,
     HTTPTimeoutError,
     SimpleAsyncHTTPClient,
 )
+from tornado.tcpserver import TCPServer
 from tornado.test import httpclient_test
 from tornado.test.httpclient_test import (
     ChunkHandler,
@@ -894,6 +896,40 @@ class ResolveTimeoutTestCase(AsyncHTTPTestCase):
         # Let the hanging coroutine clean up after itself
         self.cleanup_event.set()
         self.io_loop.run_sync(lambda: gen.sleep(0))
+
+
+class TLSHandshakeTimeoutTestCase(AsyncTestCase):
+    # The server accepts the connection but never responds to the TLS
+    # handshake. The client's socket must be closed when the connect
+    # timeout expires (#2785).
+    @gen_test
+    def test_tls_handshake_timeout(self):
+        [listener] = bind_sockets(0, "127.0.0.1", socket.AF_INET)
+        port = listener.getsockname()[1]
+        streams: Queue[IOStream] = Queue()
+
+        class SilentServer(TCPServer):
+            def handle_stream(self, stream, address):
+                streams.put(stream)
+
+        server = SilentServer()
+        server.add_sockets([listener])
+        try:
+            with closing(SimpleAsyncHTTPClient(force_instance=True)) as client:
+                # The timeout must be long enough for the TCP connection to
+                # be established (which can be slow on windows), so that it
+                # expires during the TLS handshake.
+                with self.assertRaises(HTTPTimeoutError):
+                    yield client.fetch(
+                        "https://127.0.0.1:%d/" % port,
+                        connect_timeout=0.5,
+                        validate_cert=False,
+                    )
+            server_stream = yield streams.get()
+            # This only completes once the client has closed its socket.
+            yield server_stream.read_until_close()
+        finally:
+            server.stop()
 
 
 class MaxHeaderSizeTest(AsyncHTTPTestCase):
