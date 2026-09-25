@@ -1126,6 +1126,28 @@ class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
         )
         self.assertEqual(json_decode(response.body), {"foo": ["bar"]})
 
+    def test_gzip_concatenated(self):
+        response = self.fetch(
+            "/",
+            method="POST",
+            body=gzip.compress(b"foo=") + gzip.compress(b"bar"),
+            headers={"Content-Encoding": "gzip"},
+        )
+        self.assertEqual(json_decode(response.body), {"foo": ["bar"]})
+
+    def test_gzip_invalid(self):
+        body = gzip.compress(b"foo=bar")
+        for invalid in [body + b"\0", body[:-1]]:
+            with self.subTest(invalid=invalid):
+                with ExpectLog(gen_log, ".*invalid gzip data", level=logging.INFO):
+                    response = self.fetch(
+                        "/",
+                        method="POST",
+                        body=invalid,
+                        headers={"Content-Encoding": "gzip"},
+                    )
+                self.assertEqual(response.code, 400)
+
     def test_size_limit(self):
         with ExpectLog(gen_log, ".*decompressed body too large", level=logging.INFO):
             self.post_gzip("x" * 101)
