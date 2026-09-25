@@ -99,10 +99,12 @@ class _Connector:
         timeout: float = _INITIAL_CONNECT_TIMEOUT,
         connect_timeout: float | datetime.timedelta | None = None,
     ) -> "Future[Tuple[socket.AddressFamily, Any, IOStream]]":
-        self.try_connect(iter(self.primary_addrs))
+        # Set the timeouts first: try_connect may fail synchronously, and
+        # on_connect_done will then skip ahead to the secondary addresses.
         self.set_timeout(timeout)
         if connect_timeout is not None:
             self.set_connect_timeout(connect_timeout)
+        self.try_connect(iter(self.primary_addrs))
         return self.future
 
     def try_connect(self, addrs: Iterator[tuple[socket.AddressFamily, tuple]]) -> None:
@@ -117,8 +119,16 @@ class _Connector:
                     self.last_error or IOError("connection failed")
                 )
             return
-        stream, future = self.connect(af, addr)
-        self.streams.add(stream)
+        try:
+            stream, future = self.connect(af, addr)
+        except Exception as e:
+            # Report synchronous errors (e.g. an address family that is
+            # not supported on this system) through the same path as
+            # asynchronous ones, so we move on to the next address.
+            future = Future()
+            future.set_exception(e)
+        else:
+            self.streams.add(stream)
         future_add_done_callback(
             future, functools.partial(self.on_connect_done, addrs, af, addr)
         )
@@ -308,19 +318,12 @@ class TCPClient:
             # - 127.0.0.1 for IPv4
             # - ::1 for IPv6
         socket_obj = socket.socket(af)
-        if source_port_bind or source_ip_bind:
-            # If the user requires binding also to a specific IP/port.
-            try:
-                socket_obj.bind((source_ip_bind, source_port_bind))
-            except OSError:
-                socket_obj.close()
-                # Fail loudly if unable to use the IP/port.
-                raise
         try:
+            if source_port_bind or source_ip_bind:
+                # If the user requires binding also to a specific IP/port.
+                socket_obj.bind((source_ip_bind, source_port_bind))
             stream = IOStream(socket_obj, max_buffer_size=max_buffer_size)
-        except OSError as e:
-            fu: Future[IOStream] = Future()
-            fu.set_exception(e)
-            return stream, fu
-        else:
-            return stream, stream.connect(addr)
+        except BaseException:
+            socket_obj.close()
+            raise
+        return stream, stream.connect(addr)

@@ -189,6 +189,27 @@ class TCPClientTest(AsyncTestCase):
             source_ip="8.8.8.8",
         )
 
+    @gen_test
+    def test_source_ip_mixed_families(self):
+        # Binding an IPv4 source_ip on an IPv6 socket fails (as does creating
+        # the socket, if IPv6 is unsupported); fall back to the IPv4 address.
+        port = self.start_server(socket.AF_INET)
+
+        class MixedResolver(Resolver):
+            async def resolve(self, host, port, family=socket.AF_UNSPEC):
+                return [
+                    (socket.AF_INET6, ("::1", port, 0, 0)),
+                    (socket.AF_INET, ("127.0.0.1", port)),
+                ]
+
+        client = TCPClient(resolver=MixedResolver())
+        try:
+            stream = yield client.connect("localhost", port, source_ip="127.0.0.1")
+            with closing(stream):
+                self.assertEqual(stream.socket.family, socket.AF_INET)
+        finally:
+            client.close()
+
     def test_source_ip_success(self):
         """Success when trying to use the source IP Address '127.0.0.1'."""
         self.do_test_connect(socket.AF_INET, "127.0.0.1", source_ip="127.0.0.1")
@@ -252,6 +273,8 @@ class ConnectorTest(AsyncTestCase):
         ] = {}
         self.streams: dict[typing.Any, ConnectorTest.FakeStream] = {}
         self.addrinfo = [(AF1, "a"), (AF1, "b"), (AF2, "c"), (AF2, "d")]
+        # Addresses for which create_stream raises synchronously.
+        self.sync_failures: set[typing.Any] = set()
 
     def tearDown(self):
         # Unless explicitly checked (and popped) in the test, we shouldn't
@@ -261,6 +284,8 @@ class ConnectorTest(AsyncTestCase):
         super().tearDown()
 
     def create_stream(self, af, addr):
+        if addr in self.sync_failures:
+            raise OSError("sync failure for %s" % addr)
         stream = ConnectorTest.FakeStream()
         self.streams[addr] = stream
         future: Future[ConnectorTest.FakeStream] = Future()
@@ -378,6 +403,44 @@ class ConnectorTest(AsyncTestCase):
         self.assertFalse(future.done())
         self.resolve_connect(AF1, "b", False)
         self.assertRaises(IOError, future.result)
+
+    def test_sync_failure_first_address(self):
+        # A synchronous failure is treated like an immediate asynchronous
+        # one: move on to the next address and start the secondary family
+        # without waiting for the timeout.
+        self.sync_failures.add("a")
+        conn, future = self.start_connect(self.addrinfo)
+        self.assert_pending((AF1, "b"), (AF2, "c"))
+        self.resolve_connect(AF1, "b", True)
+        self.assertEqual(future.result(), (AF1, "b", self.streams["b"]))
+        self.resolve_connect(AF2, "c", True)
+        self.assertTrue(self.streams.pop("c").closed)
+
+    def test_sync_failure_whole_family(self):
+        # e.g. AF_INET6 sockets are not supported on this system.
+        self.sync_failures.update(["a", "b"])
+        conn, future = self.start_connect(self.addrinfo)
+        self.assert_pending((AF2, "c"))
+        self.resolve_connect(AF2, "c", True)
+        self.assertEqual(future.result(), (AF2, "c", self.streams["c"]))
+
+    def test_sync_failure_in_callback(self):
+        # Synchronous failures while starting the next attempt from a
+        # callback must not leave the connector hanging.
+        self.sync_failures.update(["b", "c", "d"])
+        conn, future = self.start_connect(self.addrinfo)
+        self.assert_pending((AF1, "a"))
+        self.resolve_connect(AF1, "a", False)
+        self.assert_pending()
+        with self.assertRaisesRegex(OSError, "sync failure"):
+            future.result()
+
+    def test_sync_failure_all(self):
+        self.sync_failures.update(["a", "b", "c", "d"])
+        conn, future = self.start_connect(self.addrinfo)
+        self.assert_pending()
+        with self.assertRaisesRegex(OSError, "sync failure"):
+            future.result()
 
     def test_one_family_timeout_after_connect_timeout(self):
         conn, future = self.start_connect([(AF1, "a"), (AF1, "b")])
