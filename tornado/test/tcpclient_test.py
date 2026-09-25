@@ -442,6 +442,17 @@ class ConnectorTest(AsyncTestCase):
         with self.assertRaisesRegex(OSError, "sync failure"):
             future.result()
 
+    def test_cancel(self):
+        conn, future = self.start_connect(self.addrinfo)
+        conn.on_timeout()
+        self.assert_pending((AF1, "a"), (AF2, "c"))
+        future.cancel()
+        # Run the loop to allow callbacks to be run.
+        self.io_loop.add_callback(self.stop)
+        self.wait()
+        self.assertTrue(self.streams.pop("a").closed)
+        self.assertTrue(self.streams.pop("c").closed)
+
     def test_one_family_timeout_after_connect_timeout(self):
         conn, future = self.start_connect([(AF1, "a"), (AF1, "b")])
         self.assert_pending((AF1, "a"))

@@ -105,6 +105,7 @@ class _Connector:
         if connect_timeout is not None:
             self.set_connect_timeout(connect_timeout)
         self.try_connect(iter(self.primary_addrs))
+        future_add_done_callback(self.future, self.on_future_done)
         return self.future
 
     def try_connect(self, addrs: Iterator[tuple[socket.AddressFamily, tuple]]) -> None:
@@ -163,6 +164,16 @@ class _Connector:
         else:
             self.streams.discard(stream)
             self.future.set_result((af, addr, stream))
+            self.close_streams()
+
+    def on_future_done(
+        self, future: "Future[Tuple[socket.AddressFamily, Any, IOStream]]"
+    ) -> None:
+        if future.cancelled():
+            # The caller gave up (e.g. asyncio.wait_for). Close any
+            # connection attempts that are still in progress instead of
+            # leaving them open until the OS gives up on them.
+            self.clear_timeouts()
             self.close_streams()
 
     def set_timeout(self, timeout: float) -> None:
