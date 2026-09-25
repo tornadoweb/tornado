@@ -1,4 +1,6 @@
 import datetime
+import gzip
+import random
 import re
 import sys
 import textwrap
@@ -9,6 +11,7 @@ from tornado.escape import utf8
 from tornado.util import (
     ArgReplacer,
     Configurable,
+    GzipDecompressor,
     exec_in,
     import_object,
     raise_exc_info,
@@ -18,8 +21,124 @@ from tornado.util import (
 
 
 import unittest
+import warnings
+import zlib
 
 from tornado.test.util import TestCase
+
+
+class GzipDecompressorTest(TestCase):
+    def members(self) -> list[bytes]:
+        return [
+            # Incompressible, so that members span many reads.
+            random.Random(0).randbytes(5000),
+            b"",
+            b"hello " * 2000,
+            b"x",
+        ]
+
+    def decompress(
+        self, data: bytes, read_size: int = 1024, max_length: int = 1024
+    ) -> bytes:
+        # Drive the decompressor the way _GzipMessageDelegate does.
+        decompressor = GzipDecompressor()
+        result = bytearray()
+        for i in range(0, len(data), read_size):
+            chunk = data[i : i + read_size]
+            while chunk:
+                output = decompressor.decompress(chunk, max_length)
+                self.assertLessEqual(len(output), max_length)
+                tail = decompressor.unconsumed_tail
+                self.assertTrue(output or len(tail) < len(chunk), "no progress")
+                chunk = tail
+                result += output
+        self.assertEqual(decompressor.flush(), b"")
+        return bytes(result)
+
+    def test_members(self):
+        streams = [gzip.compress(m) for m in self.members()]
+        cases = [streams[0], streams[2], b"".join(streams), b"".join(streams[1:])]
+        for data in cases:
+            for read_size in [1, 7, 100, 4096, len(data)]:
+                for max_length in [1, 100, 5000, 65536]:
+                    with self.subTest(
+                        len=len(data), read_size=read_size, max_length=max_length
+                    ):
+                        self.assertEqual(
+                            self.decompress(data, read_size, max_length),
+                            gzip.decompress(data),
+                        )
+
+    def test_member_ends_at_max_length(self):
+        # When the output of a member ends exactly at max_length, the next
+        # member must still be decompressed, even though the call that
+        # fills max_length may leave nothing more to read.
+        first = random.Random(0).randbytes(1000)
+        data = gzip.compress(first) + gzip.compress(b"second")
+        for max_length in [1000, 500, 100]:
+            for read_size in [len(data), 100]:
+                with self.subTest(max_length=max_length, read_size=read_size):
+                    self.assertEqual(
+                        self.decompress(data, read_size, max_length),
+                        first + b"second",
+                    )
+
+    def test_empty(self):
+        # A stream with no members, e.g. the body of a response to a HEAD request.
+        decompressor = GzipDecompressor()
+        self.assertEqual(decompressor.flush(), b"")
+
+    def test_trailing_data(self):
+        data = gzip.compress(b"hello")
+        for trailer in [b"\0", b"\0" * 16, b"\r\n", b"garbage", b"\x1f\x00"]:
+            for read_size in [1, 1024]:
+                with self.subTest(trailer=trailer, read_size=read_size):
+                    with self.assertRaises(zlib.error):
+                        self.decompress(data + trailer, read_size)
+
+    def test_truncated(self):
+        members = self.members()
+        first = gzip.compress(members[0])
+        second = gzip.compress(members[2])
+        for data in [
+            first[:-1],
+            first[: len(first) // 2],
+            first + second[:1],
+            first + second[:-1],
+        ]:
+            with self.subTest(len=len(data)):
+                with self.assertRaises(zlib.error):
+                    self.decompress(data)
+
+    def test_not_gzip(self):
+        for data in [b"<html>", zlib.compress(b"hello")]:
+            with self.subTest(data=data):
+                with self.assertRaises(zlib.error):
+                    self.decompress(data)
+
+    def test_flush_with_unconsumed_tail(self):
+        # A decompression bomb that the caller stops feeding back in after
+        # the first max_length bytes. flush must not decompress the rest.
+        compressor = zlib.compressobj(9, zlib.DEFLATED, 16 + zlib.MAX_WBITS)
+        block = b"\0" * (1024 * 1024)
+        bomb = b"".join(compressor.compress(block) for _ in range(16))
+        bomb += compressor.flush()
+        decompressor = GzipDecompressor()
+        self.assertEqual(len(decompressor.decompress(bomb, 1024)), 1024)
+        self.assertTrue(decompressor.unconsumed_tail)
+        with self.assertRaises(ValueError):
+            decompressor.flush()
+
+    def test_max_length_deprecated(self):
+        # Without max_length, all the members are decompressed in one call.
+        data = gzip.compress(b"hello") + gzip.compress(b" world")
+        decompressor = GzipDecompressor()
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            self.assertEqual(decompressor.decompress(data), b"hello world")
+        self.assertEqual(len(w), 1)
+        self.assertIs(w[0].category, DeprecationWarning)
+        self.assertEqual(decompressor.flush(), b"")
 
 
 class RaiseExcInfoTest(TestCase):

@@ -17,6 +17,7 @@ import asyncio
 import os
 import re
 import typing
+import warnings
 import zlib
 from collections.abc import Callable, Mapping, Sequence
 from inspect import getfullargspec
@@ -63,39 +64,140 @@ class GzipDecompressor:
 
     The interface is like that of `zlib.decompressobj` (without some of the
     optional arguments, but it understands gzip headers and checksums.
+
+    .. versionchanged:: 6.6
+
+       Streams containing multiple gzip members (as defined in :rfc:`1952`
+       section 2.2) are now decompressed in full; previously everything
+       after the first member was ignored. Any data after the last member
+       that is not the start of another member is now an error, as is a
+       stream that ends partway through a member.
     """
 
     def __init__(self) -> None:
+        # The decompressor for the member currently being read. It is None
+        # before the first member and between members, which are the only
+        # places the stream may validly end. (We can't create one up front
+        # and check its eof attribute instead, because a new decompressobj
+        # is not at eof, and an empty stream, such as the body of a
+        # response to a HEAD request, is valid, as it is for
+        # `gzip.decompress`.)
+        self._decompressobj: zlib._Decompress | None = None
+        # Input that has not been passed to ``_decompressobj``, because
+        # ``max_length`` cut a call short. This is what `unconsumed_tail`
+        # reports; callers must pass it back to `decompress`.
+        self._unconsumed_tail = b""
+
+    @staticmethod
+    def _new_decompressobj() -> "zlib._Decompress":
         # Magic parameter makes zlib module understand gzip header
         # http://stackoverflow.com/questions/1838699/how-can-i-decompress-a-gzip-stream-with-zlib
         # This works on cpython and pypy, but not jython.
-        self.decompressobj = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        return zlib.decompressobj(16 + zlib.MAX_WBITS)
 
     def decompress(self, value: bytes, max_length: int = 0) -> bytes:
         """Decompress a chunk, returning newly-available data.
 
-        Some data may be buffered for later processing; `flush` must
-        be called when there is no more input data to ensure that
-        all data was processed.
+        When there is no more input, call `flush` to check that the stream
+        was complete.
 
         If ``max_length`` is given, some input data may be left over
         in ``unconsumed_tail``; you must retrieve this value and pass
         it back to a future call to `decompress` if it is not empty.
+        A call may return less than ``max_length``, or nothing at all,
+        even though ``unconsumed_tail`` is not empty (for example, at the
+        end of one gzip member and the start of the next), so keep
+        calling `decompress` until ``unconsumed_tail`` is empty.
+
+        Raises `zlib.error` if the input is not valid gzip data.
+
+        .. deprecated:: 6.6
+
+           Calling this method without ``max_length`` (or with
+           ``max_length=0``) is deprecated, because a small input can
+           decompress to an arbitrarily large output. In Tornado 7.0,
+           ``max_length`` will be required.
         """
-        return self.decompressobj.decompress(value, max_length)
+        if not max_length:
+            warnings.warn(
+                "GzipDecompressor.decompress without max_length is deprecated",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        result = self._decompress(value, max_length)
+        if not max_length:
+            # Without a limit, callers expect all the output at once, so we
+            # can't leave the start of the next member in unconsumed_tail.
+            while self._unconsumed_tail:
+                result += self._decompress(self._unconsumed_tail, 0)
+        return result
+
+    def _decompress(self, value: bytes, max_length: int) -> bytes:
+        # Each call makes one call to zlib; the caller loops over
+        # unconsumed_tail. This follows `gzip.decompress`, except that the
+        # header, CRC and length are checked by zlib itself.
+        if not value:
+            # Don't start a member (or report it as truncated) without data.
+            self._unconsumed_tail = b""
+            return b""
+        if self._decompressobj is None:
+            # This is the start of a member. zlib would reject anything
+            # else too, but with a less helpful message. value may be a
+            # single byte, in which case zlib checks the second one when it
+            # arrives.
+            if not b"\x1f\x8b".startswith(value[:2]):
+                raise zlib.error("expected a gzip member, got %r" % value[:2])
+            self._decompressobj = self._new_decompressobj()
+        result = self._decompressobj.decompress(value, max_length)
+        if self._decompressobj.eof:
+            # The rest of the input is the next member (or an error), so
+            # the caller must pass it back just like input that max_length
+            # held back. It is in unused_data; unconsumed_tail may hold a
+            # stale copy of it (a CPython bug), so don't look at that.
+            self._unconsumed_tail = self._decompressobj.unused_data
+            self._decompressobj = None
+        else:
+            self._unconsumed_tail = self._decompressobj.unconsumed_tail
+        return result
 
     @property
     def unconsumed_tail(self) -> bytes:
         """Returns the unconsumed portion left over"""
-        return self.decompressobj.unconsumed_tail
+        return self._unconsumed_tail
 
     def flush(self) -> bytes:
-        """Return any remaining buffered data not yet returned by decompress.
+        """Signals the end of the input.
 
-        Also checks for errors such as truncated input.
+        Call this once, after the last call to `decompress`, to check that
+        the stream was complete. Raises `zlib.error` if the input ended
+        partway through a gzip member. Raises `ValueError` if
+        `unconsumed_tail` is not empty; it must be passed back to
+        `decompress` first.
+
+        Always returns an empty byte string, because `decompress` returns
+        all of the output. The return value is kept for compatibility with
+        `zlib.Decompress.flush`, whose interface this follows.
+
         No other methods may be called on this object after `flush`.
+
+        .. versionchanged:: 6.6
+
+           Previously, this decompressed any remaining ``unconsumed_tail``
+           with no limit on the size of the output, and it did not detect
+           truncated input.
         """
-        return self.decompressobj.flush()
+        if self._unconsumed_tail:
+            raise ValueError(
+                "unconsumed_tail must be passed to decompress before flush"
+            )
+        if self._decompressobj is not None:
+            # A member has started but not ended. zlib is not holding back
+            # output that flushing it would return: when max_length cuts it
+            # off, the rest of the member, which includes at least its
+            # 8-byte trailer, is left in unconsumed_tail, which is empty. So
+            # zlib stopped because it ran out of input.
+            raise zlib.error("incomplete or truncated gzip stream")
+        return b""
 
 
 def import_object(name: str) -> Any:

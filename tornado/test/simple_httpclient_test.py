@@ -10,8 +10,10 @@
 # implementation.
 import collections
 import errno
+import gzip
 import logging
 import os
+import random
 import re
 import socket
 import ssl
@@ -733,6 +735,64 @@ class HTTP1xxLimitTestCase(AsyncHTTPTestCase):
         ):
             with self.assertRaises(HTTPStreamClosedError):
                 self.fetch("/?num=%d" % (_MAX_1XX_RESPONSES + 1), raise_error=True)
+
+
+def gzip_members() -> list[bytes]:
+    # Each member is bigger than the connection's chunk_size (64KB), so that
+    # decompression goes through the max_length path of _GzipMessageDelegate.
+    # The first is incompressible, but seeded so that the handler and the
+    # test generate the same bytes without keeping them around.
+    return [random.Random(0).randbytes(100000), b"hello " * 20000]
+
+
+class GzipResponseHandler(RequestHandler):
+    def body(self, kind: str) -> bytes:
+        body = b"".join(gzip.compress(m) for m in gzip_members())
+        if kind == "truncated":
+            return body[:-1]
+        trailers = {
+            "concatenated": b"",
+            "trailing_nul": b"\0",
+            "trailing_garbage": b"garbage",
+        }
+        return body + trailers[kind]
+
+    def get(self, kind: str) -> None:
+        # Set Content-Encoding manually to avoid automatic gzip encoding.
+        self.set_header("Content-Encoding", "gzip")
+        self.write(self.body(kind))
+
+    def head(self, kind: str) -> None:
+        self.set_header("Content-Encoding", "gzip")
+        self.set_header("Content-Length", str(len(self.body(kind))))
+
+
+class GzipResponseTestCase(AsyncHTTPTestCase):
+    def get_http_client(self):
+        return SimpleAsyncHTTPClient(force_instance=True)
+
+    def get_app(self):
+        return Application([url("/(.*)", GzipResponseHandler)])
+
+    def test_concatenated(self):
+        response = self.fetch("/concatenated")
+        self.assertEqual(response.body, b"".join(gzip_members()))
+
+    def test_head(self):
+        response = self.fetch("/concatenated", method="HEAD")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"")
+
+    def test_invalid(self):
+        for kind in ["trailing_nul", "trailing_garbage", "truncated"]:
+            with self.subTest(kind=kind):
+                with ExpectLog(
+                    gen_log,
+                    "Malformed HTTP message from None: invalid gzip data",
+                    level=logging.INFO,
+                ):
+                    with self.assertRaises(HTTPStreamClosedError):
+                        self.fetch("/" + kind, raise_error=True)
 
 
 class HTTP204NoContentTestCase(AsyncHTTPTestCase):
