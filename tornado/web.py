@@ -1868,6 +1868,24 @@ class RequestHandler:
             if self._auto_finish and not self._finished:
                 self.finish()
         except (Exception, asyncio.CancelledError) as e:
+            task = asyncio.current_task()
+            if (
+                isinstance(e, asyncio.CancelledError)
+                and task is not None
+                and task.cancelling()
+            ):
+                # This handler's own task was cancelled (as opposed to the
+                # handler awaiting something else that was cancelled). This is
+                # not an error to be logged, but send a response so the
+                # connection is not left hanging, then let the cancellation
+                # propagate.
+                result = None
+                if not self._finished:
+                    try:
+                        self.send_error(500)
+                    except Exception:
+                        app_log.error("Exception in exception handler", exc_info=True)
+                raise
             try:
                 self._handle_request_exception(e)
             except Exception:
@@ -1875,10 +1893,10 @@ class RequestHandler:
             finally:
                 # Unset result to avoid circular references
                 result = None
+        finally:
             if self._prepared_future is not None and not self._prepared_future.done():
                 # In case we failed before setting _prepared_future, do it
-                # now (to unblock the HTTP server).  Note that this is not
-                # in a finally block to avoid GC issues prior to Python 3.4.
+                # now (to unblock the HTTP server).
                 self._prepared_future.set_result(None)
 
     def data_received(self, chunk: bytes) -> Awaitable[None] | None:
@@ -2512,7 +2530,7 @@ class _HandlerDelegate(httputil.HTTPMessageDelegate):
         fut = gen.convert_yielded(
             self.handler._execute(transforms, *self.path_args, **self.path_kwargs)
         )
-        fut.add_done_callback(lambda f: f.result())
+        fut.add_done_callback(lambda f: f.cancelled() or f.result())
         # If we are streaming the request body, then execute() is finished
         # when the handler has prepared to receive the body.  If not,
         # it doesn't matter when execute() finishes (so we return None)

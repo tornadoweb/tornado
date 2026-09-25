@@ -1191,6 +1191,94 @@ class ErrorResponseTest(WebTestCase):
         self.assertEqual(response.code, 500)
 
 
+class CancellationTest(WebTestCase):
+    def get_handlers(self):
+        test = self
+
+        def cancelled_future():
+            fut: Future[None] = Future()
+            fut.cancel()
+            return fut
+
+        class AwaitCancelledHandler(RequestHandler):
+            async def get(self):
+                await cancelled_future()
+
+        class GenAwaitCancelledHandler(RequestHandler):
+            @gen.coroutine
+            def get(self):
+                yield cancelled_future()
+
+        @stream_request_body
+        class StreamingAwaitCancelledHandler(RequestHandler):
+            async def prepare(self):
+                await cancelled_future()
+
+            def data_received(self, chunk):
+                pass
+
+            def put(self):
+                pass
+
+        class CancelledTaskHandler(RequestHandler):
+            async def get(self):
+                test.handler_task = asyncio.current_task()
+                test.handler_started.set()
+                await Future()
+
+        return [
+            url("/await_cancelled", AwaitCancelledHandler),
+            url("/gen_await_cancelled", GenAwaitCancelledHandler),
+            url("/streaming_await_cancelled", StreamingAwaitCancelledHandler),
+            url("/cancelled_task", CancelledTaskHandler),
+        ]
+
+    def setUp(self):
+        super().setUp()
+        self.handler_task: asyncio.Task | None = None
+        self.handler_started = Event()
+
+    # A handler that awaits something that was cancelled gets the usual
+    # error handling for an uncaught exception.
+    def test_await_cancelled(self):
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = self.fetch("/await_cancelled", request_timeout=1.0)
+        self.assertEqual(response.code, 500)
+
+    def test_gen_await_cancelled(self):
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = self.fetch("/gen_await_cancelled", request_timeout=1.0)
+        self.assertEqual(response.code, 500)
+
+    def test_streaming_await_cancelled(self):
+        with ExpectLog(app_log, "Uncaught exception"):
+            # Use expect_100_continue so the body is not sent. Otherwise the
+            # server closes the connection with the body unread, which causes
+            # a connection reset that can discard the response on windows.
+            response = self.fetch(
+                "/streaming_await_cancelled",
+                method="PUT",
+                body=b"a" * 100000,
+                expect_100_continue=True,
+                request_timeout=1.0,
+            )
+        self.assertEqual(response.code, 500)
+
+    @gen_test
+    async def test_cancelled_task(self):
+        # If the handler's own task is cancelled, a response is sent without
+        # logging an error, and the task finishes as cancelled.
+        response_future = self.http_client.fetch(
+            self.get_url("/cancelled_task"), request_timeout=1.0, raise_error=False
+        )
+        await self.handler_started.wait()
+        assert self.handler_task is not None
+        self.handler_task.cancel()
+        response = await response_future
+        self.assertEqual(response.code, 500)
+        self.assertTrue(self.handler_task.cancelled())
+
+
 class StaticFileTest(WebTestCase):
     # The expected SHA-512 hash of robots.txt, used in tests that call
     # StaticFileHandler.get_version
