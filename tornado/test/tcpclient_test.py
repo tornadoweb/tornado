@@ -12,6 +12,7 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+import asyncio
 import getpass
 import socket
 import ssl
@@ -137,18 +138,46 @@ class TCPClientTest(AsyncTestCase):
         with self.assertRaises(IOError):
             yield self.client.connect("127.0.0.1", port)
 
-    @gen_test
-    def test_connect_tls_timeout_cancels_and_closes_stream(self):
-        port = self.start_server(socket.AF_INET)
+    def tls_context(self):
         context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
         context.check_hostname = False
         context.verify_mode = ssl.CERT_NONE
+        return context
+
+    # In the following tests the server accepts the connection but never
+    # responds to the TLS handshake. The client's socket must be closed when
+    # the connection attempt is abandoned (#3614). The server's
+    # read_until_close only completes once the client has closed it.
+
+    @gen_test
+    def test_connect_tls_timeout_closes_stream(self):
+        port = self.start_server(socket.AF_INET)
         with self.assertRaises(TimeoutError):
             yield self.client.connect(
-                "127.0.0.1", port, ssl_options=context, timeout=0.05
+                "127.0.0.1", port, ssl_options=self.tls_context(), timeout=0.05
             )
+        assert self.server is not None
         server_stream = yield self.server.queue.get()
-        server_stream.close()
+        yield server_stream.read_until_close()
+
+    @gen_test
+    def test_connect_tls_cancel_closes_stream(self):
+        port = self.start_server(socket.AF_INET)
+        for timeout in [None, 3600]:
+            with self.subTest(timeout=timeout):
+                with self.assertRaises(asyncio.TimeoutError):
+                    yield asyncio.wait_for(
+                        self.client.connect(
+                            "127.0.0.1",
+                            port,
+                            ssl_options=self.tls_context(),
+                            timeout=timeout,
+                        ),
+                        0.05,
+                    )
+                assert self.server is not None
+                server_stream = yield self.server.queue.get()
+                yield server_stream.read_until_close()
 
     def test_source_ip_fail(self):
         """Fail when trying to use the source IP Address '8.8.8.8'."""

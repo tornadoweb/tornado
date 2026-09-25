@@ -1154,10 +1154,14 @@ class TestIOStreamStartTLS(AsyncTestCase):
 
     @gen_test
     def test_start_tls_cancellation(self):
+        # The server never responds to the handshake. Cancelling the client's
+        # start_tls future must close the underlying socket (#3614).
         client_future = self.client_start_tls(dict(cert_reqs=ssl.CERT_NONE))
         client_future.cancel()
-        yield gen.moment
         self.assertTrue(client_future.cancelled())
+        # read_until_close only completes if the client's socket was closed.
+        assert self.server_stream is not None
+        yield self.server_stream.read_until_close()
 
     @gen_test
     def test_typed_memoryview(self):

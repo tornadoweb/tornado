@@ -275,14 +275,17 @@ class TCPClient:
             tls_future = stream.start_tls(
                 False, ssl_options=ssl_options, server_hostname=host
             )
-            if timeout is not None:
-                try:
+            try:
+                if timeout is not None:
                     stream = await gen.with_timeout(timeout, tls_future)
-                except Exception:
-                    tls_future.cancel()
-                    raise
-            else:
-                stream = await tls_future
+                else:
+                    stream = await tls_future
+            finally:
+                # If we're exiting early (timeout or cancellation), cancel
+                # the handshake so the new SSLIOStream (which now owns the
+                # socket) is closed. with_timeout does not do this for us.
+                # This is a no-op if the handshake has already completed.
+                tls_future.cancel()
         return stream
 
     def _create_stream(
