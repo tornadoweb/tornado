@@ -84,6 +84,24 @@ class ErrorInOnMessageHandler(TestWebSocketHandler):
         1 / 0
 
 
+class ErrorInAsyncOnMessageHandler(TestWebSocketHandler):
+    async def on_message(self, message):
+        await asyncio.sleep(0)
+        1 / 0
+
+
+class CancelledInOnMessageHandler(TestWebSocketHandler):
+    def on_message(self, message):
+        raise asyncio.CancelledError()
+
+
+class CancelledInAsyncOnMessageHandler(TestWebSocketHandler):
+    async def on_message(self, message):
+        fut: Future[None] = Future()
+        fut.cancel()
+        await fut
+
+
 class HeaderHandler(TestWebSocketHandler):
     def open(self):
         methods_to_test = [
@@ -264,6 +282,21 @@ class WebSocketTest(WebSocketBaseTestCase):
                     dict(close_future=self.close_future),
                 ),
                 (
+                    "/error_in_async_on_message",
+                    ErrorInAsyncOnMessageHandler,
+                    dict(close_future=self.close_future),
+                ),
+                (
+                    "/cancelled_in_on_message",
+                    CancelledInOnMessageHandler,
+                    dict(close_future=self.close_future),
+                ),
+                (
+                    "/cancelled_in_async_on_message",
+                    CancelledInAsyncOnMessageHandler,
+                    dict(close_future=self.close_future),
+                ),
+                (
                     "/async_prepare",
                     AsyncPrepareHandler,
                     dict(close_future=self.close_future),
@@ -387,6 +420,35 @@ class WebSocketTest(WebSocketBaseTestCase):
         with ExpectLog(app_log, "Uncaught exception"):
             response = yield ws.read_message()
         self.assertIsNone(response)
+        # on_close is still called.
+        yield self.close_future
+
+    @gen_test
+    def test_error_in_async_on_message(self):
+        ws = yield self.ws_connect("/error_in_async_on_message")
+        ws.write_message("hello")
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = yield ws.read_message()
+        self.assertIsNone(response)
+        yield self.close_future
+
+    @gen_test
+    def test_cancelled_in_on_message(self):
+        ws = yield self.ws_connect("/cancelled_in_on_message")
+        ws.write_message("hello")
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = yield ws.read_message()
+        self.assertIsNone(response)
+        yield self.close_future
+
+    @gen_test
+    def test_cancelled_in_async_on_message(self):
+        ws = yield self.ws_connect("/cancelled_in_async_on_message")
+        ws.write_message("hello")
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = yield ws.read_message()
+        self.assertIsNone(response)
+        yield self.close_future
 
     @gen_test
     def test_websocket_http_fail(self):
