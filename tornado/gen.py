@@ -205,7 +205,14 @@ def coroutine(
             result = ctx_run(func, *args, **kwargs)
         except (Return, StopIteration) as e:
             result = _value_from_stopiteration(e)
-        except Exception:
+        except (Exception, asyncio.CancelledError):
+            # asyncio.CancelledError is a BaseException in Python <3.8 and
+            # changed to inherit from Exception in 3.8+. We catch it
+            # explicitly here so that an asyncio cancellation of the wrapped
+            # function surfaces on the returned future (matching the
+            # behavior of coroutine-created tasks) rather than escaping
+            # the wrapper and silently breaking the IOLoop callback chain.
+            # See https://github.com/tornadoweb/tornado/issues/3537
             future_set_exc_info(future, sys.exc_info())
             try:
                 return future
@@ -225,7 +232,8 @@ def coroutine(
                     future_set_result_unless_cancelled(
                         future, _value_from_stopiteration(e)
                     )
-                except Exception:
+                except (Exception, asyncio.CancelledError):
+                    # Same as above: see https://github.com/tornadoweb/tornado/issues/3537
                     future_set_exc_info(future, sys.exc_info())
                 else:
                     # Provide strong references to Runner objects as long
@@ -765,10 +773,14 @@ class Runner:
                 try:
                     try:
                         value = future.result()
-                    except Exception as e:
+                    except (Exception, asyncio.CancelledError) as e:
                         # Save the exception for later. It's important that
                         # gen.throw() not be called inside this try/except block
                         # because that makes sys.exc_info behave unexpectedly.
+                        # asyncio.CancelledError is caught here so that
+                        # cancellation of a yielded future surfaces on
+                        # result_future rather than being silently dropped
+                        # when the generator is resumed. See tornado #3537.
                         exc: Exception | None = e
                     else:
                         exc = None
@@ -793,7 +805,14 @@ class Runner:
                     )
                     self.result_future = None  # type: ignore
                     return
-                except Exception:
+                except (Exception, asyncio.CancelledError):
+                    # Catching asyncio.CancelledError alongside Exception
+                    # mirrors the inline-first-iteration handling above:
+                    # an asyncio cancellation that escapes the generator
+                    # body (or is raised by the generator itself) is
+                    # propagated to result_future instead of leaking past
+                    # the Runner and breaking the IOLoop's bookkeeping.
+                    # See tornado #3537.
                     self.finished = True
                     self.future = _null_future
                     future_set_exc_info(self.result_future, sys.exc_info())
