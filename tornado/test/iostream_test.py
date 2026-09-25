@@ -1153,6 +1153,13 @@ class TestIOStreamStartTLS(AsyncTestCase):
                 yield server_future
 
     @gen_test
+    def test_start_tls_cancellation(self):
+        client_future = self.client_start_tls(dict(cert_reqs=ssl.CERT_NONE))
+        client_future.cancel()
+        yield gen.moment
+        self.assertTrue(client_future.cancelled())
+
+    @gen_test
     def test_typed_memoryview(self):
         # Test support of memoryviews with an item size greater than 1 byte.
         buf = memoryview(bytes(80)).cast("L")

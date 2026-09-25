@@ -14,6 +14,7 @@
 # under the License.
 import getpass
 import socket
+import ssl
 import typing
 from contextlib import closing
 
@@ -135,6 +136,19 @@ class TCPClientTest(AsyncTestCase):
         self.addCleanup(cleanup_func)
         with self.assertRaises(IOError):
             yield self.client.connect("127.0.0.1", port)
+
+    @gen_test
+    def test_connect_tls_timeout_cancels_and_closes_stream(self):
+        port = self.start_server(socket.AF_INET)
+        context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        with self.assertRaises(TimeoutError):
+            yield self.client.connect(
+                "127.0.0.1", port, ssl_options=context, timeout=0.05
+            )
+        server_stream = yield self.server.queue.get()
+        server_stream.close()
 
     def test_source_ip_fail(self):
         """Fail when trying to use the source IP Address '8.8.8.8'."""
