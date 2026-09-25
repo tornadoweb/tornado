@@ -916,10 +916,13 @@ class TLSHandshakeTimeoutTestCase(AsyncTestCase):
         server.add_sockets([listener])
         try:
             with closing(SimpleAsyncHTTPClient(force_instance=True)) as client:
+                # The timeout must be long enough for the TCP connection to
+                # be established (which can be slow on windows), so that it
+                # expires during the TLS handshake.
                 with self.assertRaises(HTTPTimeoutError):
                     yield client.fetch(
                         "https://127.0.0.1:%d/" % port,
-                        connect_timeout=0.05,
+                        connect_timeout=0.5,
                         validate_cert=False,
                     )
             server_stream = yield streams.get()

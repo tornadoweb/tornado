@@ -152,32 +152,42 @@ class TCPClientTest(AsyncTestCase):
     @gen_test
     def test_connect_tls_timeout_closes_stream(self):
         port = self.start_server(socket.AF_INET)
+        # The timeout must be long enough for the TCP connection to be
+        # established (which can be slow on windows), so that it expires
+        # during the TLS handshake.
         with self.assertRaises(TimeoutError):
             yield self.client.connect(
-                "127.0.0.1", port, ssl_options=self.tls_context(), timeout=0.05
+                "127.0.0.1", port, ssl_options=self.tls_context(), timeout=0.5
             )
         assert self.server is not None
         server_stream = yield self.server.queue.get()
         yield server_stream.read_until_close()
 
-    @gen_test
-    def test_connect_tls_cancel_closes_stream(self):
+    async def do_test_connect_tls_cancel(self, timeout):
         port = self.start_server(socket.AF_INET)
-        for timeout in [None, 3600]:
-            with self.subTest(timeout=timeout):
-                with self.assertRaises(asyncio.TimeoutError):
-                    yield asyncio.wait_for(
-                        self.client.connect(
-                            "127.0.0.1",
-                            port,
-                            ssl_options=self.tls_context(),
-                            timeout=timeout,
-                        ),
-                        0.05,
-                    )
-                assert self.server is not None
-                server_stream = yield self.server.queue.get()
-                yield server_stream.read_until_close()
+        connect_future = asyncio.ensure_future(
+            self.client.connect(
+                "127.0.0.1", port, ssl_options=self.tls_context(), timeout=timeout
+            )
+        )
+        assert self.server is not None
+        server_stream = await self.server.queue.get()
+        # Wait for the start of the handshake so we know the client is past
+        # the TCP connection phase before cancelling.
+        await server_stream.read_bytes(1, partial=True)
+        connect_future.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await connect_future
+        await server_stream.read_until_close()
+
+    @gen_test
+    async def test_connect_tls_cancel_closes_stream(self):
+        await self.do_test_connect_tls_cancel(timeout=None)
+
+    @gen_test
+    async def test_connect_tls_cancel_with_timeout_closes_stream(self):
+        # A timeout is set but the caller cancels first.
+        await self.do_test_connect_tls_cancel(timeout=3600)
 
     def test_source_ip_fail(self):
         """Fail when trying to use the source IP Address '8.8.8.8'."""
