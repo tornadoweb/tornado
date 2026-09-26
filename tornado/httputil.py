@@ -1128,6 +1128,9 @@ def parse_multipart_form_data(
     parts = data[:final_boundary_index].split(
         b"--" + boundary + b"\r\n", config.max_parts + 1
     )
+    # The initial boundary produces an empty segment, not a form part.
+    if not parts[0]:
+        parts.pop(0)
     if len(parts) > config.max_parts:
         raise HTTPInputError("multipart/form-data has too many parts")
     for part in parts:

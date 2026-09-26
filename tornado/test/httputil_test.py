@@ -355,6 +355,83 @@ Content-Disposition: form-data; name="files"; filename="ab.txt"
             )
         self.assertIn("multipart/form-data parsing is disabled", str(cm.exception))
 
+    def test_max_parts(self):
+        part = b'--1234\r\nContent-Disposition: form-data; name="a"\r\n\r\nvalue\r\n'
+        configs = [ParseMultipartConfig(max_parts=n) for n in (0, 1, 2)]
+        configs.append(ParseMultipartConfig())
+        for config in configs:
+            for num_parts in range(max(0, config.max_parts - 1), config.max_parts + 2):
+                with self.subTest(max_parts=config.max_parts, num_parts=num_parts):
+                    body = part * num_parts + b"--1234--\r\n"
+                    args, files = form_data_args()
+                    if num_parts > config.max_parts:
+                        with self.assertRaisesRegex(HTTPInputError, "too many parts"):
+                            parse_multipart_form_data(
+                                b"1234", body, args, files, config=config
+                            )
+                        self.assertEqual(args, {})
+                    else:
+                        parse_multipart_form_data(
+                            b"1234", body, args, files, config=config
+                        )
+                        self.assertEqual(
+                            args, {"a": [b"value"] * num_parts} if num_parts else {}
+                        )
+                    self.assertEqual(files, {})
+
+    def test_max_parts_includes_files(self):
+        body = (
+            b'--1234\r\nContent-Disposition: form-data; name="a"\r\n\r\nvalue\r\n'
+            b'--1234\r\nContent-Disposition: form-data; name="a"; filename="a.txt"\r\n'
+            b"Content-Type: text/plain\r\n\r\nfile body\r\n--1234--\r\n"
+        )
+        for max_parts in (1, 2):
+            with self.subTest(max_parts=max_parts):
+                config = ParseMultipartConfig(max_parts=max_parts)
+                args, files = form_data_args()
+                if max_parts == 1:
+                    with self.assertRaisesRegex(HTTPInputError, "too many parts"):
+                        parse_multipart_form_data(
+                            b"1234", body, args, files, config=config
+                        )
+                    self.assertEqual(args, {})
+                    self.assertEqual(files, {})
+                else:
+                    parse_multipart_form_data(b"1234", body, args, files, config=config)
+                    self.assertEqual(args, {"a": [b"value"]})
+                    self.assertEqual(
+                        files,
+                        {
+                            "a": [
+                                HTTPFile(
+                                    filename="a.txt",
+                                    body=b"file body",
+                                    content_type="text/plain",
+                                )
+                            ]
+                        },
+                    )
+
+    def test_max_parts_without_initial_boundary(self):
+        body = b'Content-Disposition: form-data; name="a"\r\n\r\nvalue\r\n--1234--\r\n'
+        args, files = form_data_args()
+        with self.assertRaisesRegex(HTTPInputError, "too many parts"):
+            parse_multipart_form_data(
+                b"1234", body, args, files, config=ParseMultipartConfig(max_parts=0)
+            )
+        self.assertEqual(args, {})
+        self.assertEqual(files, {})
+
+    def test_max_parts_with_empty_parts(self):
+        body = b"--1234\r\n" * 4 + b"--1234--\r\n"
+        args, files = form_data_args()
+        with self.assertRaisesRegex(HTTPInputError, "too many parts"):
+            parse_multipart_form_data(
+                b"1234", body, args, files, config=ParseMultipartConfig(max_parts=2)
+            )
+        self.assertEqual(args, {})
+        self.assertEqual(files, {})
+
 
 class HTTPHeadersTest(TestCase):
     def test_multi_line(self):
