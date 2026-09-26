@@ -27,10 +27,11 @@ to those provided in the standard library's `asyncio package
 
 from __future__ import annotations
 
+import asyncio
 import collections
 import datetime
 import heapq
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Generator
 from typing import Any, Generic, TypeVar
 
 from tornado import gen, ioloop
@@ -64,6 +65,20 @@ def _set_timeout(future: Future, timeout: None | float | datetime.timedelta) -> 
         io_loop = ioloop.IOLoop.current()
         timeout_handle = io_loop.add_timeout(timeout, on_timeout)
         future.add_done_callback(lambda _: io_loop.remove_timeout(timeout_handle))
+
+
+class _QueueGetter(Future[_T]):
+    def __init__(self, queue: Queue[_T]) -> None:
+        super().__init__()
+        self.queue = queue
+
+    def __await__(self) -> Generator[Any, None, _T]:
+        try:
+            return (yield from super().__await__())
+        except asyncio.CancelledError:
+            if self.done() and not self.cancelled():
+                self.queue._put_cancelled(self.result())
+            raise
 
 
 class _QueueIterator(Generic[_T]):
@@ -248,7 +263,7 @@ class Queue(Generic[_T]):
            A ``timeout`` argument of zero will either return or raise immediately.
            Previously, zero was treated equivalent to ``None`` (wait forever).
         """
-        future: Future[_T] = Future()
+        future: Future[_T] = _QueueGetter(self)
         try:
             future.set_result(self.get_nowait())
         except QueueEmpty:
@@ -325,6 +340,15 @@ class Queue(Generic[_T]):
         self._unfinished_tasks += 1
         self._finished.clear()
         self._put(item)
+
+    def _put_cancelled(self, item: _T) -> None:
+        self._consume_expired()
+        if self._getters:
+            assert self.empty(), "queue non-empty, why are getters waiting?"
+            getter = self._getters.popleft()
+            future_set_result_unless_cancelled(getter, item)
+        else:
+            self._put(item)
 
     def _consume_expired(self) -> None:
         # Remove timed-out waiters.
