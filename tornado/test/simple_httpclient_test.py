@@ -59,11 +59,35 @@ from tornado.testing import ExpectLog, gen_test
 from tornado.web import Application, RequestHandler, stream_request_body, url
 
 
+class GzipContentLengthHandler(RequestHandler):
+    BODY = b"valid proxy payload" * 32
+    COMPRESSED_BODY = gzip.compress(BODY)
+
+    def get(self):
+        self.set_header("Content-Encoding", "gzip")
+        self.finish(self.COMPRESSED_BODY)
+
+
 class SimpleHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
+    def get_app(self):
+        app = super().get_app()
+        app.add_handlers(".*$", [(r"/gzip_content_length", GzipContentLengthHandler)])
+        return app
+
     def get_http_client(self):
         client = SimpleAsyncHTTPClient(force_instance=True)
         self.assertTrue(isinstance(client, SimpleAsyncHTTPClient))
         return client
+
+    def test_decompressed_content_length(self):
+        response = self.fetch("/gzip_content_length")
+
+        self.assertEqual(response.body, GzipContentLengthHandler.BODY)
+        self.assertNotIn("Content-Length", response.headers)
+        self.assertEqual(
+            response.headers["X-Consumed-Content-Length"],
+            str(len(GzipContentLengthHandler.COMPRESSED_BODY)),
+        )
 
 
 class TriggerHandler(RequestHandler):
