@@ -57,6 +57,7 @@ from tornado.web import (
     StaticFileHandler,
     UIModule,
     _create_signature_v1,
+    _create_signature_v2,
     addslash,
     authenticated,
     create_signed_value,
@@ -3255,6 +3256,41 @@ class SignedValueTest(TestCase):
         )
         key_version = get_signature_key_version(signed)
         self.assertEqual(1, key_version)
+
+    def test_malformed_timestamp_v1(self):
+        # Valid HMAC over a non-decimal timestamp must return None, not raise.
+        secret = b"s"
+        name = "a"
+        value_b64 = b"dg=="  # base64(b"v")
+        timestamp = b"not-a-number"
+        sig = _create_signature_v1(secret, name, value_b64, timestamp)
+        cookie = b"|".join([value_b64, timestamp, sig])
+        self.assertIsNone(
+            decode_signed_value(secret, name, cookie, clock=lambda: 1_500_000_000)
+        )
+
+    def test_malformed_timestamp_v2(self):
+        # Valid HMAC over a non-decimal timestamp must return None, not raise.
+        secret = b"s"
+        name = "a"
+
+        def field(value: bytes) -> bytes:
+            return str(len(value)).encode("ascii") + b":" + value
+
+        prefix = b"|".join(
+            [
+                b"2",
+                field(b"0"),
+                field(b"a"),  # non-decimal timestamp
+                field(utf8(name)),
+                field(b""),
+                b"",
+            ]
+        )
+        cookie = prefix + _create_signature_v2(secret, prefix)
+        self.assertIsNone(
+            decode_signed_value(secret, name, cookie, clock=lambda: 1_500_000_000)
+        )
 
 
 class XSRFTest(SimpleHandlerTestCase):
