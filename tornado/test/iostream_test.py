@@ -689,6 +689,52 @@ class TestReadWriteMixin(AsyncTestCase):
             rs.close()
 
     @gen_test
+    def test_read_into_buffer_resizable(self):
+        # The caller must be able to resize their buffer once the read is
+        # complete, which requires that we don't leave any memoryviews of
+        # it alive (on PyPy, views are not freed until garbage collection).
+        rs, ws = yield self.make_iostream_pair()
+        try:
+            # Read directly from the socket into the buffer.
+            buf = bytearray(5)
+            fut = rs.read_into(buf)
+            yield gen.sleep(0.01)
+            ws.write(b"hello")
+            yield fut
+            self.assertEqual(bytes(buf), b"hello")
+            del buf[:]
+
+            # Read from the existing buffer.
+            ws.write(b"worldworld")
+            yield rs.read_bytes(1)
+            buf = bytearray(4)
+            yield rs.read_into(buf)
+            self.assertEqual(bytes(buf), b"orld")
+            del buf[:]
+            buf = bytearray(10)
+            yield rs.read_into(buf, partial=True)
+            self.assertEqual(bytes(buf[:5]), b"world")
+            del buf[:]
+        finally:
+            ws.close()
+            rs.close()
+
+    @gen_test
+    def test_write_bytearray_resizable(self):
+        # Like test_read_into_buffer_resizable, for large writes (which
+        # are buffered without copying).
+        rs, ws = yield self.make_iostream_pair()
+        try:
+            data = bytearray(b"x" * 10000)
+            fut = rs.read_bytes(len(data))
+            yield ws.write(data)  # type: ignore
+            self.assertEqual((yield fut), bytes(data))
+            del data[:]
+        finally:
+            ws.close()
+            rs.close()
+
+    @gen_test
     def test_read_into_zero_bytes(self):
         rs, ws = yield self.make_iostream_pair()
         try:

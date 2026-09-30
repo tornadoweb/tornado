@@ -133,9 +133,9 @@ class _StreamBuffer:
         """
         size = len(data)
         if size > self._large_buf_threshold:
-            if not isinstance(data, memoryview):
-                data = memoryview(data)
-            self._buffers.append((True, data))
+            # Always make a new view (even of a memoryview) so we can
+            # release it when we're done with it.
+            self._buffers.append((True, memoryview(data)))
         elif size > 0:
             if self._buffers:
                 is_memview, b = self._buffers[-1]
@@ -153,6 +153,9 @@ class _StreamBuffer:
         """
         Get a view over at most ``size`` bytes (possibly fewer) at the
         current buffer position.
+
+        The caller must release the returned view (e.g. with a ``with``
+        statement) before the buffer is modified again.
         """
         assert size > 0
         try:
@@ -164,7 +167,12 @@ class _StreamBuffer:
         if is_memview:
             return typing.cast(memoryview, b[pos : pos + size])
         else:
-            return memoryview(b)[pos : pos + size]
+            # Release the full view immediately so that only the returned
+            # slice holds a reference to the bytearray's buffer. (The
+            # bytearray cannot be resized while any view of it is
+            # alive, and on PyPy views are not freed until garbage collection)
+            with memoryview(b) as m:
+                return m[pos : pos + size]
 
     def advance(self, size: int) -> None:
         """
@@ -181,6 +189,10 @@ class _StreamBuffer:
             if b_remain <= 0:
                 buffers.popleft()
                 size -= len(b) - pos
+                if is_large:
+                    # Release our view of the caller's data so it can be
+                    # resized (if it is a bytearray) without waiting for GC.
+                    typing.cast(memoryview, b).release()
                 pos = 0
             elif is_large:
                 pos += size
@@ -439,11 +451,13 @@ class BaseIOStream:
         available_bytes = self._read_buffer_size
         n = len(buf)
         if available_bytes >= n:
-            buf[:] = memoryview(self._read_buffer)[:n]
+            with memoryview(self._read_buffer) as m, m[:n] as src:
+                buf[:] = src
             del self._read_buffer[:n]
             self._after_user_read_buffer = self._read_buffer
         elif available_bytes > 0:
-            buf[:available_bytes] = memoryview(self._read_buffer)[:]
+            with memoryview(self._read_buffer) as m:
+                buf[:available_bytes] = m
 
         # Set up the supplied buffer as our temporary read buffer.
         # The original (if it had any data remaining) has been
@@ -515,7 +529,7 @@ class BaseIOStream:
         if data:
             if isinstance(data, memoryview):
                 # Make sure that ``len(data) == data.nbytes``
-                data = memoryview(data).cast("B")
+                data = data.cast("B")
             if (
                 self.max_write_buffer_size is not None
                 and len(self._write_buffer) + len(data) > self.max_write_buffer_size
@@ -854,16 +868,22 @@ class BaseIOStream:
         to read (i.e. the read returns EWOULDBLOCK or equivalent).  On
         error closes the socket and raises an exception.
         """
+        buf: bytearray | None = None
         try:
             while True:
                 try:
                     if self._user_read_buffer:
-                        buf: memoryview | bytearray = memoryview(self._read_buffer)[
-                            self._read_buffer_size :
-                        ]
+                        # Release the views explicitly so the caller can
+                        # resize their buffer after the read completes
+                        # (PyPy does not free them until garbage collection).
+                        with (
+                            memoryview(self._read_buffer) as m,
+                            m[self._read_buffer_size :] as view,
+                        ):
+                            bytes_read = self.read_from_fd(view)
                     else:
                         buf = bytearray(self.read_chunk_size)
-                    bytes_read = self.read_from_fd(buf)
+                        bytes_read = self.read_from_fd(buf)
                 except OSError as e:
                     # ssl.SSLError is a subclass of socket.error
                     if self._is_connreset(e):
@@ -881,7 +901,9 @@ class BaseIOStream:
                 self.close()
                 return 0
             if not self._user_read_buffer:
-                self._read_buffer += memoryview(buf)[:bytes_read]
+                assert buf is not None
+                with memoryview(buf) as m, m[:bytes_read] as view:
+                    self._read_buffer += view
             self._read_buffer_size += bytes_read
         finally:
             # Break the reference to buf so we don't waste a chunk's worth of
@@ -967,7 +989,8 @@ class BaseIOStream:
                     # with more than 128KB at a time.
                     size = 128 * 1024
 
-                num_bytes = self.write_to_fd(self._write_buffer.peek(size))
+                with self._write_buffer.peek(size) as data:
+                    num_bytes = self.write_to_fd(data)
                 if num_bytes == 0:
                     break
                 self._write_buffer.advance(num_bytes)
@@ -995,8 +1018,11 @@ class BaseIOStream:
         if loc == 0:
             return b""
         assert loc <= self._read_buffer_size
-        # Slice the bytearray buffer into bytes, without intermediate copying
-        b = (memoryview(self._read_buffer)[:loc]).tobytes()
+        # Slice the bytearray buffer into bytes, without intermediate copying.
+        # The views must be released before the bytearray is resized
+        # (explicitly, since PyPy does not free them until garbage collection).
+        with memoryview(self._read_buffer) as m, m[:loc] as view:
+            b = view.tobytes()
         self._read_buffer_size -= loc
         del self._read_buffer[:loc]
         return b
