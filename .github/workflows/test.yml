@@ -66,10 +66,16 @@ jobs:
           #    configs.append(("3.11.0", "py311-full"))
           #    # Pypy is a lot slower due to jit warmup costs, so don't run the
           #    # "full" test config there.
-          #    # Pinned to 7.3.23 because pypy 8.0.0 refuses to resize a bytearray
-          #    # while a memoryview of it has not been garbage-collected, which
-          #    # breaks IOStream._consume.
-          #    configs.append(("pypy-3.11-v7.3.23", "pypy3"))
+          #    # PyPy releases are versioned independently of the python
+          #    # language version they implement. Let the PyPy version float
+          #    # within a major version (like we do with CPython patch
+          #    # releases), but upgrade to new major versions deliberately
+          #    # since they can introduce behavior changes (e.g. 8.0 began
+          #    # enforcing the rule against resizing a bytearray with live
+          #    # memoryviews).
+          #    pypy_major = 8
+          #    for pypy_python in ["3.11", "3.12"]:
+          #      configs.append((f"pypy-{pypy_python}-v{pypy_major}.x", "pypy3"))
           #    # Docs python version must be synced with tox.ini
           #    configs.append((f"3.{default_python_minor}", "docs"))
           #    for version, tox_env in configs:
@@ -92,7 +98,9 @@ jobs:
             tox_env: py315t
           - python: '3.11.0'
             tox_env: py311-full
-          - python: 'pypy-3.11-v7.3.23'
+          - python: 'pypy-3.11-v8.x'
+            tox_env: pypy3
+          - python: 'pypy-3.12-v8.x'
             tox_env: pypy3
           - python: '3.13'
             tox_env: docs
