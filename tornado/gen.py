@@ -193,6 +193,13 @@ def coroutine(
        The ``callback`` argument was removed. Use the returned
        awaitable object instead.
 
+    .. versionchanged:: 6.6
+
+       If the coroutine raises `asyncio.CancelledError` (including by
+       yielding a cancelled `.Future` without catching the exception), the
+       returned `.Future` is now cancelled. Previously the coroutine would
+       never complete.
+
     """
 
     @functools.wraps(func)
@@ -205,6 +212,11 @@ def coroutine(
             result = ctx_run(func, *args, **kwargs)
         except (Return, StopIteration) as e:
             result = _value_from_stopiteration(e)
+        except asyncio.CancelledError:
+            # Like asyncio.Task, a coroutine that raises CancelledError
+            # is treated as cancelled.
+            future.cancel()
+            return future
         except Exception:
             future_set_exc_info(future, sys.exc_info())
             try:
@@ -225,6 +237,8 @@ def coroutine(
                     future_set_result_unless_cancelled(
                         future, _value_from_stopiteration(e)
                     )
+                except asyncio.CancelledError:
+                    future.cancel()
                 except Exception:
                     future_set_exc_info(future, sys.exc_info())
                 else:
@@ -482,6 +496,11 @@ def multi(
        with a unified function ``multi``. Added support for yieldables
        other than ``YieldPoint`` and `.Future`.
 
+    .. versionchanged:: 6.6
+       If a child is cancelled, ``multi()`` now raises `asyncio.CancelledError`
+       (without logging it if it is not the first failure), matching
+       `asyncio.gather`. Previously ``multi()`` would never complete.
+
     """
     return multi_future(children, quiet_exceptions=quiet_exceptions)
 
@@ -528,9 +547,13 @@ def multi_future(
             for f in children_futs:
                 try:
                     result_list.append(f.result())
-                except Exception as e:
+                except (Exception, asyncio.CancelledError) as e:
+                    # As in asyncio.gather, a cancelled child is treated as
+                    # an error, and does not cancel the combined future.
                     if future.done():
-                        if not isinstance(e, quiet_exceptions):
+                        if not isinstance(
+                            e, (asyncio.CancelledError, quiet_exceptions)
+                        ):
                             app_log.error(
                                 "Multiple exceptions in yield list", exc_info=True
                             )
@@ -765,11 +788,11 @@ class Runner:
                 try:
                     try:
                         value = future.result()
-                    except Exception as e:
+                    except (Exception, asyncio.CancelledError) as e:
                         # Save the exception for later. It's important that
                         # gen.throw() not be called inside this try/except block
                         # because that makes sys.exc_info behave unexpectedly.
-                        exc: Exception | None = e
+                        exc: BaseException | None = e
                     else:
                         exc = None
                     finally:
@@ -791,6 +814,12 @@ class Runner:
                     future_set_result_unless_cancelled(
                         self.result_future, _value_from_stopiteration(e)
                     )
+                    self.result_future = None  # type: ignore
+                    return
+                except asyncio.CancelledError:
+                    self.finished = True
+                    self.future = _null_future
+                    self.result_future.cancel()
                     self.result_future = None  # type: ignore
                     return
                 except Exception:

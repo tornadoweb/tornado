@@ -4,9 +4,10 @@ from tornado.http1connection import HTTP1Connection
 from tornado.httputil import HTTPMessageDelegate
 from tornado.iostream import IOStream
 from tornado.locks import Event
+from tornado.log import app_log
 from tornado.netutil import add_accept_handler
 from tornado.test.util import AsyncTestCase
-from tornado.testing import bind_unused_port, gen_test
+from tornado.testing import ExpectLog, bind_unused_port, gen_test
 
 
 class HTTP1ConnectionTest(AsyncTestCase):
@@ -92,3 +93,45 @@ class HTTP1ConnectionTest(AsyncTestCase):
         yield event.wait()
         self.assertEqual(self.code, 200)
         self.assertEqual(b"".join(body), b"hello")
+
+    def check_delegate_error(self, method):
+        # If a delegate method raises, the exception is logged, the delegate is
+        # told that the connection is closed, and read_response returns False
+        # (rather than raising) with the connection closed.
+        conn = HTTP1Connection(self.client_stream, True)
+        self.server_stream.write(b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello")
+        close_count = []
+
+        class Delegate(HTTPMessageDelegate):
+            def headers_received(self, start_line, headers):
+                if method == "headers_received":
+                    raise ValueError("error in headers_received")
+
+            def data_received(self, chunk):
+                if method == "data_received":
+                    raise ValueError("error in data_received")
+
+            def finish(self):
+                if method == "finish":
+                    raise ValueError("error in finish")
+
+            def on_connection_close(self):
+                close_count.append(1)
+
+        with ExpectLog(app_log, "Uncaught exception"):
+            result = yield conn.read_response(Delegate())
+        self.assertIs(result, False)
+        self.assertEqual(len(close_count), 1)
+        self.assertTrue(self.client_stream.closed())
+
+    @gen_test
+    def test_error_in_headers_received(self):
+        yield from self.check_delegate_error("headers_received")
+
+    @gen_test
+    def test_error_in_data_received(self):
+        yield from self.check_delegate_error("data_received")
+
+    @gen_test
+    def test_error_in_finish(self):
+        yield from self.check_delegate_error("finish")

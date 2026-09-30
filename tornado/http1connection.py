@@ -192,7 +192,17 @@ class HTTP1Connection(httputil.HTTPConnection):
             )
         return self._read_message(delegate)
 
-    async def _read_message(
+    async def _read_message(self, delegate: httputil.HTTPMessageDelegate) -> bool:
+        try:
+            return await self._read_message_inner(delegate)
+        except _QuietException:
+            # The delegate raised an exception, which has already been logged,
+            # and the delegate has been told that the connection is closed.
+            # Close it, instead of letting _QuietException escape to our caller.
+            self.close()
+            return False
+
+    async def _read_message_inner(
         self, delegate: httputil.HTTPMessageDelegate, num_1xx: int = 0
     ) -> bool:
         need_delegate_close = False
@@ -271,7 +281,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                     # on_connection_close() on an already-finished
                     # delegate.
                     need_delegate_close = False
-                    return await self._read_message(delegate, num_1xx + 1)
+                    return await self._read_message_inner(delegate, num_1xx + 1)
             else:
                 if headers.get("Expect") == "100-continue" and not self._write_finished:
                     self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
@@ -295,9 +305,11 @@ class HTTP1Connection(httputil.HTTPConnection):
                             return False
             self._read_finished = True
             if not self._write_finished or self.is_client:
-                need_delegate_close = False
                 with _ExceptionLoggingContext(app_log):
                     delegate.finish()
+                # If finish() raised, the delegate is told that the connection
+                # is closed, as when any of its other methods raise.
+                need_delegate_close = False
             # If we're waiting for the application to produce an asynchronous
             # response, and we're not detached, register a close callback
             # on the stream (we didn't need one while we were reading)
@@ -875,10 +887,6 @@ class HTTP1ServerConnection:
                     iostream.UnsatisfiableReadError,
                     asyncio.CancelledError,
                 ):
-                    return
-                except _QuietException:
-                    # This exception was already logged.
-                    conn.close()
                     return
                 except Exception:
                     gen_log.error("Uncaught exception", exc_info=True)

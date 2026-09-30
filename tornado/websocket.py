@@ -36,7 +36,11 @@ from urllib.parse import urlparse
 
 import tornado
 from tornado import gen, httpclient, httputil, simple_httpclient
-from tornado.concurrent import Future, future_set_result_unless_cancelled
+from tornado.concurrent import (
+    Future,
+    future_add_done_callback,
+    future_set_result_unless_cancelled,
+)
 from tornado.escape import native_str, to_unicode, utf8
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, StreamClosedError
@@ -650,21 +654,30 @@ class WebSocketProtocol(abc.ABC):
     ) -> "Optional[Future[Any]]":
         """Runs the given callback with exception handling.
 
-        If the callback is a coroutine, returns its Future. On error, aborts the
-        websocket connection and returns None.
+        If the callback is a coroutine, returns a Future that resolves when it
+        completes. On error (including cancellation), logs the exception and
+        aborts the websocket connection. The returned Future never raises.
         """
         try:
             result = callback(*args, **kwargs)
-        except Exception:
+        except (Exception, asyncio.CancelledError):
             self.handler.log_exception(*sys.exc_info())
             self._abort()
             return None
-        else:
-            if result is not None:
-                result = gen.convert_yielded(result)
-                assert self.stream is not None
-                self.stream.io_loop.add_future(result, lambda f: f.result())
-            return result
+        if result is None:
+            return None
+        done_future: Future[None] = Future()
+
+        def on_done(f: Future[Any]) -> None:
+            try:
+                f.result()
+            except (Exception, asyncio.CancelledError):
+                self.handler.log_exception(*sys.exc_info())
+                self._abort()
+            future_set_result_unless_cancelled(done_future, None)
+
+        future_add_done_callback(gen.convert_yielded(result), on_done)
+        return done_future
 
     def on_connection_close(self) -> None:
         self._abort()
@@ -1123,7 +1136,8 @@ class WebSocketProtocol13(WebSocketProtocol):
                 await self._receive_frame()
         except StreamClosedError:
             self._abort()
-        self.handler.on_ws_connection_close(self.close_code, self.close_reason)
+        finally:
+            self.handler.on_ws_connection_close(self.close_code, self.close_reason)
 
     async def _read_bytes(self, n: int) -> bytes:
         data = await self.stream.read_bytes(n)

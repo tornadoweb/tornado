@@ -22,6 +22,7 @@ import typing
 from contextlib import closing
 
 from tornado import gen, version
+from tornado.concurrent import Future
 from tornado.escape import to_unicode, utf8
 from tornado.httpclient import AsyncHTTPClient, HTTPResponse
 from tornado.httpserver import HTTPServer
@@ -30,7 +31,7 @@ from tornado.httputil import HTTPHeaders, ResponseStartLine
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, UnsatisfiableReadError
 from tornado.locks import Event
-from tornado.log import gen_log
+from tornado.log import app_log, gen_log
 from tornado.netutil import Resolver, bind_sockets
 from tornado.queues import Queue
 from tornado.simple_httpclient import (
@@ -569,6 +570,33 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
         # Make sure we only got one set of headers.
         num_start_lines = len([h for h in headers if h.startswith("HTTP/")])
         self.assertEqual(num_start_lines, 1)
+
+    def test_streaming_callback_error(self: typing.Any):
+        # The exception is logged once, and the fetch fails.
+        def streaming_callback(chunk):
+            raise ValueError("error in streaming_callback")
+
+        with ExpectLog(app_log, "Uncaught exception"):
+            with self.assertRaises(HTTPStreamClosedError):
+                self.fetch("/hello", streaming_callback=streaming_callback)
+
+    def test_streaming_callback_coroutine_cancelled(self: typing.Any):
+        async def streaming_callback(chunk):
+            fut: Future[None] = Future()
+            fut.cancel()
+            await fut
+
+        with ExpectLog(app_log, "Uncaught exception"):
+            with self.assertRaises(HTTPStreamClosedError):
+                self.fetch("/hello", streaming_callback=streaming_callback)
+
+    def test_header_callback_error(self: typing.Any):
+        def header_callback(line):
+            raise ValueError("error in header_callback")
+
+        with ExpectLog(app_log, "Uncaught exception"):
+            with self.assertRaises(HTTPStreamClosedError):
+                self.fetch("/hello", header_callback=header_callback)
 
 
 class SimpleHTTPClientTestCase(AsyncHTTPTestCase, SimpleHTTPClientTestMixin):

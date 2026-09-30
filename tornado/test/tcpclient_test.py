@@ -452,6 +452,34 @@ class ConnectorTest(AsyncTestCase):
         with self.assertRaisesRegex(OSError, "sync failure"):
             future.result()
 
+    def cancel_connect(self, af, addr):
+        self.connect_futures.pop((af, addr)).cancel()
+        self.io_loop.add_callback(self.stop)
+        self.wait()
+
+    def test_attempt_cancelled(self):
+        # A cancelled connection attempt is treated as a failure.
+        conn, future = self.start_connect([(AF1, "a"), (AF1, "b")])
+        self.assert_pending((AF1, "a"))
+        self.cancel_connect(AF1, "a")
+        self.assert_pending((AF1, "b"))
+        self.resolve_connect(AF1, "b", True)
+        self.assertEqual(future.result(), (AF1, "b", self.streams["b"]))
+        # The stream from the cancelled attempt is closed.
+        self.assertTrue(self.streams.pop("a").closed)
+
+    def test_all_attempts_cancelled(self):
+        # If every attempt is cancelled, connect fails with an ordinary
+        # error rather than CancelledError, and all streams are closed.
+        conn, future = self.start_connect([(AF1, "a"), (AF2, "c")])
+        conn.on_timeout()
+        self.assert_pending((AF1, "a"), (AF2, "c"))
+        self.cancel_connect(AF1, "a")
+        self.cancel_connect(AF2, "c")
+        self.assertIsInstance(future.exception(), IOError)
+        self.assertTrue(self.streams.pop("a").closed)
+        self.assertTrue(self.streams.pop("c").closed)
+
     def test_cancel(self):
         conn, future = self.start_connect(self.addrinfo)
         conn.on_timeout()

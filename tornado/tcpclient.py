@@ -15,6 +15,7 @@
 
 """A non-blocking TCP connection factory."""
 
+import asyncio
 import datetime
 import functools
 import numbers
@@ -119,6 +120,9 @@ class _Connector:
                 self.future.set_exception(
                     self.last_error or IOError("connection failed")
                 )
+                # Every attempt has finished, but a cancelled attempt's
+                # stream may still be open.
+                self.close_streams()
             return
         try:
             stream, future = self.connect(af, addr)
@@ -144,12 +148,15 @@ class _Connector:
         self.remaining -= 1
         try:
             stream = future.result()
-        except Exception as e:
+        except (Exception, asyncio.CancelledError) as e:
             if self.future.done():
                 return
             # Error: try again (but remember what happened so we have an
-            # error to raise in the end)
-            self.last_error = e
+            # error to raise in the end). A cancelled attempt is treated
+            # as a failure, but is not reported as the error because
+            # our caller has not been cancelled.
+            if not isinstance(e, asyncio.CancelledError):
+                self.last_error = e
             self.try_connect(addrs)
             if self.timeout is not None:
                 # If the first attempt failed, don't wait for the
