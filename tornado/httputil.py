@@ -888,6 +888,8 @@ def _parse_request_range(
     (None, None)
     >>> _parse_request_range("foo=42")
     >>> _parse_request_range("bytes=1-2,6-10")
+    >>> _parse_request_range("bytes=8_1-9_0")
+    >>> _parse_request_range("bytes=+10-20")
 
     Note: only supports one range (ex, ``bytes=1-2,6-10`` is not allowed).
 
@@ -934,6 +936,10 @@ def _int_or_none(val: str) -> int | None:
     val = val.strip()
     if val == "":
         return None
+    # RFC 9110 byte positions are 1*DIGIT. int() also accepts underscores
+    # and signs, so "8_1" became 81 and "+10" became 10.
+    if not val.isascii() or not val.isdigit():
+        raise ValueError("invalid range bound")
     return int(val)
 
 

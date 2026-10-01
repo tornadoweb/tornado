@@ -55,6 +55,9 @@ Type annotation changes
 
 - If the ``start_line`` argument to `.HTTPServerRequest` is not provided, both ``method`` and
   ``uri`` must be provided.
+- Byte positions in a ``Range`` header must be decimal digits. ``bytes=8_1-9_0`` was accepted
+  as bytes 81-90, and ``bytes=+10-20`` as bytes 10-20. An invalid bound is now ignored, the
+  same as any other invalid ``Range``.
 
 `tornado.locks`
 ~~~~~~~~~~~~~~~
