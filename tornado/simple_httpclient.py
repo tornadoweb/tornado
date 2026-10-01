@@ -339,8 +339,10 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                         else None
                     ),
                 )
-            except gen.TimeoutError:
-                raise HTTPTimeoutError("Timeout while connecting") from None
+            except TimeoutError as e:
+                # TCPClient's timeout messages describe which phase of
+                # the connection timed out (DNS, TCP, or TLS).
+                raise HTTPTimeoutError(str(e) or "Timeout while connecting") from None
 
             if self.final_callback is None:
                 # final_callback is cleared if we've hit our timeout.

@@ -94,7 +94,7 @@ from tornado.concurrent import (
 )
 from tornado.ioloop import IOLoop
 from tornado.log import app_log
-from tornado.util import TimeoutError
+from tornado.util import TimeoutError  # noqa: F401 (re-exported for compatibility)
 
 _T = typing.TypeVar("_T")
 
@@ -577,13 +577,20 @@ def with_timeout(
     timeout: float | datetime.timedelta,
     future: _Yieldable,
     quiet_exceptions: "Union[Type[Exception], Tuple[Type[Exception], ...]]" = (),
+    *,
+    message: str | Callable[[], str] | None = None,
 ) -> Future:
     """Wraps a `.Future` (or other yieldable object) in a timeout.
 
-    Raises `tornado.util.TimeoutError` if the input future does not
+    Raises `TimeoutError` if the input future does not
     complete before ``timeout``, which may be specified in any form
     allowed by `.IOLoop.add_timeout` (i.e. a `datetime.timedelta` or
     an absolute time relative to `.IOLoop.time`)
+
+    ``message`` is used as the message of the `TimeoutError`. It may be
+    a string or a callable returning a string; a callable is only called
+    if the timeout expires, so it may be used to defer the cost of
+    formatting the message.
 
     If the wrapped `.Future` fails after it has timed out, the exception
     will be logged unless it is either of a type contained in
@@ -609,6 +616,9 @@ def with_timeout(
     .. versionchanged:: 6.2
        ``tornado.util.TimeoutError`` is now an alias to ``asyncio.TimeoutError``.
 
+    .. versionchanged:: 6.6
+       Added the ``message`` argument.
+
     """
     # It's tempting to optimize this by cancelling the input future on timeout
     # instead of creating a new one, but A) we can't know if we are the only
@@ -633,7 +643,13 @@ def with_timeout(
 
     def timeout_callback() -> None:
         if not result.done():
-            result.set_exception(TimeoutError("Timeout"))
+            if message is None:
+                msg = "Timeout"
+            elif callable(message):
+                msg = message()
+            else:
+                msg = message
+            result.set_exception(TimeoutError(msg))
         # In case the wrapped future goes on to fail, log it.
         future_add_done_callback(future_converted, error_callback)
 

@@ -17,7 +17,7 @@ from unittest import mock
 from tornado import gen
 from tornado.concurrent import Future
 from tornado.escape import native_str
-from tornado.ioloop import IOLoop, PeriodicCallback, TimeoutError
+from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.log import app_log
 from tornado.test.util import AsyncTestCase, TestCase, ignore_deprecation, skipIfNonUnix
 from tornado.testing import (
