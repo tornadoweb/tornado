@@ -245,7 +245,16 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
 
 class _HTTPConnection(httputil.HTTPMessageDelegate):
-    _SUPPORTED_METHODS = {"GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"}
+    _SUPPORTED_METHODS = {
+        "GET",
+        "HEAD",
+        "POST",
+        "PUT",
+        "DELETE",
+        "PATCH",
+        "OPTIONS",
+        "QUERY",
+    }
 
     def __init__(
         self,
@@ -402,10 +411,11 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 self.request.headers["User-Agent"] = self.request.user_agent
             elif self.request.headers.get("User-Agent") is None:
                 self.request.headers["User-Agent"] = f"Tornado/{version}"
-            if not self.request.allow_nonstandard_methods:
+            if not self.request.allow_nonstandard_methods and self.request.method != "QUERY":
                 # Some HTTP methods nearly always have bodies while others
                 # almost never do. Fail in this case unless the user has
                 # opted out of sanity checks with allow_nonstandard_methods.
+                # QUERY (RFC 10008) may or may not carry a request body.
                 body_expected = self.request.method in ("POST", "PATCH", "PUT")
                 body_present = (
                     self.request.body is not None

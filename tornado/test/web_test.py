@@ -35,6 +35,10 @@ from tornado.locks import Event
 from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
+def setUpModule() -> None:
+    logging.getLogger("tornado.access").setLevel(logging.CRITICAL)
+
+
 from tornado.test.util import (
     AsyncHTTPTestCase,
     AsyncTestCase,
@@ -2727,7 +2731,7 @@ class UnimplementedHTTPMethodsTest(SimpleHandlerTestCase):
         for method in ["HEAD", "GET", "DELETE", "OPTIONS"]:
             response = self.fetch("/", method=method)
             self.assertEqual(response.code, 405)
-        for method in ["POST", "PUT"]:
+        for method in ["POST", "PUT", "QUERY"]:
             response = self.fetch("/", method=method, body=b"")
             self.assertEqual(response.code, 405)
 
@@ -2756,7 +2760,7 @@ class AllHTTPMethodsTest(SimpleHandlerTestCase):
             assert self.request.method is not None
             self.write(self.request.method)
 
-        get = delete = options = post = put = method  # type: ignore
+        get = delete = options = post = put = query = method  # type: ignore
 
     def test_standard_methods(self):
         response = self.fetch("/", method="HEAD")
@@ -2764,7 +2768,7 @@ class AllHTTPMethodsTest(SimpleHandlerTestCase):
         for method in ["GET", "DELETE", "OPTIONS"]:
             response = self.fetch("/", method=method)
             self.assertEqual(response.body, utf8(method))
-        for method in ["POST", "PUT"]:
+        for method in ["POST", "PUT", "QUERY"]:
             response = self.fetch("/", method=method, body=b"")
             self.assertEqual(response.body, utf8(method))
 
@@ -2788,6 +2792,22 @@ class PatchMethodTest(SimpleHandlerTestCase):
     def test_other(self):
         response = self.fetch("/", method="OTHER", allow_nonstandard_methods=True)
         self.assertEqual(response.body, b"other")
+
+
+class QueryMethodTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def query(self):
+            self.write(self.request.body)
+
+    def test_query_with_body(self):
+        response = self.fetch("/", method="QUERY", body=b"SELECT * FROM items")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"SELECT * FROM items")
+
+    def test_query_without_body(self):
+        response = self.fetch("/", method="QUERY")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"")
 
 
 class FinishInPrepareTest(SimpleHandlerTestCase):
@@ -3594,6 +3614,11 @@ class XSRFTest(SimpleHandlerTestCase):
                 headers=self.cookie_headers(cookie_token),
             )
             self.assertEqual(response.code, 200)
+
+    def test_xsrf_query_no_token(self):
+        # QUERY is safe and idempotent per RFC 10008, so it is exempt from XSRF checks.
+        response = self.fetch("/", method="QUERY", body=b"")
+        self.assertEqual(response.code, 405)
 
 
 # A subset of the previous test with a different cookie name

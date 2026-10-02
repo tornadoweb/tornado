@@ -591,7 +591,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             "PUT": pycurl.UPLOAD,
             "HEAD": pycurl.NOBODY,
         }
-        custom_methods = {"DELETE", "OPTIONS", "PATCH"}
+        custom_methods = {"DELETE", "OPTIONS", "PATCH", "QUERY"}
         for o in curl_options.values():
             curl.setopt(o, False)
         if request.method in curl_options:
@@ -604,10 +604,11 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
 
         body_expected = request.method in ("POST", "PATCH", "PUT")
         body_present = request.body is not None
-        if not request.allow_nonstandard_methods:
+        if not request.allow_nonstandard_methods and request.method != "QUERY":
             # Some HTTP methods nearly always have bodies while others
             # almost never do. Fail in this case unless the user has
             # opted out of sanity checks with allow_nonstandard_methods.
+            # QUERY (RFC 10008) may or may not carry a request body.
             if (body_expected and not body_present) or (
                 body_present and not body_expected
             ):

@@ -46,6 +46,7 @@
    .. automethod:: RequestHandler.patch
    .. automethod:: RequestHandler.put
    .. automethod:: RequestHandler.options
+   .. automethod:: RequestHandler.query
 
    Input
    ^^^^^
