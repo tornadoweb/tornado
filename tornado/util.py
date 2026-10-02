@@ -42,7 +42,9 @@ basestring_type = str
 
 
 # versionchanged:: 6.2
-# no longer our own TimeoutError, use standard asyncio class
+# no longer our own TimeoutError, use standard asyncio class (which is the
+# builtin TimeoutError since Python 3.11). Kept as an alias for compatibility;
+# new code should use the builtin TimeoutError.
 TimeoutError = asyncio.TimeoutError
 
 

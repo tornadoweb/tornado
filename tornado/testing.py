@@ -28,7 +28,7 @@ from typing import Any, Optional, Type, Union
 from tornado import gen, netutil
 from tornado.httpclient import AsyncHTTPClient, HTTPResponse
 from tornado.httpserver import HTTPServer
-from tornado.ioloop import IOLoop, TimeoutError
+from tornado.ioloop import IOLoop
 from tornado.log import app_log
 from tornado.platform.asyncio import AsyncIOMainLoop
 from tornado.process import Subprocess

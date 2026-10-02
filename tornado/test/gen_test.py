@@ -809,8 +809,37 @@ class GenWebTest(AsyncHTTPTestCase):
 class WithTimeoutTest(AsyncTestCase):
     @gen_test
     def test_timeout(self):
-        with self.assertRaises(gen.TimeoutError):
+        with self.assertRaises(TimeoutError) as cm:
             yield gen.with_timeout(datetime.timedelta(seconds=0.1), Future())
+        self.assertEqual(str(cm.exception), "Timeout")
+
+    @gen_test
+    def test_timeout_message(self):
+        with self.assertRaises(TimeoutError) as cm:
+            yield gen.with_timeout(
+                datetime.timedelta(seconds=0.1), Future(), message="custom"
+            )
+        self.assertEqual(str(cm.exception), "custom")
+
+    @gen_test
+    def test_timeout_message_callable(self):
+        with self.assertRaises(TimeoutError) as cm:
+            yield gen.with_timeout(
+                datetime.timedelta(seconds=0.1), Future(), message=lambda: "lazy"
+            )
+        self.assertEqual(str(cm.exception), "lazy")
+
+    @gen_test
+    def test_timeout_message_callable_not_called_on_success(self):
+        def message():
+            raise Exception("should not be called")
+
+        future: Future[str] = Future()
+        future.set_result("asdf")
+        result = yield gen.with_timeout(
+            datetime.timedelta(seconds=3600), future, message=message
+        )
+        self.assertEqual(result, "asdf")
 
     @gen_test
     def test_completes_before_timeout(self):
@@ -851,7 +880,7 @@ class WithTimeoutTest(AsyncTestCase):
     def test_timeout_concurrent_future(self):
         # A concurrent future that does not resolve before the timeout.
         with futures.ThreadPoolExecutor(1) as executor:
-            with self.assertRaises(gen.TimeoutError):
+            with self.assertRaises(TimeoutError):
                 yield gen.with_timeout(
                     self.io_loop.time(), executor.submit(time.sleep, 0.2)
                 )

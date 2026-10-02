@@ -219,7 +219,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                         header_future,
                         quiet_exceptions=iostream.StreamClosedError,
                     )
-                except gen.TimeoutError:
+                except TimeoutError:
                     self.close()
                     return False
             start_line_str, headers = self._parse_headers(header_data)
@@ -299,7 +299,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                                 body_future,
                                 quiet_exceptions=iostream.StreamClosedError,
                             )
-                        except gen.TimeoutError:
+                        except TimeoutError:
                             gen_log.info("Timeout reading body from %s", self.context)
                             self.stream.close()
                             return False

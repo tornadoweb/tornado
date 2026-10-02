@@ -16,7 +16,6 @@ from datetime import timedelta
 from random import random
 
 from tornado import gen, queues
-from tornado.gen import TimeoutError
 from tornado.test.util import AsyncTestCase
 from tornado.testing import gen_test
 

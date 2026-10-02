@@ -20,11 +20,10 @@ import typing
 from contextlib import closing
 
 from tornado.concurrent import Future
-from tornado.gen import TimeoutError
 from tornado.iostream import IOStream
 from tornado.netutil import Resolver, bind_sockets
 from tornado.queues import Queue
-from tornado.tcpclient import TCPClient, _Connector
+from tornado.tcpclient import TCPClient, _Connector, _format_addr
 from tornado.tcpserver import TCPServer
 from tornado.test.util import (
     AsyncTestCase,
@@ -155,10 +154,13 @@ class TCPClientTest(AsyncTestCase):
         # The timeout must be long enough for the TCP connection to be
         # established (which can be slow on windows), so that it expires
         # during the TLS handshake.
-        with self.assertRaises(TimeoutError):
+        with self.assertRaises(TimeoutError) as cm:
             yield self.client.connect(
                 "127.0.0.1", port, ssl_options=self.tls_context(), timeout=0.5
             )
+        self.assertEqual(
+            str(cm.exception), "Timeout during TLS handshake with 127.0.0.1:%d" % port
+        )
         assert self.server is not None
         server_stream = yield self.server.queue.get()
         yield server_stream.read_until_close()
@@ -247,10 +249,49 @@ class TCPClientTest(AsyncTestCase):
             def resolve(self, *args, **kwargs):
                 return Future()  # never completes
 
-        with self.assertRaises(TimeoutError):
+        with self.assertRaises(TimeoutError) as cm:
             yield TCPClient(resolver=TimeoutResolver()).connect(
-                "1.2.3.4", 12345, timeout=timeout
+                "example.com", 12345, timeout=timeout
             )
+        self.assertEqual(str(cm.exception), "Timeout while resolving example.com")
+
+    @gen_test
+    def test_connect_timeout_during_tcp_connect(self):
+        class FakeResolver(Resolver):
+            async def resolve(self, host, port, family=socket.AF_UNSPEC):
+                return [
+                    (socket.AF_INET6, ("2001:db8::1", port, 0, 0)),
+                    (socket.AF_INET, ("192.0.2.1", port)),
+                ]
+
+        class HangingTCPClient(TCPClient):
+            # Connection attempts that never complete.
+            def _create_stream(
+                self, max_buffer_size, af, addr, source_ip=None, source_port=None
+            ):
+                return IOStream(socket.socket(socket.AF_INET)), Future()
+
+        # The timeout is longer than _INITIAL_CONNECT_TIMEOUT so that
+        # both address families are tried.
+        with self.assertRaises(TimeoutError) as cm:
+            yield HangingTCPClient(resolver=FakeResolver()).connect(
+                "example.com", 443, timeout=0.5
+            )
+        self.assertEqual(
+            str(cm.exception),
+            "Timeout while connecting to 192.0.2.1:443, [2001:db8::1]:443",
+        )
+
+
+class TestFormatAddr(TestCase):
+    def test_ipv4(self):
+        self.assertEqual(_format_addr(("1.2.3.4", 443)), "1.2.3.4:443")
+
+    def test_ipv6(self):
+        self.assertEqual(_format_addr(("::1", 443, 0, 0)), "[::1]:443")
+
+    def test_other(self):
+        self.assertEqual(_format_addr("/tmp/sock"), "/tmp/sock")
 
 
 class TestConnectorSplit(TestCase):
@@ -531,7 +572,10 @@ class ConnectorTest(AsyncTestCase):
         self.assert_pending()
         self.assertEqual(len(conn.streams), 2)
         self.assert_connector_streams_closed(conn)
-        self.assertRaises(TimeoutError, future.result)
+        with self.assertRaises(TimeoutError) as cm:
+            future.result()
+        # The failed attempt on "a" is not part of the timeout message.
+        self.assertEqual(str(cm.exception), "Timeout while connecting to b")
 
     def test_one_family_second_try_failure_before_connect_timeout(self):
         conn, future = self.start_connect([(AF1, "a"), (AF1, "b")])
@@ -558,7 +602,9 @@ class ConnectorTest(AsyncTestCase):
         self.assert_pending()
         self.assertEqual(len(conn.streams), 2)
         self.assert_connector_streams_closed(conn)
-        self.assertRaises(TimeoutError, future.result)
+        with self.assertRaises(TimeoutError) as cm:
+            future.result()
+        self.assertEqual(str(cm.exception), "Timeout while connecting to a, c")
 
     def test_two_family_success_after_timeout(self):
         conn, future = self.start_connect(self.addrinfo)

@@ -233,7 +233,7 @@ class Event:
     ) -> Awaitable[None]:
         """Block until the internal flag is true.
 
-        Returns an awaitable, which raises `tornado.util.TimeoutError` after a
+        Returns an awaitable, which raises `TimeoutError` after a
         timeout.
 
         .. versionchanged:: 6.6
@@ -421,7 +421,7 @@ class Semaphore(_TimeoutGarbageCollector):
         """Decrement the counter. Returns an awaitable.
 
         Block if the counter is zero and wait for a `.release`. The awaitable
-        raises `.TimeoutError` after the deadline.
+        raises `TimeoutError` after the deadline.
 
         .. versionchanged:: 6.6
            A ``timeout`` argument of zero will either return or raise immediately.
@@ -437,7 +437,7 @@ class Semaphore(_TimeoutGarbageCollector):
 
                 def on_timeout() -> None:
                     if not waiter.done():
-                        waiter.set_exception(gen.TimeoutError())
+                        waiter.set_exception(TimeoutError())
                     self._garbage_collect()
 
                 io_loop = ioloop.IOLoop.current()
@@ -538,7 +538,7 @@ class Lock:
     ) -> Awaitable[_ReleasingContextManager]:
         """Attempt to lock. Returns an awaitable.
 
-        Returns an awaitable, which raises `tornado.util.TimeoutError` after a
+        Returns an awaitable, which raises `TimeoutError` after a
         timeout.
 
         .. versionchanged:: 6.6
