@@ -49,7 +49,11 @@ from tornado.concurrent import (
     is_future,
 )
 from tornado.log import app_log
-from tornado.util import Configurable, TimeoutError, import_object
+from tornado.util import (  # noqa: F401 (TimeoutError re-exported for compatibility)
+    Configurable,
+    TimeoutError,
+    import_object,
+)
 
 
 class _Selectable(Protocol):
@@ -464,7 +468,7 @@ class IOLoop(Configurable):
 
         The keyword-only argument ``timeout`` may be used to set
         a maximum duration for the function.  If the timeout expires,
-        a `asyncio.TimeoutError` is raised.
+        a `TimeoutError` is raised.
 
         This method is useful to allow asynchronous calls in a
         ``main()`` function::

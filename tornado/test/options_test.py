@@ -1,12 +1,14 @@
 import datetime
 import os
 import sys
-import unittest
 from io import StringIO
 from unittest import mock
 
 from tornado.options import Error, OptionParser
 from tornado.util import basestring_type
+
+
+from tornado.test.util import TestCase
 
 
 class Email:
@@ -21,7 +23,7 @@ class Email:
         return self._value
 
 
-class OptionsTest(unittest.TestCase):
+class OptionsTest(TestCase):
     def test_parse_command_line(self):
         options = OptionParser()
         options.define("port", default=80)

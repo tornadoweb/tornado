@@ -15,8 +15,8 @@ import unittest
 from datetime import timedelta
 
 from tornado import gen, locks
-from tornado.gen import TimeoutError
-from tornado.testing import AsyncTestCase, gen_test
+from tornado.test.util import AsyncTestCase
+from tornado.testing import gen_test
 
 
 class ConditionTest(AsyncTestCase):
@@ -282,7 +282,7 @@ class SemaphoreTest(AsyncTestCase):
         acquire = sem.acquire(timedelta(seconds=0.01))
         self.io_loop.call_later(0.02, sem.release)  # Too late.
         yield gen.sleep(0.3)
-        with self.assertRaises(gen.TimeoutError):
+        with self.assertRaises(TimeoutError):
             yield acquire
 
         sem.acquire()
@@ -386,7 +386,7 @@ class SemaphoreContextManagerTest(AsyncTestCase):
     @gen_test
     def test_context_manager_timeout_error(self):
         sem = locks.Semaphore(value=0)
-        with self.assertRaises(gen.TimeoutError):
+        with self.assertRaises(TimeoutError):
             with (yield sem.acquire(timedelta(seconds=0.01))):
                 pass
 
@@ -501,7 +501,7 @@ class LockTests(AsyncTestCase):
     def test_acquire_timeout(self):
         lock = locks.Lock()
         lock.acquire()
-        with self.assertRaises(gen.TimeoutError):
+        with self.assertRaises(TimeoutError):
             yield lock.acquire(timeout=timedelta(seconds=0.01))
 
         # Still locked.

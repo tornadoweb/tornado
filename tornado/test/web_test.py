@@ -1,3 +1,4 @@
+import asyncio
 import binascii
 import contextlib
 import copy
@@ -9,7 +10,9 @@ import itertools
 import logging
 import os
 import re
+import shutil
 import socket
+import tempfile
 import typing
 import unittest
 import urllib.parse
@@ -32,8 +35,13 @@ from tornado.locks import Event
 from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
-from tornado.test.util import ignore_deprecation
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
+from tornado.test.util import (
+    AsyncHTTPTestCase,
+    AsyncTestCase,
+    TestCase,
+    ignore_deprecation,
+)
+from tornado.testing import ExpectLog, gen_test
 from tornado.util import ObjectDict, unicode_type
 from tornado.web import (
     Application,
@@ -49,6 +57,7 @@ from tornado.web import (
     StaticFileHandler,
     UIModule,
     _create_signature_v1,
+    _create_signature_v2,
     addslash,
     authenticated,
     create_signed_value,
@@ -121,7 +130,7 @@ class CookieTestRequestHandler(RequestHandler):
 
 
 # See SignedValueTest below for more.
-class SecureCookieV1Test(unittest.TestCase):
+class SecureCookieV1Test(TestCase):
     def test_round_trip(self):
         handler = CookieTestRequestHandler()
         handler.set_signed_cookie("foo", b"bar", version=1)
@@ -175,7 +184,7 @@ class SecureCookieV1Test(unittest.TestCase):
 
 
 # See SignedValueTest below for more.
-class SecureCookieV2Test(unittest.TestCase):
+class SecureCookieV2Test(TestCase):
     KEY_VERSIONS = {0: "ajklasdf0ojaisdf", 1: "aslkjasaolwkjsdf"}
 
     def test_round_trip(self):
@@ -329,6 +338,18 @@ class CookieTest(WebTestCase):
                                 "unexpected exception for char %r in domain: %s\n"
                                 % (char, e)
                             )
+                    try:
+                        self.set_cookie("foo", "bar", DoMaIn="example" + char + ".com")
+                        self.write(
+                            "Didn't get expected exception for char %r in DoMaIn\n"
+                            % char
+                        )
+                    except http.cookies.CookieError as e:
+                        if "Invalid cookie attribute DoMaIn" not in str(e):
+                            self.write(
+                                "unexpected exception for char %r in DoMaIn: %s\n"
+                                % (char, e)
+                            )
 
                     try:
                         self.set_cookie("foo", "bar", path="/" + char)
@@ -474,9 +495,7 @@ class CookieTest(WebTestCase):
         self.assertIsNotNone(match)
         assert match is not None  # for mypy
 
-        expires = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
-            days=10
-        )
+        expires = datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=10)
         header_expires = email.utils.parsedate_to_datetime(match.groupdict()["expires"])
         self.assertLess(abs((expires - header_expires).total_seconds()), 10)
 
@@ -1126,10 +1145,15 @@ class ErrorResponseTest(WebTestCase):
             def write_error(self, status_code, **kwargs):
                 raise Exception("exception in write_error")
 
+        class CancelledErrorHandler(RequestHandler):
+            async def get(self):
+                raise asyncio.CancelledError()
+
         return [
             url("/default", DefaultHandler),
             url("/write_error", WriteErrorHandler),
             url("/failed_write_error", FailedWriteErrorHandler),
+            url("/cancelled_error", CancelledErrorHandler),
         ]
 
     def test_default(self):
@@ -1161,6 +1185,99 @@ class ErrorResponseTest(WebTestCase):
             response = self.fetch("/failed_write_error")
             self.assertEqual(response.code, 500)
             self.assertEqual(b"", response.body)
+
+    def test_cancelled_error(self):
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = self.fetch("/cancelled_error", request_timeout=1.0)
+        self.assertEqual(response.code, 500)
+
+
+class CancellationTest(WebTestCase):
+    def get_handlers(self):
+        test = self
+
+        def cancelled_future():
+            fut: Future[None] = Future()
+            fut.cancel()
+            return fut
+
+        class AwaitCancelledHandler(RequestHandler):
+            async def get(self):
+                await cancelled_future()
+
+        class GenAwaitCancelledHandler(RequestHandler):
+            @gen.coroutine
+            def get(self):
+                yield cancelled_future()
+
+        @stream_request_body
+        class StreamingAwaitCancelledHandler(RequestHandler):
+            async def prepare(self):
+                await cancelled_future()
+
+            def data_received(self, chunk):
+                pass
+
+            def put(self):
+                pass
+
+        class CancelledTaskHandler(RequestHandler):
+            async def get(self):
+                test.handler_task = asyncio.current_task()
+                test.handler_started.set()
+                await Future()
+
+        return [
+            url("/await_cancelled", AwaitCancelledHandler),
+            url("/gen_await_cancelled", GenAwaitCancelledHandler),
+            url("/streaming_await_cancelled", StreamingAwaitCancelledHandler),
+            url("/cancelled_task", CancelledTaskHandler),
+        ]
+
+    def setUp(self):
+        super().setUp()
+        self.handler_task: asyncio.Task | None = None
+        self.handler_started = Event()
+
+    # A handler that awaits something that was cancelled gets the usual
+    # error handling for an uncaught exception.
+    def test_await_cancelled(self):
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = self.fetch("/await_cancelled", request_timeout=1.0)
+        self.assertEqual(response.code, 500)
+
+    def test_gen_await_cancelled(self):
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = self.fetch("/gen_await_cancelled", request_timeout=1.0)
+        self.assertEqual(response.code, 500)
+
+    def test_streaming_await_cancelled(self):
+        with ExpectLog(app_log, "Uncaught exception"):
+            # Use expect_100_continue so the body is not sent. Otherwise the
+            # server closes the connection with the body unread, which causes
+            # a connection reset that can discard the response on windows.
+            response = self.fetch(
+                "/streaming_await_cancelled",
+                method="PUT",
+                body=b"a" * 100000,
+                expect_100_continue=True,
+                request_timeout=1.0,
+            )
+        self.assertEqual(response.code, 500)
+
+    @gen_test
+    async def test_cancelled_task(self):
+        # If the handler's own task is cancelled, a response is sent without
+        # logging an error, and the task finishes as cancelled.
+        response_future = self.http_client.fetch(
+            self.get_url("/cancelled_task"), request_timeout=1.0, raise_error=False
+        )
+        await self.handler_started.wait()
+        assert self.handler_task is not None
+        self.handler_task.cancel()
+        response = await response_future
+        self.assertEqual(response.code, 500)
+        self.assertTrue(self.handler_task.cancelled())
 
 
 class StaticFileTest(WebTestCase):
@@ -1256,7 +1373,16 @@ class StaticFileTest(WebTestCase):
         ]
         for filename in filenames:
             with self.subTest(filename=filename):
-                response = self.fetch(f"/static/{filename}")
+                # The 403 below is raised with a log message, so it must be
+                # expected here. It is not required because the 404 path (and
+                # every platform other than windows) does not log anything.
+                with ExpectLog(
+                    gen_log,
+                    ".*is not in root static directory",
+                    required=False,
+                    level=logging.WARNING,
+                ):
+                    response = self.fetch(f"/static/{filename}")
                 # The exact behavior of these filenames differs across versions of
                 # Windows and Python.
                 # https://github.com/python/cpython/issues/90520#issuecomment-1093942179
@@ -1521,6 +1647,14 @@ class StaticFileTest(WebTestCase):
         response = self.get_and_head("/static/blarg")
         self.assertEqual(response.code, 404)
 
+    def test_static_directory_without_default_filename(self):
+        # Without a default_filename, a directory is not servable. This
+        # shares the stat() that validate_absolute_path performs, so it is
+        # worth pinning the status it produces.
+        with ExpectLog(gen_log, ".*is not a file"):
+            response = self.get_and_head("/static/dir/")
+        self.assertEqual(response.code, 403)
+
     def test_path_traversal_protection(self):
         # curl_httpclient processes ".." on the client side, so we
         # must test this with simple_httpclient.
@@ -1545,6 +1679,313 @@ class StaticFileTest(WebTestCase):
         )
         response = self.get_and_head("/root_static" + urllib.parse.quote(path))
         self.assertEqual(response.code, 200)
+
+
+@unittest.skipIf(os.name != "posix", "non-posix OS")
+class StaticFileSymlinkTest(WebTestCase):
+    """Symlinks must not be followed out of the static directory unless the
+    application opts in with ``allowed_symlink_directory``.
+    """
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmpdir)
+        self.root = os.path.join(self.tmpdir, "static")
+        self.outside = os.path.join(self.tmpdir, "outside")
+        os.mkdir(self.root)
+        os.mkdir(self.outside)
+        with open(os.path.join(self.root, "inside.txt"), "w", encoding="utf-8") as f:
+            f.write("inside")
+        with open(os.path.join(self.outside, "secret.txt"), "w", encoding="utf-8") as f:
+            f.write("secret")
+        with open(os.path.join(self.root, "index.html"), "w", encoding="utf-8") as f:
+            f.write("root index")
+        # A symlink to a file outside the root.
+        os.symlink(
+            os.path.join(self.outside, "secret.txt"),
+            os.path.join(self.root, "link.txt"),
+        )
+        # A symlink to a directory outside the root.
+        os.symlink(self.outside, os.path.join(self.root, "linkdir"))
+        # Out-of-bounds symlink targets, one existing and one not, for the
+        # existence-oracle test below.
+        os.mkdir(os.path.join(self.outside, "realdir"))
+        os.symlink(
+            os.path.join(self.outside, "realdir"),
+            os.path.join(self.root, "link_exists"),
+        )
+        os.symlink(
+            os.path.join(self.outside, "nope"),
+            os.path.join(self.root, "link_missing"),
+        )
+        # A symlink that stays inside the root.
+        os.symlink(
+            os.path.join(self.root, "inside.txt"),
+            os.path.join(self.root, "internal.txt"),
+        )
+        # A second out-of-bounds directory, for the list form of
+        # allowed_symlink_directory, plus a target that is in neither.
+        self.outside2 = os.path.join(self.tmpdir, "outside2")
+        os.mkdir(self.outside2)
+        with open(os.path.join(self.outside2, "other.txt"), "w", encoding="utf-8") as f:
+            f.write("other")
+        os.symlink(
+            os.path.join(self.outside2, "other.txt"),
+            os.path.join(self.root, "link2.txt"),
+        )
+        with open(
+            os.path.join(self.tmpdir, "elsewhere.txt"), "w", encoding="utf-8"
+        ) as f:
+            f.write("elsewhere")
+        os.symlink(
+            os.path.join(self.tmpdir, "elsewhere.txt"),
+            os.path.join(self.root, "link_elsewhere.txt"),
+        )
+        super().setUp()
+
+    def get_handlers(self):
+        return [
+            ("/default/(.*)", StaticFileHandler, dict(path=self.root)),
+            (
+                "/permissive/(.*)",
+                StaticFileHandler,
+                dict(path=self.root, allowed_symlink_directory=self.tmpdir),
+            ),
+            (
+                "/permissive_list/(.*)",
+                StaticFileHandler,
+                dict(
+                    path=self.root,
+                    allowed_symlink_directory=[
+                        self.root,
+                        self.outside,
+                        self.outside2,
+                    ],
+                ),
+            ),
+            (
+                "/default_filename/(.*)",
+                StaticFileHandler,
+                dict(path=self.root, default_filename="index.html"),
+            ),
+        ]
+
+    def get_app_kwargs(self):
+        return dict()
+
+    def test_regular_file(self):
+        response = self.fetch("/default/inside.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"inside")
+
+    def test_symlink_within_root(self):
+        # A symlink is fine as long as it resolves inside the root.
+        response = self.fetch("/default/internal.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"inside")
+
+    def test_symlinked_file_escaping_root(self):
+        with ExpectLog(gen_log, ".*is not in root static directory"):
+            response = self.fetch("/default/link.txt")
+        self.assertEqual(response.code, 403)
+
+    def test_symlinked_directory_escaping_root(self):
+        with ExpectLog(gen_log, ".*is not in root static directory"):
+            response = self.fetch("/default/linkdir/secret.txt")
+        self.assertEqual(response.code, 403)
+
+    def test_served_directory_itself(self):
+        # A request for the served directory itself resolves to the allowed
+        # directory exactly, rather than to something beneath it. That must
+        # still be allowed.
+        response = self.fetch("/default_filename/")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"root index")
+
+    def test_symlinked_default_filename(self):
+        # The default filename is appended after the directory has been
+        # resolved, so it must be checked in its own right.
+        os.mkdir(os.path.join(self.root, "dir"))
+        os.symlink(
+            os.path.join(self.outside, "secret.txt"),
+            os.path.join(self.root, "dir", "index.html"),
+        )
+        with ExpectLog(gen_log, ".*is not in root static directory"):
+            response = self.fetch("/default_filename/dir/")
+        self.assertEqual(response.code, 403)
+
+    def test_no_existence_oracle_for_symlinked_directory(self):
+        # A symlink pointing out of bounds must be rejected identically
+        # whether or not its target exists, so that it cannot be used to
+        # probe the server's filesystem. This pins the ordering in
+        # validate_absolute_path: resolving only after the isdir() check
+        # would let an existing directory trigger a redirect (301) while a
+        # missing one still gave 403.
+        codes = []
+        for name in ("link_exists", "link_missing"):
+            with ExpectLog(gen_log, ".*is not in root static directory"):
+                codes.append(
+                    self.fetch("/default_filename/" + name, follow_redirects=False).code
+                )
+        self.assertEqual(codes, [403, 403])
+
+    def test_allowed_symlink_directory(self):
+        # With an explicit allowed_symlink_directory that contains the
+        # target, the same symlinks are served.
+        response = self.fetch("/permissive/link.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"secret")
+
+        response = self.fetch("/permissive/linkdir/secret.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"secret")
+
+    def test_allowed_symlink_directory_list(self):
+        # A list allows symlinks into any of the listed directories. The
+        # list replaces the root rather than adding to it, so it must
+        # include the root for ordinary files to be served.
+        for path, expected in [
+            ("inside.txt", b"inside"),
+            ("link.txt", b"secret"),
+            ("link2.txt", b"other"),
+        ]:
+            response = self.fetch("/permissive_list/" + path)
+            self.assertEqual(response.code, 200)
+            self.assertEqual(response.body, expected)
+
+    def test_allowed_symlink_directory_list_rejects_others(self):
+        # A target in none of the listed directories is still rejected,
+        # even though it is in a directory that contains them all.
+        with ExpectLog(gen_log, ".*is not in root static directory"):
+            response = self.fetch("/permissive_list/link_elsewhere.txt")
+        self.assertEqual(response.code, 403)
+
+
+class MultiRootStaticFileHandler(StaticFileHandler):
+    """A subclass that searches a list of directories.
+
+    It replaces ``initialize`` without calling ``super().initialize()``, so
+    ``allowed_symlink_directory`` is never set, and it puts something other
+    than a string in ``self.root``, passing the directory that matched to
+    ``validate_absolute_path``. The symlink check must run against that
+    directory. Jupyter's ``FileFindHandler`` is built this way.
+    """
+
+    root: tuple  # type: ignore[assignment]
+
+    def initialize(self, path):  # type: ignore[override]
+        self.root = tuple(os.path.abspath(p) + os.path.sep for p in path)
+        self.default_filename = None
+
+    @classmethod
+    def get_absolute_path(cls, roots, path):  # type: ignore[override]
+        for root in roots:
+            candidate = os.path.abspath(os.path.join(root, path))
+            if os.path.exists(candidate):
+                return candidate
+        return os.path.abspath(os.path.join(roots[0], path))
+
+    def validate_absolute_path(self, root, absolute_path):  # type: ignore[override]
+        for candidate in self.root:
+            if (absolute_path + os.path.sep).startswith(candidate):
+                root = candidate
+                break
+        return super().validate_absolute_path(root, absolute_path)
+
+
+@unittest.skipIf(os.name != "posix", "non-posix OS")
+class StaticFileMultiRootTest(WebTestCase):
+    """Subclasses that search several directories and never set
+    ``allowed_symlink_directory`` must keep working (issue #3724).
+    """
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmpdir)
+        self.root1 = os.path.join(self.tmpdir, "static1")
+        self.root2 = os.path.join(self.tmpdir, "static2")
+        self.outside = os.path.join(self.tmpdir, "outside")
+        for d in (self.root1, self.root2, self.outside):
+            os.mkdir(d)
+        with open(os.path.join(self.root1, "one.txt"), "w", encoding="utf-8") as f:
+            f.write("one")
+        with open(os.path.join(self.root2, "two.txt"), "w", encoding="utf-8") as f:
+            f.write("two")
+        with open(os.path.join(self.outside, "secret.txt"), "w", encoding="utf-8") as f:
+            f.write("secret")
+        os.symlink(
+            os.path.join(self.root1, "one.txt"),
+            os.path.join(self.root2, "internal.txt"),
+        )
+        os.symlink(
+            os.path.join(self.outside, "secret.txt"),
+            os.path.join(self.root1, "link.txt"),
+        )
+        super().setUp()
+
+    def get_handlers(self):
+        return [
+            (
+                "/multi/(.*)",
+                MultiRootStaticFileHandler,
+                dict(path=[self.root1, self.root2]),
+            )
+        ]
+
+    def get_app_kwargs(self):
+        return dict()
+
+    def test_first_root(self):
+        response = self.fetch("/multi/one.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"one")
+
+    def test_second_root(self):
+        response = self.fetch("/multi/two.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"two")
+
+    def test_symlink_to_other_root_rejected(self):
+        # Each root is validated on its own: a link from one search directory
+        # into another is still an escape from the directory it lives in.
+        with ExpectLog(gen_log, ".*is not in root static directory"):
+            response = self.fetch("/multi/internal.txt")
+        self.assertEqual(response.code, 403)
+
+    def test_symlink_escaping_roots_rejected(self):
+        with ExpectLog(gen_log, ".*is not in root static directory"):
+            response = self.fetch("/multi/link.txt")
+        self.assertEqual(response.code, 403)
+
+
+class StaticFileSymlinkedRootTest(WebTestCase):
+    """The root itself may be reached through a symlink; that must not make
+    every request look like an escape.
+    """
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmpdir)
+        real_root = os.path.join(self.tmpdir, "real")
+        os.mkdir(real_root)
+        with open(os.path.join(real_root, "inside.txt"), "w", encoding="utf-8") as f:
+            f.write("inside")
+        # Serve through a symlink to the real directory.
+        self.root = os.path.join(self.tmpdir, "link")
+        os.symlink(real_root, self.root)
+        super().setUp()
+
+    def get_handlers(self):
+        return [("/static/(.*)", StaticFileHandler, dict(path=self.root))]
+
+    def get_app_kwargs(self):
+        return dict()
+
+    @unittest.skipIf(os.name != "posix", "non-posix OS")
+    def test_symlinked_root(self):
+        response = self.fetch("/static/inside.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"inside")
 
 
 class StaticDefaultFilenameTest(WebTestCase):
@@ -1809,6 +2250,18 @@ class Header204Test(SimpleHandlerTestCase):
         self.assertNotIn("Transfer-Encoding", response.headers)
 
 
+class Header204viaHTTPErrorTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            raise HTTPError(204)
+
+    def test_204_headers_via_httperror(self):
+        response = self.fetch("/")
+        self.assertEqual(response.code, 204)
+        self.assertNotIn("Content-Length", response.headers)
+        self.assertNotIn("Transfer-Encoding", response.headers)
+
+
 class Header304Test(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):
@@ -1880,7 +2333,7 @@ class DateHeaderTest(SimpleHandlerTestCase):
         response = self.fetch("/")
         header_date = email.utils.parsedate_to_datetime(response.headers["Date"])
         self.assertLess(
-            header_date - datetime.datetime.now(datetime.timezone.utc),
+            header_date - datetime.datetime.now(datetime.UTC),
             datetime.timedelta(seconds=2),
         )
 
@@ -2735,7 +3188,7 @@ class ClientCloseTest(SimpleHandlerTestCase):
             self.assertEqual(response.code, 599)
 
 
-class SignedValueTest(unittest.TestCase):
+class SignedValueTest(TestCase):
     SECRET = "It's a secret to everybody"
     SECRET_DICT = {0: "asdfbasdf", 1: "12312312", 2: "2342342"}
 
@@ -2903,6 +3356,41 @@ class SignedValueTest(unittest.TestCase):
         )
         key_version = get_signature_key_version(signed)
         self.assertEqual(1, key_version)
+
+    def test_malformed_timestamp_v1(self):
+        # Valid HMAC over a non-decimal timestamp must return None, not raise.
+        secret = b"s"
+        name = "a"
+        value_b64 = b"dg=="  # base64(b"v")
+        timestamp = b"not-a-number"
+        sig = _create_signature_v1(secret, name, value_b64, timestamp)
+        cookie = b"|".join([value_b64, timestamp, sig])
+        self.assertIsNone(
+            decode_signed_value(secret, name, cookie, clock=lambda: 1_500_000_000)
+        )
+
+    def test_malformed_timestamp_v2(self):
+        # Valid HMAC over a non-decimal timestamp must return None, not raise.
+        secret = b"s"
+        name = "a"
+
+        def field(value: bytes) -> bytes:
+            return str(len(value)).encode("ascii") + b":" + value
+
+        prefix = b"|".join(
+            [
+                b"2",
+                field(b"0"),
+                field(b"a"),  # non-decimal timestamp
+                field(utf8(name)),
+                field(b""),
+                b"",
+            ]
+        )
+        cookie = prefix + _create_signature_v2(secret, prefix)
+        self.assertIsNone(
+            decode_signed_value(secret, name, cookie, clock=lambda: 1_500_000_000)
+        )
 
 
 class XSRFTest(SimpleHandlerTestCase):
@@ -3186,12 +3674,10 @@ class XSRFCookieKwargsTest(SimpleHandlerTestCase):
         match = re.match(".*; expires=(?P<expires>.+);.*", header)
         assert match is not None
 
-        expires = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
-            days=2
-        )
+        expires = datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=2)
         header_expires = email.utils.parsedate_to_datetime(match.groupdict()["expires"])
         if header_expires.tzinfo is None:
-            header_expires = header_expires.replace(tzinfo=datetime.timezone.utc)
+            header_expires = header_expires.replace(tzinfo=datetime.UTC)
         self.assertTrue(abs((expires - header_expires).total_seconds()) < 10)
 
 
@@ -3326,7 +3812,7 @@ class RequestSummaryTest(SimpleHandlerTestCase):
         self.assertEqual(resp.body, b"GET / (None)")
 
 
-class HTTPErrorTest(unittest.TestCase):
+class HTTPErrorTest(TestCase):
     def test_copy(self):
         e = HTTPError(403, reason="Go away")
         e2 = copy.copy(e)
@@ -3342,7 +3828,7 @@ class ApplicationTest(AsyncTestCase):
         server.stop()
 
 
-class URLSpecReverseTest(unittest.TestCase):
+class URLSpecReverseTest(TestCase):
     def test_reverse(self):
         self.assertEqual("/favicon.ico", url(r"/favicon\.ico", None).reverse())
         self.assertEqual("/favicon.ico", url(r"^/favicon\.ico$", None).reverse())
