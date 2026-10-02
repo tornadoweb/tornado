@@ -601,8 +601,6 @@ class PathMatches(Matcher):
         assert len(args) == self._group_count, (
             "required number of arguments " "not found"
         )
-        if not len(args):
-            return self._path
         converted_args = []
         for a in args:
             if not isinstance(a, (unicode_type, bytes)):
@@ -616,7 +614,8 @@ class PathMatches(Matcher):
         For example: Given the url pattern /([0-9]{4})/([a-z-]+)/, this method
         would return ('/%s/%s/', 2).
         """
-        pattern = self.regex.pattern
+        # Literal percent signs must not become formatting directives in reverse().
+        pattern = self.regex.pattern.replace("%", "%%")
         if pattern.startswith("^"):
             pattern = pattern[1:]
         if pattern.endswith("$"):
