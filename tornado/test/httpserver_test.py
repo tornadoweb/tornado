@@ -37,14 +37,14 @@ from tornado.iostream import IOStream
 from tornado.locks import Event
 from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.test.util import abstract_base_test
-from tornado.testing import (
+from tornado.test.util import (
     AsyncHTTPSTestCase,
     AsyncHTTPTestCase,
     AsyncTestCase,
-    ExpectLog,
-    gen_test,
+    TestCase,
+    abstract_base_test,
 )
+from tornado.testing import ExpectLog, gen_test
 from tornado.web import Application, RequestHandler, stream_request_body
 
 
@@ -137,7 +137,7 @@ class SSLTest(AsyncHTTPSTestCase):
         self.assertFalse(expect_log.logged_stack)
 
 
-class BadSSLOptionsTest(unittest.TestCase):
+class BadSSLOptionsTest(TestCase):
     def test_missing_arguments(self):
         application = Application()
         self.assertRaises(
@@ -1125,6 +1125,28 @@ class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
             headers={"Content-Encoding": "GZIP"},
         )
         self.assertEqual(json_decode(response.body), {"foo": ["bar"]})
+
+    def test_gzip_concatenated(self):
+        response = self.fetch(
+            "/",
+            method="POST",
+            body=gzip.compress(b"foo=") + gzip.compress(b"bar"),
+            headers={"Content-Encoding": "gzip"},
+        )
+        self.assertEqual(json_decode(response.body), {"foo": ["bar"]})
+
+    def test_gzip_invalid(self):
+        body = gzip.compress(b"foo=bar")
+        for invalid in [body + b"\0", body[:-1]]:
+            with self.subTest(invalid=invalid):
+                with ExpectLog(gen_log, ".*invalid gzip data", level=logging.INFO):
+                    response = self.fetch(
+                        "/",
+                        method="POST",
+                        body=invalid,
+                        headers={"Content-Encoding": "gzip"},
+                    )
+                self.assertEqual(response.code, 400)
 
     def test_size_limit(self):
         with ExpectLog(gen_log, ".*decompressed body too large", level=logging.INFO):

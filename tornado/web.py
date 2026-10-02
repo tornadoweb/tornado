@@ -56,6 +56,7 @@ the executor do not refer to Tornado objects.
 
 """
 
+import asyncio
 import base64
 import binascii
 import datetime
@@ -70,6 +71,7 @@ import numbers
 import os.path
 import re
 import socket
+import stat
 import sys
 import threading
 import time
@@ -422,7 +424,7 @@ class RequestHandler:
         # If \n is allowed into the header, it is possible to inject
         # additional headers or split the request.
         if RequestHandler._VALID_HEADER_CHARS.fullmatch(retval) is None:
-            raise ValueError("Unsafe header value %r", retval)
+            raise ValueError("Unsafe header value %r" % retval)
         return retval
 
     @overload
@@ -700,6 +702,12 @@ class RequestHandler:
                 raise http.cookies.CookieError(
                     f"Invalid cookie attribute {attr_name}={attr_value!r} for cookie {name!r}"
                 )
+        for k, v in kwargs.items():
+            # Also check for disallowed characters in deprecated kwargs.
+            if re.search(r"[\x00-\x20\x3b\x7f]", str(v)):
+                raise http.cookies.CookieError(
+                    f"Invalid cookie attribute {k}={v!r} for cookie {name!r}"
+                )
         if not hasattr(self, "_new_cookie"):
             self._new_cookie: http.cookies.SimpleCookie = http.cookies.SimpleCookie()
         if name in self._new_cookie:
@@ -709,7 +717,7 @@ class RequestHandler:
         if domain:
             morsel["domain"] = domain
         if expires_days is not None and not expires:
-            expires = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+            expires = datetime.datetime.now(datetime.UTC) + datetime.timedelta(
                 days=expires_days
             )
         if expires:
@@ -762,9 +770,7 @@ class RequestHandler:
                 raise TypeError(
                     f"clear_cookie() got an unexpected keyword argument '{excluded_arg}'"
                 )
-        expires = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
-            days=365
-        )
+        expires = datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=365)
         self.set_cookie(name, value="", expires=expires, **kwargs)
 
     def clear_all_cookies(self, **kwargs: Any) -> None:
@@ -1248,6 +1254,10 @@ class RequestHandler:
                 future.set_result(None)
                 return future
 
+    def _should_not_send_content(self, status_code: int) -> bool:
+        """Check if we should not send body content for given `status_code`"""
+        return status_code in (204, 304) or (100 <= status_code < 200)
+
     def finish(self, chunk: str | bytes | dict | None = None) -> "Future[None]":
         """Finishes this response, ending the HTTP request.
 
@@ -1281,10 +1291,11 @@ class RequestHandler:
                 if self.check_etag_header():
                     self._write_buffer = []
                     self.set_status(304)
-            if self._status_code in (204, 304) or (100 <= self._status_code < 200):
-                assert not self._write_buffer, (
-                    "Cannot send body with %s" % self._status_code
-                )
+            if self._should_not_send_content(self._status_code):
+                if self._write_buffer:
+                    raise RuntimeError(
+                        f"Cannot send body with status code HTTP{self._status_code}"
+                    )
                 self._clear_representation_headers()
             elif "Content-Length" not in self._headers:
                 content_length = sum(len(part) for part in self._write_buffer)
@@ -1376,7 +1387,9 @@ class RequestHandler:
         the "current" exception for purposes of methods like
         ``sys.exc_info()`` or ``traceback.format_exc``.
         """
-        if self.settings.get("serve_traceback") and "exc_info" in kwargs:
+        if self._should_not_send_content(status_code):
+            self.finish()
+        elif self.settings.get("serve_traceback") and "exc_info" in kwargs:
             # in debug mode, try to send a traceback
             self.set_header("Content-Type", "text/plain")
             for line in traceback.format_exception(*kwargs["exc_info"]):
@@ -1564,7 +1577,7 @@ class RequestHandler:
                     ]
                 )
             else:
-                raise ValueError("unknown xsrf cookie version %d", output_version)
+                raise ValueError("unknown xsrf cookie version %d" % output_version)
             if version is None:
                 if self.current_user and "expires_days" not in cookie_kwargs:
                     cookie_kwargs["expires_days"] = 30
@@ -1861,7 +1874,25 @@ class RequestHandler:
                 result = await result
             if self._auto_finish and not self._finished:
                 self.finish()
-        except Exception as e:
+        except (Exception, asyncio.CancelledError) as e:
+            task = asyncio.current_task()
+            if (
+                isinstance(e, asyncio.CancelledError)
+                and task is not None
+                and task.cancelling()
+            ):
+                # This handler's own task was cancelled (as opposed to the
+                # handler awaiting something else that was cancelled). This is
+                # not an error to be logged, but send a response so the
+                # connection is not left hanging, then let the cancellation
+                # propagate.
+                result = None
+                if not self._finished:
+                    try:
+                        self.send_error(500)
+                    except Exception:
+                        app_log.error("Exception in exception handler", exc_info=True)
+                raise
             try:
                 self._handle_request_exception(e)
             except Exception:
@@ -1869,10 +1900,10 @@ class RequestHandler:
             finally:
                 # Unset result to avoid circular references
                 result = None
+        finally:
             if self._prepared_future is not None and not self._prepared_future.done():
                 # In case we failed before setting _prepared_future, do it
-                # now (to unblock the HTTP server).  Note that this is not
-                # in a finally block to avoid GC issues prior to Python 3.4.
+                # now (to unblock the HTTP server).
                 self._prepared_future.set_result(None)
 
     def data_received(self, chunk: bytes) -> Awaitable[None] | None:
@@ -2001,14 +2032,14 @@ def stream_request_body(cls: type[_RequestHandlerType]) -> type[_RequestHandlerT
     for example usage.
     """  # noqa: E501
     if not issubclass(cls, RequestHandler):
-        raise TypeError("expected subclass of RequestHandler, got %r", cls)
+        raise TypeError("expected subclass of RequestHandler, got %r" % cls)
     cls._stream_request_body = True
     return cls
 
 
 def _has_stream_request_body(cls: type[RequestHandler]) -> bool:
     if not issubclass(cls, RequestHandler):
-        raise TypeError("expected subclass of RequestHandler, got %r", cls)
+        raise TypeError("expected subclass of RequestHandler, got %r" % cls)
     return cls._stream_request_body
 
 
@@ -2506,7 +2537,7 @@ class _HandlerDelegate(httputil.HTTPMessageDelegate):
         fut = gen.convert_yielded(
             self.handler._execute(transforms, *self.path_args, **self.path_kwargs)
         )
-        fut.add_done_callback(lambda f: f.result())
+        fut.add_done_callback(lambda f: f.cancelled() or f.result())
         # If we are streaming the request body, then execute() is finished
         # when the handler has prepared to receive the body.  If not,
         # it doesn't matter when execute() finishes (so we return None)
@@ -2709,6 +2740,13 @@ class StaticFileHandler(RequestHandler):
     in your application settings, or add ``default_filename`` as an initializer
     argument for your ``StaticFileHandler``.
 
+    Symlinks are not followed out of the directory being served: if a path
+    resolves to a location outside it, the request is rejected with a 403
+    error. Deployments that deliberately serve content through symlinks
+    pointing elsewhere can set the ``allowed_symlink_directory`` initializer
+    argument to a directory containing all of the intended targets, or to a
+    list of such directories. It defaults to the ``path`` argument.
+
     To maximize the effectiveness of browser caching, this class supports
     versioned urls (by default using the argument ``?v=``).  If a version
     is given, we instruct the browser to cache this file indefinitely.
@@ -2747,6 +2785,14 @@ class StaticFileHandler(RequestHandler):
 
     .. versionchanged:: 3.1
        Many of the methods for subclasses were added in Tornado 3.1.
+
+    .. versionchanged:: 6.5.9
+       Symlinks pointing outside the served directory are no longer
+       followed, and the ``allowed_symlink_directory`` argument was added
+       to configure this.
+
+    .. versionchanged:: 6.5.10
+       ``allowed_symlink_directory`` may now be a list of directories.
     """
 
     CACHE_MAX_AGE = 86400 * 365 * 10  # 10 years
@@ -2754,9 +2800,23 @@ class StaticFileHandler(RequestHandler):
     _static_hashes: dict[str, str | None] = {}
     _lock = threading.Lock()  # protects _static_hashes
 
-    def initialize(self, path: str, default_filename: str | None = None) -> None:
+    # A single directory or a list of them. None means "not set", in which
+    # case the symlink check falls back to the directory being served. The
+    # default lives on the class, not in initialize(), because this attribute
+    # was introduced in a security patch and some projects (notably Jupyter)
+    # subclass StaticFileHandler with their own initialize() that does not
+    # call ours.
+    allowed_symlink_directory: str | list[str] | None = None
+
+    def initialize(
+        self,
+        path: str,
+        default_filename: str | None = None,
+        allowed_symlink_directory: str | list[str] | None = None,
+    ) -> None:
         self.root = path
         self.default_filename = default_filename
+        self.allowed_symlink_directory = allowed_symlink_directory
 
     @classmethod
     def reset(cls) -> None:
@@ -2883,7 +2943,7 @@ class StaticFileHandler(RequestHandler):
         if cache_time > 0:
             self.set_header(
                 "Expires",
-                datetime.datetime.now(datetime.timezone.utc)
+                datetime.datetime.now(datetime.UTC)
                 + datetime.timedelta(seconds=cache_time),
             )
             self.set_header("Cache-Control", "max-age=" + str(cache_time))
@@ -2908,7 +2968,7 @@ class StaticFileHandler(RequestHandler):
             except Exception:
                 return False
             if if_since.tzinfo is None:
-                if_since = if_since.replace(tzinfo=datetime.timezone.utc)
+                if_since = if_since.replace(tzinfo=datetime.UTC)
             assert self.modified is not None
             if if_since >= self.modified:
                 return True
@@ -2968,6 +3028,26 @@ class StaticFileHandler(RequestHandler):
         # the requested path so a request to root/ will match.
         if not (absolute_path + os.path.sep).startswith(root):
             raise HTTPError(403, "%s is not in root static directory", self.path)
+        # Symlinks may point anywhere inside allowed_symlink_directory, which
+        # defaults to the directory being served. Resolve that default here,
+        # against the same root the checks above used, and normalize the one
+        # directory that is allowed by default (or configured as a plain
+        # string) to a list, so that _resolve_symlink_target has only one
+        # shape to deal with.
+        allowed_symlink_directories = self.allowed_symlink_directory or root
+        if isinstance(allowed_symlink_directories, str):
+            allowed_symlink_directories = [allowed_symlink_directories]
+        # The check above is on the path as written, which is cheap and
+        # rejects traversal without touching the filesystem. Resolve
+        # symlinks only once it has passed, so that the remaining checks -
+        # and the path this method returns - refer to the file that will
+        # actually be opened rather than to the link. The two checks
+        # cannot be merged: this one must stay on the unresolved path,
+        # because allowed_symlink_directory may be wider than the root and
+        # would then let a ../ traversal through.
+        absolute_path = self._resolve_symlink_target(
+            absolute_path, allowed_symlink_directories, self.path
+        )
         if os.path.isdir(absolute_path) and self.default_filename is not None:
             # need to look at the request.path here for when path is empty
             # but there is some prefix to the path that was already
@@ -2985,11 +3065,88 @@ class StaticFileHandler(RequestHandler):
                 self.redirect(self.request.path + "/", permanent=True)
                 return None
             absolute_path = os.path.join(absolute_path, self.default_filename)
-        if not os.path.exists(absolute_path):
+            # The default filename may be a symlink even when the directory
+            # containing it is not. Resolving here rather than deferring a
+            # single resolution until after this block is deliberate: the
+            # isdir() above, and the redirect it can trigger, must not run
+            # on a path that has already escaped, or the difference between
+            # a redirect and a 403 would reveal whether an out-of-bounds
+            # directory exists.
+            absolute_path = self._resolve_symlink_target(
+                absolute_path, allowed_symlink_directories, self.path
+            )
+        # Stat the resolved path once and keep the result, instead of
+        # letting os.path.exists, os.path.isfile and the later header
+        # generation each resolve the path again. Every one of those is a
+        # separate trip through the filesystem that could observe a
+        # different file from the one validated here.
+        try:
+            stat_result = os.stat(absolute_path)
+        except OSError:
+            # Matches the previous os.path.exists() check, which is also
+            # false when the path cannot be stat'ed at all.
             raise HTTPError(404)
-        if not os.path.isfile(absolute_path):
+        if not stat.S_ISREG(stat_result.st_mode):
             raise HTTPError(403, "%s is not a file", self.path)
+        self._stat_result = stat_result
         return absolute_path
+
+    @staticmethod
+    def _resolve_symlink_target(
+        absolute_path: str,
+        allowed_symlink_directories: list[str],
+        path_message: str,
+    ) -> str:
+        """Resolves symlinks in ``absolute_path`` and validates the result.
+
+        The path checks in `validate_absolute_path` operate on the path as
+        written, which says nothing about where a symlink points: a symlink
+        inside the static directory can name any file on the system. The
+        resolved path must therefore stay inside one of
+        ``allowed_symlink_directories``.
+
+        This is a static method so that it can only see the values its
+        caller checked against: ``allowed_symlink_directories`` are the
+        directories `validate_absolute_path` settled on, which are not
+        necessarily ``self.allowed_symlink_directory`` or ``self.root``.
+        It is always a list, so that the single-directory case does not
+        need a second code path here. ``path_message`` is used only to
+        build the error message.
+
+        Raises `HTTPError` (403) if the resolved path escapes all of those
+        directories.
+
+        Note that this is a check against the state of the filesystem at
+        one moment: a path that is replaced by a symlink after this returns
+        but before the file is opened would not be caught. Closing that
+        race entirely would require holding file descriptors across the
+        whole operation. This check is not a substitute for filesystem
+        permissions on a directory that untrusted users can write to.
+        """
+        # strict=True is deliberately not used here: it is unavailable on
+        # Python 3.9, and a path that does not exist resolves to itself,
+        # which the caller then reports as a 404.
+        resolved_path = os.path.realpath(absolute_path)
+        for allowed_symlink_directory in allowed_symlink_directories:
+            # realpath() is applied to the allowed directory as well, because
+            # it may itself be reached through a symlink (a static directory
+            # of /var/www that links to /srv/www, say). Comparing a resolved
+            # path against an unresolved directory would reject every request.
+            allowed_directory = os.path.realpath(allowed_symlink_directory)
+            if not allowed_directory.endswith(os.path.sep):
+                # As in validate_absolute_path, the separator must not be
+                # doubled when the directory is the filesystem root.
+                allowed_directory += os.path.sep
+            # The trailing separator lets the allowed directory itself match,
+            # as well as anything beneath it. This is reachable because the
+            # path may still be a directory at this point (when
+            # default_filename is set).
+            if (resolved_path + os.path.sep).startswith(allowed_directory):
+                return resolved_path
+        # Deliberately the same error as the check on the path as written,
+        # so that a caller cannot tell which way a path left the served
+        # directory.
+        raise HTTPError(403, "%s is not in root static directory", path_message)
 
     @classmethod
     def get_content(
@@ -3050,6 +3207,10 @@ class StaticFileHandler(RequestHandler):
 
     def _stat(self) -> os.stat_result:
         assert self.absolute_path is not None
+        # validate_absolute_path normally populates this, so that the size
+        # and modification time reported here describe the same file that
+        # was validated. Subclasses that override validate_absolute_path
+        # without calling super() fall back to stat'ing here.
         if not hasattr(self, "_stat_result"):
             self._stat_result = os.stat(self.absolute_path)
         return self._stat_result
@@ -3090,7 +3251,7 @@ class StaticFileHandler(RequestHandler):
         # that relies on this), we truncate the float here, although
         # I'm not sure that's the right thing to do.
         modified = datetime.datetime.fromtimestamp(
-            int(stat_result.st_mtime), datetime.timezone.utc
+            int(stat_result.st_mtime), datetime.UTC
         )
         return modified
 
@@ -3391,7 +3552,7 @@ def authenticated(
 
 
 class UIModule:
-    """A re-usable, modular UI unit on a page.
+    """A reusable, modular UI unit on a page.
 
     UI modules often execute additional queries, and they can include
     additional CSS and JavaScript that will be included in the output

@@ -46,8 +46,8 @@ if (
         #   cog.outl(")]")
         #   cog.outl(f"bdist_wheel_options = {{\"py_limited_api\": \"cp3{min_python_minor}\"}}")
         #   ]]]
-        define_macros = [("Py_LIMITED_API", "0x030a0000")]
-        bdist_wheel_options = {"py_limited_api": "cp310"}
+        define_macros = [("Py_LIMITED_API", "0x030b0000")]
+        bdist_wheel_options = {"py_limited_api": "cp311"}
         # [[[end]]]
     else:
         define_macros = []
@@ -77,7 +77,7 @@ setuptools.setup(
     name="tornado",
     version=version,
     # [[[cog cog.outl(f"python_requires=\">= 3.{min_python_minor}\",")]]]
-    python_requires=">= 3.10",
+    python_requires=">= 3.11",
     # [[[end]]]
     packages=["tornado", "tornado.test", "tornado.platform"],
     package_data={
@@ -120,13 +120,13 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         # [[[cog
         #   for minor in range(int(min_python_minor), int(max_python_minor) + 1):
-        #     cog.outl(f"\"Programming Language :: Python :: 3.{minor}\"")
+        #     cog.outl(f"\"Programming Language :: Python :: 3.{minor}\",")
         #   ]]]
-        "Programming Language :: Python :: 3.10"
-        "Programming Language :: Python :: 3.11"
-        "Programming Language :: Python :: 3.12"
-        "Programming Language :: Python :: 3.13"
-        "Programming Language :: Python :: 3.14"
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
+        "Programming Language :: Python :: 3.14",
+        "Programming Language :: Python :: 3.15",
         # [[[end]]]
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python :: Implementation :: PyPy",

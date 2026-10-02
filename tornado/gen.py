@@ -94,7 +94,7 @@ from tornado.concurrent import (
 )
 from tornado.ioloop import IOLoop
 from tornado.log import app_log
-from tornado.util import TimeoutError
+from tornado.util import TimeoutError  # noqa: F401 (re-exported for compatibility)
 
 _T = typing.TypeVar("_T")
 
@@ -193,6 +193,13 @@ def coroutine(
        The ``callback`` argument was removed. Use the returned
        awaitable object instead.
 
+    .. versionchanged:: 6.6
+
+       If the coroutine raises `asyncio.CancelledError` (including by
+       yielding a cancelled `.Future` without catching the exception), the
+       returned `.Future` is now cancelled. Previously the coroutine would
+       never complete.
+
     """
 
     @functools.wraps(func)
@@ -205,6 +212,11 @@ def coroutine(
             result = ctx_run(func, *args, **kwargs)
         except (Return, StopIteration) as e:
             result = _value_from_stopiteration(e)
+        except asyncio.CancelledError:
+            # Like asyncio.Task, a coroutine that raises CancelledError
+            # is treated as cancelled.
+            future.cancel()
+            return future
         except Exception:
             future_set_exc_info(future, sys.exc_info())
             try:
@@ -225,6 +237,8 @@ def coroutine(
                     future_set_result_unless_cancelled(
                         future, _value_from_stopiteration(e)
                     )
+                except asyncio.CancelledError:
+                    future.cancel()
                 except Exception:
                     future_set_exc_info(future, sys.exc_info())
                 else:
@@ -482,6 +496,11 @@ def multi(
        with a unified function ``multi``. Added support for yieldables
        other than ``YieldPoint`` and `.Future`.
 
+    .. versionchanged:: 6.6
+       If a child is cancelled, ``multi()`` now raises `asyncio.CancelledError`
+       (without logging it if it is not the first failure), matching
+       `asyncio.gather`. Previously ``multi()`` would never complete.
+
     """
     return multi_future(children, quiet_exceptions=quiet_exceptions)
 
@@ -528,9 +547,13 @@ def multi_future(
             for f in children_futs:
                 try:
                     result_list.append(f.result())
-                except Exception as e:
+                except (Exception, asyncio.CancelledError) as e:
+                    # As in asyncio.gather, a cancelled child is treated as
+                    # an error, and does not cancel the combined future.
                     if future.done():
-                        if not isinstance(e, quiet_exceptions):
+                        if not isinstance(
+                            e, (asyncio.CancelledError, quiet_exceptions)
+                        ):
                             app_log.error(
                                 "Multiple exceptions in yield list", exc_info=True
                             )
@@ -577,13 +600,20 @@ def with_timeout(
     timeout: float | datetime.timedelta,
     future: _Yieldable,
     quiet_exceptions: "Union[Type[Exception], Tuple[Type[Exception], ...]]" = (),
+    *,
+    message: str | Callable[[], str] | None = None,
 ) -> Future:
     """Wraps a `.Future` (or other yieldable object) in a timeout.
 
-    Raises `tornado.util.TimeoutError` if the input future does not
+    Raises `TimeoutError` if the input future does not
     complete before ``timeout``, which may be specified in any form
     allowed by `.IOLoop.add_timeout` (i.e. a `datetime.timedelta` or
     an absolute time relative to `.IOLoop.time`)
+
+    ``message`` is used as the message of the `TimeoutError`. It may be
+    a string or a callable returning a string; a callable is only called
+    if the timeout expires, so it may be used to defer the cost of
+    formatting the message.
 
     If the wrapped `.Future` fails after it has timed out, the exception
     will be logged unless it is either of a type contained in
@@ -609,6 +639,9 @@ def with_timeout(
     .. versionchanged:: 6.2
        ``tornado.util.TimeoutError`` is now an alias to ``asyncio.TimeoutError``.
 
+    .. versionchanged:: 6.6
+       Added the ``message`` argument.
+
     """
     # It's tempting to optimize this by cancelling the input future on timeout
     # instead of creating a new one, but A) we can't know if we are the only
@@ -633,7 +666,13 @@ def with_timeout(
 
     def timeout_callback() -> None:
         if not result.done():
-            result.set_exception(TimeoutError("Timeout"))
+            if message is None:
+                msg = "Timeout"
+            elif callable(message):
+                msg = message()
+            else:
+                msg = message
+            result.set_exception(TimeoutError(msg))
         # In case the wrapped future goes on to fail, log it.
         future_add_done_callback(future_converted, error_callback)
 
@@ -765,11 +804,11 @@ class Runner:
                 try:
                     try:
                         value = future.result()
-                    except Exception as e:
+                    except (Exception, asyncio.CancelledError) as e:
                         # Save the exception for later. It's important that
                         # gen.throw() not be called inside this try/except block
                         # because that makes sys.exc_info behave unexpectedly.
-                        exc: Exception | None = e
+                        exc: BaseException | None = e
                     else:
                         exc = None
                     finally:
@@ -791,6 +830,12 @@ class Runner:
                     future_set_result_unless_cancelled(
                         self.result_future, _value_from_stopiteration(e)
                     )
+                    self.result_future = None  # type: ignore
+                    return
+                except asyncio.CancelledError:
+                    self.finished = True
+                    self.future = _null_future
+                    self.result_future.cancel()
                     self.result_future = None  # type: ignore
                     return
                 except Exception:

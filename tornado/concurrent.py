@@ -131,7 +131,7 @@ def run_on_executor(*args: Any, **kwargs: Any) -> Callable:
     if len(args) == 1:
         return run_on_executor_decorator(args[0])
     elif len(args) != 0:
-        raise ValueError("expected 1 argument, got %d", len(args))
+        raise ValueError("expected 1 argument, got %d" % len(args))
     return run_on_executor_decorator
 
 
@@ -152,10 +152,18 @@ def chain_future(
        Now accepts both Tornado/asyncio `Future` objects and
        `concurrent.futures.Future`.
 
+    .. versionchanged:: 6.6
+
+       If ``a`` is cancelled, ``b`` is now cancelled too. Previously ``b``
+       would never complete.
+
     """
 
     def copy(a: "Future[_T]") -> None:
         if b.done():
+            return
+        if a.cancelled():
+            b.cancel()
             return
         if hasattr(a, "exc_info") and a.exc_info() is not None:  # type: ignore
             future_set_exc_info(b, a.exc_info())  # type: ignore

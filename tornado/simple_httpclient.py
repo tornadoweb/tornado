@@ -325,19 +325,24 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 timeout = self.request.request_timeout
             else:
                 timeout = 0
-            if timeout:
-                self._timeout = self.io_loop.add_timeout(
-                    self.start_time + timeout,
-                    functools.partial(self._on_timeout, "while connecting"),
+            try:
+                stream = await self.tcp_client.connect(
+                    host,
+                    port,
+                    af=af,
+                    ssl_options=ssl_options,
+                    max_buffer_size=self.max_buffer_size,
+                    source_ip=source_ip,
+                    timeout=(
+                        self.start_time + timeout - self.io_loop.time()
+                        if timeout
+                        else None
+                    ),
                 )
-            stream = await self.tcp_client.connect(
-                host,
-                port,
-                af=af,
-                ssl_options=ssl_options,
-                max_buffer_size=self.max_buffer_size,
-                source_ip=source_ip,
-            )
+            except TimeoutError as e:
+                # TCPClient's timeout messages describe which phase of
+                # the connection timed out (DNS, TCP, or TLS).
+                raise HTTPTimeoutError(str(e) or "Timeout while connecting") from None
 
             if self.final_callback is None:
                 # final_callback is cleared if we've hit our timeout.
@@ -385,7 +390,9 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             if username is not None:
                 assert password is not None
                 if self.request.auth_mode not in (None, "basic"):
-                    raise ValueError("unsupported auth_mode %s", self.request.auth_mode)
+                    raise ValueError(
+                        "unsupported auth_mode %s" % self.request.auth_mode
+                    )
                 self.request.headers["Authorization"] = "Basic " + _unicode(
                     base64.b64encode(
                         httputil.encode_username_password(username, password)
@@ -453,7 +460,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 and self.request.client_cert is None
                 and self.request.client_key is None
             ):
-                return _client_ssl_defaults
+                return _client_ssl_defaults()
             ssl_ctx = ssl.create_default_context(
                 ssl.Purpose.SERVER_AUTH, cafile=self.request.ca_certs
             )
