@@ -18,10 +18,7 @@ import unittest
 from tornado.testing import AsyncTestCase, gen_test
 
 try:
-    from twisted.internet.defer import (  # type: ignore
-        inlineCallbacks,
-        returnValue,
-    )
+    from twisted.internet.defer import inlineCallbacks  # type: ignore
 
     have_twisted = True
 except ImportError:
@@ -43,7 +40,7 @@ class ConvertDeferredTest(AsyncTestCase):
                 # inlineCallbacks doesn't work with regular functions;
                 # must have a yield even if it's unreachable.
                 yield
-            returnValue(42)
+            return 42
 
         res = yield fn()
         self.assertEqual(res, 42)

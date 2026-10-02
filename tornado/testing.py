@@ -84,39 +84,6 @@ def get_async_test_timeout() -> float:
     return 5
 
 
-class _TestMethodWrapper(object):
-    """Wraps a test method to raise an error if it returns a value.
-
-    This is mainly used to detect undecorated generators (if a test
-    method yields it must use a decorator to consume the generator),
-    but will also detect other kinds of return values (these are not
-    necessarily errors, but we alert anyway since there is no good
-    reason to return a value from a test).
-    """
-
-    def __init__(self, orig_method: Callable) -> None:
-        self.orig_method = orig_method
-        self.__wrapped__ = orig_method
-
-    def __call__(self, *args: Any, **kwargs: Any) -> None:
-        result = self.orig_method(*args, **kwargs)
-        if isinstance(result, Generator) or inspect.iscoroutine(result):
-            raise TypeError(
-                "Generator and coroutine test methods should be"
-                " decorated with tornado.testing.gen_test"
-            )
-        elif result is not None:
-            raise ValueError("Return value from test method ignored: %r" % result)
-
-    def __getattr__(self, name: str) -> Any:
-        """Proxy all unknown attributes to the original method.
-
-        This is important for some of the decorators in the `unittest`
-        module, such as `unittest.skipIf`.
-        """
-        return getattr(self.orig_method, name)
-
-
 class AsyncTestCase(unittest.TestCase):
     """`~unittest.TestCase` subclass for testing `.IOLoop`-based
     asynchronous code.
@@ -172,12 +139,6 @@ class AsyncTestCase(unittest.TestCase):
         self.__failure = None  # type: Optional[_ExcInfoTuple]
         self.__stop_args = None  # type: Any
         self.__timeout = None  # type: Optional[object]
-
-        # It's easy to forget the @gen_test decorator, but if you do
-        # the test will silently be ignored because nothing will consume
-        # the generator.  Replace the test method with a wrapper that will
-        # make sure it's not an undecorated generator.
-        setattr(self, methodName, _TestMethodWrapper(getattr(self, methodName)))
 
         # Not used in this class itself, but used by @gen_test
         self._test_generator = None  # type: Optional[Union[Generator, Coroutine]]
@@ -288,6 +249,30 @@ class AsyncTestCase(unittest.TestCase):
         # ignoring an error.
         self.__rethrow()
         return ret
+
+    def _callTestMethod(self, method: Callable) -> None:
+        """Run the given test method, raising an error if it returns non-None.
+
+        Failure to decorate asynchronous test methods with ``@gen_test`` can lead to tests
+        incorrectly passing.
+
+        Remove this override when Python 3.10 support is dropped. This check (in the form of a
+        DeprecationWarning) became a part of the standard library in 3.11.
+
+        Note that ``_callTestMethod`` is not documented as a public interface. However, it is
+        present in all supported versions of Python (3.8+), and if it goes away in the future that's
+        OK because we can just remove this override as noted above.
+        """
+        # Calling super()._callTestMethod would hide the return value, even in python 3.8-3.10
+        # where the check isn't being done for us.
+        result = method()
+        if isinstance(result, Generator) or inspect.iscoroutine(result):
+            raise TypeError(
+                "Generator and coroutine test methods should be"
+                " decorated with tornado.testing.gen_test"
+            )
+        elif result is not None:
+            raise ValueError("Return value from test method ignored: %r" % result)
 
     def stop(self, _arg: Any = None, **kwargs: Any) -> None:
         """Stops the `.IOLoop`, causing one pending (or future) call to `wait()`

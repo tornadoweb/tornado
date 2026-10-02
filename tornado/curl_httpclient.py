@@ -19,6 +19,7 @@ import collections
 import functools
 import logging
 import pycurl
+import re
 import threading
 import time
 from io import BytesIO
@@ -43,6 +44,8 @@ if typing.TYPE_CHECKING:
     from typing import Deque, Tuple  # noqa: F401
 
 curl_log = logging.getLogger("tornado.curl_httpclient")
+
+CR_OR_LF_RE = re.compile(b"\r|\n")
 
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):
@@ -347,14 +350,15 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if "Pragma" not in request.headers:
             request.headers["Pragma"] = ""
 
-        curl.setopt(
-            pycurl.HTTPHEADER,
-            [
-                b"%s: %s"
-                % (native_str(k).encode("ASCII"), native_str(v).encode("ISO8859-1"))
-                for k, v in request.headers.get_all()
-            ],
-        )
+        encoded_headers = [
+            b"%s: %s"
+            % (native_str(k).encode("ASCII"), native_str(v).encode("ISO8859-1"))
+            for k, v in request.headers.get_all()
+        ]
+        for line in encoded_headers:
+            if CR_OR_LF_RE.search(line):
+                raise ValueError("Illegal characters in header (CR or LF): %r" % line)
+        curl.setopt(pycurl.HTTPHEADER, encoded_headers)
 
         curl.setopt(
             pycurl.HEADERFUNCTION,

@@ -66,6 +66,7 @@ function to extend this mechanism.
    via ``singledispatch``.
 
 """
+
 import asyncio
 import builtins
 import collections
@@ -165,13 +166,11 @@ def _fake_ctx_run(f: Callable[..., _T], *args: Any, **kw: Any) -> _T:
 @overload
 def coroutine(
     func: Callable[..., "Generator[Any, Any, _T]"]
-) -> Callable[..., "Future[_T]"]:
-    ...
+) -> Callable[..., "Future[_T]"]: ...
 
 
 @overload
-def coroutine(func: Callable[..., _T]) -> Callable[..., "Future[_T]"]:
-    ...
+def coroutine(func: Callable[..., _T]) -> Callable[..., "Future[_T]"]: ...
 
 
 def coroutine(

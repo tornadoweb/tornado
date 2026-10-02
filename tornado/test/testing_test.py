@@ -5,7 +5,6 @@ from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, 
 from tornado.web import Application
 import asyncio
 import contextlib
-import inspect
 import gc
 import os
 import platform
@@ -118,7 +117,11 @@ class AsyncHTTPTestCaseTest(AsyncHTTPTestCase):
         super().tearDown()
 
 
-class AsyncTestCaseWrapperTest(unittest.TestCase):
+class AsyncTestCaseReturnAssertionsTest(unittest.TestCase):
+    # These tests verify that tests that return non-None values (without being decorated with
+    # @gen_test) raise errors instead of incorrectly succeeding. These tests should be removed or
+    # updated when the _callTestMethod method is removed from AsyncTestCase (the same checks will
+    # still happen, but they'll be performed in the stdlib as DeprecationWarnings)
     def test_undecorated_generator(self):
         class Test(AsyncTestCase):
             def test_gen(self):
@@ -135,7 +138,10 @@ class AsyncTestCaseWrapperTest(unittest.TestCase):
         "pypy destructor warnings cannot be silenced",
     )
     @unittest.skipIf(
-        sys.version_info >= (3, 12), "py312 has its own check for test case returns"
+        # This check actually exists in 3.11 but it changed in 3.12 in a way that breaks
+        # this test.
+        sys.version_info >= (3, 12),
+        "py312 has its own check for test case returns",
     )
     def test_undecorated_coroutine(self):
         class Test(AsyncTestCase):
@@ -175,17 +181,6 @@ class AsyncTestCaseWrapperTest(unittest.TestCase):
         test.run(result)
         self.assertEqual(len(result.errors), 1)
         self.assertIn("Return value from test method ignored", result.errors[0][1])
-
-    def test_unwrap(self):
-        class Test(AsyncTestCase):
-            def test_foo(self):
-                pass
-
-        test = Test("test_foo")
-        self.assertIs(
-            inspect.unwrap(test.test_foo),
-            test.test_foo.orig_method,  # type: ignore[attr-defined]
-        )
 
 
 class SetUpTearDownTest(unittest.TestCase):

@@ -1374,7 +1374,7 @@ class SSLIOStream(IOStream):
                 return
             elif err.args[0] in (ssl.SSL_ERROR_EOF, ssl.SSL_ERROR_ZERO_RETURN):
                 return self.close(exc_info=err)
-            elif err.args[0] == ssl.SSL_ERROR_SSL:
+            elif err.args[0] in (ssl.SSL_ERROR_SSL, ssl.SSL_ERROR_SYSCALL):
                 try:
                     peer = self.socket.getpeername()
                 except Exception:

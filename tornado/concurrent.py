@@ -118,6 +118,7 @@ def run_on_executor(*args: Any, **kwargs: Any) -> Callable:
 
        The ``callback`` argument was removed.
     """
+
     # Fully type-checking decorators is tricky, and this one is
     # discouraged anyway so it doesn't have all the generic magic.
     def run_on_executor_decorator(fn: Callable) -> Callable[..., Future]:

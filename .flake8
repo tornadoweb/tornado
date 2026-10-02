@@ -13,5 +13,7 @@ ignore =
     # flake8 and black disagree about
     # W503 line break before binary operator
     # E203 whitespace before ':'
-    W503,E203
+    # E701/E704 multiple statements on one line
+    # https://black.readthedocs.io/en/latest/guides/using_black_with_other_tools.html#labels-why-pycodestyle-warnings
+    W503,E203,E701,E704
 doctests = true

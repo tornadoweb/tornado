@@ -725,6 +725,22 @@ X-XSS-Protection: 1;
                 if el.logged_stack:
                     break
 
+    def test_header_crlf(self):
+        # Ensure that the client doesn't allow CRLF injection in headers. RFC 9112 section 2.2
+        # prohibits a bare CR specifically and "a recipient MAY recognize a single LF as a line
+        # terminator" so we check each character separately as well as the (redundant) CRLF pair.
+        for header, name in [
+            ("foo\rbar:", "cr"),
+            ("foo\nbar:", "lf"),
+            ("foo\r\nbar:", "crlf"),
+        ]:
+            with self.subTest(name=name, position="value"):
+                with self.assertRaises(ValueError):
+                    self.fetch("/hello", headers={"foo": header})
+            with self.subTest(name=name, position="key"):
+                with self.assertRaises(ValueError):
+                    self.fetch("/hello", headers={header: "foo"})
+
 
 class RequestProxyTest(unittest.TestCase):
     def test_request_set(self):
