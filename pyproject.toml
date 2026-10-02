@@ -22,10 +22,6 @@ test-command = "python -m tornado.test"
 [tool.cibuildwheel.macos]
 archs = "universal2"
 
-[tool.cibuildwheel.windows]
-# TODO: figure out what's going on with these occasional log messages.
-test-command = "python -m tornado.test --fail-if-logs=false"
-
 [[tool.cibuildwheel.overrides]]
 select = "*{riscv64,ppc64le,s390x}*"
 # On emulated platforms, only run the websocket tests, since those are the ones that

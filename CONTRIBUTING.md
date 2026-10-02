@@ -5,6 +5,13 @@
 * We use `black` as code formatter and recommend configuring your editor to run this automatically
   (using the version specified in `requirements.txt`). Commits that are not properly formatted
   by `black` will be rejected in CI.
+* We update `requirements.txt` infrequently. It is important to install the versions of tools
+  like `black` and `mypy` from `requirements.txt` instead of running their latest versions
+  (don't just use `uvx`). Older release branches like `branch6.5` have their own
+  `requirements.txt` so reinstall these tools (or switch virtualenvs) when switching branches.
+* The `types-pycurl` package should be installed when running `mypy`.
+* Run `flake8` from the project root directory so it can see `.flake8`, this prevents spurious
+  warnings.
 * Before committing, it is recommended to run `tox -e lint,docs,py3`. This will verify that the
   code is formatted correctly, type checking with `mypy` passes, the `sphinx` build for docs has
   no errors, and the main test suite passes with the current version of python.
@@ -33,6 +40,10 @@
   It is rarely appropriate to use mocks just to speed up a test. The most common reason
   to use mocks in Tornado tests is to simulate error conditions that cannot be
   reproduced without mocks.
+* Most tests are covered by a default 5 second timeout. This can be changed during
+  development with the env var `ASYNC_TEST_TIMEOUT`, or with the `timeout` argument
+  to `@gen_test` (although most tests should be made fast instead of given an increased
+  timeout)
 
 ## Documentation
 
@@ -45,6 +56,18 @@ Tornado has a neutral stance towards AI-generated code. All pull requests, wheth
 or machine-generated, are subject to strict code review standards. However, PRs that appear
 to be AI-generated *and* contain clear flaws (such as failing CI) may be closed without
 detailed review. 
+
+## curl_httpclient notes
+
+- Older versions of pycurl bundled specific versions of libcurl. This can be an easy way
+  to test with old versions of libcurl. Specifically, `pycurl==7.45.4` installs libcurl
+  8.11.1, which is not the oldest version of libcurl we support but is the oldest one that
+  is easy to install.
+- Easy handles are pooled and reused (_free_list, reset in _finish), so per-request state leaking
+  into the following request is a live bug class: test_reuse_proxy_credentials and test_reuse_certs
+  both exist because of it. New per-request state deserves a reuse test with max_clients=1.
+- That state is smuggled in a dict attached to the handle (curl.info, rebuilt in _process_queue).
+  There is a standing TODO about the approach; until it is addressed, this is where such state goes.
 
 ## PR Checklist
 

@@ -99,8 +99,8 @@ from collections.abc import Callable
 # fixes that behavior.
 _has_execv = sys.platform != "win32"
 
-_watched_files = set()
-_reload_hooks = []
+_watched_files: set[str] = set()
+_reload_hooks: list[Callable[[], None]] = []
 _reload_attempted = False
 _io_loops: "weakref.WeakKeyDictionary[ioloop.IOLoop, bool]" = (
     weakref.WeakKeyDictionary()

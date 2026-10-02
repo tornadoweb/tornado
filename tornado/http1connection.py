@@ -22,6 +22,7 @@ import asyncio
 import logging
 import re
 import types
+import zlib
 from collections.abc import Awaitable, Callable
 from typing import Optional, Type, cast
 
@@ -36,6 +37,13 @@ from tornado.log import app_log, gen_log
 from tornado.util import GzipDecompressor
 
 CR_OR_LF_RE = re.compile(b"\r|\n")
+
+
+# The maximum number of informational (1xx) responses to accept before the
+# real response. Each one is processed with a recursive call to
+# _read_message, so an unbounded number of them would exhaust the stack.
+# There is no legitimate use for more than a handful.
+_MAX_1XX_RESPONSES = 10
 
 
 class _QuietException(Exception):
@@ -185,6 +193,18 @@ class HTTP1Connection(httputil.HTTPConnection):
         return self._read_message(delegate)
 
     async def _read_message(self, delegate: httputil.HTTPMessageDelegate) -> bool:
+        try:
+            return await self._read_message_inner(delegate)
+        except _QuietException:
+            # The delegate raised an exception, which has already been logged,
+            # and the delegate has been told that the connection is closed.
+            # Close it, instead of letting _QuietException escape to our caller.
+            self.close()
+            return False
+
+    async def _read_message_inner(
+        self, delegate: httputil.HTTPMessageDelegate, num_1xx: int = 0
+    ) -> bool:
         need_delegate_close = False
         try:
             header_future = self.stream.read_until_regex(
@@ -199,7 +219,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                         header_future,
                         quiet_exceptions=iostream.StreamClosedError,
                     )
-                except gen.TimeoutError:
+                except TimeoutError:
                     self.close()
                     return False
             start_line_str, headers = self._parse_headers(header_data)
@@ -249,9 +269,19 @@ class HTTP1Connection(httputil.HTTPConnection):
                         raise httputil.HTTPInputError(
                             "Response code %d cannot have body" % code
                         )
+                    if num_1xx >= _MAX_1XX_RESPONSES:
+                        raise httputil.HTTPInputError("Too many 1xx responses")
                     # TODO: client delegates will get headers_received twice
                     # in the case of a 100-continue.  Document or change?
-                    await self._read_message(delegate)
+                    #
+                    # The recursive call reads the real response and owns
+                    # the delegate from here on, so there is nothing left
+                    # for this frame to do. Clear need_delegate_close so
+                    # that the finally block does not call
+                    # on_connection_close() on an already-finished
+                    # delegate.
+                    need_delegate_close = False
+                    return await self._read_message_inner(delegate, num_1xx + 1)
             else:
                 if headers.get("Expect") == "100-continue" and not self._write_finished:
                     self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
@@ -269,15 +299,17 @@ class HTTP1Connection(httputil.HTTPConnection):
                                 body_future,
                                 quiet_exceptions=iostream.StreamClosedError,
                             )
-                        except gen.TimeoutError:
+                        except TimeoutError:
                             gen_log.info("Timeout reading body from %s", self.context)
                             self.stream.close()
                             return False
             self._read_finished = True
             if not self._write_finished or self.is_client:
-                need_delegate_close = False
                 with _ExceptionLoggingContext(app_log):
                     delegate.finish()
+                # If finish() raised, the delegate is told that the connection
+                # is closed, as when any of its other methods raise.
+                need_delegate_close = False
             # If we're waiting for the application to produce an asynchronous
             # response, and we're not detached, register a close callback
             # on the stream (we didn't need one while we were reading)
@@ -693,12 +725,27 @@ class HTTP1Connection(httputil.HTTPConnection):
     async def _read_body_until_close(
         self, delegate: httputil.HTTPMessageDelegate
     ) -> None:
-        body = await self.stream.read_until_close()
-        if not self._write_finished or self.is_client:
-            with _ExceptionLoggingContext(app_log):
-                ret = delegate.data_received(body)
-                if ret is not None:
-                    await ret
+        # The body is terminated by the connection closing, so there is no
+        # length known in advance. Read incrementally so that max_body_size
+        # is enforced before an over-large body has been buffered, and so
+        # that the body is not limited by the stream's read buffer size.
+        total_size = 0
+        while True:
+            try:
+                body = await self.stream.read_bytes(
+                    self.params.chunk_size, partial=True
+                )
+            except iostream.StreamClosedError:
+                # The connection closing is the normal end of this body.
+                return
+            total_size += len(body)
+            if total_size > self._max_body_size:
+                raise httputil.HTTPInputError("Body too long")
+            if not self._write_finished or self.is_client:
+                with _ExceptionLoggingContext(app_log):
+                    ret = delegate.data_received(body)
+                    if ret is not None:
+                        await ret
 
 
 class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
@@ -734,9 +781,12 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
         if self._decompressor:
             compressed_data = chunk
             while compressed_data:
-                decompressed = self._decompressor.decompress(
-                    compressed_data, self._chunk_size
-                )
+                try:
+                    decompressed = self._decompressor.decompress(
+                        compressed_data, self._chunk_size
+                    )
+                except zlib.error as e:
+                    raise httputil.HTTPInputError("invalid gzip data: %s" % e)
                 if decompressed:
                     self._decompressed_body_size += len(decompressed)
                     if self._decompressed_body_size > self._max_body_size:
@@ -744,11 +794,14 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
                     ret = self._delegate.data_received(decompressed)
                     if ret is not None:
                         await ret
-                compressed_data = self._decompressor.unconsumed_tail
-                if compressed_data and not decompressed:
+                tail = self._decompressor.unconsumed_tail
+                # A call that finishes a gzip member may return no output,
+                # but it must consume some input.
+                if not decompressed and len(tail) >= len(compressed_data):
                     raise httputil.HTTPInputError(
                         "encountered unconsumed gzip data without making progress"
                     )
+                compressed_data = tail
         else:
             ret = self._delegate.data_received(chunk)
             if ret is not None:
@@ -756,17 +809,17 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
 
     def finish(self) -> None:
         if self._decompressor is not None:
-            tail = self._decompressor.flush()
-            if tail:
-                # The tail should always be empty: decompress returned
-                # all that it can in data_received and the only
-                # purpose of the flush call is to detect errors such
-                # as truncated input. If we did legitimately get a new
-                # chunk at this point we'd need to change the
-                # interface to make finish() a coroutine.
-                raise ValueError(
-                    "decompressor.flush returned data; possible truncated input"
-                )
+            try:
+                # data_received has passed all the data to decompress, so
+                # this returns nothing; it checks for truncated input.
+                self._decompressor.flush()
+            except zlib.error as e:
+                # The wrapped delegate will never see finish(), and since this
+                # delegate has been finished, HTTP1Connection will not call
+                # our on_connection_close either. Close the wrapped delegate
+                # here so it gets exactly one of the two.
+                self._delegate.on_connection_close()
+                raise httputil.HTTPInputError("invalid gzip data: %s" % e)
         return self._delegate.finish()
 
     def on_connection_close(self) -> None:
@@ -834,10 +887,6 @@ class HTTP1ServerConnection:
                     iostream.UnsatisfiableReadError,
                     asyncio.CancelledError,
                 ):
-                    return
-                except _QuietException:
-                    # This exception was already logged.
-                    conn.close()
                     return
                 except Exception:
                     gen_log.error("Uncaught exception", exc_info=True)

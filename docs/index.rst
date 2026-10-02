@@ -103,7 +103,8 @@ source tarball or clone the `git repository
 optional packages may be useful:
 
 * `pycurl <http://pycurl.io/>`_ is used by the optional
-  ``tornado.curl_httpclient``.  Libcurl version 7.22 or higher is required.
+  ``tornado.curl_httpclient``.  Libcurl version 7.81 or higher is required
+  (the version shipped by Ubuntu 22.04 LTS).
 * `pycares <https://pypi.org/project/pycares/>`_ is an alternative
   non-blocking DNS resolver that can be used when threads are not
   appropriate.

@@ -15,8 +15,13 @@ from tornado.log import app_log, gen_log
 from tornado.netutil import Resolver
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
-from tornado.test.util import abstract_base_test, ignore_deprecation
-from tornado.testing import AsyncHTTPTestCase, ExpectLog, bind_unused_port, gen_test
+from tornado.test.util import (
+    AsyncHTTPTestCase,
+    TestCase,
+    abstract_base_test,
+    ignore_deprecation,
+)
+from tornado.testing import ExpectLog, bind_unused_port, gen_test
 from tornado.web import Application, RequestHandler
 
 try:
@@ -77,6 +82,24 @@ class EchoHandler(TestWebSocketHandler):
 class ErrorInOnMessageHandler(TestWebSocketHandler):
     def on_message(self, message):
         1 / 0
+
+
+class ErrorInAsyncOnMessageHandler(TestWebSocketHandler):
+    async def on_message(self, message):
+        await asyncio.sleep(0)
+        1 / 0
+
+
+class CancelledInOnMessageHandler(TestWebSocketHandler):
+    def on_message(self, message):
+        raise asyncio.CancelledError()
+
+
+class CancelledInAsyncOnMessageHandler(TestWebSocketHandler):
+    async def on_message(self, message):
+        fut: Future[None] = Future()
+        fut.cancel()
+        await fut
 
 
 class HeaderHandler(TestWebSocketHandler):
@@ -259,6 +282,21 @@ class WebSocketTest(WebSocketBaseTestCase):
                     dict(close_future=self.close_future),
                 ),
                 (
+                    "/error_in_async_on_message",
+                    ErrorInAsyncOnMessageHandler,
+                    dict(close_future=self.close_future),
+                ),
+                (
+                    "/cancelled_in_on_message",
+                    CancelledInOnMessageHandler,
+                    dict(close_future=self.close_future),
+                ),
+                (
+                    "/cancelled_in_async_on_message",
+                    CancelledInAsyncOnMessageHandler,
+                    dict(close_future=self.close_future),
+                ),
+                (
                     "/async_prepare",
                     AsyncPrepareHandler,
                     dict(close_future=self.close_future),
@@ -382,6 +420,35 @@ class WebSocketTest(WebSocketBaseTestCase):
         with ExpectLog(app_log, "Uncaught exception"):
             response = yield ws.read_message()
         self.assertIsNone(response)
+        # on_close is still called.
+        yield self.close_future
+
+    @gen_test
+    def test_error_in_async_on_message(self):
+        ws = yield self.ws_connect("/error_in_async_on_message")
+        ws.write_message("hello")
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = yield ws.read_message()
+        self.assertIsNone(response)
+        yield self.close_future
+
+    @gen_test
+    def test_cancelled_in_on_message(self):
+        ws = yield self.ws_connect("/cancelled_in_on_message")
+        ws.write_message("hello")
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = yield ws.read_message()
+        self.assertIsNone(response)
+        yield self.close_future
+
+    @gen_test
+    def test_cancelled_in_async_on_message(self):
+        ws = yield self.ws_connect("/cancelled_in_async_on_message")
+        ws.write_message("hello")
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = yield ws.read_message()
+        self.assertIsNone(response)
+        yield self.close_future
 
     @gen_test
     def test_websocket_http_fail(self):
@@ -772,7 +839,7 @@ class DefaultCompressionTest(CompressionTestMixin):
 
 
 @abstract_base_test
-class MaskFunctionMixin(unittest.TestCase):
+class MaskFunctionMixin(TestCase):
     # Subclasses should define self.mask(mask, data)
     def mask(self, mask: bytes, data: bytes) -> bytes:
         raise NotImplementedError()
@@ -930,7 +997,7 @@ class ServerPingTimeoutTest(WebSocketBaseTestCase):
         self.assertEqual(ws.protocol.close_code, 1000)
 
 
-class PingCalculationTest(unittest.TestCase):
+class PingCalculationTest(TestCase):
     def test_ping_sleep_time(self):
         from tornado.websocket import WebSocketProtocol13
 

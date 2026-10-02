@@ -12,8 +12,8 @@ from concurrent import futures
 from tornado import gen
 from tornado.concurrent import Future
 from tornado.log import app_log
-from tornado.test.util import skipNotCPython
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
+from tornado.test.util import AsyncHTTPTestCase, AsyncTestCase, skipNotCPython
+from tornado.testing import ExpectLog, gen_test
 from tornado.web import Application, HTTPError, RequestHandler
 
 
@@ -187,6 +187,29 @@ class GenBasicTest(AsyncTestCase):
             yield gen.Multi(
                 [self.async_exception(RuntimeError("error 1")), self.async_future(2)]
             )
+
+    @gen_test
+    def test_multi_cancelled(self):
+        # As with asyncio.gather, a cancelled child makes multi() raise
+        # CancelledError, but the multi future itself is not cancelled.
+        fut: Future[None] = Future()
+        self.io_loop.add_callback(fut.cancel)
+        multi_future = gen.multi([fut, self.async_future(2)])
+        with self.assertRaises(asyncio.CancelledError):
+            yield multi_future
+        self.assertFalse(multi_future.cancelled())
+
+        # A child that is already cancelled.
+        fut = Future()
+        fut.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            yield gen.multi([fut])
+
+        # Cancellation after the first exception is not logged.
+        fut = Future()
+        self.io_loop.add_callback(fut.cancel)
+        with self.assertRaises(RuntimeError):
+            yield gen.multi([self.async_exception(RuntimeError("error 1")), fut])
 
         # Exception logging may be explicitly quieted.
         with self.assertRaises(RuntimeError):
@@ -467,6 +490,74 @@ class GenCoroutineTest(AsyncTestCase):
         self.finished = True
 
     @gen_test
+    def test_sync_raise_cancelled(self):
+        @gen.coroutine
+        def f():
+            raise asyncio.CancelledError()
+
+        # Like any other exception, CancelledError is not raised when the
+        # function is called, and the future is cancelled as with asyncio.Task.
+        future = f()
+        with self.assertRaises(asyncio.CancelledError):
+            yield future
+        self.assertTrue(future.cancelled())
+        self.finished = True
+
+    @gen_test
+    def test_async_raise_cancelled(self):
+        @gen.coroutine
+        def f():
+            yield gen.moment
+            raise asyncio.CancelledError()
+
+        future = f()
+        with self.assertRaises(asyncio.CancelledError):
+            yield future
+        self.assertTrue(future.cancelled())
+        self.finished = True
+
+    @gen_test
+    def test_yield_cancelled_future(self):
+        @gen.coroutine
+        def f(fut):
+            yield fut
+
+        # Cancelled before the coroutine starts.
+        fut: Future[None] = Future()
+        fut.cancel()
+        future = f(fut)
+        with self.assertRaises(asyncio.CancelledError):
+            yield future
+        self.assertTrue(future.cancelled())
+
+        # Cancelled while the coroutine is waiting on it.
+        fut = Future()
+        future = f(fut)
+        self.io_loop.add_callback(fut.cancel)
+        with self.assertRaises(asyncio.CancelledError):
+            yield future
+        self.assertTrue(future.cancelled())
+        self.finished = True
+
+    @gen_test
+    def test_catch_cancelled_future(self):
+        # A coroutine can catch the CancelledError from a yielded future.
+        @gen.coroutine
+        def f():
+            fut: Future[None] = Future()
+            self.io_loop.add_callback(fut.cancel)
+            try:
+                yield fut
+            except asyncio.CancelledError:
+                pass
+            yield gen.moment
+            return 42
+
+        result = yield f()
+        self.assertEqual(result, 42)
+        self.finished = True
+
+    @gen_test
     def test_replace_yieldpoint_exception(self):
         # Test exception handling: a coroutine can catch one exception
         # raised by a yield point and raise a different one.
@@ -718,8 +809,37 @@ class GenWebTest(AsyncHTTPTestCase):
 class WithTimeoutTest(AsyncTestCase):
     @gen_test
     def test_timeout(self):
-        with self.assertRaises(gen.TimeoutError):
+        with self.assertRaises(TimeoutError) as cm:
             yield gen.with_timeout(datetime.timedelta(seconds=0.1), Future())
+        self.assertEqual(str(cm.exception), "Timeout")
+
+    @gen_test
+    def test_timeout_message(self):
+        with self.assertRaises(TimeoutError) as cm:
+            yield gen.with_timeout(
+                datetime.timedelta(seconds=0.1), Future(), message="custom"
+            )
+        self.assertEqual(str(cm.exception), "custom")
+
+    @gen_test
+    def test_timeout_message_callable(self):
+        with self.assertRaises(TimeoutError) as cm:
+            yield gen.with_timeout(
+                datetime.timedelta(seconds=0.1), Future(), message=lambda: "lazy"
+            )
+        self.assertEqual(str(cm.exception), "lazy")
+
+    @gen_test
+    def test_timeout_message_callable_not_called_on_success(self):
+        def message():
+            raise Exception("should not be called")
+
+        future: Future[str] = Future()
+        future.set_result("asdf")
+        result = yield gen.with_timeout(
+            datetime.timedelta(seconds=3600), future, message=message
+        )
+        self.assertEqual(result, "asdf")
 
     @gen_test
     def test_completes_before_timeout(self):
@@ -741,6 +861,15 @@ class WithTimeoutTest(AsyncTestCase):
             yield gen.with_timeout(datetime.timedelta(seconds=3600), future)
 
     @gen_test
+    def test_cancelled_before_timeout(self):
+        future: Future[str] = Future()
+        self.io_loop.add_timeout(datetime.timedelta(seconds=0.1), future.cancel)
+        timeout_future = gen.with_timeout(datetime.timedelta(seconds=3600), future)
+        with self.assertRaises(asyncio.CancelledError):
+            yield timeout_future
+        self.assertTrue(timeout_future.cancelled())
+
+    @gen_test
     def test_already_resolved(self):
         future: Future[str] = Future()
         future.set_result("asdf")
@@ -751,9 +880,9 @@ class WithTimeoutTest(AsyncTestCase):
     def test_timeout_concurrent_future(self):
         # A concurrent future that does not resolve before the timeout.
         with futures.ThreadPoolExecutor(1) as executor:
-            with self.assertRaises(gen.TimeoutError):
+            with self.assertRaises(TimeoutError):
                 yield gen.with_timeout(
-                    self.io_loop.time(), executor.submit(time.sleep, 0.1)
+                    self.io_loop.time(), executor.submit(time.sleep, 0.2)
                 )
 
     @gen_test

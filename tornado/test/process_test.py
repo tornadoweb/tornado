@@ -3,11 +3,10 @@ import signal
 import subprocess
 import sys
 import time
-import unittest
 
 from tornado.process import Subprocess
-from tornado.test.util import skipIfNonUnix
-from tornado.testing import AsyncTestCase, gen_test
+from tornado.test.util import AsyncTestCase, TestCase, skipIfNonUnix
+from tornado.testing import gen_test
 
 # Body of the multi-process test, factored out so it can be launched in a
 # clean Python subprocess. fork_processes() calls os.fork(), which raises
@@ -134,7 +133,7 @@ if __name__ == "__main__":
 
 # Not using AsyncHTTPTestCase because we need control over the IOLoop.
 @skipIfNonUnix
-class ProcessTest(unittest.TestCase):
+class ProcessTest(TestCase):
     def test_multi_process(self):
         # Run the test body in a fresh interpreter so fork_processes()
         # starts from a single-threaded state. See the comment on
