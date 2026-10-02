@@ -18,8 +18,8 @@ from tornado.escape import json_decode
 from tornado.httpclient import HTTPClientError
 from tornado.httputil import url_concat
 from tornado.log import app_log
-from tornado.testing import AsyncHTTPTestCase, ExpectLog, setup_with_context_manager
-from tornado.test.util import ignore_deprecation
+from tornado.testing import ExpectLog, setup_with_context_manager
+from tornado.test.util import AsyncHTTPTestCase, ignore_deprecation
 from tornado.web import Application, HTTPError, RequestHandler
 
 

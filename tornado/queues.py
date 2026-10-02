@@ -33,7 +33,7 @@ import heapq
 from collections.abc import Awaitable
 from typing import Any, Generic, TypeVar
 
-from tornado import gen, ioloop
+from tornado import ioloop
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado.locks import Event
 
@@ -59,7 +59,7 @@ def _set_timeout(future: Future, timeout: None | float | datetime.timedelta) -> 
 
         def on_timeout() -> None:
             if not future.done():
-                future.set_exception(gen.TimeoutError())
+                future.set_exception(TimeoutError())
 
         io_loop = ioloop.IOLoop.current()
         timeout_handle = io_loop.add_timeout(timeout, on_timeout)
@@ -186,7 +186,7 @@ class Queue(Generic[_T]):
     ) -> Future[None]:
         """Put an item into the queue, perhaps waiting until there is room.
 
-        Returns a Future, which raises `tornado.util.TimeoutError` after a
+        Returns a Future, which raises `TimeoutError` after a
         timeout.
 
         ``timeout`` may be a number denoting a time (on the same
@@ -228,7 +228,7 @@ class Queue(Generic[_T]):
         """Remove and return an item from the queue.
 
         Returns an awaitable which resolves once an item is available, or raises
-        `tornado.util.TimeoutError` after a timeout.
+        `TimeoutError` after a timeout.
 
         ``timeout`` may be a number denoting a time (on the same
         scale as `tornado.ioloop.IOLoop.time`, normally `time.time`), or a
@@ -297,7 +297,7 @@ class Queue(Generic[_T]):
     ) -> Awaitable[None]:
         """Block until all items in the queue are processed.
 
-        Returns an awaitable, which raises `tornado.util.TimeoutError` after a
+        Returns an awaitable, which raises `TimeoutError` after a
         timeout.
 
         .. versionchanged:: 6.6

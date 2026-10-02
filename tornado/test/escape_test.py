@@ -1,4 +1,3 @@
-import unittest
 from typing import Any
 
 import tornado
@@ -210,7 +209,10 @@ linkify_tests: list[tuple[str | bytes, dict[str, Any], str]] = [
 ]
 
 
-class EscapeTestCase(unittest.TestCase):
+from tornado.test.util import TestCase
+
+
+class EscapeTestCase(TestCase):
     def test_linkify(self):
         for text, kwargs, html in linkify_tests:
             linked = tornado.escape.linkify(text, **kwargs)

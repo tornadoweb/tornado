@@ -2,14 +2,16 @@ import datetime
 import os
 import shutil
 import tempfile
-import unittest
 
 import tornado.locale
 from tornado.escape import to_unicode, utf8
 from tornado.util import unicode_type
 
 
-class TranslationLoaderTest(unittest.TestCase):
+from tornado.test.util import TestCase
+
+
+class TranslationLoaderTest(TestCase):
     # TODO: less hacky way to get isolated tests
     SAVE_VARS = ["_translations", "_supported_locales", "_use_gettext"]
 
@@ -75,7 +77,7 @@ class TranslationLoaderTest(unittest.TestCase):
         self.assertEqual(locale.pgettext("stick", "club", "clubs", 2), "les b\xe2tons")
 
 
-class LocaleDataTest(unittest.TestCase):
+class LocaleDataTest(TestCase):
     def test_non_ascii_name(self):
         name = tornado.locale.LOCALE_NAMES["es_LA"]["name"]
         self.assertTrue(isinstance(name, unicode_type))
@@ -83,7 +85,7 @@ class LocaleDataTest(unittest.TestCase):
         self.assertEqual(utf8(name), b"Espa\xc3\xb1ol")
 
 
-class EnglishTest(unittest.TestCase):
+class EnglishTest(TestCase):
     def test_format_date(self):
         locale = tornado.locale.get("en_US")
         date = datetime.datetime(2013, 4, 28, 18, 35)
@@ -91,7 +93,7 @@ class EnglishTest(unittest.TestCase):
             locale.format_date(date, full_format=True), "April 28, 2013 at 6:35 pm"
         )
 
-        aware_dt = datetime.datetime.now(datetime.timezone.utc)
+        aware_dt = datetime.datetime.now(datetime.UTC)
         naive_dt = aware_dt.replace(tzinfo=None)
         for name, now in {"aware": aware_dt, "naive": naive_dt}.items():
             with self.subTest(dt=name):
@@ -136,6 +138,12 @@ class EnglishTest(unittest.TestCase):
                 )
 
                 date = now - datetime.timedelta(days=500)
+                self.assertEqual(
+                    locale.format_date(date, full_format=False, shorter=True),
+                    "%s %d, %d" % (locale._months[date.month - 1], date.day, date.year),
+                )
+
+                date = now + datetime.timedelta(days=1, seconds=30)
                 self.assertEqual(
                     locale.format_date(date, full_format=False, shorter=True),
                     "%s %d, %d" % (locale._months[date.month - 1], date.day, date.year),

@@ -10,6 +10,10 @@ rules:
         github/*: ref-pin
         dependabot/*: ref-pin
         # Additional trusted repositories
+        # tornadoweb/* is our own org; the downstream testbed is referenced by
+        # branch so a release build gates on its current package pins rather
+        # than on a months-stale snapshot of them.
+        tornadoweb/*: ref-pin
         pypa/*: ref-pin
         astral-sh/setup-uv: ref-pin
         docker/setup-qemu-action: ref-pin

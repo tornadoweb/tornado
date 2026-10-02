@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 # [[[cog
 #    cog.outl(f"target-version = ['py3{min_python_minor}']")
 # ]]]
-target-version = ['py310']
+target-version = ['py311']
 #[[[end]]]
 
 [tool.cibuildwheel]
@@ -15,16 +15,12 @@ target-version = ['py310']
 #    versions += ["cp314t*"]
 #    cog.outl(f"build = \"{" ".join(versions)}\"")
 # ]]]
-build = "cp310* cp311* cp312* cp313* cp314* cp314t*"
+build = "cp311* cp312* cp313* cp314* cp315* cp314t*"
 #[[[end]]]
 test-command = "python -m tornado.test"
 
 [tool.cibuildwheel.macos]
 archs = "universal2"
-
-[tool.cibuildwheel.windows]
-# TODO: figure out what's going on with these occasional log messages.
-test-command = "python -m tornado.test --fail-if-logs=false"
 
 [[tool.cibuildwheel.overrides]]
 select = "*{riscv64,ppc64le,s390x}*"

@@ -4,12 +4,14 @@ import subprocess
 import sys
 import textwrap
 import time
-import unittest
 from subprocess import Popen
 from tempfile import mkdtemp
 
 
-class AutoreloadTest(unittest.TestCase):
+from tornado.test.util import TestCase
+
+
+class AutoreloadTest(TestCase):
     def setUp(self):
         # When these tests fail the output sometimes exceeds the default maxDiff.
         self.maxDiff = 1024

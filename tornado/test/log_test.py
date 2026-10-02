@@ -20,7 +20,6 @@ import re
 import subprocess
 import sys
 import tempfile
-import unittest
 import warnings
 
 from tornado.escape import utf8
@@ -36,7 +35,10 @@ def ignore_bytes_warning():
         yield
 
 
-class LogFormatterTest(unittest.TestCase):
+from tornado.test.util import TestCase
+
+
+class LogFormatterTest(TestCase):
     # Matches the output of a single logging call (which may be multiple lines
     # if a traceback was included, so we use the DOTALL option)
     LINE_RE = re.compile(
@@ -117,7 +119,7 @@ class LogFormatterTest(unittest.TestCase):
         self.assertEqual(self.get_output(), utf8("\u00e9"))
 
 
-class EnablePrettyLoggingTest(unittest.TestCase):
+class EnablePrettyLoggingTest(TestCase):
     def setUp(self):
         super().setUp()
         self.options = OptionParser()
@@ -181,7 +183,7 @@ class EnablePrettyLoggingTest(unittest.TestCase):
                 handler.close()
 
 
-class LoggingOptionTest(unittest.TestCase):
+class LoggingOptionTest(TestCase):
     """Test the ability to enable and disable Tornado's logging hooks."""
 
     def logs_present(self, statement, args=None):

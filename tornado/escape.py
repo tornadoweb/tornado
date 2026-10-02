@@ -169,7 +169,11 @@ def url_unescape(
 
 
 def parse_qs_bytes(
-    qs: str | bytes, keep_blank_values: bool = False, strict_parsing: bool = False
+    qs: str | bytes,
+    keep_blank_values: bool = False,
+    strict_parsing: bool = False,
+    *,
+    max_num_fields: int | None = None,
 ) -> dict[str, list[bytes]]:
     """Parses a query string like urlparse.parse_qs,
     but takes bytes and returns the values as byte strings.
@@ -177,13 +181,21 @@ def parse_qs_bytes(
     Keys still become type str (interpreted as latin1 in python3!)
     because it's too painful to keep them as byte strings in
     python3 and in practice they're nearly always ascii anyway.
+
+    .. versionadded:: 6.5.8
+       The ``max_num_fields`` argument. ValueError is raised if this limit is exceeded.
     """
     # This is gross, but python3 doesn't give us another way.
     # Latin1 is the universal donor of character encodings.
     if isinstance(qs, bytes):
         qs = qs.decode("latin1")
     result = urllib.parse.parse_qs(
-        qs, keep_blank_values, strict_parsing, encoding="latin1", errors="strict"
+        qs,
+        keep_blank_values,
+        strict_parsing,
+        encoding="latin1",
+        errors="strict",
+        max_num_fields=max_num_fields,
     )
     encoded = {}
     for k, v in result.items():
