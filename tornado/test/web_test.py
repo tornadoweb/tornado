@@ -307,6 +307,7 @@ class CookieTest(WebTestCase):
                 self.set_cookie("equals", "a=b")
                 self.set_cookie("semicolon", "a;b")
                 self.set_cookie("quote", 'a"b')
+                self.set_cookie("space", "a b")
 
         class SetCookieForbiddenCharHandler(RequestHandler):
             def get(self):
@@ -444,7 +445,7 @@ class CookieTest(WebTestCase):
     def test_cookie_special_char(self):
         response = self.fetch("/special_char")
         headers = sorted(response.headers.get_list("Set-Cookie"))
-        self.assertEqual(len(headers), 3)
+        self.assertEqual(len(headers), 4)
         self.assertEqual(headers[0], 'equals="a=b"; Path=/')
         self.assertEqual(headers[1], 'quote="a\\"b"; Path=/')
         # Semicolons are octal-escaped
@@ -453,6 +454,7 @@ class CookieTest(WebTestCase):
             ('semicolon="a;b"; Path=/', 'semicolon="a\\073b"; Path=/'),
             headers[2],
         )
+        self.assertEqual(headers[3], 'space="a b"; Path=/')
 
         data = [
             ("foo=a=b", "a=b"),
@@ -461,6 +463,7 @@ class CookieTest(WebTestCase):
             ("foo=a\\073b", "a\\073b"),  # escapes only decoded in quotes
             ('foo="a\\073b"', "a;b"),
             ('foo="a\\"b"', 'a"b'),
+            ('foo="a b"', "a b"),
         ]
         for header, expected in data:
             logging.debug("trying %r", header)
