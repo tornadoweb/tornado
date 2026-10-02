@@ -1,17 +1,14 @@
 import datetime
-from io import StringIO
 import os
 import sys
+from io import StringIO
 from unittest import mock
-import unittest
 
-from tornado.options import OptionParser, Error
+from tornado.options import Error, OptionParser
 from tornado.util import basestring_type
 
-import typing
 
-if typing.TYPE_CHECKING:
-    from typing import List  # noqa: F401
+from tornado.test.util import TestCase
 
 
 class Email:
@@ -26,7 +23,7 @@ class Email:
         return self._value
 
 
-class OptionsTest(unittest.TestCase):
+class OptionsTest(TestCase):
     def test_parse_command_line(self):
         options = OptionParser()
         options.define("port", default=80)
@@ -119,7 +116,7 @@ class OptionsTest(unittest.TestCase):
             options.foo = "2"
 
     def test_setattr_with_callback(self):
-        values = []  # type: List[int]
+        values: list[int] = []
         options = OptionParser()
         options.define("foo", default=1, type=int, callback=values.append)
         options.foo = 2

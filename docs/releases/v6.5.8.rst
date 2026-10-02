@@ -1,0 +1,26 @@
+What's new in Tornado 6.5.8
+===========================
+
+Aug 6, 2026
+-----------
+
+Security fixes
+~~~~~~~~~~~~~~
+
+- Form-encoded ``POST`` bodies are now subject to a limit of 1000 arguments by default. This
+  prevents a CPU and memory denial of service attack. This limit can be overridden via the
+  `.set_parse_body_config` function. Thanks to `Arpit Jain <https://github.com/arpitjain099>`_ 
+  for reporting this issue.
+- Multipart parsing now rejects requests with an excessive number of parts earlier in the parsing
+  process, limiting memory consumption. Thanks to `afldl <https://github.com/afldl>`_ for
+  reporting this issue.
+- The deprecated mixed-case arguments to `.RequestHandler.set_cookie` now enforce the same
+  restrictions on invalid characters that were introduced in Tornado 6.5.5 for the standard
+  lowercase arguments. Thanks to `sec-reex <https://github.com/sec-reex>`_ and
+  `Arpit Jain <https://github.com/arpitjain099>`_ for reporting this issue.
+
+Deprecations
+~~~~~~~~~~~~
+
+- The `.OpenIdMixin` class is deprecated and will be removed in Tornado 6.7. OpenID 2.0 is no
+  longer widely supported by identity providers.

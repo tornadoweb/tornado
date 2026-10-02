@@ -26,15 +26,15 @@ directly.
 """
 
 import asyncio
-from concurrent import futures
 import functools
 import sys
 import types
+import typing
+from collections.abc import Callable
+from concurrent import futures
+from typing import Any, Union
 
 from tornado.log import app_log
-
-import typing
-from typing import Any, Callable, Optional, Tuple, Union
 
 _T = typing.TypeVar("_T")
 
@@ -57,7 +57,7 @@ class DummyExecutor(futures.Executor):
     def submit(  # type: ignore[override]
         self, fn: Callable[..., _T], *args: Any, **kwargs: Any
     ) -> "futures.Future[_T]":
-        future = futures.Future()  # type: futures.Future[_T]
+        future: futures.Future[_T] = futures.Future()
         try:
             future_set_result_unless_cancelled(future, fn(*args, **kwargs))
         except Exception:
@@ -119,7 +119,7 @@ def run_on_executor(*args: Any, **kwargs: Any) -> Callable:
 
         @functools.wraps(fn)
         def wrapper(self: Any, *args: Any, **kwargs: Any) -> Future:
-            async_future = Future()  # type: Future
+            async_future: Future = Future()
             conc_future = getattr(self, executor).submit(fn, self, *args, **kwargs)
             chain_future(conc_future, async_future)
             return async_future
@@ -152,10 +152,18 @@ def chain_future(
        Now accepts both Tornado/asyncio `Future` objects and
        `concurrent.futures.Future`.
 
+    .. versionchanged:: 6.6
+
+       If ``a`` is cancelled, ``b`` is now cancelled too. Previously ``b``
+       would never complete.
+
     """
 
     def copy(a: "Future[_T]") -> None:
         if b.done():
+            return
+        if a.cancelled():
+            b.cancel()
             return
         if hasattr(a, "exc_info") and a.exc_info() is not None:  # type: ignore
             future_set_exc_info(b, a.exc_info())  # type: ignore
@@ -213,9 +221,7 @@ def future_set_exception_unless_cancelled(
 
 def future_set_exc_info(
     future: "Union[futures.Future[_T], Future[_T]]",
-    exc_info: Tuple[
-        Optional[type], Optional[BaseException], Optional[types.TracebackType]
-    ],
+    exc_info: tuple[type | None, BaseException | None, types.TracebackType | None],
 ) -> None:
     """Set the given ``exc_info`` as the `Future`'s exception.
 
@@ -242,14 +248,14 @@ def future_add_done_callback(
     pass
 
 
-@typing.overload  # noqa: F811
+@typing.overload
 def future_add_done_callback(
     future: "Future[_T]", callback: Callable[["Future[_T]"], None]
 ) -> None:
     pass
 
 
-def future_add_done_callback(  # noqa: F811
+def future_add_done_callback(
     future: "Union[futures.Future[_T], Future[_T]]", callback: Callable[..., None]
 ) -> None:
     """Arrange to call ``callback`` when ``future`` is complete.

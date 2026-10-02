@@ -1,0 +1,89 @@
+What's new in Tornado 6.6.0
+===========================
+
+Oct XX, 2026
+------------
+
+General changes
+~~~~~~~~~~~~~~~
+
+- Python 3.15 is now supported. Python 3.9 and 3.10 are no longer supported; 3.11 is the minimum
+  supported version.
+- Free-threaded python interpreters are now supported; prebuilt wheels are available for 3.14t
+  and 3.15t.
+- Windows on ARM is now supported and prebuilt wheels are available.
+- Prebuilt wheels are now available for ``riscv64``, ``ppc64le``, and ``s390x`` architectures on
+  Linux. These architectures are experimental and have limited support and testing.
+
+Deprecation notices
+~~~~~~~~~~~~~~~~~~~
+
+- The ``host`` argument to the `.HTTPServerRequest` constructor is deprecated (since
+  Tornado 6.5.2); use ``headers["Host"]`` instead. It will be removed in Tornado 6.7.
+- The ``start_line`` argument to the ``HTTPServerRequest`` constructor will become required in
+  Tornado 6.7. The ``method``, ``uri``, and ``version`` arguments are deprecated and will be
+  removed at the same time. All remaining arguments will become keyword-only.
+- `tornado.auth.OpenIdMixin` is deprecated and will be removed in Tornado 6.7 (this is a change
+  in the timeline; it was previously scheduled for removal in Tornado 7.0).
+
+Type annotation changes
+~~~~~~~~~~~~~~~~~~~~~~~
+
+- `.tornado.gen.multi` now has overload annotations to indicate that its return type depends
+  on its inputs (list vs dict).
+- `.HTTPServerRequest.method` and ``uri`` attributes are now typed as ``str`` instead of
+  ``str | None``
+
+``tornado.curl_httpclient``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- The minimum supported version of libcurl is now 7.81 (which is the version shipped by
+  Ubuntu 22.04 LTS).
+
+``tornado.simple_httpclient``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- The ``streaming_callback`` argument to ``SimpleAsyncHTTPClient.fetch`` may now be a coroutine.
+
+``tornado.http1connection``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Invalid ``Host`` headers are now logged at the INFO level instead of as an uncaught exception.
+
+`tornado.httputil`
+~~~~~~~~~~~~~~~~~~
+
+- If the ``start_line`` argument to `.HTTPServerRequest` is not provided, both ``method`` and
+  ``uri`` must be provided.
+
+`tornado.locks`
+~~~~~~~~~~~~~~~
+
+- A ``timeout`` value of zero will either return or raise immediately. Previously, zero was
+  treated as equivalent to ``None`` (wait forever). This affects `.Condition.wait`, `.Event.wait`,
+  `.Semaphore.acquire`, and `.Lock.acquire`.
+
+`tornado.netutil`
+~~~~~~~~~~~~~~~~~
+
+- The default ``SSLContext`` objects are now lazily created on first use rather than at import time.
+
+`tornado.platform.asyncio`
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- The selector thread used on Windows now cleans up its sockets correctly on interpreter exit,
+  preventing logged warnings.
+
+`tornado.platform.caresresolver`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- The ``CaresResolver`` class (which has been deprecated since Tornado 6.2) requires pycares
+  version 4.x; it will not be updated to support pycares 5.x.
+
+`tornado.queues`
+~~~~~~~~~~~~~~~~
+
+- A ``timeout`` value of zero will either return or raise immediately. Previously, zero was
+  treated as equivalent to ``None`` (wait forever). This affects `.Queue.get`, `.Queue.put`, and
+  `.Queue.join`.
+ 

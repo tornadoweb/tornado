@@ -18,26 +18,45 @@
 import asyncio
 import concurrent.futures
 import errno
+import functools
 import os
-import sys
 import socket
 import ssl
 import stat
+import sys
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from tornado.concurrent import dummy_executor, run_on_executor
 from tornado.ioloop import IOLoop
 from tornado.util import Configurable, errno_from_exception
 
-from typing import List, Callable, Any, Type, Dict, Union, Tuple, Awaitable, Optional
 
 # Note that the naming of ssl.Purpose is confusing; the purpose
 # of a context is to authenticate the opposite side of the connection.
-_client_ssl_defaults = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-_server_ssl_defaults = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-if hasattr(ssl, "OP_NO_COMPRESSION"):
-    # See netutil.ssl_options_to_context
-    _client_ssl_defaults.options |= ssl.OP_NO_COMPRESSION
-    _server_ssl_defaults.options |= ssl.OP_NO_COMPRESSION
+#
+# These are created lazily (rather than at import time) because
+# ssl.create_default_context() loads the platform's default certificate
+# store, which on some platforms (e.g. macOS) may start background
+# threads. Creating these contexts eagerly at import time could leave
+# such threads running at a call to os.fork() (e.g. in
+# tornado.process.fork_processes), which is unsafe.
+@functools.lru_cache(maxsize=1)
+def _client_ssl_defaults() -> ssl.SSLContext:
+    ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+    if hasattr(ssl, "OP_NO_COMPRESSION"):
+        # See netutil.ssl_options_to_context
+        ctx.options |= ssl.OP_NO_COMPRESSION
+    return ctx
+
+
+@functools.lru_cache(maxsize=1)
+def _server_ssl_defaults() -> ssl.SSLContext:
+    ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    if hasattr(ssl, "OP_NO_COMPRESSION"):
+        ctx.options |= ssl.OP_NO_COMPRESSION
+    return ctx
+
 
 # ThreadedResolver runs getaddrinfo on a thread. If the hostname is unicode,
 # getaddrinfo attempts to import encodings.idna. If this is done at
@@ -55,12 +74,12 @@ _DEFAULT_BACKLOG = 128
 
 def bind_sockets(
     port: int,
-    address: Optional[str] = None,
+    address: str | None = None,
     family: socket.AddressFamily = socket.AF_UNSPEC,
     backlog: int = _DEFAULT_BACKLOG,
-    flags: Optional[int] = None,
+    flags: int | None = None,
     reuse_port: bool = False,
-) -> List[socket.socket]:
+) -> list[socket.socket]:
     """Creates listening sockets bound to the given port and address.
 
     Returns a list of socket objects (multiple sockets are returned if
@@ -100,7 +119,7 @@ def bind_sockets(
     if flags is None:
         flags = socket.AI_PASSIVE
     bound_port = None
-    unique_addresses = set()  # type: set
+    unique_addresses: set = set()
     for res in sorted(
         socket.getaddrinfo(address, port, family, socket.SOCK_STREAM, 0, flags),
         key=lambda x: x[0],
@@ -346,16 +365,16 @@ class Resolver(Configurable):
     """
 
     @classmethod
-    def configurable_base(cls) -> Type["Resolver"]:
+    def configurable_base(cls) -> type["Resolver"]:
         return Resolver
 
     @classmethod
-    def configurable_default(cls) -> Type["Resolver"]:
+    def configurable_default(cls) -> type["Resolver"]:
         return DefaultLoopResolver
 
     def resolve(
         self, host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
-    ) -> Awaitable[List[Tuple[int, Any]]]:
+    ) -> Awaitable[list[tuple[int, Any]]]:
         """Resolves an address.
 
         The ``host`` argument is a string which may be a hostname or a
@@ -390,7 +409,7 @@ class Resolver(Configurable):
 
 def _resolve_addr(
     host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
-) -> List[Tuple[int, Any]]:
+) -> list[tuple[int, Any]]:
     # On Solaris, getaddrinfo fails if the given port is not found
     # in /etc/services and no socket type is given, so we must pass
     # one here.  The socket type used here doesn't seem to actually
@@ -415,7 +434,7 @@ class DefaultExecutorResolver(Resolver):
 
     async def resolve(
         self, host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
-    ) -> List[Tuple[int, Any]]:
+    ) -> list[tuple[int, Any]]:
         result = await IOLoop.current().run_in_executor(
             None, _resolve_addr, host, port, family
         )
@@ -427,7 +446,7 @@ class DefaultLoopResolver(Resolver):
 
     async def resolve(
         self, host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
-    ) -> List[Tuple[int, Any]]:
+    ) -> list[tuple[int, Any]]:
         # On Solaris, getaddrinfo fails if the given port is not found
         # in /etc/services and no socket type is given, so we must pass
         # one here.  The socket type used here doesn't seem to actually
@@ -461,7 +480,7 @@ class ExecutorResolver(Resolver):
 
     def initialize(
         self,
-        executor: Optional[concurrent.futures.Executor] = None,
+        executor: concurrent.futures.Executor | None = None,
         close_executor: bool = True,
     ) -> None:
         if executor is not None:
@@ -479,7 +498,7 @@ class ExecutorResolver(Resolver):
     @run_on_executor
     def resolve(
         self, host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
-    ) -> List[Tuple[int, Any]]:
+    ) -> list[tuple[int, Any]]:
         return _resolve_addr(host, port, family)
 
 
@@ -515,8 +534,8 @@ class ThreadedResolver(ExecutorResolver):
        of this class.
     """
 
-    _threadpool = None  # type: ignore
-    _threadpool_pid = None  # type: int
+    _threadpool: concurrent.futures.ThreadPoolExecutor | None = None
+    _threadpool_pid: int | None = None
 
     def initialize(self, num_threads: int = 10) -> None:  # type: ignore
         threadpool = ThreadedResolver._create_threadpool(num_threads)
@@ -569,7 +588,7 @@ class OverrideResolver(Resolver):
 
     def resolve(
         self, host: str, port: int, family: socket.AddressFamily = socket.AF_UNSPEC
-    ) -> Awaitable[List[Tuple[int, Any]]]:
+    ) -> Awaitable[list[tuple[int, Any]]]:
         if (host, port, family) in self.mapping:
             host, port = self.mapping[(host, port, family)]
         elif (host, port) in self.mapping:
@@ -588,8 +607,8 @@ _SSL_CONTEXT_KEYWORDS = frozenset(
 
 
 def ssl_options_to_context(
-    ssl_options: Union[Dict[str, Any], ssl.SSLContext],
-    server_side: Optional[bool] = None,
+    ssl_options: dict[str, Any] | ssl.SSLContext,
+    server_side: bool | None = None,
 ) -> ssl.SSLContext:
     """Try to convert an ``ssl_options`` dictionary to an
     `~ssl.SSLContext` object.
@@ -642,9 +661,9 @@ def ssl_options_to_context(
 
 def ssl_wrap_socket(
     socket: socket.socket,
-    ssl_options: Union[Dict[str, Any], ssl.SSLContext],
-    server_hostname: Optional[str] = None,
-    server_side: Optional[bool] = None,
+    ssl_options: dict[str, Any] | ssl.SSLContext,
+    server_hostname: str | None = None,
+    server_side: bool | None = None,
     **kwargs: Any,
 ) -> ssl.SSLSocket:
     """Returns an ``ssl.SSLSocket`` wrapping the given socket.

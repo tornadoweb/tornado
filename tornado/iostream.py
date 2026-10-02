@@ -29,33 +29,24 @@ import errno
 import io
 import numbers
 import os
+import re
 import socket
 import ssl
 import sys
-import re
-
-from tornado.concurrent import Future, future_set_result_unless_cancelled
-from tornado import ioloop
-from tornado.log import gen_log
-from tornado.netutil import ssl_wrap_socket, _client_ssl_defaults, _server_ssl_defaults
-from tornado.util import errno_from_exception
-
 import typing
-from typing import (
-    Union,
-    Optional,
-    Awaitable,
-    Callable,
-    Pattern,
-    Any,
-    Dict,
-    TypeVar,
-    Tuple,
-)
+from collections.abc import Awaitable, Callable
+from re import Pattern
 from types import TracebackType
+from typing import (
+    Any,
+    TypeVar,
+)
 
-if typing.TYPE_CHECKING:
-    from typing import Deque, List, Type  # noqa: F401
+from tornado import ioloop
+from tornado.concurrent import Future, future_set_result_unless_cancelled
+from tornado.log import gen_log
+from tornado.netutil import _client_ssl_defaults, _server_ssl_defaults, ssl_wrap_socket
+from tornado.util import errno_from_exception
 
 _IOStreamType = TypeVar("_IOStreamType", bound="IOStream")
 
@@ -95,7 +86,7 @@ class StreamClosedError(IOError):
        Added the ``real_error`` attribute.
     """
 
-    def __init__(self, real_error: Optional[BaseException] = None) -> None:
+    def __init__(self, real_error: BaseException | None = None) -> None:
         super().__init__("Stream is closed")
         self.real_error = real_error
 
@@ -122,9 +113,9 @@ class _StreamBuffer:
 
     def __init__(self) -> None:
         # A sequence of (False, bytearray) and (True, memoryview) objects
-        self._buffers = (
+        self._buffers: collections.deque[tuple[bool, bytearray | memoryview]] = (
             collections.deque()
-        )  # type: Deque[Tuple[bool, Union[bytearray, memoryview]]]
+        )
         # Position in the first buffer
         self._first_pos = 0
         self._size = 0
@@ -136,15 +127,15 @@ class _StreamBuffer:
     # of extending an existing bytearray
     _large_buf_threshold = 2048
 
-    def append(self, data: Union[bytes, bytearray, memoryview]) -> None:
+    def append(self, data: bytes | bytearray | memoryview) -> None:
         """
         Append the given piece of data (should be a buffer-compatible object).
         """
         size = len(data)
         if size > self._large_buf_threshold:
-            if not isinstance(data, memoryview):
-                data = memoryview(data)
-            self._buffers.append((True, data))
+            # Always make a new view (even of a memoryview) so we can
+            # release it when we're done with it.
+            self._buffers.append((True, memoryview(data)))
         elif size > 0:
             if self._buffers:
                 is_memview, b = self._buffers[-1]
@@ -162,6 +153,9 @@ class _StreamBuffer:
         """
         Get a view over at most ``size`` bytes (possibly fewer) at the
         current buffer position.
+
+        The caller must release the returned view (e.g. with a ``with``
+        statement) before the buffer is modified again.
         """
         assert size > 0
         try:
@@ -173,7 +167,12 @@ class _StreamBuffer:
         if is_memview:
             return typing.cast(memoryview, b[pos : pos + size])
         else:
-            return memoryview(b)[pos : pos + size]
+            # Release the full view immediately so that only the returned
+            # slice holds a reference to the bytearray's buffer. (The
+            # bytearray cannot be resized while any view of it is
+            # alive, and on PyPy views are not freed until garbage collection)
+            with memoryview(b) as m:
+                return m[pos : pos + size]
 
     def advance(self, size: int) -> None:
         """
@@ -190,6 +189,10 @@ class _StreamBuffer:
             if b_remain <= 0:
                 buffers.popleft()
                 size -= len(b) - pos
+                if is_large:
+                    # Release our view of the caller's data so it can be
+                    # resized (if it is a bytearray) without waiting for GC.
+                    typing.cast(memoryview, b).release()
                 pos = 0
             elif is_large:
                 pos += size
@@ -224,9 +227,9 @@ class BaseIOStream:
 
     def __init__(
         self,
-        max_buffer_size: Optional[int] = None,
-        read_chunk_size: Optional[int] = None,
-        max_write_buffer_size: Optional[int] = None,
+        max_buffer_size: int | None = None,
+        read_chunk_size: int | None = None,
+        max_write_buffer_size: int | None = None,
     ) -> None:
         """`BaseIOStream` constructor.
 
@@ -250,36 +253,36 @@ class BaseIOStream:
         # spurious failures.
         self.read_chunk_size = min(read_chunk_size or 65536, self.max_buffer_size // 2)
         self.max_write_buffer_size = max_write_buffer_size
-        self.error = None  # type: Optional[BaseException]
+        self.error: BaseException | None = None
         self._read_buffer = bytearray()
         self._read_buffer_size = 0
         self._user_read_buffer = False
-        self._after_user_read_buffer = None  # type: Optional[bytearray]
+        self._after_user_read_buffer: bytearray | None = None
         self._write_buffer = _StreamBuffer()
         self._total_write_index = 0
         self._total_write_done_index = 0
-        self._read_delimiter = None  # type: Optional[bytes]
-        self._read_regex = None  # type: Optional[Pattern]
-        self._read_max_bytes = None  # type: Optional[int]
-        self._read_bytes = None  # type: Optional[int]
+        self._read_delimiter: bytes | None = None
+        self._read_regex: Pattern | None = None
+        self._read_max_bytes: int | None = None
+        self._read_bytes: int | None = None
         self._read_partial = False
         self._read_until_close = False
-        self._read_future = None  # type: Optional[Future]
-        self._write_futures = (
+        self._read_future: Future | None = None
+        self._write_futures: collections.deque[tuple[int, Future[None]]] = (
             collections.deque()
-        )  # type: Deque[Tuple[int, Future[None]]]
-        self._close_callback = None  # type: Optional[Callable[[], None]]
-        self._connect_future = None  # type: Optional[Future[IOStream]]
+        )
+        self._close_callback: Callable[[], None] | None = None
+        self._connect_future: Future[IOStream] | None = None
         # _ssl_connect_future should be defined in SSLIOStream
         # but it's here so we can clean it up in _signal_closed
         # TODO: refactor that so subclasses can add additional futures
         # to be cancelled.
-        self._ssl_connect_future = None  # type: Optional[Future[SSLIOStream]]
+        self._ssl_connect_future: Future[SSLIOStream] | None = None
         self._connecting = False
-        self._state = None  # type: Optional[int]
+        self._state: int | None = None
         self._closed = False
 
-    def fileno(self) -> Union[int, ioloop._Selectable]:
+    def fileno(self) -> int | ioloop._Selectable:
         """Returns the file descriptor for this stream."""
         raise NotImplementedError()
 
@@ -298,7 +301,7 @@ class BaseIOStream:
         """
         raise NotImplementedError()
 
-    def read_from_fd(self, buf: Union[bytearray, memoryview]) -> Optional[int]:
+    def read_from_fd(self, buf: bytearray | memoryview) -> int | None:
         """Attempts to read from the underlying file.
 
         Reads up to ``len(buf)`` bytes, storing them in the buffer.
@@ -313,7 +316,7 @@ class BaseIOStream:
         """
         raise NotImplementedError()
 
-    def get_fd_error(self) -> Optional[Exception]:
+    def get_fd_error(self) -> Exception | None:
         """Returns information about any error on the underlying file.
 
         This method is called after the `.IOLoop` has signaled an error on the
@@ -324,7 +327,7 @@ class BaseIOStream:
         return None
 
     def read_until_regex(
-        self, regex: bytes, max_bytes: Optional[int] = None
+        self, regex: bytes, max_bytes: int | None = None
     ) -> Awaitable[bytes]:
         """Asynchronously read until we have matched the given regex.
 
@@ -363,7 +366,7 @@ class BaseIOStream:
         return future
 
     def read_until(
-        self, delimiter: bytes, max_bytes: Optional[int] = None
+        self, delimiter: bytes, max_bytes: int | None = None
     ) -> Awaitable[bytes]:
         """Asynchronously read until we have found the given delimiter.
 
@@ -448,11 +451,13 @@ class BaseIOStream:
         available_bytes = self._read_buffer_size
         n = len(buf)
         if available_bytes >= n:
-            buf[:] = memoryview(self._read_buffer)[:n]
+            with memoryview(self._read_buffer) as m, m[:n] as src:
+                buf[:] = src
             del self._read_buffer[:n]
             self._after_user_read_buffer = self._read_buffer
         elif available_bytes > 0:
-            buf[:available_bytes] = memoryview(self._read_buffer)[:]
+            with memoryview(self._read_buffer) as m:
+                buf[:available_bytes] = m
 
         # Set up the supplied buffer as our temporary read buffer.
         # The original (if it had any data remaining) has been
@@ -500,7 +505,7 @@ class BaseIOStream:
             raise
         return future
 
-    def write(self, data: Union[bytes, memoryview]) -> "Future[None]":
+    def write(self, data: bytes | memoryview) -> "Future[None]":
         """Asynchronously write the given data to this stream.
 
         This method returns a `.Future` that resolves (with a result
@@ -524,7 +529,7 @@ class BaseIOStream:
         if data:
             if isinstance(data, memoryview):
                 # Make sure that ``len(data) == data.nbytes``
-                data = memoryview(data).cast("B")
+                data = data.cast("B")
             if (
                 self.max_write_buffer_size is not None
                 and len(self._write_buffer) + len(data) > self.max_write_buffer_size
@@ -532,7 +537,7 @@ class BaseIOStream:
                 raise StreamBufferFullError("Reached maximum write buffer size")
             self._write_buffer.append(data)
             self._total_write_index += len(data)
-        future = Future()  # type: Future[None]
+        future: Future[None] = Future()
         future.add_done_callback(lambda f: f.exception())
         self._write_futures.append((self._total_write_index, future))
         if not self._connecting:
@@ -542,7 +547,7 @@ class BaseIOStream:
             self._maybe_add_error_listener()
         return future
 
-    def set_close_callback(self, callback: Optional[Callable[[], None]]) -> None:
+    def set_close_callback(self, callback: Callable[[], None] | None) -> None:
         """Call the given callback when the stream is closed.
 
         This mostly is not necessary for applications that use the
@@ -559,16 +564,16 @@ class BaseIOStream:
 
     def close(
         self,
-        exc_info: Union[
-            None,
-            bool,
-            BaseException,
-            Tuple[
-                "Optional[Type[BaseException]]",
-                Optional[BaseException],
-                Optional[TracebackType],
-            ],
-        ] = False,
+        exc_info: (
+            None
+            | bool
+            | BaseException
+            | tuple[
+                type[BaseException] | None,
+                BaseException | None,
+                TracebackType | None,
+            ]
+        ) = False,
     ) -> None:
         """Close this stream.
 
@@ -588,7 +593,18 @@ class BaseIOStream:
                         self.error = exc_info[1]
             if self._read_until_close:
                 self._read_until_close = False
-                self._finish_read(self._read_buffer_size)
+                if self.error is None or self._is_connreset(self.error):
+                    # A connection reset is treated as a normal close
+                    # throughout this class (on some platforms, notably
+                    # windows, a peer that closes cleanly may still be
+                    # reported as a reset), so deliver the buffered data as
+                    # the result of the read.
+                    self._finish_read(self._read_buffer_size)
+                # Otherwise the stream is closing because of a real error, so
+                # leave the read future pending for _signal_closed() to fail
+                # with StreamClosedError(real_error=self.error). Resolving it
+                # with the buffered data would report a truncated result as if
+                # it were complete.
             elif self._read_future is not None:
                 # resolve reads that are pending and ready to complete
                 try:
@@ -606,7 +622,7 @@ class BaseIOStream:
         self._signal_closed()
 
     def _signal_closed(self) -> None:
-        futures = []  # type: List[Future]
+        futures: list[Future] = []
         if self._read_future is not None:
             futures.append(self._read_future)
             self._read_future = None
@@ -633,7 +649,10 @@ class BaseIOStream:
                     self._ssl_connect_future.set_exception(self.error)
                 else:
                     self._ssl_connect_future.set_exception(StreamClosedError())
-            self._ssl_connect_future.exception()
+            try:
+                self._ssl_connect_future.exception()
+            except asyncio.CancelledError:
+                pass
             self._ssl_connect_future = None
         if self._close_callback is not None:
             cb = self._close_callback
@@ -674,7 +693,7 @@ class BaseIOStream:
     def _handle_connect(self) -> None:
         raise NotImplementedError()
 
-    def _handle_events(self, fd: Union[int, ioloop._Selectable], events: int) -> None:
+    def _handle_events(self, fd: int | ioloop._Selectable, events: int) -> None:
         if self.closed():
             gen_log.warning("Got events for closed stream %s", fd)
             return
@@ -727,10 +746,10 @@ class BaseIOStream:
             self.close(exc_info=e)
             raise
 
-    def _read_to_buffer_loop(self) -> Optional[int]:
+    def _read_to_buffer_loop(self) -> int | None:
         # This method is called from _handle_read and _try_inline_read.
         if self._read_bytes is not None:
-            target_bytes = self._read_bytes  # type: Optional[int]
+            target_bytes: int | None = self._read_bytes
         elif self._read_max_bytes is not None:
             target_bytes = self._read_max_bytes
         elif self.reading():
@@ -811,7 +830,7 @@ class BaseIOStream:
             self._after_user_read_buffer = None
             self._read_buffer_size = len(self._read_buffer)
             self._user_read_buffer = False
-            result = size  # type: Union[int, bytes]
+            result: int | bytes = size
         else:
             result = self._consume(size)
         if self._read_future is not None:
@@ -842,23 +861,29 @@ class BaseIOStream:
         if not self.closed():
             self._add_io_state(ioloop.IOLoop.READ)
 
-    def _read_to_buffer(self) -> Optional[int]:
+    def _read_to_buffer(self) -> int | None:
         """Reads from the socket and appends the result to the read buffer.
 
         Returns the number of bytes read.  Returns 0 if there is nothing
         to read (i.e. the read returns EWOULDBLOCK or equivalent).  On
         error closes the socket and raises an exception.
         """
+        buf: bytearray | None = None
         try:
             while True:
                 try:
                     if self._user_read_buffer:
-                        buf = memoryview(self._read_buffer)[
-                            self._read_buffer_size :
-                        ]  # type: Union[memoryview, bytearray]
+                        # Release the views explicitly so the caller can
+                        # resize their buffer after the read completes
+                        # (PyPy does not free them until garbage collection).
+                        with (
+                            memoryview(self._read_buffer) as m,
+                            m[self._read_buffer_size :] as view,
+                        ):
+                            bytes_read = self.read_from_fd(view)
                     else:
                         buf = bytearray(self.read_chunk_size)
-                    bytes_read = self.read_from_fd(buf)
+                        bytes_read = self.read_from_fd(buf)
                 except OSError as e:
                     # ssl.SSLError is a subclass of socket.error
                     if self._is_connreset(e):
@@ -876,7 +901,9 @@ class BaseIOStream:
                 self.close()
                 return 0
             if not self._user_read_buffer:
-                self._read_buffer += memoryview(buf)[:bytes_read]
+                assert buf is not None
+                with memoryview(buf) as m, m[:bytes_read] as view:
+                    self._read_buffer += view
             self._read_buffer_size += bytes_read
         finally:
             # Break the reference to buf so we don't waste a chunk's worth of
@@ -884,8 +911,11 @@ class BaseIOStream:
             del buf
         if self._read_buffer_size > self.max_buffer_size:
             gen_log.error("Reached maximum read buffer size")
-            self.close()
-            raise StreamBufferFullError("Reached maximum read buffer size")
+            buffer_full_error = StreamBufferFullError(
+                "Reached maximum read buffer size"
+            )
+            self.close(exc_info=buffer_full_error)
+            raise buffer_full_error
         return bytes_read
 
     def _read_from_buffer(self, pos: int) -> None:
@@ -898,7 +928,7 @@ class BaseIOStream:
         self._read_partial = False
         self._finish_read(pos)
 
-    def _find_read_pos(self) -> Optional[int]:
+    def _find_read_pos(self) -> int | None:
         """Attempts to find a position in the read buffer that satisfies
         the currently-pending read.
 
@@ -937,7 +967,7 @@ class BaseIOStream:
                 self._check_max_bytes(self._read_regex, self._read_buffer_size)
         return None
 
-    def _check_max_bytes(self, delimiter: Union[bytes, Pattern], size: int) -> None:
+    def _check_max_bytes(self, delimiter: bytes | Pattern, size: int) -> None:
         if self._read_max_bytes is not None and size > self._read_max_bytes:
             raise UnsatisfiableReadError(
                 "delimiter %r not found within %d bytes"
@@ -959,7 +989,8 @@ class BaseIOStream:
                     # with more than 128KB at a time.
                     size = 128 * 1024
 
-                num_bytes = self.write_to_fd(self._write_buffer.peek(size))
+                with self._write_buffer.peek(size) as data:
+                    num_bytes = self.write_to_fd(data)
                 if num_bytes == 0:
                     break
                 self._write_buffer.advance(num_bytes)
@@ -987,8 +1018,11 @@ class BaseIOStream:
         if loc == 0:
             return b""
         assert loc <= self._read_buffer_size
-        # Slice the bytearray buffer into bytes, without intermediate copying
-        b = (memoryview(self._read_buffer)[:loc]).tobytes()
+        # Slice the bytearray buffer into bytes, without intermediate copying.
+        # The views must be released before the bytearray is resized
+        # (explicitly, since PyPy does not free them until garbage collection).
+        with memoryview(self._read_buffer) as m, m[:loc] as view:
+            b = view.tobytes()
         self._read_buffer_size -= loc
         del self._read_buffer[:loc]
         return b
@@ -1097,18 +1131,18 @@ class IOStream(BaseIOStream):
         self.socket.setblocking(False)
         super().__init__(*args, **kwargs)
 
-    def fileno(self) -> Union[int, ioloop._Selectable]:
+    def fileno(self) -> int | ioloop._Selectable:
         return self.socket
 
     def close_fd(self) -> None:
         self.socket.close()
         self.socket = None  # type: ignore
 
-    def get_fd_error(self) -> Optional[Exception]:
+    def get_fd_error(self) -> Exception | None:
         errno = self.socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
         return socket.error(errno, os.strerror(errno))
 
-    def read_from_fd(self, buf: Union[bytearray, memoryview]) -> Optional[int]:
+    def read_from_fd(self, buf: bytearray | memoryview) -> int | None:
         try:
             return self.socket.recv_into(buf, len(buf))
         except BlockingIOError:
@@ -1125,7 +1159,7 @@ class IOStream(BaseIOStream):
             del data
 
     def connect(
-        self: _IOStreamType, address: Any, server_hostname: Optional[str] = None
+        self: _IOStreamType, address: Any, server_hostname: str | None = None
     ) -> "Future[_IOStreamType]":
         """Connects the socket to a remote address without blocking.
 
@@ -1171,7 +1205,7 @@ class IOStream(BaseIOStream):
 
         """
         self._connecting = True
-        future = Future()  # type: Future[_IOStreamType]
+        future: Future[_IOStreamType] = Future()
         self._connect_future = typing.cast("Future[IOStream]", future)
         try:
             self.socket.connect(address)
@@ -1194,9 +1228,9 @@ class IOStream(BaseIOStream):
     def start_tls(
         self,
         server_side: bool,
-        ssl_options: Optional[Union[Dict[str, Any], ssl.SSLContext]] = None,
-        server_hostname: Optional[str] = None,
-    ) -> Awaitable["SSLIOStream"]:
+        ssl_options: dict[str, Any] | ssl.SSLContext | None = None,
+        server_hostname: str | None = None,
+    ) -> "Future[SSLIOStream]":
         """Convert this `IOStream` to an `SSLIOStream`.
 
         This enables protocols that begin in clear-text mode and
@@ -1230,6 +1264,10 @@ class IOStream(BaseIOStream):
            SSL certificates are validated by default; pass
            ``ssl_options=dict(cert_reqs=ssl.CERT_NONE)`` or a
            suitably-configured `ssl.SSLContext` to disable.
+
+        .. versionchanged:: 6.6
+           Cancelling the returned `.Future` before the handshake completes
+           now closes the new stream and its socket.
         """
         if (
             self._read_future
@@ -1242,9 +1280,9 @@ class IOStream(BaseIOStream):
             raise ValueError("IOStream is not idle; cannot convert to SSL")
         if ssl_options is None:
             if server_side:
-                ssl_options = _server_ssl_defaults
+                ssl_options = _server_ssl_defaults()
             else:
-                ssl_options = _client_ssl_defaults
+                ssl_options = _client_ssl_defaults()
 
         socket = self.socket
         self.io_loop.remove_handler(socket)
@@ -1259,12 +1297,19 @@ class IOStream(BaseIOStream):
         orig_close_callback = self._close_callback
         self._close_callback = None
 
-        future = Future()  # type: Future[SSLIOStream]
+        future: Future[SSLIOStream] = Future()
         ssl_stream = SSLIOStream(socket, ssl_options=ssl_options)
         ssl_stream.set_close_callback(orig_close_callback)
         ssl_stream._ssl_connect_future = future
         ssl_stream.max_buffer_size = self.max_buffer_size
         ssl_stream.read_chunk_size = self.read_chunk_size
+        # The socket now belongs to ssl_stream, which the caller can't see
+        # until the handshake completes. If the caller gives up (e.g. on a
+        # timeout) and cancels the future, close the stream so the socket
+        # is not leaked.
+        future.add_done_callback(
+            lambda f: ssl_stream.close() if f.cancelled() else None
+        )
         return future
 
     def _handle_connect(self) -> None:
@@ -1324,19 +1369,21 @@ class SSLIOStream(IOStream):
     wrapped when `IOStream.connect` is finished.
     """
 
-    socket = None  # type: ssl.SSLSocket
+    socket: ssl.SSLSocket
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """The ``ssl_options`` keyword argument may either be an
         `ssl.SSLContext` object or a dictionary of keywords arguments
         for `ssl.SSLContext.wrap_socket`
         """
-        self._ssl_options = kwargs.pop("ssl_options", _client_ssl_defaults)
+        self._ssl_options = kwargs.pop("ssl_options", None)
+        if self._ssl_options is None:
+            self._ssl_options = _client_ssl_defaults()
         super().__init__(*args, **kwargs)
         self._ssl_accepting = True
         self._handshake_reading = False
         self._handshake_writing = False
-        self._server_hostname = None  # type: Optional[str]
+        self._server_hostname: str | None = None
 
         # If the socket is already connected, attempt to start the handshake.
         try:
@@ -1425,7 +1472,7 @@ class SSLIOStream(IOStream):
         super()._handle_write()
 
     def connect(
-        self, address: Tuple, server_hostname: Optional[str] = None
+        self, address: tuple, server_hostname: str | None = None
     ) -> "Future[SSLIOStream]":
         self._server_hostname = server_hostname
         # Ignore the result of connect(). If it fails,
@@ -1526,7 +1573,7 @@ class SSLIOStream(IOStream):
             # See https://github.com/tornadoweb/tornado/pull/2008
             del data
 
-    def read_from_fd(self, buf: Union[bytearray, memoryview]) -> Optional[int]:
+    def read_from_fd(self, buf: bytearray | memoryview) -> int | None:
         try:
             if self._ssl_accepting:
                 # If the handshake hasn't finished yet, there can't be anything
@@ -1596,7 +1643,7 @@ class PipeIOStream(BaseIOStream):
             # See https://github.com/tornadoweb/tornado/pull/2008
             del data
 
-    def read_from_fd(self, buf: Union[bytearray, memoryview]) -> Optional[int]:
+    def read_from_fd(self, buf: bytearray | memoryview) -> int | None:
         try:
             return self._fio.readinto(buf)  # type: ignore
         except OSError as e:

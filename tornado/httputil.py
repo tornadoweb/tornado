@@ -19,54 +19,49 @@ This module also defines the `HTTPServerRequest` class which is exposed
 via `tornado.web.RequestHandler.request`.
 """
 
+from __future__ import annotations
+
 import calendar
 import collections.abc
 import copy
+import dataclasses
 import datetime
 import email.utils
-from functools import lru_cache
-from http.client import responses
 import http.cookies
 import re
-from ssl import SSLError
 import time
 import unicodedata
-from urllib.parse import urlencode, urlparse, urlunparse, parse_qsl
+from functools import lru_cache
+from http.client import responses
+from ssl import SSLError
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+import warnings
 
-from tornado.escape import native_str, parse_qs_bytes, utf8, to_unicode
+from tornado.escape import native_str, parse_qs_bytes, to_unicode, utf8
 from tornado.util import ObjectDict, unicode_type
-
 
 # responses is unused in this file, but we re-export it to other files.
 # Reference it so pyflakes doesn't complain.
 responses
 
 import typing
+from collections.abc import Awaitable, Generator, Iterable, Iterator, Mapping
 from typing import (
-    Tuple,
-    Iterable,
-    List,
-    Mapping,
-    Iterator,
-    Dict,
-    Union,
-    Optional,
-    Awaitable,
-    Generator,
     AnyStr,
 )
 
 if typing.TYPE_CHECKING:
-    from typing import Deque  # noqa: F401
-    from asyncio import Future  # noqa: F401
-    import unittest  # noqa: F401
+    # These are relatively heavy imports and aren't needed in this file
+    # unless we're type-checking.
+    import unittest
+    from asyncio import Future
 
 # To be used with str.strip() and related methods.
 HTTP_WHITESPACE = " \t"
 
 # Roughly the inverse of RequestHandler._VALID_HEADER_CHARS, but permits
 # chars greater than \xFF (which may appear after decoding utf8).
-_FORBIDDEN_HEADER_CHARS_RE = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]")
+_FORBIDDEN_HEADER_CHARS_RE = re.compile(r"[\x00-\x08\x0A-\x1F\x7F]")
 
 
 class _ABNF:
@@ -79,7 +74,7 @@ class _ABNF:
     """
 
     # RFC 3986 (URI)
-    # The URI hostname ABNF is both complex (including detailed vaildation of IPv4 and IPv6
+    # The URI hostname ABNF is both complex (including detailed validation of IPv4 and IPv6
     # literals) and not strict enough (a lot of punctuation is allowed by the ABNF even though
     # it is not allowed by DNS). We simplify it by allowing square brackets and colons in any
     # position, not only for their use in IPv6 literals.
@@ -165,22 +160,22 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
     """
 
     @typing.overload
-    def __init__(self, __arg: Mapping[str, List[str]]) -> None:
+    def __init__(self, __arg: Mapping[str, list[str]]) -> None:
         pass
 
-    @typing.overload  # noqa: F811
+    @typing.overload
     def __init__(self, __arg: Mapping[str, str]) -> None:
         pass
 
-    @typing.overload  # noqa: F811
-    def __init__(self, *args: Tuple[str, str]) -> None:
+    @typing.overload
+    def __init__(self, *args: tuple[str, str]) -> None:
         pass
 
-    @typing.overload  # noqa: F811
+    @typing.overload
     def __init__(self, **kwargs: str) -> None:
         pass
 
-    def __init__(self, *args: typing.Any, **kwargs: str) -> None:  # noqa: F811
+    def __init__(self, *args: typing.Any, **kwargs: str) -> None:
         # Formally, HTTP headers are a mapping from a field name to a "combined field value",
         # which may be constructed from multiple field lines by joining them with commas.
         # In practice, however, some headers (notably Set-Cookie) do not follow this convention,
@@ -189,7 +184,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
         # on demand (and cleared whenever the list is modified).
         self._as_list: dict[str, list[str]] = {}
         self._combined_cache: dict[str, str] = {}
-        self._last_key = None  # type: Optional[str]
+        self._last_key: str | None = None
         if len(args) == 1 and len(kwargs) == 0 and isinstance(args[0], HTTPHeaders):
             # Copy constructor
             for k, v in args[0].get_all():
@@ -220,12 +215,12 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
         else:
             self[norm_name] = value
 
-    def get_list(self, name: str) -> List[str]:
+    def get_list(self, name: str) -> list[str]:
         """Returns all values for the given header as a list."""
         norm_name = _normalize_header(name)
         return self._as_list.get(norm_name, [])
 
-    def get_all(self) -> Iterable[Tuple[str, str]]:
+    def get_all(self) -> Iterable[tuple[str, str]]:
         """Returns an iterable of all (name, value) pairs.
 
         If a header has multiple values, multiple pairs will be
@@ -287,7 +282,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
             )
 
     @classmethod
-    def parse(cls, headers: str, *, _chars_are_bytes: bool = True) -> "HTTPHeaders":
+    def parse(cls, headers: str, *, _chars_are_bytes: bool = True) -> HTTPHeaders:
         """Returns a dictionary from HTTP header text.
 
         >>> h = HTTPHeaders.parse("Content-Type: text/html\\r\\nContent-Length: 42\\r\\n")
@@ -359,7 +354,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
     def __iter__(self) -> Iterator[typing.Any]:
         return iter(self._as_list)
 
-    def copy(self) -> "HTTPHeaders":
+    def copy(self) -> HTTPHeaders:
         # defined in dict but not in MutableMapping.
         return HTTPHeaders(self)
 
@@ -472,36 +467,63 @@ class HTTPServerRequest:
     .. deprecated:: 6.5.2
        The ``host`` argument to the ``HTTPServerRequest`` constructor is deprecated. Use
        ``headers["Host"]`` instead. This argument was mistakenly removed in Tornado 6.5.0 and
-       temporarily restored in 6.5.2.
+       temporarily restored in 6.5.2. It will be removed in Tornado 6.7.
+
+    .. deprecated:: 6.6
+       Creating a ``HTTPServerRequest`` with out a ``start_line`` argument is deprecated.
+       This argument will require a non-None value in Tornado 6.7. The ``method``, ``uri``,
+       and ``version`` arguments are deprecated and will be removed in Tornado 6.7, along
+       with the previously-deprecated ``host`` argument. At this time all remaining arguments
+       will become keyword-only.
     """
 
-    path = None  # type: str
-    query = None  # type: str
+    path: str
+    query: str
 
     # HACK: Used for stream_request_body
-    _body_future = None  # type: Future[None]
+    _body_future: Future[None]
 
     def __init__(
         self,
-        method: Optional[str] = None,
-        uri: Optional[str] = None,
+        method: str | None = None,
+        uri: str | None = None,
         version: str = "HTTP/1.0",
-        headers: Optional[HTTPHeaders] = None,
-        body: Optional[bytes] = None,
-        host: Optional[str] = None,
-        files: Optional[Dict[str, List["HTTPFile"]]] = None,
-        connection: Optional["HTTPConnection"] = None,
-        start_line: Optional["RequestStartLine"] = None,
-        server_connection: Optional[object] = None,
+        headers: HTTPHeaders | None = None,
+        body: bytes | None = None,
+        host: str | None = None,
+        files: dict[str, list[HTTPFile]] | None = None,
+        connection: HTTPConnection | None = None,
+        start_line: RequestStartLine | None = None,
+        server_connection: object | None = None,
     ) -> None:
-        if start_line is not None:
-            method, uri, version = start_line
-        assert method
-        self.method = method
-        assert uri
-        self.uri = uri
-        self.version = version
+        if method is not None or uri is not None:
+            warnings.warn(
+                "The method, uri, and version arguments to HTTPServerRequest are deprecated and "
+                "will be removed in Tornado 6.7. Use the start_line argument instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        if start_line is None:
+            warnings.warn(
+                "The start_line argument to HTTPServerRequest will be required in Tornado 6.7.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            start_line = RequestStartLine(method or "GET", uri or "/", version)
+            del method, uri, version
+        self.method, self.uri, self.version = start_line
+
         self.headers = headers or HTTPHeaders()
+        if host is not None:
+            warnings.warn(
+                "The host argument to HTTPServerRequest is deprecated and will be removed "
+                "in Tornado 6.7. Use headers['Host'] instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            self.headers["Host"] = host
+            del host
+
         self.body = body or b""
 
         # set remote IP and protocol
@@ -510,9 +532,9 @@ class HTTPServerRequest:
         self.protocol = getattr(context, "protocol", "http")
 
         try:
-            self.host = host or self.headers["Host"]
+            self.host = self.headers["Host"]
         except KeyError:
-            if version == "HTTP/1.0":
+            if self.version == "HTTP/1.0":
                 # HTTP/1.0 does not require the Host header.
                 self.host = "127.0.0.1"
             else:
@@ -544,19 +566,29 @@ class HTTPServerRequest:
         self._start_time = time.time()
         self._finish_time = None
 
-        if uri is not None:
-            self.path, sep, self.query = uri.partition("?")
-        self.arguments = parse_qs_bytes(self.query, keep_blank_values=True)
+        if self.uri is not None:
+            self.path, sep, self.query = self.uri.partition("?")
+        try:
+            self.arguments = parse_qs_bytes(
+                self.query,
+                keep_blank_values=True,
+                # The query string is bounded by max_header_size, but parsing
+                # is expensive enough per field to be worth limiting. Use the
+                # same limit as a urlencoded body. This reads the global
+                # config because HTTPServerRequest has no access to the
+                # per-connection configuration; see set_parse_body_config.
+                max_num_fields=_DEFAULT_PARSE_BODY_CONFIG.urlencoded.max_arguments,
+            )
+        except Exception as e:
+            raise HTTPInputError("Invalid query string: %s" % e) from e
         self.query_arguments = copy.deepcopy(self.arguments)
-        self.body_arguments = {}  # type: Dict[str, List[bytes]]
+        self.body_arguments: dict[str, list[bytes]] = {}
 
     @property
-    def cookies(self) -> Dict[str, http.cookies.Morsel]:
+    def cookies(self) -> dict[str, http.cookies.Morsel]:
         """A dictionary of ``http.cookies.Morsel`` objects."""
         if not hasattr(self, "_cookies"):
-            self._cookies = (
-                http.cookies.SimpleCookie()
-            )  # type: http.cookies.SimpleCookie
+            self._cookies: http.cookies.SimpleCookie = http.cookies.SimpleCookie()
             if "Cookie" in self.headers:
                 try:
                     parsed = parse_cookie(self.headers["Cookie"])
@@ -584,9 +616,7 @@ class HTTPServerRequest:
         else:
             return self._finish_time - self._start_time
 
-    def get_ssl_certificate(
-        self, binary_form: bool = False
-    ) -> Union[None, Dict, bytes]:
+    def get_ssl_certificate(self, binary_form: bool = False) -> None | dict | bytes:
         """Returns the client's SSL certificate, if any.
 
         To use client certificates, the HTTPServer's
@@ -659,8 +689,8 @@ class HTTPServerConnectionDelegate:
     """
 
     def start_request(
-        self, server_conn: object, request_conn: "HTTPConnection"
-    ) -> "HTTPMessageDelegate":
+        self, server_conn: object, request_conn: HTTPConnection
+    ) -> HTTPMessageDelegate:
         """This method is called by the server when a new request has started.
 
         :arg server_conn: is an opaque object representing the long-lived
@@ -690,9 +720,9 @@ class HTTPMessageDelegate:
     # TODO: genericize this class to avoid exposing the Union.
     def headers_received(
         self,
-        start_line: Union["RequestStartLine", "ResponseStartLine"],
+        start_line: RequestStartLine | ResponseStartLine,
         headers: HTTPHeaders,
-    ) -> Optional[Awaitable[None]]:
+    ) -> Awaitable[None] | None:
         """Called when the HTTP headers have been received and parsed.
 
         :arg start_line: a `.RequestStartLine` or `.ResponseStartLine`
@@ -707,7 +737,7 @@ class HTTPMessageDelegate:
         """
         pass
 
-    def data_received(self, chunk: bytes) -> Optional[Awaitable[None]]:
+    def data_received(self, chunk: bytes) -> Awaitable[None] | None:
         """Called when a chunk of data has been received.
 
         May return a `.Future` for flow control.
@@ -735,10 +765,10 @@ class HTTPConnection:
 
     def write_headers(
         self,
-        start_line: Union["RequestStartLine", "ResponseStartLine"],
+        start_line: RequestStartLine | ResponseStartLine,
         headers: HTTPHeaders,
-        chunk: Optional[bytes] = None,
-    ) -> "Future[None]":
+        chunk: bytes | None = None,
+    ) -> Future[None]:
         """Write an HTTP header block.
 
         :arg start_line: a `.RequestStartLine` or `.ResponseStartLine`.
@@ -757,7 +787,7 @@ class HTTPConnection:
         """
         raise NotImplementedError()
 
-    def write(self, chunk: bytes) -> "Future[None]":
+    def write(self, chunk: bytes) -> Future[None]:
         """Writes a chunk of body data.
 
         Returns a future for flow control.
@@ -775,9 +805,7 @@ class HTTPConnection:
 
 def url_concat(
     url: str,
-    args: Union[
-        None, Dict[str, str], List[Tuple[str, str]], Tuple[Tuple[str, str], ...]
-    ],
+    args: None | dict[str, str] | list[tuple[str, str]] | tuple[tuple[str, str], ...],
 ) -> str:
     """Concatenate url and arguments regardless of whether
     url has existing query parameters.
@@ -838,7 +866,7 @@ class HTTPFile(ObjectDict):
 
 def _parse_request_range(
     range_header: str,
-) -> Optional[Tuple[Optional[int], Optional[int]]]:
+) -> tuple[int | None, int | None] | None:
     """Parses a Range header.
 
     Returns either ``None`` or tuple ``(start, end)``.
@@ -887,7 +915,7 @@ def _parse_request_range(
     return (start, end)
 
 
-def _get_content_range(start: Optional[int], end: Optional[int], total: int) -> str:
+def _get_content_range(start: int | None, end: int | None, total: int) -> str:
     """Returns a suitable Content-Range header:
 
     >>> print(_get_content_range(None, 1, 4))
@@ -902,19 +930,117 @@ def _get_content_range(start: Optional[int], end: Optional[int], total: int) -> 
     return f"bytes {start}-{end}/{total}"
 
 
-def _int_or_none(val: str) -> Optional[int]:
+def _int_or_none(val: str) -> int | None:
     val = val.strip()
     if val == "":
         return None
     return int(val)
 
 
+@dataclasses.dataclass
+class ParseMultipartConfig:
+    """This class configures the parsing of ``multipart/form-data`` request bodies.
+
+    Its primary purpose is to place limits on the size and complexity of request messages
+    to avoid potential denial-of-service attacks.
+
+    .. versionadded:: 6.5.5
+    """
+
+    enabled: bool = True
+    """Set this to false to disable the parsing of ``multipart/form-data`` requests entirely.
+
+    This may be desirable for applications that do not need to handle this format, since
+    multipart request have a history of DoS vulnerabilities in Tornado. Multipart requests
+    are used primarily for ``<input type="file">`` in HTML forms, or in APIs that mimic this
+    format. File uploads that use the HTTP ``PUT`` method generally do not use the multipart
+    format.
+    """
+
+    max_parts: int = 100
+    """The maximum number of parts accepted in a multipart request.
+
+    Each ``<input>`` element in an HTML form corresponds to at least one "part".
+    """
+
+    max_part_header_size: int = 10 * 1024
+    """The maximum size of the headers for each part of a multipart request.
+
+    The header for a part contains the name of the form field and optionally the filename
+    and content type of the uploaded file.
+    """
+
+
+@dataclasses.dataclass
+class ParseUrlEncodedConfig:
+    """This class configures the parsing of ``application/x-www-form-urlencoded`` request bodies.
+
+    Its primary purpose is to place limits on the size and complexity of request messages
+    to avoid potential denial-of-service attacks.
+
+    .. versionadded:: 6.5.8
+    """
+
+    max_arguments: int = 1000
+    """The maximum number of arguments accepted in a urlencoded request.
+
+    Each ``<input>`` element in an HTML form corresponds to at least one argument.
+    """
+
+
+@dataclasses.dataclass
+class ParseBodyConfig:
+    """This class configures the parsing of request bodies.
+
+    .. versionadded:: 6.5.5
+    """
+
+    multipart: ParseMultipartConfig = dataclasses.field(
+        default_factory=ParseMultipartConfig
+    )
+    urlencoded: ParseUrlEncodedConfig = dataclasses.field(
+        default_factory=ParseUrlEncodedConfig
+    )
+    """Configuration for ``multipart/form-data`` request bodies."""
+
+
+_DEFAULT_PARSE_BODY_CONFIG = ParseBodyConfig()
+
+
+def set_parse_body_config(config: ParseBodyConfig) -> None:
+    r"""Sets the **global** default configuration for parsing request bodies.
+
+    This global setting is provided as a stopgap for applications that need to raise the limits
+    introduced in Tornado 6.5.5, or who wish to disable the parsing of multipart/form-data bodies
+    entirely. Non-global configuration for this functionality will be introduced in a future
+    release.
+
+    >>> content_type = "multipart/form-data; boundary=foo"
+    >>> multipart_body = b"--foo--\r\n"
+    >>> parse_body_arguments(content_type, multipart_body, {}, {})
+    >>> multipart_config = ParseMultipartConfig(enabled=False)
+    >>> config = ParseBodyConfig(multipart=multipart_config)
+    >>> set_parse_body_config(config)
+    >>> parse_body_arguments(content_type, multipart_body, {}, {})
+    Traceback (most recent call last):
+        ...
+    tornado.httputil.HTTPInputError: ...: multipart/form-data parsing is disabled
+    >>> set_parse_body_config(ParseBodyConfig())  # reset to defaults
+
+    .. versionadded:: 6.5.5
+    """
+    global _DEFAULT_PARSE_BODY_CONFIG
+    _DEFAULT_PARSE_BODY_CONFIG = config
+
+
 def parse_body_arguments(
     content_type: str,
     body: bytes,
-    arguments: Dict[str, List[bytes]],
-    files: Dict[str, List[HTTPFile]],
-    headers: Optional[HTTPHeaders] = None,
+    arguments: dict[str, list[bytes]],
+    files: dict[str, list[HTTPFile]],
+    headers: HTTPHeaders | None = None,
+    *,
+    config: ParseBodyConfig | None = None,
 ) -> None:
     """Parses a form request body.
 
@@ -924,6 +1050,8 @@ def parse_body_arguments(
     and ``files`` parameters are dictionaries that will be updated
     with the parsed contents.
     """
+    if config is None:
+        config = _DEFAULT_PARSE_BODY_CONFIG
     if content_type.startswith("application/x-www-form-urlencoded"):
         if headers and "Content-Encoding" in headers:
             raise HTTPInputError(
@@ -931,7 +1059,11 @@ def parse_body_arguments(
             )
         try:
             # real charset decoding will happen in RequestHandler.decode_argument()
-            uri_arguments = parse_qs_bytes(body, keep_blank_values=True)
+            uri_arguments = parse_qs_bytes(
+                body,
+                keep_blank_values=True,
+                max_num_fields=config.urlencoded.max_arguments,
+            )
         except Exception as e:
             raise HTTPInputError("Invalid x-www-form-urlencoded body: %s" % e) from e
         for name, values in uri_arguments.items():
@@ -944,10 +1076,15 @@ def parse_body_arguments(
             )
         try:
             fields = content_type.split(";")
+            if fields[0].strip() != "multipart/form-data":
+                # This catches "Content-Type: multipart/form-dataxyz"
+                raise HTTPInputError("Invalid content type")
             for field in fields:
                 k, sep, v = field.strip().partition("=")
                 if k == "boundary" and v:
-                    parse_multipart_form_data(utf8(v), body, arguments, files)
+                    parse_multipart_form_data(
+                        utf8(v), body, arguments, files, config=config.multipart
+                    )
                     break
             else:
                 raise HTTPInputError("multipart boundary not found")
@@ -958,8 +1095,10 @@ def parse_body_arguments(
 def parse_multipart_form_data(
     boundary: bytes,
     data: bytes,
-    arguments: Dict[str, List[bytes]],
-    files: Dict[str, List[HTTPFile]],
+    arguments: dict[str, list[bytes]],
+    files: dict[str, list[HTTPFile]],
+    *,
+    config: ParseMultipartConfig | None = None,
 ) -> None:
     """Parses a ``multipart/form-data`` body.
 
@@ -972,6 +1111,10 @@ def parse_multipart_form_data(
        Now recognizes non-ASCII filenames in RFC 2231/5987
        (``filename*=``) format.
     """
+    if config is None:
+        config = _DEFAULT_PARSE_BODY_CONFIG.multipart
+    if not config.enabled:
+        raise HTTPInputError("multipart/form-data parsing is disabled")
     # The standard allows for the boundary to be quoted in the header,
     # although it's rare (it happens at least for google app engine
     # xmpp).  I think we're also supposed to handle backslash-escapes
@@ -982,13 +1125,19 @@ def parse_multipart_form_data(
     final_boundary_index = data.rfind(b"--" + boundary + b"--")
     if final_boundary_index == -1:
         raise HTTPInputError("Invalid multipart/form-data: no final boundary found")
-    parts = data[:final_boundary_index].split(b"--" + boundary + b"\r\n")
+    parts = data[:final_boundary_index].split(
+        b"--" + boundary + b"\r\n", config.max_parts + 1
+    )
+    if len(parts) > config.max_parts:
+        raise HTTPInputError("multipart/form-data has too many parts")
     for part in parts:
         if not part:
             continue
         eoh = part.find(b"\r\n\r\n")
         if eoh == -1:
             raise HTTPInputError("multipart/form-data missing headers")
+        if eoh > config.max_part_header_size:
+            raise HTTPInputError("multipart/form-data part header too large")
         headers = HTTPHeaders.parse(part[:eoh].decode("utf-8"), _chars_are_bytes=False)
         disp_header = headers.get("Content-Disposition", "")
         disposition, disp_params = _parse_header(disp_header)
@@ -1010,7 +1159,7 @@ def parse_multipart_form_data(
 
 
 def format_timestamp(
-    ts: Union[int, float, tuple, time.struct_time, datetime.datetime],
+    ts: int | float | tuple | time.struct_time | datetime.datetime,
 ) -> str:
     """Formats a timestamp in the format used by HTTP.
 
@@ -1103,7 +1252,7 @@ def parse_response_start_line(line: str) -> ResponseStartLine:
 # RFCs for multipart/form-data) before making this change.
 
 
-def _parseparam(s: str) -> Generator[str, None, None]:
+def _parseparam(s: str) -> Generator[str]:
     start = 0
     while s.find(";", start) == start:
         start += 1
@@ -1121,7 +1270,7 @@ def _parseparam(s: str) -> Generator[str, None, None]:
         start = end
 
 
-def _parse_header(line: str) -> Tuple[str, Dict[str, str]]:
+def _parse_header(line: str) -> tuple[str, dict[str, str]]:
     r"""Parse a Content-type like header.
 
     Return the main content-type and a dictionary of options.
@@ -1156,7 +1305,7 @@ def _parse_header(line: str) -> Tuple[str, Dict[str, str]]:
     return key, pdict
 
 
-def _encode_header(key: str, pdict: Dict[str, str]) -> str:
+def _encode_header(key: str, pdict: dict[str, str]) -> str:
     """Inverse of _parse_header.
 
     >>> _encode_header('permessage-deflate',
@@ -1176,9 +1325,7 @@ def _encode_header(key: str, pdict: Dict[str, str]) -> str:
     return "; ".join(out)
 
 
-def encode_username_password(
-    username: Union[str, bytes], password: Union[str, bytes]
-) -> bytes:
+def encode_username_password(username: str | bytes, password: str | bytes) -> bytes:
     """Encodes a username/password pair in the format used by HTTP auth.
 
     The return value is a byte string in the form ``username:password``.
@@ -1192,17 +1339,16 @@ def encode_username_password(
     return utf8(username) + b":" + utf8(password)
 
 
-def doctests():
-    # type: () -> unittest.TestSuite
+def doctests() -> unittest.TestSuite:
     import doctest
 
-    return doctest.DocTestSuite()
+    return doctest.DocTestSuite(optionflags=doctest.ELLIPSIS)
 
 
 _netloc_re = re.compile(r"^(.+):(\d+)$")
 
 
-def split_host_and_port(netloc: str) -> Tuple[str, Optional[int]]:
+def split_host_and_port(netloc: str) -> tuple[str, int | None]:
     """Returns ``(host, port)`` tuple from ``netloc``.
 
     Returned ``port`` will be ``None`` if not present.
@@ -1212,14 +1358,14 @@ def split_host_and_port(netloc: str) -> Tuple[str, Optional[int]]:
     match = _netloc_re.match(netloc)
     if match:
         host = match.group(1)
-        port = int(match.group(2))  # type: Optional[int]
+        port: int | None = int(match.group(2))
     else:
         host = netloc
         port = None
     return (host, port)
 
 
-def qs_to_qsl(qs: Dict[str, List[AnyStr]]) -> Iterable[Tuple[str, AnyStr]]:
+def qs_to_qsl(qs: dict[str, list[AnyStr]]) -> Iterable[tuple[str, AnyStr]]:
     """Generator converting a result of ``parse_qs`` back to name-value pairs.
 
     .. versionadded:: 5.0
@@ -1266,7 +1412,7 @@ def _unquote_cookie(s: str) -> str:
     return _unquote_sub(_unquote_replace, s)
 
 
-def parse_cookie(cookie: str) -> Dict[str, str]:
+def parse_cookie(cookie: str) -> dict[str, str]:
     """Parse a ``Cookie`` HTTP header into a dict of name/value pairs.
 
     This function attempts to mimic browser cookie parsing behavior;

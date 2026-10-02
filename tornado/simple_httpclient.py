@@ -1,26 +1,3 @@
-from tornado.escape import _unicode
-from tornado import gen, version
-from tornado.httpclient import (
-    HTTPResponse,
-    HTTPError,
-    AsyncHTTPClient,
-    main,
-    _RequestProxy,
-    HTTPRequest,
-)
-from tornado import httputil
-from tornado.http1connection import HTTP1Connection, HTTP1ConnectionParameters
-from tornado.ioloop import IOLoop
-from tornado.iostream import StreamClosedError, IOStream
-from tornado.netutil import (
-    Resolver,
-    OverrideResolver,
-    _client_ssl_defaults,
-    is_valid_ip,
-)
-from tornado.log import gen_log
-from tornado.tcpclient import TCPClient
-
 import base64
 import collections
 import copy
@@ -30,15 +7,33 @@ import socket
 import ssl
 import sys
 import time
-from io import BytesIO
 import urllib.parse
-
-from typing import Dict, Any, Callable, Optional, Type, Union, Awaitable
+from collections.abc import Awaitable, Callable
+from io import BytesIO
 from types import TracebackType
-import typing
+from typing import Any, Optional, Type
 
-if typing.TYPE_CHECKING:
-    from typing import Deque, Tuple, List  # noqa: F401
+from tornado import gen, httputil, version
+from tornado.escape import _unicode
+from tornado.http1connection import HTTP1Connection, HTTP1ConnectionParameters
+from tornado.httpclient import (
+    AsyncHTTPClient,
+    HTTPError,
+    HTTPRequest,
+    HTTPResponse,
+    _RequestProxy,
+    main,
+)
+from tornado.ioloop import IOLoop
+from tornado.iostream import IOStream, StreamClosedError
+from tornado.log import gen_log
+from tornado.netutil import (
+    OverrideResolver,
+    Resolver,
+    _client_ssl_defaults,
+    is_valid_ip,
+)
+from tornado.tcpclient import TCPClient
 
 
 class HTTPTimeoutError(HTTPError):
@@ -118,24 +113,24 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     def initialize(  # type: ignore
         self,
         max_clients: int = 10,
-        hostname_mapping: Optional[Dict[str, str]] = None,
+        hostname_mapping: dict[str, str] | None = None,
         max_buffer_size: int = 104857600,
-        resolver: Optional[Resolver] = None,
-        defaults: Optional[Dict[str, Any]] = None,
-        max_header_size: Optional[int] = None,
-        max_body_size: Optional[int] = None,
+        resolver: Resolver | None = None,
+        defaults: dict[str, Any] | None = None,
+        max_header_size: int | None = None,
+        max_body_size: int | None = None,
     ) -> None:
         super().initialize(defaults=defaults)
         self.max_clients = max_clients
-        self.queue = (
-            collections.deque()
-        )  # type: Deque[Tuple[object, HTTPRequest, Callable[[HTTPResponse], None]]]
-        self.active = (
-            {}
-        )  # type: Dict[object, Tuple[HTTPRequest, Callable[[HTTPResponse], None]]]
-        self.waiting = (
-            {}
-        )  # type: Dict[object, Tuple[HTTPRequest, Callable[[HTTPResponse], None], object]]
+        self.queue: collections.deque[
+            tuple[object, HTTPRequest, Callable[[HTTPResponse], None]]
+        ] = collections.deque()
+        self.active: dict[
+            object, tuple[HTTPRequest, Callable[[HTTPResponse], None]]
+        ] = {}
+        self.waiting: dict[
+            object, tuple[HTTPRequest, Callable[[HTTPResponse], None], object]
+        ] = {}
         self.max_buffer_size = max_buffer_size
         self.max_header_size = max_header_size
         self.max_body_size = max_body_size
@@ -227,7 +222,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
                 self.io_loop.remove_timeout(timeout_handle)
             del self.waiting[key]
 
-    def _on_timeout(self, key: object, info: Optional[str] = None) -> None:
+    def _on_timeout(self, key: object, info: str | None = None) -> None:
         """Timeout callback of request.
 
         Construct a timeout HTTPResponse when a timeout occurs.
@@ -254,7 +249,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
     def __init__(
         self,
-        client: Optional[SimpleAsyncHTTPClient],
+        client: SimpleAsyncHTTPClient | None,
         request: HTTPRequest,
         release_callback: Callable[[], None],
         final_callback: Callable[[HTTPResponse], None],
@@ -274,12 +269,12 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self.tcp_client = tcp_client
         self.max_header_size = max_header_size
         self.max_body_size = max_body_size
-        self.code = None  # type: Optional[int]
-        self.headers = None  # type: Optional[httputil.HTTPHeaders]
-        self.chunks = []  # type: List[bytes]
+        self.code: int | None = None
+        self.headers: httputil.HTTPHeaders | None = None
+        self.chunks: list[bytes] = []
         self._decompressor = None
         # Timeout handle returned by IOLoop.add_timeout
-        self._timeout = None  # type: object
+        self._timeout: object = None
         self._sockaddr = None
         IOLoop.current().add_future(
             gen.convert_yielded(self.run()), lambda f: f.result()
@@ -330,19 +325,24 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 timeout = self.request.request_timeout
             else:
                 timeout = 0
-            if timeout:
-                self._timeout = self.io_loop.add_timeout(
-                    self.start_time + timeout,
-                    functools.partial(self._on_timeout, "while connecting"),
+            try:
+                stream = await self.tcp_client.connect(
+                    host,
+                    port,
+                    af=af,
+                    ssl_options=ssl_options,
+                    max_buffer_size=self.max_buffer_size,
+                    source_ip=source_ip,
+                    timeout=(
+                        self.start_time + timeout - self.io_loop.time()
+                        if timeout
+                        else None
+                    ),
                 )
-            stream = await self.tcp_client.connect(
-                host,
-                port,
-                af=af,
-                ssl_options=ssl_options,
-                max_buffer_size=self.max_buffer_size,
-                source_ip=source_ip,
-            )
+            except TimeoutError as e:
+                # TCPClient's timeout messages describe which phase of
+                # the connection timed out (DNS, TCP, or TLS).
+                raise HTTPTimeoutError(str(e) or "Timeout while connecting") from None
 
             if self.final_callback is None:
                 # final_callback is cleared if we've hit our timeout.
@@ -446,9 +446,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             if not self._handle_exception(*sys.exc_info()):
                 raise
 
-    def _get_ssl_options(
-        self, scheme: str
-    ) -> Union[None, Dict[str, Any], ssl.SSLContext]:
+    def _get_ssl_options(self, scheme: str) -> None | dict[str, Any] | ssl.SSLContext:
         if scheme == "https":
             if self.request.ssl_options is not None:
                 return self.request.ssl_options
@@ -460,7 +458,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 and self.request.client_cert is None
                 and self.request.client_key is None
             ):
-                return _client_ssl_defaults
+                return _client_ssl_defaults()
             ssl_ctx = ssl.create_default_context(
                 ssl.Purpose.SERVER_AUTH, cafile=self.request.ca_certs
             )
@@ -477,7 +475,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             return ssl_ctx
         return None
 
-    def _on_timeout(self, info: Optional[str] = None) -> None:
+    def _on_timeout(self, info: str | None = None) -> None:
         """Timeout callback of _HTTPConnection instance.
 
         Raise a `HTTPTimeoutError` when a timeout occurs.
@@ -542,8 +540,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
     def _handle_exception(
         self,
         typ: "Optional[Type[BaseException]]",
-        value: Optional[BaseException],
-        tb: Optional[TracebackType],
+        value: BaseException | None,
+        tb: TracebackType | None,
     ) -> bool:
         if self.final_callback is not None:
             self._remove_timeout()
@@ -587,7 +585,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
     async def headers_received(
         self,
-        first_line: Union[httputil.ResponseStartLine, httputil.RequestStartLine],
+        first_line: httputil.ResponseStartLine | httputil.RequestStartLine,
         headers: httputil.HTTPHeaders,
     ) -> None:
         assert isinstance(first_line, httputil.ResponseStartLine)
@@ -631,6 +629,42 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             new_request.url = urllib.parse.urljoin(
                 self.request.url, self.headers["Location"]
             )
+            new_request.headers = self.request.headers.copy()
+            parsed_orig_url = urllib.parse.urlsplit(original_request.url)
+            parsed_new_url = urllib.parse.urlsplit(new_request.url)
+            if (
+                parsed_orig_url.scheme != parsed_new_url.scheme
+                or parsed_orig_url.netloc != parsed_new_url.netloc
+            ):
+                # Cross-origin redirect: strip auth headers.
+                # Note that while there is no formal specification of headers that should be
+                # stripped here, libcurl strips the Authorization and Cookie headers, so we
+                # do the same.
+                # Reference:
+                # https://github.com/curl/curl/blob/01d8191b25a05e8fa91553a6c0d48acb99907d26/lib/http.c#L1827-L1828
+                #
+                # Note that checking for cross-origin redirects is a crude heuristic. It is both
+                # too weak (e.g. cookies that have a path attribute may need to be stripped even on
+                # same-origin redirects) and too strong (e.g. cookies may be kept on cross-host
+                # redirects within the same domain). However, we cannot know the full details of
+                # the cookie policy at this layer, so we use the same heuristic as libcurl.
+                # Applications that need more control over behavior on redirects can set
+                # follow_redirects=False and handle 3xx responses themselves.
+                new_request.auth_username = None
+                new_request.auth_password = None
+                if "@" in parsed_new_url.netloc:
+                    if parsed_new_url.port is not None:
+                        new_netloc = f"{parsed_new_url.hostname}:{parsed_new_url.port}"
+                    else:
+                        assert parsed_new_url.hostname is not None
+                        new_netloc = parsed_new_url.hostname
+                    parsed_new_url = parsed_new_url._replace(netloc=new_netloc)
+                new_request.url = urllib.parse.urlunsplit(parsed_new_url)
+                for h in ["Authorization", "Cookie"]:
+                    try:
+                        del new_request.headers[h]
+                    except KeyError:
+                        pass
             assert self.request.max_redirects is not None
             new_request.max_redirects = self.request.max_redirects - 1
             del new_request.headers["Host"]
@@ -655,7 +689,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     "Transfer-Encoding",
                 ]:
                     try:
-                        del self.request.headers[h]
+                        del new_request.headers[h]
                     except KeyError:
                         pass
             new_request.original_request = original_request  # type: ignore
@@ -687,7 +721,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
     def _on_end_request(self) -> None:
         self.stream.close()
 
-    def data_received(self, chunk: bytes) -> Optional[Awaitable[None]]:
+    def data_received(self, chunk: bytes) -> Awaitable[None] | None:
         if self._should_follow_redirect():
             # We're going to follow a redirect so just discard the body.
             return None

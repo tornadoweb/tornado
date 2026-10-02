@@ -15,15 +15,11 @@
 import collections
 import datetime
 import types
+from collections.abc import Awaitable
+from typing import Any, Optional, Type
 
 from tornado import gen, ioloop
 from tornado.concurrent import Future, future_set_result_unless_cancelled
-
-from typing import Union, Optional, Type, Any, Awaitable
-import typing
-
-if typing.TYPE_CHECKING:
-    from typing import Deque, Set  # noqa: F401
 
 __all__ = ["Condition", "Event", "Semaphore", "BoundedSemaphore", "Lock"]
 
@@ -39,7 +35,7 @@ class _TimeoutGarbageCollector:
     """
 
     def __init__(self) -> None:
-        self._waiters = collections.deque()  # type: Deque[Future]
+        self._waiters: collections.deque[Future] = collections.deque()
         self._timeouts = 0
 
     def _garbage_collect(self) -> None:
@@ -117,16 +113,20 @@ class Condition(_TimeoutGarbageCollector):
         return result + ">"
 
     def wait(
-        self, timeout: Optional[Union[float, datetime.timedelta]] = None
+        self, timeout: float | datetime.timedelta | None = None
     ) -> Awaitable[bool]:
         """Wait for `.notify`.
 
         Returns a `.Future` that resolves ``True`` if the condition is notified,
         or ``False`` after a timeout.
+
+        .. versionchanged:: 6.6
+           A ``timeout`` argument of zero will either return or raise immediately.
+           Previously, zero was treated equivalent to ``None`` (wait forever).
         """
-        waiter = Future()  # type: Future[bool]
+        waiter: Future[bool] = Future()
         self._waiters.append(waiter)
-        if timeout:
+        if timeout is not None:
 
             def on_timeout() -> None:
                 if not waiter.done():
@@ -197,7 +197,7 @@ class Event:
 
     def __init__(self) -> None:
         self._value = False
-        self._waiters = set()  # type: Set[Future[None]]
+        self._waiters: set[Future[None]] = set()
 
     def __repr__(self) -> str:
         return "<{} {}>".format(
@@ -229,14 +229,18 @@ class Event:
         self._value = False
 
     def wait(
-        self, timeout: Optional[Union[float, datetime.timedelta]] = None
+        self, timeout: float | datetime.timedelta | None = None
     ) -> Awaitable[None]:
         """Block until the internal flag is true.
 
-        Returns an awaitable, which raises `tornado.util.TimeoutError` after a
+        Returns an awaitable, which raises `TimeoutError` after a
         timeout.
+
+        .. versionchanged:: 6.6
+           A ``timeout`` argument of zero will either return or raise immediately.
+           Previously, zero was treated equivalent to ``None`` (wait forever).
         """
-        fut = Future()  # type: Future[None]
+        fut: Future[None] = Future()
         if self._value:
             fut.set_result(None)
             return fut
@@ -273,8 +277,8 @@ class _ReleasingContextManager:
     def __exit__(
         self,
         exc_type: "Optional[Type[BaseException]]",
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[types.TracebackType],
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
     ) -> None:
         self._obj.release()
 
@@ -412,24 +416,28 @@ class Semaphore(_TimeoutGarbageCollector):
                 break
 
     def acquire(
-        self, timeout: Optional[Union[float, datetime.timedelta]] = None
+        self, timeout: float | datetime.timedelta | None = None
     ) -> Awaitable[_ReleasingContextManager]:
         """Decrement the counter. Returns an awaitable.
 
         Block if the counter is zero and wait for a `.release`. The awaitable
-        raises `.TimeoutError` after the deadline.
+        raises `TimeoutError` after the deadline.
+
+        .. versionchanged:: 6.6
+           A ``timeout`` argument of zero will either return or raise immediately.
+           Previously, zero was treated equivalent to ``None`` (wait forever).
         """
-        waiter = Future()  # type: Future[_ReleasingContextManager]
+        waiter: Future[_ReleasingContextManager] = Future()
         if self._value > 0:
             self._value -= 1
             waiter.set_result(_ReleasingContextManager(self))
         else:
             self._waiters.append(waiter)
-            if timeout:
+            if timeout is not None:
 
                 def on_timeout() -> None:
                     if not waiter.done():
-                        waiter.set_exception(gen.TimeoutError())
+                        waiter.set_exception(TimeoutError())
                     self._garbage_collect()
 
                 io_loop = ioloop.IOLoop.current()
@@ -445,8 +453,8 @@ class Semaphore(_TimeoutGarbageCollector):
     def __exit__(
         self,
         typ: "Optional[Type[BaseException]]",
-        value: Optional[BaseException],
-        traceback: Optional[types.TracebackType],
+        value: BaseException | None,
+        traceback: types.TracebackType | None,
     ) -> None:
         self.__enter__()
 
@@ -456,8 +464,8 @@ class Semaphore(_TimeoutGarbageCollector):
     async def __aexit__(
         self,
         typ: "Optional[Type[BaseException]]",
-        value: Optional[BaseException],
-        tb: Optional[types.TracebackType],
+        value: BaseException | None,
+        tb: types.TracebackType | None,
     ) -> None:
         self.release()
 
@@ -526,12 +534,16 @@ class Lock:
         return f"<{self.__class__.__name__} _block={self._block}>"
 
     def acquire(
-        self, timeout: Optional[Union[float, datetime.timedelta]] = None
+        self, timeout: float | datetime.timedelta | None = None
     ) -> Awaitable[_ReleasingContextManager]:
         """Attempt to lock. Returns an awaitable.
 
-        Returns an awaitable, which raises `tornado.util.TimeoutError` after a
+        Returns an awaitable, which raises `TimeoutError` after a
         timeout.
+
+        .. versionchanged:: 6.6
+           A ``timeout`` argument of zero will either return or raise immediately.
+           Previously, zero was treated equivalent to ``None`` (wait forever).
         """
         return self._block.acquire(timeout)
 
@@ -553,8 +565,8 @@ class Lock:
     def __exit__(
         self,
         typ: "Optional[Type[BaseException]]",
-        value: Optional[BaseException],
-        tb: Optional[types.TracebackType],
+        value: BaseException | None,
+        tb: types.TracebackType | None,
     ) -> None:
         self.__enter__()
 
@@ -564,7 +576,7 @@ class Lock:
     async def __aexit__(
         self,
         typ: "Optional[Type[BaseException]]",
-        value: Optional[BaseException],
-        tb: Optional[types.TracebackType],
+        value: BaseException | None,
+        tb: types.TracebackType | None,
     ) -> None:
         self.release()

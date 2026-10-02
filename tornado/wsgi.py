@@ -28,23 +28,21 @@ container.
 """
 
 import concurrent.futures
-from io import BytesIO
-import tornado
 import sys
+import typing
+from collections.abc import Callable
+from io import BytesIO
+from types import TracebackType
+from typing import Any
 
+import tornado
+from tornado import escape, httputil
 from tornado.concurrent import dummy_executor
-from tornado import escape
-from tornado import httputil
 from tornado.ioloop import IOLoop
 from tornado.log import access_log
 
-from typing import List, Tuple, Optional, Callable, Any, Dict
-from types import TracebackType
-import typing
-
 if typing.TYPE_CHECKING:
-    from typing import Type  # noqa: F401
-    from _typeshed.wsgi import WSGIApplication as WSGIAppType  # noqa: F401
+    from _typeshed.wsgi import WSGIApplication as WSGIAppType
 
 
 # PEP 3333 specifies that WSGI on python 3 generally deals with byte strings
@@ -125,7 +123,7 @@ class WSGIContainer:
     def __init__(
         self,
         wsgi_application: "WSGIAppType",
-        executor: Optional[concurrent.futures.Executor] = None,
+        executor: concurrent.futures.Executor | None = None,
     ) -> None:
         self.wsgi_application = wsgi_application
         self.executor = dummy_executor if executor is None else executor
@@ -134,19 +132,19 @@ class WSGIContainer:
         IOLoop.current().spawn_callback(self.handle_request, request)
 
     async def handle_request(self, request: httputil.HTTPServerRequest) -> None:
-        data = {}  # type: Dict[str, Any]
-        response = []  # type: List[bytes]
+        data: dict[str, Any] = {}
+        response: list[bytes] = []
 
         def start_response(
             status: str,
-            headers: List[Tuple[str, str]],
-            exc_info: Optional[
-                Tuple[
-                    "Optional[Type[BaseException]]",
-                    Optional[BaseException],
-                    Optional[TracebackType],
+            headers: list[tuple[str, str]],
+            exc_info: None | (
+                tuple[
+                    type[BaseException] | None,
+                    BaseException | None,
+                    TracebackType | None,
                 ]
-            ] = None,
+            ) = None,
         ) -> Callable[[bytes], Any]:
             data["status"] = status
             data["headers"] = headers
@@ -162,7 +160,7 @@ class WSGIContainer:
         try:
             app_response_iter = iter(app_response)
 
-            def next_chunk() -> Optional[bytes]:
+            def next_chunk() -> bytes | None:
                 try:
                     return next(app_response_iter)
                 except StopIteration:
@@ -184,7 +182,7 @@ class WSGIContainer:
 
         status_code_str, reason = data["status"].split(" ", 1)
         status_code = int(status_code_str)
-        headers = data["headers"]  # type: List[Tuple[str, str]]
+        headers: list[tuple[str, str]] = data["headers"]
         header_set = {k.lower() for (k, v) in headers}
         body = escape.utf8(body)
         if status_code != 304:
@@ -204,7 +202,7 @@ class WSGIContainer:
         request.connection.finish()
         self._log(status_code, request)
 
-    def environ(self, request: httputil.HTTPServerRequest) -> Dict[str, Any]:
+    def environ(self, request: httputil.HTTPServerRequest) -> dict[str, Any]:
         """Converts a `tornado.httputil.HTTPServerRequest` to a WSGI environment.
 
         .. versionchanged:: 6.3

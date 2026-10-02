@@ -2,14 +2,15 @@ import os
 import traceback
 import unittest
 
-from tornado.escape import utf8, native_str, to_unicode
-from tornado.template import Template, DictLoader, ParseError, Loader
+from tornado.escape import native_str, to_unicode, utf8
+from tornado.template import DictLoader, Loader, ParseError, Template
 from tornado.util import ObjectDict
 
-import typing  # noqa: F401
+
+from tornado.test.util import TestCase
 
 
-class TemplateTest(unittest.TestCase):
+class TemplateTest(TestCase):
     def test_simple(self):
         template = Template("Hello {{ name }}!")
         self.assertEqual(template.generate(name="Ben"), b"Hello Ben!")
@@ -126,16 +127,12 @@ class TemplateTest(unittest.TestCase):
         self.assertEqual(template.generate(), b"")
 
     def test_try(self):
-        template = Template(
-            utf8(
-                """{% try %}
+        template = Template(utf8("""{% try %}
 try{% set y = 1/x %}
 {% except %}-except
 {% else %}-else
 {% finally %}-finally
-{% end %}"""
-            )
-        )
+{% end %}"""))
         self.assertEqual(template.generate(x=1), b"\ntry\n-else\n-finally\n")
         self.assertEqual(template.generate(x=0), b"\ntry-except\n-finally\n")
 
@@ -144,9 +141,7 @@ try{% set y = 1/x %}
         self.assertEqual(template.generate(), b"foo")
 
     def test_break_continue(self):
-        template = Template(
-            utf8(
-                """\
+        template = Template(utf8("""\
 {% for i in range(10) %}
     {% if i == 2 %}
         {% continue %}
@@ -155,9 +150,7 @@ try{% set y = 1/x %}
     {% if i == 6 %}
         {% break %}
     {% end %}
-{% end %}"""
-            )
-        )
+{% end %}"""))
         result = template.generate()
         # remove extraneous whitespace
         result = b"".join(result.split())
@@ -192,16 +185,12 @@ try{% set y = 1/x %}
         self.assertEqual(loader.load("t\u00e9st.html").generate(), b"hello")
 
 
-class StackTraceTest(unittest.TestCase):
+class StackTraceTest(TestCase):
     def test_error_line_number_expression(self):
-        loader = DictLoader(
-            {
-                "test.html": """one
+        loader = DictLoader({"test.html": """one
 two{{1/0}}
 three
-        """
-            }
-        )
+        """})
         try:
             loader.load("test.html").generate()
             self.fail("did not get expected exception")
@@ -209,14 +198,10 @@ three
             self.assertTrue("# test.html:2" in traceback.format_exc())
 
     def test_error_line_number_directive(self):
-        loader = DictLoader(
-            {
-                "test.html": """one
+        loader = DictLoader({"test.html": """one
 two{%if 1/0%}
 three{%end%}
-        """
-            }
-        )
+        """})
         try:
             loader.load("test.html").generate()
             self.fail("did not get expected exception")
@@ -224,7 +209,7 @@ three{%end%}
             self.assertTrue("# test.html:2" in traceback.format_exc())
 
     def test_error_line_number_module(self):
-        loader = None  # type: typing.Optional[DictLoader]
+        loader: DictLoader | None = None
 
         def load_generate(path, **kwargs):
             assert loader is not None
@@ -296,7 +281,7 @@ three{%end%}
             self.assertIn("# c.html:1 (via b.html:1, a.html:1)", traceback.format_exc())
 
 
-class ParseErrorDetailTest(unittest.TestCase):
+class ParseErrorDetailTest(TestCase):
     def test_details(self):
         loader = DictLoader({"foo.html": "\n\n{{"})
         with self.assertRaises(ParseError) as cm:
@@ -311,7 +296,7 @@ class ParseErrorDetailTest(unittest.TestCase):
         self.assertEqual("asdf at None:0", str(ParseError("asdf")))
 
 
-class AutoEscapeTest(unittest.TestCase):
+class AutoEscapeTest(TestCase):
     def setUp(self):
         self.templates = {
             "escaped.html": "{% autoescape xhtml_escape %}{{ name }}",
@@ -449,16 +434,12 @@ raw: {% raw name %}""",
         # Whitespace including newlines is allowed within template tags
         # and directives, and this is one way to avoid long lines while
         # keeping extra whitespace out of the rendered output.
-        loader = DictLoader(
-            {
-                "foo.txt": """\
+        loader = DictLoader({"foo.txt": """\
 {% for i in items
   %}{% if i > 0 %}, {% end %}{#
   #}{{i
   }}{% end
-%}"""
-            }
-        )
+%}"""})
         self.assertEqual(
             loader.load("foo.txt").generate(items=range(5)), b"0, 1, 2, 3, 4"
         )
@@ -501,24 +482,20 @@ raw: {% raw name %}""",
         self.assertEqual(loader.load("bar.txt").generate(), b" bar ")
 
     def test_whitespace_directive(self):
-        loader = DictLoader(
-            {
-                "foo.html": """\
+        loader = DictLoader({"foo.html": """\
 {% whitespace oneline %}
     {% for i in range(3) %}
         {{ i }}
     {% end %}
 {% whitespace all %}
     pre\tformatted
-"""
-            }
-        )
+"""})
         self.assertEqual(
             loader.load("foo.html").generate(), b"  0  1  2  \n    pre\tformatted\n"
         )
 
 
-class TemplateLoaderTest(unittest.TestCase):
+class TemplateLoaderTest(TestCase):
     def setUp(self):
         self.loader = Loader(os.path.join(os.path.dirname(__file__), "templates"))
 

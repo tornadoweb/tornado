@@ -1,22 +1,26 @@
 import errno
 import signal
 import socket
-from subprocess import Popen
 import sys
 import time
+import typing
 import unittest
+from subprocess import Popen
 
 from tornado.netutil import (
     BlockingResolver,
     OverrideResolver,
     ThreadedResolver,
-    is_valid_ip,
     bind_sockets,
+    is_valid_ip,
 )
-from tornado.testing import AsyncTestCase, gen_test, bind_unused_port
-from tornado.test.util import skipIfNoNetwork, abstract_base_test
-
-import typing
+from tornado.test.util import (
+    AsyncTestCase,
+    TestCase,
+    abstract_base_test,
+    skipIfNoNetwork,
+)
+from tornado.testing import bind_unused_port, gen_test
 
 try:
     import pycares  # type: ignore
@@ -28,7 +32,7 @@ else:
 
 @abstract_base_test
 class _ResolverTestMixin(AsyncTestCase):
-    resolver = None  # type: typing.Any
+    resolver: typing.Any = None
 
     @gen_test
     def test_localhost(self):
@@ -47,7 +51,7 @@ class _ResolverTestMixin(AsyncTestCase):
 # resolution, so test this case separately, using mocks as needed.
 @abstract_base_test
 class _ResolverErrorTestMixin(AsyncTestCase):
-    resolver = None  # type: typing.Any
+    resolver: typing.Any = None
 
     @gen_test
     def test_bad_host(self):
@@ -114,6 +118,10 @@ class ThreadedResolverTest(_ResolverTestMixin):
 
     def tearDown(self):
         self.resolver.close()
+        # ThreadedResolver uses a global thread pool, so we have to shut it down
+        if ThreadedResolver._threadpool is not None:
+            ThreadedResolver._threadpool.shutdown(wait=True)
+            ThreadedResolver._threadpool = None
         super().tearDown()
 
 
@@ -131,7 +139,7 @@ class ThreadedResolverErrorTest(_ResolverErrorTestMixin):
 
 @skipIfNoNetwork
 @unittest.skipIf(sys.platform == "win32", "preexec_fn not available on win32")
-class ThreadedResolverImportTest(unittest.TestCase):
+class ThreadedResolverImportTest(TestCase):
     def test_import(self):
         TIMEOUT = 5
 
@@ -168,7 +176,7 @@ class CaresResolverTest(_ResolverTestMixin):
         self.resolver = CaresResolver()
 
 
-class IsValidIPTest(unittest.TestCase):
+class IsValidIPTest(TestCase):
     def test_is_valid_ip(self):
         self.assertTrue(is_valid_ip("127.0.0.1"))
         self.assertTrue(is_valid_ip("4.4.4.4"))
@@ -185,7 +193,7 @@ class IsValidIPTest(unittest.TestCase):
         self.assertFalse(is_valid_ip("a" * 100))
 
 
-class TestPortAllocation(unittest.TestCase):
+class TestPortAllocation(TestCase):
     def test_same_port_allocation(self):
         sockets = bind_sockets(0, "localhost")
         try:
@@ -199,7 +207,7 @@ class TestPortAllocation(unittest.TestCase):
         not hasattr(socket, "SO_REUSEPORT"), "SO_REUSEPORT is not supported"
     )
     def test_reuse_port(self):
-        sockets: typing.List[socket.socket] = []
+        sockets: list[socket.socket] = []
         sock, port = bind_unused_port(reuse_port=True)
         try:
             sockets = bind_sockets(port, "127.0.0.1", reuse_port=True)

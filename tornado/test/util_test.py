@@ -1,25 +1,147 @@
+import datetime
+import gzip
+import random
 import re
 import sys
-import datetime
 import textwrap
-import unittest
+from typing import Any, cast
 
 import tornado
 from tornado.escape import utf8
 from tornado.util import (
-    raise_exc_info,
-    Configurable,
-    exec_in,
     ArgReplacer,
-    timedelta_to_seconds,
+    Configurable,
+    GzipDecompressor,
+    exec_in,
     import_object,
+    raise_exc_info,
     re_unescape,
+    timedelta_to_seconds,
 )
 
-from typing import cast, Dict, Any
+
+import unittest
+import warnings
+import zlib
+
+from tornado.test.util import TestCase
 
 
-class RaiseExcInfoTest(unittest.TestCase):
+class GzipDecompressorTest(TestCase):
+    def members(self) -> list[bytes]:
+        return [
+            # Incompressible, so that members span many reads.
+            random.Random(0).randbytes(5000),
+            b"",
+            b"hello " * 2000,
+            b"x",
+        ]
+
+    def decompress(
+        self, data: bytes, read_size: int = 1024, max_length: int = 1024
+    ) -> bytes:
+        # Drive the decompressor the way _GzipMessageDelegate does.
+        decompressor = GzipDecompressor()
+        result = bytearray()
+        for i in range(0, len(data), read_size):
+            chunk = data[i : i + read_size]
+            while chunk:
+                output = decompressor.decompress(chunk, max_length)
+                self.assertLessEqual(len(output), max_length)
+                tail = decompressor.unconsumed_tail
+                self.assertTrue(output or len(tail) < len(chunk), "no progress")
+                chunk = tail
+                result += output
+        self.assertEqual(decompressor.flush(), b"")
+        return bytes(result)
+
+    def test_members(self):
+        streams = [gzip.compress(m) for m in self.members()]
+        cases = [streams[0], streams[2], b"".join(streams), b"".join(streams[1:])]
+        for data in cases:
+            for read_size in [1, 7, 100, 4096, len(data)]:
+                for max_length in [1, 100, 5000, 65536]:
+                    with self.subTest(
+                        len=len(data), read_size=read_size, max_length=max_length
+                    ):
+                        self.assertEqual(
+                            self.decompress(data, read_size, max_length),
+                            gzip.decompress(data),
+                        )
+
+    def test_member_ends_at_max_length(self):
+        # When the output of a member ends exactly at max_length, the next
+        # member must still be decompressed, even though the call that
+        # fills max_length may leave nothing more to read.
+        first = random.Random(0).randbytes(1000)
+        data = gzip.compress(first) + gzip.compress(b"second")
+        for max_length in [1000, 500, 100]:
+            for read_size in [len(data), 100]:
+                with self.subTest(max_length=max_length, read_size=read_size):
+                    self.assertEqual(
+                        self.decompress(data, read_size, max_length),
+                        first + b"second",
+                    )
+
+    def test_empty(self):
+        # A stream with no members, e.g. the body of a response to a HEAD request.
+        decompressor = GzipDecompressor()
+        self.assertEqual(decompressor.flush(), b"")
+
+    def test_trailing_data(self):
+        data = gzip.compress(b"hello")
+        for trailer in [b"\0", b"\0" * 16, b"\r\n", b"garbage", b"\x1f\x00"]:
+            for read_size in [1, 1024]:
+                with self.subTest(trailer=trailer, read_size=read_size):
+                    with self.assertRaises(zlib.error):
+                        self.decompress(data + trailer, read_size)
+
+    def test_truncated(self):
+        members = self.members()
+        first = gzip.compress(members[0])
+        second = gzip.compress(members[2])
+        for data in [
+            first[:-1],
+            first[: len(first) // 2],
+            first + second[:1],
+            first + second[:-1],
+        ]:
+            with self.subTest(len=len(data)):
+                with self.assertRaises(zlib.error):
+                    self.decompress(data)
+
+    def test_not_gzip(self):
+        for data in [b"<html>", zlib.compress(b"hello")]:
+            with self.subTest(data=data):
+                with self.assertRaises(zlib.error):
+                    self.decompress(data)
+
+    def test_flush_with_unconsumed_tail(self):
+        # A decompression bomb that the caller stops feeding back in after
+        # the first max_length bytes. flush must not decompress the rest.
+        compressor = zlib.compressobj(9, zlib.DEFLATED, 16 + zlib.MAX_WBITS)
+        block = b"\0" * (1024 * 1024)
+        bomb = b"".join(compressor.compress(block) for _ in range(16))
+        bomb += compressor.flush()
+        decompressor = GzipDecompressor()
+        self.assertEqual(len(decompressor.decompress(bomb, 1024)), 1024)
+        self.assertTrue(decompressor.unconsumed_tail)
+        with self.assertRaises(ValueError):
+            decompressor.flush()
+
+    def test_max_length_deprecated(self):
+        # Without max_length, all the members are decompressed in one call.
+        data = gzip.compress(b"hello") + gzip.compress(b" world")
+        decompressor = GzipDecompressor()
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            self.assertEqual(decompressor.decompress(data), b"hello world")
+        self.assertEqual(len(w), 1)
+        self.assertIs(w[0].category, DeprecationWarning)
+        self.assertEqual(decompressor.flush(), b"")
+
+
+class RaiseExcInfoTest(TestCase):
     def test_two_arg_exception(self):
         # This test would fail on python 3 if raise_exc_info were simply
         # a three-argument raise statement, because TwoArgException
@@ -83,7 +205,7 @@ class TestConfig3B(TestConfig3):
         self.b = b
 
 
-class ConfigurableTest(unittest.TestCase):
+class ConfigurableTest(TestCase):
     def setUp(self):
         self.saved = TestConfigurable._save_configuration()
         self.saved3 = TestConfig3._save_configuration()
@@ -207,34 +329,30 @@ class ConfigurableTest(unittest.TestCase):
         self.assertIsInstance(obj, TestConfig3B)
 
 
-class UnicodeLiteralTest(unittest.TestCase):
+class UnicodeLiteralTest(TestCase):
     def test_unicode_escapes(self):
         self.assertEqual(utf8("\u00e9"), b"\xc3\xa9")
 
 
-class ExecInTest(unittest.TestCase):
+class ExecInTest(TestCase):
     def test_no_inherit_future(self):
         # Two files: the first has "from __future__ import annotations", and it executes the second
         # which doesn't. The second file should not be affected by the first's __future__ imports.
         #
         # The annotations future became available in python 3.7 but has been replaced by PEP 649, so
         # it should remain supported but off-by-default for the foreseeable future.
-        code1 = textwrap.dedent(
-            """
+        code1 = textwrap.dedent("""
             from __future__ import annotations
             from tornado.util import exec_in
 
             exec_in(code2, globals())
-            """
-        )
+            """)
 
-        code2 = textwrap.dedent(
-            """
+        code2 = textwrap.dedent("""
             def f(x: int) -> int:
                 return x + 1
             output[0] = f.__annotations__
-            """
-        )
+            """)
 
         # Make a mutable container to pass the result back to the caller
         output = [None]
@@ -244,7 +362,7 @@ class ExecInTest(unittest.TestCase):
         self.assertEqual(output[0], {"x": int, "return": int})
 
 
-class ArgReplacerTest(unittest.TestCase):
+class ArgReplacerTest(TestCase):
     def setUp(self):
         def function(x, y, callback=None, z=None):
             pass
@@ -253,7 +371,7 @@ class ArgReplacerTest(unittest.TestCase):
 
     def test_omitted(self):
         args = (1, 2)
-        kwargs: Dict[str, Any] = dict()
+        kwargs: dict[str, Any] = dict()
         self.assertIsNone(self.replacer.get_old_value(args, kwargs))
         self.assertEqual(
             self.replacer.replace("new", args, kwargs),
@@ -262,7 +380,7 @@ class ArgReplacerTest(unittest.TestCase):
 
     def test_position(self):
         args = (1, 2, "old", 3)
-        kwargs: Dict[str, Any] = dict()
+        kwargs: dict[str, Any] = dict()
         self.assertEqual(self.replacer.get_old_value(args, kwargs), "old")
         self.assertEqual(
             self.replacer.replace("new", args, kwargs),
@@ -279,13 +397,13 @@ class ArgReplacerTest(unittest.TestCase):
         )
 
 
-class TimedeltaToSecondsTest(unittest.TestCase):
+class TimedeltaToSecondsTest(TestCase):
     def test_timedelta_to_seconds(self):
         time_delta = datetime.timedelta(hours=1)
         self.assertEqual(timedelta_to_seconds(time_delta), 3600.0)
 
 
-class ImportObjectTest(unittest.TestCase):
+class ImportObjectTest(TestCase):
     def test_import_member(self):
         self.assertIs(import_object("tornado.escape.utf8"), utf8)
 
@@ -302,7 +420,7 @@ class ImportObjectTest(unittest.TestCase):
         self.assertIs(import_object("tornado.escape"), tornado.escape)
 
 
-class ReUnescapeTest(unittest.TestCase):
+class ReUnescapeTest(TestCase):
     def test_re_unescape(self):
         test_strings = ("/favicon.ico", "index.html", "Hello, World!", "!$@#%;")
         for string in test_strings:
@@ -317,7 +435,7 @@ class ReUnescapeTest(unittest.TestCase):
             re_unescape("\\Z")
 
 
-class VersionInfoTest(unittest.TestCase):
+class VersionInfoTest(TestCase):
     def assert_version_info_compatible(self, version, version_info):
         # We map our version identifier string (a subset of
         # https://packaging.python.org/en/latest/specifications/version-specifiers/#public-version-identifiers)
@@ -371,3 +489,39 @@ class VersionInfoTest(unittest.TestCase):
 
     def test_current_version(self):
         self.assert_version_info_compatible(tornado.version, tornado.version_info)
+
+
+class LogCheckCoverageTest(TestCase):
+    def test_all_test_classes_check_logs(self):
+        """Every test in the suite must fail if it logs something unexpected.
+
+        New test classes must derive from the base classes in
+        `tornado.test.util` rather than from `unittest` or `tornado.testing`
+        directly, so that the check in `.TestCase.setUp` applies to them.
+        """
+        import doctest
+
+        from tornado.test.runtests import all as all_tests
+        from tornado.test.util import AsyncTestCase as UtilAsyncTestCase
+
+        def flatten(suite):
+            for test in suite:
+                if isinstance(test, unittest.TestSuite):
+                    yield from flatten(test)
+                else:
+                    yield test
+
+        uncovered = set()
+        for test in flatten(all_tests()):
+            cls = type(test)
+            if cls.__module__ == "unittest.loader":
+                # Placeholders for modules that failed to import; these are
+                # reported as errors by the tests that use them.
+                continue
+            if issubclass(cls, doctest.DocTestCase):
+                # Doctests are built by doctest.DocTestSuite and cannot be
+                # given a base class of our own.
+                continue
+            if not issubclass(cls, (TestCase, UtilAsyncTestCase)):
+                uncovered.add(f"{cls.__module__}.{cls.__qualname__}")
+        self.assertEqual(uncovered, set())

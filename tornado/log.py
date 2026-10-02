@@ -27,12 +27,13 @@ These streams may be configured independently using the standard library's
 `logging` module.  For example, you may wish to send ``tornado.access`` logs
 to a separate file for analysis.
 """
+
 import logging
 import logging.handlers
 import sys
 
 from tornado.escape import _unicode
-from tornado.util import unicode_type, basestring_type
+from tornado.util import basestring_type, unicode_type
 
 try:
     import colorama  # type: ignore
@@ -44,7 +45,7 @@ try:
 except ImportError:
     curses = None  # type: ignore
 
-from typing import Dict, Any, cast, Optional
+from typing import Any, cast
 
 # Logger objects for internal tornado use
 access_log = logging.getLogger("tornado.access")
@@ -119,7 +120,7 @@ class LogFormatter(logging.Formatter):
         datefmt: str = DEFAULT_DATE_FORMAT,
         style: str = "%",
         color: bool = True,
-        colors: Dict[int, int] = DEFAULT_COLORS,
+        colors: dict[int, int] = DEFAULT_COLORS,
     ) -> None:
         r"""
         :arg bool color: Enables color support.
@@ -139,7 +140,7 @@ class LogFormatter(logging.Formatter):
         logging.Formatter.__init__(self, datefmt=datefmt)
         self._fmt = fmt
 
-        self._colors = {}  # type: Dict[int, str]
+        self._colors: dict[int, str] = {}
         if color and _stderr_supports_color():
             if curses is not None:
                 fg_color = curses.tigetstr("setaf") or curses.tigetstr("setf") or b""
@@ -213,7 +214,7 @@ class LogFormatter(logging.Formatter):
 
 
 def enable_pretty_logging(
-    options: Any = None, logger: Optional[logging.Logger] = None
+    options: Any = None, logger: logging.Logger | None = None
 ) -> None:
     """Turns on formatted logging output as configured.
 
@@ -232,12 +233,12 @@ def enable_pretty_logging(
     if options.log_file_prefix:
         rotate_mode = options.log_rotate_mode
         if rotate_mode == "size":
-            channel = logging.handlers.RotatingFileHandler(
+            channel: logging.Handler = logging.handlers.RotatingFileHandler(
                 filename=options.log_file_prefix,
                 maxBytes=options.log_file_max_size,
                 backupCount=options.log_file_num_backups,
                 encoding="utf-8",
-            )  # type: logging.Handler
+            )
         elif rotate_mode == "time":
             channel = logging.handlers.TimedRotatingFileHandler(
                 filename=options.log_file_prefix,

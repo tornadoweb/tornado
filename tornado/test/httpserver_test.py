@@ -1,11 +1,28 @@
+import datetime
+import gzip
+import logging
+import os
+import shutil
+import socket
+import ssl
+import sys
+import tempfile
+import textwrap
+import typing
+import unittest
+import urllib.parse
+import uuid
+from contextlib import closing, contextmanager
+from io import BytesIO
+
 from tornado import gen, netutil
 from tornado.escape import (
+    _unicode,
     json_decode,
     json_encode,
-    utf8,
-    _unicode,
-    recursive_unicode,
     native_str,
+    recursive_unicode,
+    utf8,
 )
 from tornado.http1connection import HTTP1Connection
 from tornado.httpclient import HTTPError
@@ -18,38 +35,17 @@ from tornado.httputil import (
 )
 from tornado.iostream import IOStream
 from tornado.locks import Event
-from tornado.log import gen_log, app_log
+from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.testing import (
-    AsyncHTTPTestCase,
+from tornado.test.util import (
     AsyncHTTPSTestCase,
+    AsyncHTTPTestCase,
     AsyncTestCase,
-    ExpectLog,
-    gen_test,
+    TestCase,
+    abstract_base_test,
 )
-from tornado.test.util import abstract_base_test
+from tornado.testing import ExpectLog, gen_test
 from tornado.web import Application, RequestHandler, stream_request_body
-
-from contextlib import closing, contextmanager
-import datetime
-import gzip
-import logging
-import os
-import shutil
-import socket
-import ssl
-import sys
-import tempfile
-import textwrap
-import unittest
-import urllib.parse
-import uuid
-from io import BytesIO
-
-import typing
-
-if typing.TYPE_CHECKING:
-    from typing import Dict, List  # noqa: F401
 
 
 async def read_stream_body(stream):
@@ -141,7 +137,7 @@ class SSLTest(AsyncHTTPSTestCase):
         self.assertFalse(expect_log.logged_stack)
 
 
-class BadSSLOptionsTest(unittest.TestCase):
+class BadSSLOptionsTest(TestCase):
     def test_missing_arguments(self):
         application = Application()
         self.assertRaises(
@@ -297,7 +293,7 @@ class EchoHandler(RequestHandler):
 
 class TypeCheckHandler(RequestHandler):
     def prepare(self):
-        self.errors = {}  # type: Dict[str, str]
+        self.errors: dict[str, str] = {}
         fields = [
             ("method", str),
             ("uri", str),
@@ -477,8 +473,7 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
     def test_chunked_request_body(self):
         # Chunked requests are not widely supported and we don't have a way
         # to generate them in AsyncHTTPClient, but HTTPServer will read them.
-        self.stream.write(
-            b"""\
+        self.stream.write(b"""\
 POST /echo HTTP/1.1
 Host: 127.0.0.1
 Transfer-Encoding: chunked
@@ -490,10 +485,7 @@ foo=
 bar
 0
 
-""".replace(
-                b"\n", b"\r\n"
-            )
-        )
+""".replace(b"\n", b"\r\n"))
         start_line, headers, response = self.io_loop.run_sync(
             lambda: read_stream_body(self.stream)
         )
@@ -502,8 +494,7 @@ bar
     def test_chunked_request_uppercase(self):
         # As per RFC 2616 section 3.6, "Transfer-Encoding" header's value is
         # case-insensitive.
-        self.stream.write(
-            b"""\
+        self.stream.write(b"""\
 POST /echo HTTP/1.1
 Host: 127.0.0.1
 Transfer-Encoding: Chunked
@@ -515,10 +506,7 @@ foo=
 bar
 0
 
-""".replace(
-                b"\n", b"\r\n"
-            )
-        )
+""".replace(b"\n", b"\r\n"))
         start_line, headers, response = self.io_loop.run_sync(
             lambda: read_stream_body(self.stream)
         )
@@ -527,8 +515,7 @@ bar
     def test_chunked_request_body_invalid_size(self):
         # Only hex digits are allowed in chunk sizes. Python's int() function
         # also accepts underscores, so make sure we reject them here.
-        self.stream.write(
-            b"""\
+        self.stream.write(b"""\
 POST /echo HTTP/1.1
 Host: 127.0.0.1
 Transfer-Encoding: chunked
@@ -537,10 +524,7 @@ Transfer-Encoding: chunked
 1234567890abcdef1234567890
 0
 
-""".replace(
-                b"\n", b"\r\n"
-            )
-        )
+""".replace(b"\n", b"\r\n"))
         with ExpectLog(gen_log, ".*invalid chunk size", level=logging.INFO):
             start_line, headers, response = self.io_loop.run_sync(
                 lambda: read_stream_body(self.stream)
@@ -550,8 +534,7 @@ Transfer-Encoding: chunked
     def test_chunked_request_body_duplicate_header(self):
         # Repeated Transfer-Encoding headers should be an error (and not confuse
         # the chunked-encoding detection to mess up framing).
-        self.stream.write(
-            b"""\
+        self.stream.write(b"""\
 POST /echo HTTP/1.1
 Host: 127.0.0.1
 Transfer-Encoding: chunked
@@ -561,8 +544,7 @@ Transfer-encoding: chunked
 ok
 0
 
-"""
-        )
+""")
         with ExpectLog(
             gen_log,
             ".*Unsupported Transfer-Encoding chunked,chunked",
@@ -575,8 +557,7 @@ ok
 
     def test_chunked_request_body_unsupported_transfer_encoding(self):
         # We don't support transfer-encodings other than chunked.
-        self.stream.write(
-            b"""\
+        self.stream.write(b"""\
 POST /echo HTTP/1.1
 Host: 127.0.0.1
 Transfer-Encoding: gzip, chunked
@@ -585,8 +566,7 @@ Transfer-Encoding: gzip, chunked
 ok
 0
 
-"""
-        )
+""")
         with ExpectLog(
             gen_log, ".*Unsupported Transfer-Encoding gzip, chunked", level=logging.INFO
         ):
@@ -597,8 +577,7 @@ ok
 
     def test_chunked_request_body_transfer_encoding_and_content_length(self):
         # Transfer-encoding and content-length are mutually exclusive
-        self.stream.write(
-            b"""\
+        self.stream.write(b"""\
 POST /echo HTTP/1.1
 Host: 127.0.0.1
 Transfer-Encoding: chunked
@@ -608,8 +587,7 @@ Content-Length: 2
 ok
 0
 
-"""
-        )
+""")
         with ExpectLog(
             gen_log,
             ".*Message with both Transfer-Encoding and Content-Length",
@@ -638,20 +616,14 @@ ok
                     level=logging.INFO,
                 ):
                     yield stream.connect(("127.0.0.1", self.get_http_port()))
-                    stream.write(
-                        utf8(
-                            textwrap.dedent(
-                                f"""\
+                    stream.write(utf8(textwrap.dedent(f"""\
                             POST /echo HTTP/1.1
                             Host: 127.0.0.1
                             Content-Length: {value}
                             Connection: close
 
                             1234567890
-                            """
-                            ).replace("\n", "\r\n")
-                        )
-                    )
+                            """).replace("\n", "\r\n")))
                     yield stream.read_until_close()
 
     @gen_test
@@ -1133,7 +1105,7 @@ class GzipBaseTest(AsyncHTTPTestCase):
 
 class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
     def get_httpserver_options(self):
-        return dict(decompress_request=True)
+        return dict(decompress_request=True, max_body_size=100)
 
     def test_gzip(self):
         response = self.post_gzip("foo=bar")
@@ -1153,6 +1125,32 @@ class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
             headers={"Content-Encoding": "GZIP"},
         )
         self.assertEqual(json_decode(response.body), {"foo": ["bar"]})
+
+    def test_gzip_concatenated(self):
+        response = self.fetch(
+            "/",
+            method="POST",
+            body=gzip.compress(b"foo=") + gzip.compress(b"bar"),
+            headers={"Content-Encoding": "gzip"},
+        )
+        self.assertEqual(json_decode(response.body), {"foo": ["bar"]})
+
+    def test_gzip_invalid(self):
+        body = gzip.compress(b"foo=bar")
+        for invalid in [body + b"\0", body[:-1]]:
+            with self.subTest(invalid=invalid):
+                with ExpectLog(gen_log, ".*invalid gzip data", level=logging.INFO):
+                    response = self.fetch(
+                        "/",
+                        method="POST",
+                        body=invalid,
+                        headers={"Content-Encoding": "gzip"},
+                    )
+                self.assertEqual(response.code, 400)
+
+    def test_size_limit(self):
+        with ExpectLog(gen_log, ".*decompressed body too large", level=logging.INFO):
+            self.post_gzip("x" * 101)
 
 
 class GzipUnsupportedTest(GzipBaseTest, AsyncHTTPTestCase):
@@ -1183,7 +1181,7 @@ class StreamingChunkSizeTest(AsyncHTTPTestCase):
             self.connection = connection
 
         def headers_received(self, start_line, headers):
-            self.chunk_lengths = []  # type: List[int]
+            self.chunk_lengths: list[int] = []
 
         def data_received(self, chunk):
             self.chunk_lengths.append(len(chunk))
@@ -1334,7 +1332,7 @@ class IdleTimeoutTest(AsyncHTTPTestCase):
 
     def setUp(self):
         super().setUp()
-        self.streams = []  # type: List[IOStream]
+        self.streams: list[IOStream] = []
 
     def tearDown(self):
         super().tearDown()

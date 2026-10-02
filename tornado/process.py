@@ -18,29 +18,24 @@ the server into multiple processes and managing subprocesses.
 """
 
 import asyncio
-import os
 import multiprocessing
+import os
 import signal
 import subprocess
 import sys
 import time
-
 from binascii import hexlify
+from collections.abc import Callable
+from typing import Any
 
+from tornado import ioloop
 from tornado.concurrent import (
     Future,
-    future_set_result_unless_cancelled,
     future_set_exception_unless_cancelled,
+    future_set_result_unless_cancelled,
 )
-from tornado import ioloop
 from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
-
-import typing
-from typing import Optional, Any, Callable
-
-if typing.TYPE_CHECKING:
-    from typing import List  # noqa: F401
 
 # Re-export this exception for convenience.
 CalledProcessError = subprocess.CalledProcessError
@@ -80,9 +75,7 @@ def _reseed_random() -> None:
 _task_id = None
 
 
-def fork_processes(
-    num_processes: Optional[int], max_restarts: Optional[int] = None
-) -> int:
+def fork_processes(num_processes: int | None, max_restarts: int | None = None) -> int:
     """Starts multiple worker processes.
 
     If ``num_processes`` is None or <= 0, we detect the number of cores
@@ -123,7 +116,7 @@ def fork_processes(
     gen_log.info("Starting %d processes", num_processes)
     children = {}
 
-    def start_child(i: int) -> Optional[int]:
+    def start_child(i: int) -> int | None:
         pid = os.fork()
         if pid == 0:
             # child process
@@ -175,7 +168,7 @@ def fork_processes(
     sys.exit(0)
 
 
-def task_id() -> Optional[int]:
+def task_id() -> int | None:
     """Returns the current task id, if any.
 
     Returns None if this process was not created by `fork_processes`.
@@ -214,8 +207,8 @@ class Subprocess:
         self.io_loop = ioloop.IOLoop.current()
         # All FDs we create should be closed on error; those in to_close
         # should be closed in the parent process on success.
-        pipe_fds = []  # type: List[int]
-        to_close = []  # type: List[int]
+        pipe_fds: list[int] = []
+        to_close: list[int] = []
         if kwargs.get("stdin") is Subprocess.STREAM:
             in_r, in_w = os.pipe()
             kwargs["stdin"] = in_r
@@ -246,8 +239,8 @@ class Subprocess:
         for attr in ["stdin", "stdout", "stderr"]:
             if not hasattr(self, attr):  # don't clobber streams set above
                 setattr(self, attr, getattr(self.proc, attr))
-        self._exit_callback = None  # type: Optional[Callable[[int], None]]
-        self.returncode = None  # type: Optional[int]
+        self._exit_callback: Callable[[int], None] | None = None
+        self.returncode: int | None = None
 
     def set_exit_callback(self, callback: Callable[[int], None]) -> None:
         """Runs ``callback`` when this process exits.
@@ -289,7 +282,7 @@ class Subprocess:
 
         Availability: Unix
         """
-        future = Future()  # type: Future[int]
+        future: Future[int] = Future()
 
         def callback(ret: int) -> None:
             if ret != 0 and raise_error:

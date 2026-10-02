@@ -7,16 +7,21 @@ import traceback
 import typing
 import unittest
 
-from tornado.concurrent import Future
 from tornado import gen
+from tornado.concurrent import Future
 from tornado.httpclient import HTTPError, HTTPRequest
 from tornado.locks import Event
-from tornado.log import gen_log, app_log
+from tornado.log import app_log, gen_log
 from tornado.netutil import Resolver
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
-from tornado.test.util import abstract_base_test, ignore_deprecation
-from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
+from tornado.test.util import (
+    AsyncHTTPTestCase,
+    TestCase,
+    abstract_base_test,
+    ignore_deprecation,
+)
+from tornado.testing import ExpectLog, bind_unused_port, gen_test
 from tornado.web import Application, RequestHandler
 
 try:
@@ -31,10 +36,10 @@ except ImportError:
     raise
 
 from tornado.websocket import (
+    WebSocketClosedError,
+    WebSocketError,
     WebSocketHandler,
     websocket_connect,
-    WebSocketError,
-    WebSocketClosedError,
 )
 
 try:
@@ -77,6 +82,24 @@ class EchoHandler(TestWebSocketHandler):
 class ErrorInOnMessageHandler(TestWebSocketHandler):
     def on_message(self, message):
         1 / 0
+
+
+class ErrorInAsyncOnMessageHandler(TestWebSocketHandler):
+    async def on_message(self, message):
+        await asyncio.sleep(0)
+        1 / 0
+
+
+class CancelledInOnMessageHandler(TestWebSocketHandler):
+    def on_message(self, message):
+        raise asyncio.CancelledError()
+
+
+class CancelledInAsyncOnMessageHandler(TestWebSocketHandler):
+    async def on_message(self, message):
+        fut: Future[None] = Future()
+        fut.cancel()
+        await fut
 
 
 class HeaderHandler(TestWebSocketHandler):
@@ -236,7 +259,7 @@ class WebSocketBaseTestCase(AsyncHTTPTestCase):
 
 class WebSocketTest(WebSocketBaseTestCase):
     def get_app(self):
-        self.close_future = Future()  # type: Future[None]
+        self.close_future: Future[None] = Future()
         return Application(
             [
                 ("/echo", EchoHandler, dict(close_future=self.close_future)),
@@ -256,6 +279,21 @@ class WebSocketTest(WebSocketBaseTestCase):
                 (
                     "/error_in_on_message",
                     ErrorInOnMessageHandler,
+                    dict(close_future=self.close_future),
+                ),
+                (
+                    "/error_in_async_on_message",
+                    ErrorInAsyncOnMessageHandler,
+                    dict(close_future=self.close_future),
+                ),
+                (
+                    "/cancelled_in_on_message",
+                    CancelledInOnMessageHandler,
+                    dict(close_future=self.close_future),
+                ),
+                (
+                    "/cancelled_in_async_on_message",
+                    CancelledInAsyncOnMessageHandler,
                     dict(close_future=self.close_future),
                 ),
                 (
@@ -382,6 +420,35 @@ class WebSocketTest(WebSocketBaseTestCase):
         with ExpectLog(app_log, "Uncaught exception"):
             response = yield ws.read_message()
         self.assertIsNone(response)
+        # on_close is still called.
+        yield self.close_future
+
+    @gen_test
+    def test_error_in_async_on_message(self):
+        ws = yield self.ws_connect("/error_in_async_on_message")
+        ws.write_message("hello")
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = yield ws.read_message()
+        self.assertIsNone(response)
+        yield self.close_future
+
+    @gen_test
+    def test_cancelled_in_on_message(self):
+        ws = yield self.ws_connect("/cancelled_in_on_message")
+        ws.write_message("hello")
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = yield ws.read_message()
+        self.assertIsNone(response)
+        yield self.close_future
+
+    @gen_test
+    def test_cancelled_in_async_on_message(self):
+        ws = yield self.ws_connect("/cancelled_in_async_on_message")
+        ws.write_message("hello")
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = yield ws.read_message()
+        self.assertIsNone(response)
+        yield self.close_future
 
     @gen_test
     def test_websocket_http_fail(self):
@@ -772,7 +839,7 @@ class DefaultCompressionTest(CompressionTestMixin):
 
 
 @abstract_base_test
-class MaskFunctionMixin(unittest.TestCase):
+class MaskFunctionMixin(TestCase):
     # Subclasses should define self.mask(mask, data)
     def mask(self, mask: bytes, data: bytes) -> bytes:
         raise NotImplementedError()
@@ -793,6 +860,13 @@ class MaskFunctionMixin(unittest.TestCase):
             self.mask(b"\xff\xfb\xfd\xfc", b"\x00\x01\x02\x03\x04\x05"),
             b"\xff\xfa\xff\xff\xfb\xfe",
         )
+
+    def test_length_validation(self: typing.Any):
+        # Test all lengths of mask that are not 4 bytes.
+        for mask in (b"", b"a", b"ab", b"abc", b"abcde", b"abcdef"):
+            with self.subTest(mask=mask):
+                with self.assertRaises(ValueError):
+                    self.mask(mask, b"data asdf")
 
 
 class PythonMaskFunctionTest(MaskFunctionMixin):
@@ -923,15 +997,13 @@ class ServerPingTimeoutTest(WebSocketBaseTestCase):
         self.assertEqual(ws.protocol.close_code, 1000)
 
 
-class PingCalculationTest(unittest.TestCase):
+class PingCalculationTest(TestCase):
     def test_ping_sleep_time(self):
         from tornado.websocket import WebSocketProtocol13
 
-        now = datetime.datetime(2025, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        now = datetime.datetime(2025, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
         interval = 10  # seconds
-        last_ping_time = datetime.datetime(
-            2025, 1, 1, 11, 59, 54, tzinfo=datetime.timezone.utc
-        )
+        last_ping_time = datetime.datetime(2025, 1, 1, 11, 59, 54, tzinfo=datetime.UTC)
         sleep_time = WebSocketProtocol13.ping_sleep_time(
             last_ping_time=last_ping_time.timestamp(),
             interval=interval,

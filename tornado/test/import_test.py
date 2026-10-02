@@ -1,7 +1,5 @@
-# flake8: noqa
 import subprocess
 import sys
-import unittest
 
 _import_everything = b"""
 # The event loop is not fork-safe, and it's easy to initialize an asyncio.Future
@@ -42,7 +40,10 @@ if "tornado.web" not in sys.modules:
 """
 
 
-class ImportTest(unittest.TestCase):
+from tornado.test.util import TestCase
+
+
+class ImportTest(TestCase):
     def test_import_everything(self):
         # Test that all Tornado modules can be imported without side effects,
         # specifically without initializing the default asyncio event loop.
@@ -60,8 +61,9 @@ class ImportTest(unittest.TestCase):
 
     def test_import_aliases(self):
         # Ensure we don't delete formerly-documented aliases accidentally.
-        import tornado
         import asyncio
+
+        import tornado
 
         self.assertIs(tornado.ioloop.TimeoutError, tornado.util.TimeoutError)
         self.assertIs(tornado.gen.TimeoutError, tornado.util.TimeoutError)

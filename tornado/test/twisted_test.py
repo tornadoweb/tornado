@@ -16,7 +16,8 @@
 import sys
 import unittest
 
-from tornado.testing import AsyncTestCase, gen_test
+from tornado.test.util import AsyncTestCase
+from tornado.testing import gen_test
 
 try:
     from twisted.internet.defer import inlineCallbacks  # type: ignore

@@ -1,0 +1,13 @@
+What's new in Tornado 6.5.4
+===========================
+
+Dec 15, 2025
+------------
+
+Bug fixes
+~~~~~~~~~
+
+- The ``in`` operator for ``HTTPHeaders`` was incorrectly case-sensitive, causing
+  lookups to fail for headers with different casing than the original header name.
+  This was a regression in version 6.5.3 and has been fixed to restore the intended
+  case-insensitive behavior from version 6.5.2 and earlier.

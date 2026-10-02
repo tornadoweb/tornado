@@ -1,31 +1,37 @@
-from tornado.httputil import (
-    url_concat,
-    parse_multipart_form_data,
-    HTTPHeaders,
-    format_timestamp,
-    HTTPServerRequest,
-    parse_request_start_line,
-    parse_cookie,
-    qs_to_qsl,
-    HTTPInputError,
-    HTTPFile,
-)
-from tornado.escape import utf8, native_str
-from tornado.log import gen_log
-from tornado.test.util import ignore_deprecation
-
 import copy
 import datetime
 import logging
 import pickle
 import time
 import urllib.parse
-import unittest
 
-from typing import Tuple, Dict, List
+from tornado.escape import native_str, utf8
+from tornado.httputil import (
+    HTTPFile,
+    HTTPHeaders,
+    HTTPInputError,
+    HTTPServerRequest,
+    ParseMultipartConfig,
+    RequestStartLine,
+    _DEFAULT_PARSE_BODY_CONFIG,
+    format_timestamp,
+    parse_body_arguments,
+    parse_cookie,
+    parse_multipart_form_data,
+    parse_request_start_line,
+    qs_to_qsl,
+    url_concat,
+)
+from tornado.log import gen_log
+from tornado.test.util import (
+    TestCase,
+    assert_linear_scaling,
+    ignore_deprecation,
+    skipIfEmulated,
+)
 
 
-def form_data_args() -> Tuple[Dict[str, List[bytes]], Dict[str, List[HTTPFile]]]:
+def form_data_args() -> tuple[dict[str, list[bytes]], dict[str, list[HTTPFile]]]:
     """Return two empty dicts suitable for use with parse_multipart_form_data.
 
     mypy insists on type annotations for dict literals, so this lets us avoid
@@ -34,7 +40,7 @@ def form_data_args() -> Tuple[Dict[str, List[bytes]], Dict[str, List[HTTPFile]]]
     return {}, {}
 
 
-class TestUrlConcat(unittest.TestCase):
+class TestUrlConcat(TestCase):
     def test_url_concat_no_query_params(self):
         url = url_concat("https://localhost/path", [("y", "y"), ("z", "z")])
         self.assertEqual(url, "https://localhost/path?y=y&z=z")
@@ -84,7 +90,7 @@ class TestUrlConcat(unittest.TestCase):
         self.assertEqual(url, "https://localhost/path?y=y")
 
 
-class QsParseTest(unittest.TestCase):
+class QsParseTest(TestCase):
     def test_parsing(self):
         qsstring = "a=1&b=2&a=3"
         qs = urllib.parse.parse_qs(qsstring)
@@ -94,16 +100,31 @@ class QsParseTest(unittest.TestCase):
         self.assertIn(("b", "2"), qsl)
 
 
-class MultipartFormDataTest(unittest.TestCase):
+class UrlEncodedDataTest(TestCase):
+    def test_urlencoded_data(self):
+        data = b"a=1&b=2&a=3"
+        args, files = form_data_args()
+        parse_body_arguments("application/x-www-form-urlencoded", data, args, files)
+        self.assertEqual(args["a"], [b"1", b"3"])
+        self.assertEqual(args["b"], [b"2"])
+        self.assertEqual(files, {})
+
+    def test_max_arguments(self):
+        data = b"".join(b"a=1&" for _ in range(1001))
+        args, files = form_data_args()
+        with self.assertRaises(HTTPInputError) as cm:
+            parse_body_arguments("application/x-www-form-urlencoded", data, args, files)
+        self.assertIn("Max number of fields exceeded", str(cm.exception))
+
+
+class MultipartFormDataTest(TestCase):
     def test_file_upload(self):
         data = b"""\
 --1234
 Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 Foo
---1234--""".replace(
-            b"\n", b"\r\n"
-        )
+--1234--""".replace(b"\n", b"\r\n")
         args, files = form_data_args()
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
@@ -117,9 +138,7 @@ Foo
 Content-Disposition: form-data; name=files; filename=ab.txt
 
 Foo
---1234--""".replace(
-            b"\n", b"\r\n"
-        )
+--1234--""".replace(b"\n", b"\r\n")
         args, files = form_data_args()
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
@@ -135,6 +154,8 @@ Foo
             'a";";.txt',
             'a\\"b.txt',
             "a\\b.txt",
+            "a b.txt",
+            "a\tb.txt",
         ]
         for filename in filenames:
             logging.debug("trying filename %r", filename)
@@ -143,11 +164,7 @@ Foo
 Content-Disposition: form-data; name="files"; filename="%s"
 
 Foo
---1234--""" % filename.replace(
-                "\\", "\\\\"
-            ).replace(
-                '"', '\\"'
-            )
+--1234--""" % filename.replace("\\", "\\\\").replace('"', '\\"')
             data = utf8(str_data.replace("\n", "\r\n"))
             args, files = form_data_args()
             parse_multipart_form_data(b"1234", data, args, files)
@@ -155,15 +172,32 @@ Foo
             self.assertEqual(file["filename"], filename)
             self.assertEqual(file["body"], b"Foo")
 
+    def test_invalid_chars(self):
+        filenames = [
+            "a\rb.txt",
+            "a\0b.txt",
+            "a\x08b.txt",
+        ]
+        for filename in filenames:
+            str_data = """\
+--1234
+Content-Disposition: form-data; name="files"; filename="%s"
+
+Foo
+--1234--""" % filename.replace("\\", "\\\\").replace('"', '\\"')
+            data = utf8(str_data.replace("\n", "\r\n"))
+            args, files = form_data_args()
+            with self.assertRaises(HTTPInputError) as cm:
+                parse_multipart_form_data(b"1234", data, args, files)
+            self.assertIn("Invalid header value", str(cm.exception))
+
     def test_non_ascii_filename_rfc5987(self):
         data = b"""\
 --1234
 Content-Disposition: form-data; name="files"; filename="ab.txt"; filename*=UTF-8''%C3%A1b.txt
 
 Foo
---1234--""".replace(
-            b"\n", b"\r\n"
-        )
+--1234--""".replace(b"\n", b"\r\n")
         args, files = form_data_args()
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
@@ -176,11 +210,7 @@ Foo
 Content-Disposition: form-data; name="files"; filename="测试.txt"
 
 Foo
---1234--""".encode(
-            "utf-8"
-        ).replace(
-            b"\n", b"\r\n"
-        )
+--1234--""".encode().replace(b"\n", b"\r\n")
         args, files = form_data_args()
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
@@ -193,9 +223,7 @@ Foo
 Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 Foo
---1234--""".replace(
-            b"\n", b"\r\n"
-        )
+--1234--""".replace(b"\n", b"\r\n")
         args, files = form_data_args()
         parse_multipart_form_data(b'"1234"', data, args, files)
         file = files["files"][0]
@@ -207,9 +235,7 @@ Foo
 --1234
 
 Foo
---1234--""".replace(
-            b"\n", b"\r\n"
-        )
+--1234--""".replace(b"\n", b"\r\n")
         args, files = form_data_args()
         with self.assertRaises(
             HTTPInputError, msg="multipart/form-data missing headers"
@@ -223,9 +249,7 @@ Foo
 Content-Disposition: invalid; name="files"; filename="ab.txt"
 
 Foo
---1234--""".replace(
-            b"\n", b"\r\n"
-        )
+--1234--""".replace(b"\n", b"\r\n")
         args, files = form_data_args()
         with self.assertRaises(HTTPInputError, msg="Invalid multipart/form-data"):
             parse_multipart_form_data(b"1234", data, args, files)
@@ -236,9 +260,7 @@ Foo
 --1234
 Content-Disposition: form-data; name="files"; filename="ab.txt"
 
-Foo--1234--""".replace(
-            b"\n", b"\r\n"
-        )
+Foo--1234--""".replace(b"\n", b"\r\n")
         args, files = form_data_args()
         with self.assertRaises(HTTPInputError, msg="Invalid multipart/form-data"):
             parse_multipart_form_data(b"1234", data, args, files)
@@ -250,9 +272,7 @@ Foo--1234--""".replace(
 Content-Disposition: form-data; filename="ab.txt"
 
 Foo
---1234--""".replace(
-            b"\n", b"\r\n"
-        )
+--1234--""".replace(b"\n", b"\r\n")
         args, files = form_data_args()
         with self.assertRaises(
             HTTPInputError, msg="multipart/form-data value missing name"
@@ -270,9 +290,7 @@ Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 Foo
 --1234--
-""".replace(
-            b"\n", b"\r\n"
-        )
+""".replace(b"\n", b"\r\n")
         args, files = form_data_args()
         parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
@@ -284,7 +302,6 @@ Foo
         # to the content-disposition header, specifically for semicolons within
         # quoted strings.
         def f(n):
-            start = time.perf_counter()
             message = (
                 b"--1234\r\nContent-Disposition: form-data; "
                 + b'x="'
@@ -295,15 +312,51 @@ Foo
             args: dict[str, list[bytes]] = {}
             files: dict[str, list[HTTPFile]] = {}
             parse_multipart_form_data(b"1234", message, args, files)
-            return time.perf_counter() - start
 
-        d1 = f(1_000)
-        d2 = f(10_000)
-        if d2 / d1 > 20:
-            self.fail(f"Disposition param parsing is not linear: {d1=} vs {d2=}")
+        # Note that headers larger than 10_000 are blocked by the default
+        # configuration.
+        assert_linear_scaling(
+            f,
+            1_000,
+            10_000,
+            max_ratio=20,
+            msg="Disposition param parsing is not linear",
+        )
+
+    def test_multipart_config(self):
+        boundary = b"1234"
+        body = b"""--1234
+Content-Disposition: form-data; name="files"; filename="ab.txt"
+
+--1234--""".replace(b"\n", b"\r\n")
+        config = ParseMultipartConfig()
+        args, files = form_data_args()
+        parse_multipart_form_data(boundary, body, args, files, config=config)
+        self.assertEqual(files["files"][0]["filename"], "ab.txt")
+
+        config_no_parts = ParseMultipartConfig(max_parts=0)
+        with self.assertRaises(HTTPInputError) as cm:
+            parse_multipart_form_data(
+                boundary, body, args, files, config=config_no_parts
+            )
+        self.assertIn("too many parts", str(cm.exception))
+
+        config_small_headers = ParseMultipartConfig(max_part_header_size=10)
+        with self.assertRaises(HTTPInputError) as cm:
+            parse_multipart_form_data(
+                boundary, body, args, files, config=config_small_headers
+            )
+        self.assertIn("header too large", str(cm.exception))
+
+        config_disabled = ParseMultipartConfig(enabled=False)
+        with self.assertRaises(HTTPInputError) as cm:
+            parse_multipart_form_data(
+                boundary, body, args, files, config=config_disabled
+            )
+        self.assertIn("multipart/form-data parsing is disabled", str(cm.exception))
 
 
-class HTTPHeadersTest(unittest.TestCase):
+class HTTPHeadersTest(TestCase):
     def test_multi_line(self):
         # Lines beginning with whitespace are appended to the previous line
         # with any leading whitespace replaced by a single space.
@@ -317,9 +370,7 @@ Asdf: qwer
 Foo: even
      more
      lines
-""".replace(
-            "\n", "\r\n"
-        )
+""".replace("\n", "\r\n")
         headers = HTTPHeaders.parse(data)
         self.assertEqual(headers["asdf"], "qwer zxcv")
         self.assertEqual(headers.get_list("asdf"), ["qwer zxcv"])
@@ -499,21 +550,23 @@ Foo: even
 
     def test_linear_performance(self):
         def f(n):
-            start = time.perf_counter()
             headers = HTTPHeaders()
             for i in range(n):
                 headers.add("X-Foo", "bar")
-            return time.perf_counter() - start
 
-        # This runs under 50ms on my laptop as of 2025-12-09.
-        d1 = f(10_000)
-        d2 = f(100_000)
-        if d2 / d1 > 20:
-            # d2 should be about 10x d1 but allow a wide margin for variability.
-            self.fail(f"HTTPHeaders.add() does not scale linearly: {d1=} vs {d2=}")
+        # This runs under 50ms on my laptop as of 2025-12-09. The ratio
+        # between the two sizes should be about 10x, but allow a wide margin
+        # for variability.
+        assert_linear_scaling(
+            f,
+            10_000,
+            100_000,
+            max_ratio=20,
+            msg="HTTPHeaders.add() does not scale linearly",
+        )
 
 
-class FormatTimestampTest(unittest.TestCase):
+class FormatTimestampTest(TestCase):
     # Make sure that all the input types are supported.
     TIMESTAMP = 1359312200.503611
     EXPECTED = "Sun, 27 Jan 2013 18:43:20 GMT"
@@ -537,9 +590,9 @@ class FormatTimestampTest(unittest.TestCase):
 
     def test_utc_naive_datetime(self):
         self.check(
-            datetime.datetime.fromtimestamp(
-                self.TIMESTAMP, datetime.timezone.utc
-            ).replace(tzinfo=None)
+            datetime.datetime.fromtimestamp(self.TIMESTAMP, datetime.UTC).replace(
+                tzinfo=None
+            )
         )
 
     def test_utc_naive_datetime_deprecated(self):
@@ -547,9 +600,7 @@ class FormatTimestampTest(unittest.TestCase):
             self.check(datetime.datetime.utcfromtimestamp(self.TIMESTAMP))
 
     def test_utc_aware_datetime(self):
-        self.check(
-            datetime.datetime.fromtimestamp(self.TIMESTAMP, datetime.timezone.utc)
-        )
+        self.check(datetime.datetime.fromtimestamp(self.TIMESTAMP, datetime.UTC))
 
     def test_other_aware_datetime(self):
         # Other timezones are ignored; the timezone is always printed as GMT
@@ -562,25 +613,45 @@ class FormatTimestampTest(unittest.TestCase):
 
 # HTTPServerRequest is mainly tested incidentally to the server itself,
 # but this tests the parts of the class that can be tested in isolation.
-class HTTPServerRequestTest(unittest.TestCase):
+class HTTPServerRequestTest(TestCase):
     def test_default_constructor(self):
         # All parameters are formally optional, but uri is required
         # (and has been for some time).  This test ensures that no
         # more required parameters slip in.
-        HTTPServerRequest(method="GET", uri="/")
+        with ignore_deprecation():
+            HTTPServerRequest(method="GET", uri="/")
+        # The new minimal construction uses the start_line parameter.
+        HTTPServerRequest(start_line=RequestStartLine("GET", "/", "HTTP/1.0"))
 
     def test_body_is_a_byte_string(self):
-        request = HTTPServerRequest(method="GET", uri="/")
+        request = HTTPServerRequest(start_line=RequestStartLine("GET", "/", "HTTP/1.0"))
         self.assertIsInstance(request.body, bytes)
 
     def test_repr_does_not_contain_headers(self):
         request = HTTPServerRequest(
-            method="GET", uri="/", headers=HTTPHeaders({"Canary": ["Coal Mine"]})
+            start_line=RequestStartLine("GET", "/", "HTTP/1.0"),
+            headers=HTTPHeaders({"Canary": ["Coal Mine"]}),
         )
         self.assertNotIn("Canary", repr(request))
 
+    def test_query_arguments_within_limit(self):
+        n = _DEFAULT_PARSE_BODY_CONFIG.urlencoded.max_arguments
+        uri = "/?" + "&".join("a=%d" % i for i in range(n))
+        request = HTTPServerRequest(start_line=RequestStartLine("GET", uri, "HTTP/1.0"))
+        self.assertEqual(len(request.arguments["a"]), n)
 
-class ParseRequestStartLineTest(unittest.TestCase):
+    def test_max_query_arguments(self):
+        # The query string is subject to the same limit on the number of
+        # arguments as a urlencoded body: parsing is superlinear enough in
+        # the number of fields to be worth bounding.
+        n = _DEFAULT_PARSE_BODY_CONFIG.urlencoded.max_arguments + 1
+        uri = "/?" + "&".join("a=%d" % i for i in range(n))
+        with self.assertRaises(HTTPInputError) as cm:
+            HTTPServerRequest(start_line=RequestStartLine("GET", uri, "HTTP/1.0"))
+        self.assertIn("Max number of fields exceeded", str(cm.exception))
+
+
+class ParseRequestStartLineTest(TestCase):
     METHOD = "GET"
     PATH = "/foo"
     VERSION = "HTTP/1.1"
@@ -593,7 +664,7 @@ class ParseRequestStartLineTest(unittest.TestCase):
         self.assertEqual(parsed_start_line.version, self.VERSION)
 
 
-class ParseCookieTest(unittest.TestCase):
+class ParseCookieTest(TestCase):
     # These tests copied from Django:
     # https://github.com/django/django/pull/6277/commits/da810901ada1cae9fc1f018f879f11a7fb467b28
     def test_python_cookies(self):
@@ -641,7 +712,7 @@ class ParseCookieTest(unittest.TestCase):
             "django_language",
             parse_cookie("abc=def; unnamed; django_language=en").keys(),
         )
-        # Even a double quote may be an unamed value.
+        # Even a double quote may be an unnamed value.
         self.assertEqual(parse_cookie('a=b; "; c=d'), {"a": "b", "": '"', "c": "d"})
         # Spaces in names and values, and an equals sign in values.
         self.assertEqual(
@@ -689,6 +760,7 @@ class ParseCookieTest(unittest.TestCase):
                 c = parse_cookie(encoded)
                 self.assertEqual(c["a"], decoded)
 
+    @skipIfEmulated
     def test_unquote_large(self):
         # Adapted from
         # https://github.com/python/cpython/blob/dc7a2b6522ec7af41282bc34f405bee9b306d611/Lib/test/test_http_cookies.py#L87

@@ -1,23 +1,21 @@
-import unittest
+from typing import Any
 
 import tornado
 from tornado.escape import (
+    json_decode,
+    json_encode,
+    recursive_unicode,
+    squeeze,
+    to_unicode,
+    url_escape,
+    url_unescape,
     utf8,
     xhtml_escape,
     xhtml_unescape,
-    url_escape,
-    url_unescape,
-    to_unicode,
-    json_decode,
-    json_encode,
-    squeeze,
-    recursive_unicode,
 )
 from tornado.util import unicode_type
 
-from typing import List, Tuple, Union, Dict, Any  # noqa: F401
-
-linkify_tests = [
+linkify_tests: list[tuple[str | bytes, dict[str, Any], str]] = [
     # (input, linkify_kwargs, expected_output)
     (
         "hello http://world.com/!",
@@ -208,17 +206,20 @@ linkify_tests = [
         {"extra_params": lambda href: '    rel="nofollow" class="external"  '},
         '<a href="http://www.external-link.com" rel="nofollow" class="external">www.external-link.com</a>',  # noqa: E501
     ),
-]  # type: List[Tuple[Union[str, bytes], Dict[str, Any], str]]
+]
 
 
-class EscapeTestCase(unittest.TestCase):
+from tornado.test.util import TestCase
+
+
+class EscapeTestCase(TestCase):
     def test_linkify(self):
         for text, kwargs, html in linkify_tests:
             linked = tornado.escape.linkify(text, **kwargs)
             self.assertEqual(linked, html)
 
     def test_xhtml_escape(self):
-        tests = [
+        tests: list[tuple[str | bytes, str | bytes]] = [
             ("<foo>", "&lt;foo&gt;"),
             ("<foo>", "&lt;foo&gt;"),
             (b"<foo>", b"&lt;foo&gt;"),
@@ -226,7 +227,7 @@ class EscapeTestCase(unittest.TestCase):
             ("&amp;", "&amp;amp;"),
             ("<\u00e9>", "&lt;\u00e9&gt;"),
             (b"<\xc3\xa9>", b"&lt;\xc3\xa9&gt;"),
-        ]  # type: List[Tuple[Union[str, bytes], Union[str, bytes]]]
+        ]
         for unescaped, escaped in tests:
             self.assertEqual(utf8(xhtml_escape(unescaped)), utf8(escaped))
             self.assertEqual(utf8(unescaped), utf8(xhtml_unescape(escaped)))
@@ -245,13 +246,13 @@ class EscapeTestCase(unittest.TestCase):
             self.assertEqual(unescaped, xhtml_unescape(escaped))
 
     def test_url_escape_unicode(self):
-        tests = [
+        tests: list[tuple[str | bytes, str]] = [
             # byte strings are passed through as-is
             ("\u00e9".encode(), "%C3%A9"),
             ("\u00e9".encode("latin1"), "%E9"),
             # unicode strings become utf8
             ("\u00e9", "%C3%A9"),
-        ]  # type: List[Tuple[Union[str, bytes], str]]
+        ]
         for unescaped, escaped in tests:
             self.assertEqual(url_escape(unescaped), escaped)
 
