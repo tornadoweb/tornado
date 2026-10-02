@@ -131,7 +131,7 @@ def run_on_executor(*args: Any, **kwargs: Any) -> Callable:
     if len(args) == 1:
         return run_on_executor_decorator(args[0])
     elif len(args) != 0:
-        raise ValueError("expected 1 argument, got %d", len(args))
+        raise ValueError("expected 1 argument, got %d" % len(args))
     return run_on_executor_decorator
 
 
