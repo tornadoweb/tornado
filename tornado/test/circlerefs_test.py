@@ -14,12 +14,19 @@ import io
 import sys
 import traceback
 import types
-import typing
 import unittest
 
 import tornado
-from tornado import web, gen, httpclient
-from tornado.test.util import skipNotCPython
+from tornado import gen, httpclient, web
+from tornado.test.util import TestCase, skipNotCPython
+
+try:
+    import pycurl
+except ImportError:
+    pycurl = None  # type: ignore
+
+if pycurl is not None:
+    from tornado.curl_httpclient import CurlAsyncHTTPClient
 
 
 def find_circular_references(garbage):
@@ -51,7 +58,7 @@ def find_circular_references(garbage):
             stack_ids.remove(item_id)
             visited_ids.add(item_id)
 
-    found: typing.List[object] = []
+    found: list[object] = []
     stack = []
     stack_ids = set()
     garbage_ids = set(map(id, garbage))
@@ -100,17 +107,22 @@ def assert_no_cycle_garbage():
         gc.enable()
 
 
+class OkHandler(web.RequestHandler):
+    def get(self):
+        self.write("ok\n")
+
+
 # GC behavior is cpython-specific
 @skipNotCPython
-class CircleRefsTest(unittest.TestCase):
+class CircleRefsTest(TestCase):
     def test_known_leak(self):
         # Construct a known leak scenario to make sure the test harness works.
-        class C(object):
+        class C:
             def __init__(self, name):
                 self.name = name
-                self.a: typing.Optional[C] = None
-                self.b: typing.Optional[C] = None
-                self.c: typing.Optional[C] = None
+                self.a: C | None = None
+                self.b: C | None = None
+                self.c: C | None = None
 
             def __repr__(self):
                 return f"name={self.name}"
@@ -137,7 +149,7 @@ class CircleRefsTest(unittest.TestCase):
         self.assertIn("    name=b", str(cm.exception))
         self.assertNotIn("    name=c", str(cm.exception))
 
-    async def run_handler(self, handler_class):
+    async def run_handler(self, handler_class, client_factory=None, **fetch_kwargs):
         app = web.Application(
             [
                 (r"/", handler_class),
@@ -147,14 +159,18 @@ class CircleRefsTest(unittest.TestCase):
         server = tornado.httpserver.HTTPServer(app)
         server.add_socket(socket)
 
-        client = httpclient.AsyncHTTPClient()
+        # The client must be constructed here rather than by the caller: it
+        # binds to the IOLoop that is current when it is created.
+        if client_factory is None:
+            client_factory = httpclient.AsyncHTTPClient
+        client = client_factory()
         with assert_no_cycle_garbage():
             # Only the fetch (and the corresponding server-side handler)
             # are being tested for cycles. In particular, the Application
             # object has internal cycles (as of this writing) which we don't
             # care to fix since in real world usage the Application object
             # is effectively a global singleton.
-            await client.fetch(f"http://127.0.0.1:{port}/")
+            await client.fetch(f"http://127.0.0.1:{port}/", **fetch_kwargs)
         client.close()
         server.stop()
         socket.close()
@@ -190,6 +206,33 @@ class CircleRefsTest(unittest.TestCase):
 
         asyncio.run(self.run_handler(Handler))
 
+    # The tests above vary the server-side handler against one client. These
+    # vary the client instead: a streaming_callback takes a different path
+    # through both client implementations than a buffered response does, and
+    # curl_httpclient keeps per-request state on pooled curl handles.
+
+    def test_streaming_callback(self):
+        asyncio.run(self.run_handler(OkHandler, streaming_callback=lambda chunk: None))
+
+    @unittest.skipIf(pycurl is None, "pycurl module not present")
+    def test_curl_httpclient(self):
+        asyncio.run(
+            self.run_handler(
+                OkHandler,
+                client_factory=lambda: CurlAsyncHTTPClient(force_instance=True),
+            )
+        )
+
+    @unittest.skipIf(pycurl is None, "pycurl module not present")
+    def test_curl_httpclient_streaming_callback(self):
+        asyncio.run(
+            self.run_handler(
+                OkHandler,
+                client_factory=lambda: CurlAsyncHTTPClient(force_instance=True),
+                streaming_callback=lambda chunk: None,
+            )
+        )
+
     def test_run_on_executor(self):
         # From https://github.com/tornadoweb/tornado/issues/2620
         #
@@ -199,7 +242,7 @@ class CircleRefsTest(unittest.TestCase):
 
         with concurrent.futures.ThreadPoolExecutor(1) as thread_pool:
 
-            class Factory(object):
+            class Factory:
                 executor = thread_pool
 
                 @tornado.concurrent.run_on_executor

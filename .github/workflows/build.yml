@@ -17,68 +17,120 @@ on:
   workflow_dispatch:
     # Allow this workflow to be run manually (pushing to testpypi instead of pypi)
 
+permissions: {}
+
 env:
-  python-version: '3.9'
+  # [[[cog cog.outl(f"python-version: &python-version '3.{default_python_minor}'")]]]
+  python-version: &python-version '3.13'
+  # [[[end]]]
 
 jobs:
   build_sdist:
     name: Build sdist
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
         name: Install Python
         with:
           python-version: ${{ env.python-version }}
 
+      - name: Install dependencies
+        run: python -m pip install setuptools
       - name: Check metadata
         run: "python setup.py check"
       - name: Build sdist
         run: "python setup.py sdist && ls -l dist"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: artifacts-sdist
           path: ./dist/tornado-*.tar.gz
 
   build_wheels:
-    name: Build wheels on ${{ matrix.os }}
+    name: Build wheels on ${{ matrix.os }}${{ matrix.name_suffix || '' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-2022, macos-12]
+        os: [ubuntu-24.04, ubuntu-24.04-arm, windows-2025, windows-11-arm, macos-15]
+        emulated: [false]
+        include:
+          - os: ubuntu-24.04
+            emulated: true
+            arch: "riscv64"
+            name_suffix: "-riscv64"
+          - os: ubuntu-24.04
+            emulated: true
+            arch: "ppc64le"
+            name_suffix: "-ppc64le"
+          - os: ubuntu-24.04
+            emulated: true
+            arch: "s390x"
+            name_suffix: "-s390x"
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
         name: Install Python
         with:
           python-version: ${{ env.python-version }}
+
       - name: Set up QEMU
-        if: runner.os == 'Linux'
-        uses: docker/setup-qemu-action@v3
+        if: matrix.emulated
+        uses: docker/setup-qemu-action@v4
         with:
-          platforms: all
+          platforms: ${{ matrix.arch }}
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.18
+        uses: pypa/cibuildwheel@v4.2.1
+        env:
+          CIBW_ARCHS: ${{ matrix.emulated && matrix.arch || '' }}
+          # Increase timeouts for emulated archs
+          CIBW_ENVIRONMENT: ${{ matrix.emulated && 'ASYNC_TEST_TIMEOUT=30 EMULATION=1' || '' }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
-          name: artifacts-${{ matrix.os }}
+          name: artifacts-${{ matrix.os }}${{ matrix.name_suffix || '' }}
           path: ./wheelhouse/*.whl
+
+  downstream:
+    name: Downstream testbed
+    needs: [build_wheels, build_sdist]
+    # Only meaningful on the canonical repo; forks have no reason to spend an
+    # hour of CI on downstream suites.
+    if: github.repository == 'tornadoweb/tornado'
+    # Runs the test suites of the ten most popular packages that depend on
+    # tornado against the wheel this run just built. Because a called workflow
+    # shares this run, the testbed downloads that artifact directly rather than
+    # re-resolving a git ref -- so what the downstream suites import is exactly
+    # what we are about to publish.
+    #
+    # Deliberately NOT in upload_pypi's `needs`: this is a signal to read before
+    # pushing a tag, not a gate that a flaky downstream suite can use to wedge a
+    # release. build.yml already runs on release-branch pushes, which is the
+    # point at which there is still time to act on it.
+    uses: tornadoweb/tornado-testbed/.github/workflows/testbed.yml@main
+    with:
+      tornado_artifact: artifacts-ubuntu-24.04
+      python_version: *python-version
+    permissions:
+      contents: read
 
   upload_pypi_test:
     name: Upload to PyPI (test)
     needs: [build_wheels, build_sdist]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     if: github.repository == 'tornadoweb/tornado' && github.event_name == 'workflow_dispatch'
     permissions:
       # This permission is required for pypi's "trusted publisher" feature
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: artifacts-*
           path: dist
@@ -92,13 +144,13 @@ jobs:
   upload_pypi:
     name: Upload to PyPI (prod)
     needs: [build_wheels, build_sdist]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     if: github.repository == 'tornadoweb/tornado' && github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
     permissions:
       # This permission is required for pypi's "trusted publisher" feature
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: artifacts-*
           path: dist

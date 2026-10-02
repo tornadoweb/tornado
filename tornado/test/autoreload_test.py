@@ -1,15 +1,17 @@
 import os
 import shutil
 import subprocess
-from subprocess import Popen
 import sys
-from tempfile import mkdtemp
 import textwrap
 import time
-import unittest
+from subprocess import Popen
+from tempfile import mkdtemp
 
 
-class AutoreloadTest(unittest.TestCase):
+from tornado.test.util import TestCase
+
+
+class AutoreloadTest(TestCase):
     def setUp(self):
         # When these tests fail the output sometimes exceeds the default maxDiff.
         self.maxDiff = 1024
@@ -23,9 +25,7 @@ class AutoreloadTest(unittest.TestCase):
         #
         # The last line of each such test's "main" program should be
         #     exec(open("run_twice_magic.py").read())
-        self.write_files(
-            {
-                "run_twice_magic.py": """
+        self.write_files({"run_twice_magic.py": """
                     import os
                     import sys
 
@@ -38,9 +38,7 @@ class AutoreloadTest(unittest.TestCase):
                         tornado.autoreload._reload()
                     else:
                         os._exit(0)
-                """
-            }
-        )
+                """})
 
     def tearDown(self):
         try:

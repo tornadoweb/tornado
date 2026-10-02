@@ -78,36 +78,35 @@ import functools
 import importlib.abc
 import os
 import pkgutil
+import subprocess
 import sys
 import traceback
 import types
-import subprocess
 import weakref
 
-from tornado import ioloop
+from tornado import ioloop, process
 from tornado.log import gen_log
-from tornado import process
 
 try:
     import signal
 except ImportError:
     signal = None  # type: ignore
 
-from typing import Callable, Dict, Optional, List, Union
+from collections.abc import Callable
 
 # os.execv is broken on Windows and can't properly parse command line
 # arguments and executable name if they contain whitespaces. subprocess
 # fixes that behavior.
 _has_execv = sys.platform != "win32"
 
-_watched_files = set()
-_reload_hooks = []
+_watched_files: set[str] = set()
+_reload_hooks: list[Callable[[], None]] = []
 _reload_attempted = False
 _io_loops: "weakref.WeakKeyDictionary[ioloop.IOLoop, bool]" = (
     weakref.WeakKeyDictionary()
 )
 _autoreload_is_main = False
-_original_argv: Optional[List[str]] = None
+_original_argv: list[str] | None = None
 _original_spec = None
 
 
@@ -123,7 +122,7 @@ def start(check_time: int = 500) -> None:
     _io_loops[io_loop] = True
     if len(_io_loops) > 1:
         gen_log.warning("tornado.autoreload started more than once in the same process")
-    modify_times: Dict[str, float] = {}
+    modify_times: dict[str, float] = {}
     callback = functools.partial(_reload_on_update, modify_times)
     scheduler = ioloop.PeriodicCallback(callback, check_time)
     scheduler.start()
@@ -159,7 +158,7 @@ def add_reload_hook(fn: Callable[[], None]) -> None:
     _reload_hooks.append(fn)
 
 
-def _reload_on_update(modify_times: Dict[str, float]) -> None:
+def _reload_on_update(modify_times: dict[str, float]) -> None:
     if _reload_attempted:
         # We already tried to reload and it didn't work, so don't try again.
         return
@@ -185,7 +184,7 @@ def _reload_on_update(modify_times: Dict[str, float]) -> None:
         _check_file(modify_times, path)
 
 
-def _check_file(modify_times: Dict[str, float], path: str) -> None:
+def _check_file(modify_times: dict[str, float], path: str) -> None:
     try:
         modified = os.stat(path).st_mtime
     except Exception:
@@ -265,6 +264,7 @@ def main() -> None:
     # parsing at the first positional argument. optparse supports
     # this but as far as I can tell argparse does not.
     import optparse
+
     import tornado.autoreload
 
     global _autoreload_is_main
@@ -300,7 +300,7 @@ def main() -> None:
 
     # SystemExit.code is typed funny: https://github.com/python/typeshed/issues/8513
     # All we care about is truthiness
-    exit_status: Union[int, str, None] = 1
+    exit_status: int | str | None = 1
     try:
         import runpy
 

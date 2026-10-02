@@ -99,11 +99,12 @@ installed in this way, so you may wish to download a copy of the
 source tarball or clone the `git repository
 <https://github.com/tornadoweb/tornado>`_ as well.
 
-**Prerequisites**: Tornado 6.3 requires Python 3.8 or newer. The following
+**Prerequisites**: Tornado requires Python 3. The following
 optional packages may be useful:
 
 * `pycurl <http://pycurl.io/>`_ is used by the optional
-  ``tornado.curl_httpclient``.  Libcurl version 7.22 or higher is required.
+  ``tornado.curl_httpclient``.  Libcurl version 7.81 or higher is required
+  (the version shipped by Ubuntu 22.04 LTS).
 * `pycares <https://pypi.org/project/pycares/>`_ is an alternative
   non-blocking DNS resolver that can be used when threads are not
   appropriate.

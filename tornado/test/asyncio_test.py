@@ -11,21 +11,33 @@
 # under the License.
 
 import asyncio
+import contextlib
+import contextvars
+import gc
+import io
 import threading
 import time
-import unittest
 import warnings
-
 from concurrent.futures import ThreadPoolExecutor
+
+import tornado.platform.asyncio
+from tornado.platform import asyncio as platform_asyncio
 from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.platform.asyncio import (
-    AsyncIOLoop,
-    to_asyncio_future,
-    AnyThreadEventLoopPolicy,
     AddThreadSelectorEventLoop,
+    AsyncIOLoop,
+    SelectorThread,
+    to_asyncio_future,
 )
-from tornado.testing import AsyncTestCase, gen_test
+from tornado.test.util import (
+    AsyncHTTPTestCase,
+    AsyncTestCase,
+    TestCase,
+    ignore_deprecation,
+)
+from tornado.testing import gen_test, setup_with_context_manager
+from tornado.web import Application, RequestHandler
 
 
 class AsyncIOLoopTest(AsyncTestCase):
@@ -107,14 +119,10 @@ class AsyncIOLoopTest(AsyncTestCase):
         loop.close()
 
 
-class LeakTest(unittest.TestCase):
+class LeakTest(TestCase):
     def setUp(self):
         # Trigger a cleanup of the mapping so we start with a clean slate.
         AsyncIOLoop(make_current=False).close()
-        # If we don't clean up after ourselves other tests may fail on
-        # py34.
-        self.orig_policy = asyncio.get_event_loop_policy()
-        asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
 
     def tearDown(self):
         try:
@@ -124,7 +132,6 @@ class LeakTest(unittest.TestCase):
             pass
         else:
             loop.close()
-        asyncio.set_event_loop_policy(self.orig_policy)
 
     def test_ioloop_close_leak(self):
         orig_count = len(IOLoop._ioloop_for_asyncio)
@@ -152,7 +159,7 @@ class LeakTest(unittest.TestCase):
         self.assertEqual(new_count, 1)
 
 
-class SelectorThreadLeakTest(unittest.TestCase):
+class SelectorThreadLeakTest(TestCase):
     # These tests are only relevant on windows, but they should pass anywhere.
     def setUp(self):
         # As a precaution, ensure that we've run an event loop at least once
@@ -202,9 +209,62 @@ class SelectorThreadLeakTest(unittest.TestCase):
             loop.close()
         self.assert_no_thread_leak()
 
+    def test_atexit_closes_waker_sockets(self):
+        # The atexit hook is the backstop for selectors whose loop was never
+        # closed. It has to close the waker socketpair as well as shut the
+        # thread down: otherwise the sockets survive until the interpreter
+        # finalizes them, and each one is reported as an unclosed socket after
+        # the test suite has finished.
+        loop = asyncio.new_event_loop()
+        selector = SelectorThread(loop)
+        try:
+            loop.run_until_complete(asyncio.sleep(0.05))
+            self.assertIn(selector, platform_asyncio._selector_loops)
+            platform_asyncio._atexit_callback()
+            self.assertEqual(selector._waker_r.fileno(), -1)
+            self.assertEqual(selector._waker_w.fileno(), -1)
+            self.assertFalse(selector._thread.is_alive())  # type: ignore[union-attr]
+        finally:
+            selector.close()
+            loop.close()
 
-class AnyThreadEventLoopPolicyTest(unittest.TestCase):
+    def test_close_before_thread_manager_starts(self):
+        # The task that starts the selector thread is created by a call_soon
+        # callback, so a loop that stops immediately can close with that task
+        # created but never run. Closing must clean it up; otherwise it is
+        # reported as "Task was destroyed but it is pending", and its coroutine
+        # as "never awaited", whenever it is eventually garbage collected --
+        # which is at an unpredictable point, quite possibly during an
+        # unrelated test.
+        loop = asyncio.new_event_loop()
+        selector = SelectorThread(loop)
+        loop.call_soon(loop.stop)
+        loop.run_forever()
+        task = selector._thread_manager_task
+        self.assertIsNotNone(task)
+        # Once the task runs it completes immediately, so a task that is not
+        # done here is one that never started.
+        self.assertFalse(task.done())  # type: ignore[union-attr]
+        selector.close()
+        loop.close()
+        del loop, selector, task
+        # An asyncio error logged here would be caught by the log check in
+        # tornado.test.util.TestCase, but only if the collection happens while
+        # this test is running, so force it.
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            gc.collect()
+        self.assertNotIn("never awaited", stderr.getvalue())
+
+
+class AnyThreadEventLoopPolicyTest(TestCase):
     def setUp(self):
+        setup_with_context_manager(self, ignore_deprecation())
+        # Referencing the event loop policy attributes raises deprecation warnings,
+        # so instead of importing this at the top of the file we capture it here.
+        self.AnyThreadEventLoopPolicy = (
+            tornado.platform.asyncio.AnyThreadEventLoopPolicy
+        )
         self.orig_policy = asyncio.get_event_loop_policy()
         self.executor = ThreadPoolExecutor(1)
 
@@ -237,7 +297,7 @@ class AnyThreadEventLoopPolicyTest(unittest.TestCase):
                 RuntimeError, self.executor.submit(asyncio.get_event_loop).result
             )
             # Set the policy and we can get a loop.
-            asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
+            asyncio.set_event_loop_policy(self.AnyThreadEventLoopPolicy())
             self.assertIsInstance(
                 self.executor.submit(asyncio.get_event_loop).result(),
                 asyncio.AbstractEventLoop,
@@ -256,6 +316,34 @@ class AnyThreadEventLoopPolicyTest(unittest.TestCase):
             # IOLoop doesn't (currently) close the underlying loop.
             self.executor.submit(lambda: asyncio.get_event_loop().close()).result()  # type: ignore
 
-            asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
+            asyncio.set_event_loop_policy(self.AnyThreadEventLoopPolicy())
             self.assertIsInstance(self.executor.submit(IOLoop.current).result(), IOLoop)
             self.executor.submit(lambda: asyncio.get_event_loop().close()).result()  # type: ignore
+
+
+class SelectorThreadContextvarsTest(AsyncHTTPTestCase):
+    ctx_value = "foo"
+    test_endpoint = "/"
+    tornado_test_ctx = contextvars.ContextVar("tornado_test_ctx", default="default")
+    tornado_test_ctx.set(ctx_value)
+
+    def get_app(self) -> Application:
+        tornado_test_ctx = self.tornado_test_ctx
+
+        class Handler(RequestHandler):
+            async def get(self):
+                # On the Windows platform,
+                # when a asyncio.events.Handle is created
+                # in the SelectorThread without providing a context,
+                # it will copy the current thread's context,
+                # which can lead to the loss of the main thread's context
+                # when executing the handle.
+                # Therefore, it is necessary to
+                # save a copy of the main thread's context in the SelectorThread
+                # for creating the handle.
+                self.write(tornado_test_ctx.get())
+
+        return Application([(self.test_endpoint, Handler)])
+
+    def test_context_vars(self):
+        self.assertEqual(self.ctx_value, self.fetch(self.test_endpoint).body.decode())

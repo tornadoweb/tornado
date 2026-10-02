@@ -13,32 +13,41 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""A non-blocking TCP connection factory.
-"""
+"""A non-blocking TCP connection factory."""
 
-import functools
-import socket
-import numbers
+import asyncio
 import datetime
+import functools
+import numbers
+import socket
 import ssl
-import typing
+from collections.abc import Callable, Iterator
+from typing import Any, Tuple
 
+from tornado import gen
 from tornado.concurrent import Future, future_add_done_callback
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
-from tornado import gen
 from tornado.netutil import Resolver
-from tornado.gen import TimeoutError
-
-from typing import Any, Union, Dict, Tuple, List, Callable, Iterator, Optional
-
-if typing.TYPE_CHECKING:
-    from typing import Set  # noqa(F401)
 
 _INITIAL_CONNECT_TIMEOUT = 0.3
 
 
-class _Connector(object):
+def _format_addr(addr: Any) -> str:
+    """Format a socket address for use in error messages.
+
+    IPv4 addresses are formatted as ``1.2.3.4:443`` and IPv6 addresses as
+    ``[::1]:443``. Anything else is formatted with `str`.
+    """
+    if isinstance(addr, tuple) and len(addr) >= 2:
+        host, port = addr[:2]
+        if isinstance(host, str) and ":" in host:
+            return f"[{host}]:{port}"
+        return f"{host}:{port}"
+    return str(addr)
+
+
+class _Connector:
     """A stateless implementation of the "Happy Eyeballs" algorithm.
 
     "Happy Eyeballs" is documented in RFC6555 as the recommended practice
@@ -58,30 +67,31 @@ class _Connector(object):
 
     def __init__(
         self,
-        addrinfo: List[Tuple],
+        addrinfo: list[tuple],
         connect: Callable[
-            [socket.AddressFamily, Tuple], Tuple[IOStream, "Future[IOStream]"]
+            [socket.AddressFamily, tuple], tuple[IOStream, "Future[IOStream]"]
         ],
     ) -> None:
         self.io_loop = IOLoop.current()
         self.connect = connect
 
-        self.future = (
-            Future()
-        )  # type: Future[Tuple[socket.AddressFamily, Any, IOStream]]
-        self.timeout = None  # type: Optional[object]
-        self.connect_timeout = None  # type: Optional[object]
-        self.last_error = None  # type: Optional[Exception]
+        self.future: Future[tuple[socket.AddressFamily, Any, IOStream]] = Future()
+        self.timeout: object | None = None
+        self.connect_timeout: object | None = None
+        self.last_error: Exception | None = None
         self.remaining = len(addrinfo)
         self.primary_addrs, self.secondary_addrs = self.split(addrinfo)
-        self.streams = set()  # type: Set[IOStream]
+        self.streams: set[IOStream] = set()
+        # Addresses with connection attempts in progress. Used for
+        # error messages.
+        self.pending_addrs: set[tuple] = set()
 
     @staticmethod
     def split(
-        addrinfo: List[Tuple],
-    ) -> Tuple[
-        List[Tuple[socket.AddressFamily, Tuple]],
-        List[Tuple[socket.AddressFamily, Tuple]],
+        addrinfo: list[tuple],
+    ) -> tuple[
+        list[tuple[socket.AddressFamily, tuple]],
+        list[tuple[socket.AddressFamily, tuple]],
     ]:
         """Partition the ``addrinfo`` list by address family.
 
@@ -104,15 +114,18 @@ class _Connector(object):
     def start(
         self,
         timeout: float = _INITIAL_CONNECT_TIMEOUT,
-        connect_timeout: Optional[Union[float, datetime.timedelta]] = None,
+        connect_timeout: float | datetime.timedelta | None = None,
     ) -> "Future[Tuple[socket.AddressFamily, Any, IOStream]]":
-        self.try_connect(iter(self.primary_addrs))
+        # Set the timeouts first: try_connect may fail synchronously, and
+        # on_connect_done will then skip ahead to the secondary addresses.
         self.set_timeout(timeout)
         if connect_timeout is not None:
             self.set_connect_timeout(connect_timeout)
+        self.try_connect(iter(self.primary_addrs))
+        future_add_done_callback(self.future, self.on_future_done)
         return self.future
 
-    def try_connect(self, addrs: Iterator[Tuple[socket.AddressFamily, Tuple]]) -> None:
+    def try_connect(self, addrs: Iterator[tuple[socket.AddressFamily, tuple]]) -> None:
         try:
             af, addr = next(addrs)
         except StopIteration:
@@ -123,29 +136,45 @@ class _Connector(object):
                 self.future.set_exception(
                     self.last_error or IOError("connection failed")
                 )
+                # Every attempt has finished, but a cancelled attempt's
+                # stream may still be open.
+                self.close_streams()
             return
-        stream, future = self.connect(af, addr)
-        self.streams.add(stream)
+        try:
+            stream, future = self.connect(af, addr)
+        except Exception as e:
+            # Report synchronous errors (e.g. an address family that is
+            # not supported on this system) through the same path as
+            # asynchronous ones, so we move on to the next address.
+            future = Future()
+            future.set_exception(e)
+        else:
+            self.streams.add(stream)
+            self.pending_addrs.add(addr)
         future_add_done_callback(
             future, functools.partial(self.on_connect_done, addrs, af, addr)
         )
 
     def on_connect_done(
         self,
-        addrs: Iterator[Tuple[socket.AddressFamily, Tuple]],
+        addrs: Iterator[tuple[socket.AddressFamily, tuple]],
         af: socket.AddressFamily,
-        addr: Tuple,
+        addr: tuple,
         future: "Future[IOStream]",
     ) -> None:
         self.remaining -= 1
+        self.pending_addrs.discard(addr)
         try:
             stream = future.result()
-        except Exception as e:
+        except (Exception, asyncio.CancelledError) as e:
             if self.future.done():
                 return
             # Error: try again (but remember what happened so we have an
-            # error to raise in the end)
-            self.last_error = e
+            # error to raise in the end). A cancelled attempt is treated
+            # as a failure, but is not reported as the error because
+            # our caller has not been cancelled.
+            if not isinstance(e, asyncio.CancelledError):
+                self.last_error = e
             self.try_connect(addrs)
             if self.timeout is not None:
                 # If the first attempt failed, don't wait for the
@@ -162,6 +191,16 @@ class _Connector(object):
             self.future.set_result((af, addr, stream))
             self.close_streams()
 
+    def on_future_done(
+        self, future: "Future[Tuple[socket.AddressFamily, Any, IOStream]]"
+    ) -> None:
+        if future.cancelled():
+            # The caller gave up (e.g. asyncio.wait_for). Close any
+            # connection attempts that are still in progress instead of
+            # leaving them open until the OS gives up on them.
+            self.clear_timeouts()
+            self.close_streams()
+
     def set_timeout(self, timeout: float) -> None:
         self.timeout = self.io_loop.add_timeout(
             self.io_loop.time() + timeout, self.on_timeout
@@ -176,16 +215,20 @@ class _Connector(object):
         if self.timeout is not None:
             self.io_loop.remove_timeout(self.timeout)
 
-    def set_connect_timeout(
-        self, connect_timeout: Union[float, datetime.timedelta]
-    ) -> None:
+    def set_connect_timeout(self, connect_timeout: float | datetime.timedelta) -> None:
         self.connect_timeout = self.io_loop.add_timeout(
             connect_timeout, self.on_connect_timeout
         )
 
     def on_connect_timeout(self) -> None:
         if not self.future.done():
-            self.future.set_exception(TimeoutError())
+            if self.pending_addrs:
+                message = "Timeout while connecting to %s" % ", ".join(
+                    sorted(_format_addr(addr) for addr in self.pending_addrs)
+                )
+            else:
+                message = "Timeout while connecting"
+            self.future.set_exception(TimeoutError(message))
         self.close_streams()
 
     def clear_timeouts(self) -> None:
@@ -199,14 +242,14 @@ class _Connector(object):
             stream.close()
 
 
-class TCPClient(object):
+class TCPClient:
     """A non-blocking TCP connection factory.
 
     .. versionchanged:: 5.0
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
     """
 
-    def __init__(self, resolver: Optional[Resolver] = None) -> None:
+    def __init__(self, resolver: Resolver | None = None) -> None:
         if resolver is not None:
             self.resolver = resolver
             self._own_resolver = False
@@ -223,11 +266,11 @@ class TCPClient(object):
         host: str,
         port: int,
         af: socket.AddressFamily = socket.AF_UNSPEC,
-        ssl_options: Optional[Union[Dict[str, Any], ssl.SSLContext]] = None,
-        max_buffer_size: Optional[int] = None,
-        source_ip: Optional[str] = None,
-        source_port: Optional[int] = None,
-        timeout: Optional[Union[float, datetime.timedelta]] = None,
+        ssl_options: dict[str, Any] | ssl.SSLContext | None = None,
+        max_buffer_size: int | None = None,
+        source_ip: str | None = None,
+        source_port: int | None = None,
+        timeout: float | datetime.timedelta | None = None,
     ) -> IOStream:
         """Connect to the given host and port.
 
@@ -245,6 +288,11 @@ class TCPClient(object):
         `.IOLoop.add_timeout` (i.e. a `datetime.timedelta` or an absolute time
         relative to `.IOLoop.time`)
 
+        The message of the `TimeoutError` indicates which phase of the
+        connection timed out: resolving the hostname, establishing the TCP
+        connection (listing the addresses being tried), or performing the
+        TLS handshake.
+
         Similarly, when the user requires a certain source port, it can
         be specified using the ``source_port`` arg.
 
@@ -253,6 +301,10 @@ class TCPClient(object):
 
         .. versionchanged:: 5.0
            Added the ``timeout`` argument.
+
+        .. versionchanged:: 6.6
+           Timeout errors now have messages describing which phase of
+           the connection process timed out.
         """
         if timeout is not None:
             if isinstance(timeout, numbers.Real):
@@ -263,7 +315,9 @@ class TCPClient(object):
                 raise TypeError("Unsupported timeout %r" % timeout)
         if timeout is not None:
             addrinfo = await gen.with_timeout(
-                timeout, self.resolver.resolve(host, port, af)
+                timeout,
+                self.resolver.resolve(host, port, af),
+                message=f"Timeout while resolving {host}",
             )
         else:
             addrinfo = await self.resolver.resolve(host, port, af)
@@ -278,30 +332,38 @@ class TCPClient(object):
         )
         af, addr, stream = await connector.start(connect_timeout=timeout)
         # TODO: For better performance we could cache the (af, addr)
-        # information here and re-use it on subsequent connections to
+        # information here and reuse it on subsequent connections to
         # the same host. (http://tools.ietf.org/html/rfc6555#section-4.2)
         if ssl_options is not None:
-            if timeout is not None:
-                stream = await gen.with_timeout(
-                    timeout,
-                    stream.start_tls(
-                        False, ssl_options=ssl_options, server_hostname=host
-                    ),
-                )
-            else:
-                stream = await stream.start_tls(
-                    False, ssl_options=ssl_options, server_hostname=host
-                )
+            tls_future = stream.start_tls(
+                False, ssl_options=ssl_options, server_hostname=host
+            )
+            try:
+                if timeout is not None:
+                    stream = await gen.with_timeout(
+                        timeout,
+                        tls_future,
+                        message=lambda: "Timeout during TLS handshake with "
+                        + _format_addr(addr),
+                    )
+                else:
+                    stream = await tls_future
+            finally:
+                # If we're exiting early (timeout or cancellation), cancel
+                # the handshake so the new SSLIOStream (which now owns the
+                # socket) is closed. with_timeout does not do this for us.
+                # This is a no-op if the handshake has already completed.
+                tls_future.cancel()
         return stream
 
     def _create_stream(
         self,
-        max_buffer_size: int,
+        max_buffer_size: int | None,
         af: socket.AddressFamily,
-        addr: Tuple,
-        source_ip: Optional[str] = None,
-        source_port: Optional[int] = None,
-    ) -> Tuple[IOStream, "Future[IOStream]"]:
+        addr: tuple,
+        source_ip: str | None = None,
+        source_port: int | None = None,
+    ) -> tuple[IOStream, "Future[IOStream]"]:
         # Always connect in plaintext; we'll convert to ssl if necessary
         # after one connection has completed.
         source_port_bind = source_port if isinstance(source_port, int) else 0
@@ -314,19 +376,12 @@ class TCPClient(object):
             # - 127.0.0.1 for IPv4
             # - ::1 for IPv6
         socket_obj = socket.socket(af)
-        if source_port_bind or source_ip_bind:
-            # If the user requires binding also to a specific IP/port.
-            try:
-                socket_obj.bind((source_ip_bind, source_port_bind))
-            except socket.error:
-                socket_obj.close()
-                # Fail loudly if unable to use the IP/port.
-                raise
         try:
+            if source_port_bind or source_ip_bind:
+                # If the user requires binding also to a specific IP/port.
+                socket_obj.bind((source_ip_bind, source_port_bind))
             stream = IOStream(socket_obj, max_buffer_size=max_buffer_size)
-        except socket.error as e:
-            fu = Future()  # type: Future[IOStream]
-            fu.set_exception(e)
-            return stream, fu
-        else:
-            return stream, stream.connect(addr)
+        except BaseException:
+            socket_obj.close()
+            raise
+        return stream, stream.connect(addr)

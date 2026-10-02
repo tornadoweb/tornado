@@ -9,64 +9,108 @@ name: Test
 
 on: pull_request
 
+permissions: {}
+
 jobs:
   # Before starting the full build matrix, run one test configuration
   # and the linter (the `black` linter is especially likely to catch
   # first-time contributors).
   test_quick:
     name: Run quick tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
         name: Install Python
         with:
-          # Lint python version must be synced with tox.ini
-          python-version: '3.11'
+          # [[[cog cog.outl(f"python-version: '3.{default_python_minor}'")]]]
+          python-version: '3.13'
+          # [[[end]]]
       - name: Install tox
         run: python -m pip install tox -c requirements.txt
 
       - name: Run test suite
-        run: python -m tox -e py311,lint
+        # [[[cog cog.outl(f"run: python -m tox -e py3{default_python_minor},lint")]]]
+        run: python -m tox -e py313,lint
+        # [[[end]]]
 
   test_tox:
     name: Run full tests
     needs: test_quick
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
-          - python: '3.8'
-            tox_env: py38-full
-          - python: '3.9'
-            tox_env: py39-full
-          - python: '3.10'
-            tox_env: py310-full
-          - python: '3.10.8'
-            # Early versions of 3.10 and 3.11 had different deprecation
-            # warnings in asyncio. Test with them too to make sure everything
-            # works the same way.
-            tox_env: py310-full
+          # [[[cog
+          #    configs  = []
+          #    for minor in range(int(min_python_minor), int(max_python_minor) + 1):
+          #      if minor == int(dev_python_minor):
+          #          # For python versions in development, specify a range so we install
+          #          # a final version if available, otherwise a prerelease.
+          #          # The .0 is necessary here for unclear reasons.
+          #          configs.append((f"3.{minor}.0-dev - 3.{minor}", f"py3{minor}"))
+          #      else:
+          #          configs.append((f"3.{minor}", f"py3{minor}-full"))
+          #      if int(min_python_threaded_minor) <= minor <= int(max_python_threaded_minor):
+          #          if minor == int(dev_python_minor):
+          #              # The range trick above doesn't work for threaded builds, so we'll
+          #              # just be stuck with last prerelease until we update dev_python_minor.
+          #              configs.append((f"3.{minor}t-dev", f"py3{minor}t"))
+          #          else:
+          #              configs.append((f"3.{minor}t", f"py3{minor}t"))
+          #    # Early versions of 3.11 had different deprecation
+          #    # warnings in asyncio. Test with them too to make sure everything
+          #    # works the same way.
+          #    configs.append(("3.11.0", "py311-full"))
+          #    # Pypy is a lot slower due to jit warmup costs, so don't run the
+          #    # "full" test config there.
+          #    # PyPy releases are versioned independently of the python
+          #    # language version they implement. Let the PyPy version float
+          #    # within a major version (like we do with CPython patch
+          #    # releases), but upgrade to new major versions deliberately
+          #    # since they can introduce behavior changes (e.g. 8.0 began
+          #    # enforcing the rule against resizing a bytearray with live
+          #    # memoryviews).
+          #    pypy_major = 8
+          #    for pypy_python in ["3.11", "3.12"]:
+          #      configs.append((f"pypy-{pypy_python}-v{pypy_major}.x", "pypy3"))
+          #    # Docs python version must be synced with tox.ini
+          #    configs.append((f"3.{default_python_minor}", "docs"))
+          #    for version, tox_env in configs:
+          #      cog.outl(f"  - python: '{version}'")
+          #      cog.outl(f"    tox_env: {tox_env}")
+          #    ]]]
           - python: '3.11'
             tox_env: py311-full
+          - python: '3.12'
+            tox_env: py312-full
+          - python: '3.13'
+            tox_env: py313-full
+          - python: '3.14'
+            tox_env: py314-full
+          - python: '3.14t'
+            tox_env: py314t
+          - python: '3.15.0-dev - 3.15'
+            tox_env: py315
+          - python: '3.15t-dev'
+            tox_env: py315t
           - python: '3.11.0'
             tox_env: py311-full
-          - python: '3.12.0'
-            tox_env: py312-full
-          - python: '3.13.0-beta.2 - 3.13'
-            # Some optional dependencies don't seem to work on 3.13 yet
-            tox_env: py313
-          - python: 'pypy-3.8'
-            # Pypy is a lot slower due to jit warmup costs, so don't run the
-            # "full" test config there.
+          - python: 'pypy-3.11-v8.x'
             tox_env: pypy3
-          - python: '3.11'
-            # Docs python version must be synced with tox.ini
+          - python: 'pypy-3.12-v8.x'
+            tox_env: pypy3
+          - python: '3.13'
             tox_env: docs
+          # [[[end]]]
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
         name: Install Python
         with:
           python-version: ${{ matrix.python}}
@@ -86,13 +130,72 @@ jobs:
     # enough that we'll break it if we don't test it in CI.
     name: Run windows tests
     needs: test_quick
-    runs-on: windows-2022
+    runs-on: windows-2025
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
         name: Install Python
         with:
-          python-version: '3.11'
+          # [[[cog cog.outl(f"python-version: '3.{default_python_minor}'")]]]
+          python-version: '3.13'
+          # [[[end]]]
       - name: Run test suite
-        # TODO: figure out what's up with these log messages
-        run: py -m tornado.test --fail-if-logs=false
+        run: py -m tornado.test
+
+  zizmor:
+    name: Analyze action configs with zizmor
+    runs-on: ubuntu-24.04
+    needs: test_quick
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        name: Install uv
+      - name: Run zizmor
+        run: uvx zizmor .github/workflows
+
+  test_cibw:
+    # cibuildwheel is the tool that we use for release builds in build.yml.
+    # Run it in the every-PR workflow because it's slightly different from our
+    # regular build and this gives us easier ways to test freethreading changes.
+    #
+    # Note that test_cibw and test_tox both take about a minute to run, but test_tox runs
+    # more tests; test_cibw spends a lot of its time installing dependencies. Replacing
+    # test_tox with test_cibw would entail either increasing test runtime or reducing
+    # test coverage.
+    name: Test with cibuildwheel
+    runs-on: ubuntu-24.04
+    needs: test_quick
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Run cibuildwheel
+        uses: pypa/cibuildwheel@v2.23
+        env:
+          # For speed, we only build one python version and one arch. We throw away the wheels
+          # built here; the real build is defined in build.yml.
+          CIBW_ARCHS: native
+          # [[[cog cog.outl(f"CIBW_BUILD: cp3{default_python_minor}-manylinux*")]]]
+          CIBW_BUILD: cp313-manylinux*
+          # [[[end]]]
+
+  test_cog:
+    # Run cog and ensure that nothing changes, to make sure that cog-generated files are not
+    # edited manually.
+    name: Test cog generation
+    runs-on: ubuntu-24.04
+    needs: test_quick
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        name: Install uv
+      - name: Run cog
+        run: maint/scripts/runcog.sh
+      - name: Check for changes
+        run: git diff --exit-code

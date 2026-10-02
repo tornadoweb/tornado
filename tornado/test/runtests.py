@@ -1,19 +1,19 @@
-from functools import reduce
 import gc
 import io
 import locale  # system locale module, not tornado.locale
 import logging
 import operator
-import textwrap
 import sys
+import textwrap
 import unittest
 import warnings
+from functools import reduce
 
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 from tornado.netutil import Resolver
-from tornado.options import define, add_parse_callback, options
-
+from tornado.options import add_parse_callback, define
+from tornado.test.util import ABT_SKIP_MESSAGE
 
 TEST_MODULES = [
     "tornado.httputil.doctests",
@@ -60,15 +60,26 @@ def all():
 
 
 def test_runner_factory(stderr):
+
+    class TornadoTextTestResult(unittest.TextTestResult):
+        def addSkip(self, test, reason):
+            if reason == ABT_SKIP_MESSAGE:
+                # Don't report abstract base tests as skips in our own tooling.
+                #
+                # See tornado.test.util.abstract_base_test.
+                return
+            super().addSkip(test, reason)
+
     class TornadoTextTestRunner(unittest.TextTestRunner):
         def __init__(self, *args, **kwargs):
             kwargs["stream"] = stderr
+            kwargs["resultclass"] = TornadoTextTestResult
             super().__init__(*args, **kwargs)
 
         def run(self, test):
             result = super().run(test)
             if result.skipped:
-                skip_reasons = set(reason for (test, reason) in result.skipped)
+                skip_reasons = {reason for (test, reason) in result.skipped}
                 self.stream.write(  # type: ignore
                     textwrap.fill(
                         "Some tests were skipped because: %s"
@@ -152,11 +163,6 @@ def main():
             reduce(operator.or_, (getattr(gc, v) for v in values))
         ),
     )
-    define(
-        "fail-if-logs",
-        default=True,
-        help="If true, fail the tests if any log output is produced (unless captured by ExpectLog)",
-    )
 
     def set_locale(x):
         locale.setlocale(locale.LC_ALL, x)
@@ -203,8 +209,7 @@ def main():
                 log_counter.error_count,
                 counting_stderr.byte_count,
             )
-            if options.fail_if_logs:
-                sys.exit(1)
+            sys.exit(1)
 
 
 if __name__ == "__main__":

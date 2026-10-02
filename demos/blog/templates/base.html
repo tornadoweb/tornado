@@ -1,27 +1,31 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="UTF-8">
-    <title>{{ escape(handler.settings["blog_title"]) }}</title>
-    <link rel="stylesheet" href="{{ static_url("blog.css") }}" type="text/css">
-    <link rel="alternate" href="/feed" type="application/atom+xml" title="{{ escape(handler.settings["blog_title"]) }}">
-    {% block head %}{% end %}
-  </head>
-  <body>
-    <div id="body">
-      <div id="header">
-        <div style="float:right">
-          {% if current_user %}
-            <a href="/compose">{{ _("New post") }}</a> -
-            <a href="/auth/logout?next={{ url_escape(request.uri) }}">{{ _("Sign out") }}</a>
-          {% else %}
-            {% raw _('<a href="%(url)s">Sign in</a> to compose/edit') % {"url": "/auth/login?next=" + url_escape(request.uri)} %}
-          {% end %}
-        </div>
-        <h1><a href="/">{{ escape(handler.settings["blog_title"]) }}</a></h1>
+
+<head>
+  <meta charset="UTF-8">
+  <title>{{ escape(handler.settings["blog_title"]) }}</title>
+  <link rel="stylesheet" href="{{ static_url(" blog.css") }}" type="text/css">
+  <link rel="alternate" href="/feed" type="application/atom+xml" title="{{ escape(handler.settings[" blog_title"]) }}">
+  {% block head %}{% end %}
+</head>
+
+<body>
+  <div id="body">
+    <div id="header">
+      <div style="float:right">
+        {% if current_user %}
+        <a href="/compose">{{ _("New post") }}</a> -
+        <a href="/auth/logout?next={{ url_escape(request.path) }}">{{ _("Sign out") }}</a>
+        {% else %}
+        {% raw _('<a href="%(url)s">Sign in</a> to compose/edit') % {"url": "/auth/login?next=" +
+        url_escape(request.path)} %}
+        {% end %}
       </div>
-      <div id="content">{% block body %}{% end %}</div>
+      <h1><a href="/">{{ escape(handler.settings["blog_title"]) }}</a></h1>
     </div>
-    {% block bottom %}{% end %}
-  </body>
+    <div id="content">{% block body %}{% end %}</div>
+  </div>
+  {% block bottom %}{% end %}
+</body>
+
 </html>

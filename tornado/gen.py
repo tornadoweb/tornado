@@ -64,42 +64,42 @@ function to extend this mechanism.
 import asyncio
 import builtins
 import collections
-from collections.abc import Generator
 import concurrent.futures
+import contextvars
 import datetime
 import functools
-from functools import singledispatch
-from inspect import isawaitable
 import sys
 import types
+import typing
+from collections.abc import Awaitable, Callable, Generator, Iterable, Mapping, Sequence
+from functools import singledispatch
+from inspect import isawaitable
+from typing import (
+    Any,
+    Dict,
+    List,
+    Tuple,
+    Type,
+    Union,
+    overload,
+)
 
 from tornado.concurrent import (
     Future,
-    is_future,
     chain_future,
-    future_set_exc_info,
     future_add_done_callback,
+    future_set_exc_info,
     future_set_result_unless_cancelled,
+    is_future,
 )
 from tornado.ioloop import IOLoop
 from tornado.log import app_log
-from tornado.util import TimeoutError
-
-try:
-    import contextvars
-except ImportError:
-    contextvars = None  # type: ignore
-
-import typing
-from typing import Union, Any, Callable, List, Type, Tuple, Awaitable, Dict, overload
-
-if typing.TYPE_CHECKING:
-    from typing import Sequence, Deque, Optional, Set, Iterable  # noqa: F401
+from tornado.util import TimeoutError  # noqa: F401 (re-exported for compatibility)
 
 _T = typing.TypeVar("_T")
 
 _Yieldable = Union[
-    None, Awaitable, List[Awaitable], Dict[Any, Awaitable], concurrent.futures.Future
+    None, Awaitable, list[Awaitable], dict[Any, Awaitable], concurrent.futures.Future
 ]
 
 
@@ -139,7 +139,7 @@ def _value_from_stopiteration(e: Union[StopIteration, "Return"]) -> Any:
 
 
 def _create_future() -> Future:
-    future = Future()  # type: Future
+    future: Future = Future()
     # Fixup asyncio debug info by removing extraneous stack entries
     source_traceback = getattr(future, "_source_traceback", ())
     while source_traceback:
@@ -159,7 +159,7 @@ def _fake_ctx_run(f: Callable[..., _T], *args: Any, **kw: Any) -> _T:
 
 @overload
 def coroutine(
-    func: Callable[..., "Generator[Any, Any, _T]"]
+    func: Callable[..., "Generator[Any, Any, _T]"],
 ) -> Callable[..., "Future[_T]"]: ...
 
 
@@ -168,7 +168,7 @@ def coroutine(func: Callable[..., _T]) -> Callable[..., "Future[_T]"]: ...
 
 
 def coroutine(
-    func: Union[Callable[..., "Generator[Any, Any, _T]"], Callable[..., _T]]
+    func: Callable[..., "Generator[Any, Any, _T]"] | Callable[..., _T],
 ) -> Callable[..., "Future[_T]"]:
     """Decorator for asynchronous generators.
 
@@ -193,22 +193,30 @@ def coroutine(
        The ``callback`` argument was removed. Use the returned
        awaitable object instead.
 
+    .. versionchanged:: 6.6
+
+       If the coroutine raises `asyncio.CancelledError` (including by
+       yielding a cancelled `.Future` without catching the exception), the
+       returned `.Future` is now cancelled. Previously the coroutine would
+       never complete.
+
     """
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        # type: (*Any, **Any) -> Future[_T]
+    def wrapper(*args: Any, **kwargs: Any) -> Future[_T]:
         # This function is type-annotated with a comment to work around
         # https://bitbucket.org/pypy/pypy/issues/2868/segfault-with-args-type-annotation-in
         future = _create_future()
-        if contextvars is not None:
-            ctx_run = contextvars.copy_context().run  # type: Callable
-        else:
-            ctx_run = _fake_ctx_run
+        ctx_run: Callable = contextvars.copy_context().run
         try:
             result = ctx_run(func, *args, **kwargs)
         except (Return, StopIteration) as e:
             result = _value_from_stopiteration(e)
+        except asyncio.CancelledError:
+            # Like asyncio.Task, a coroutine that raises CancelledError
+            # is treated as cancelled.
+            future.cancel()
+            return future
         except Exception:
             future_set_exc_info(future, sys.exc_info())
             try:
@@ -229,6 +237,8 @@ def coroutine(
                     future_set_result_unless_cancelled(
                         future, _value_from_stopiteration(e)
                     )
+                except asyncio.CancelledError:
+                    future.cancel()
                 except Exception:
                     future_set_exc_info(future, sys.exc_info())
                 else:
@@ -275,6 +285,10 @@ def is_coroutine_function(func: Any) -> bool:
 class Return(Exception):
     """Special exception to return a value from a `coroutine`.
 
+    This exception exists for compatibility with older versions of
+    Python (before 3.3). In newer code use the ``return`` statement
+    instead.
+
     If this exception is raised, its value argument is used as the
     result of the coroutine::
 
@@ -283,14 +297,7 @@ class Return(Exception):
             response = yield AsyncHTTPClient().fetch(url)
             raise gen.Return(json_decode(response.body))
 
-    In Python 3.3, this exception is no longer necessary: the ``return``
-    statement can be used directly to return a value (previously
-    ``yield`` and ``return`` with a value could not be combined in the
-    same function).
-
-    By analogy with the return statement, the value argument is optional,
-    but it is never necessary to ``raise gen.Return()``.  The ``return``
-    statement can be used with no arguments instead.
+    By analogy with the return statement, the value argument is optional.
     """
 
     def __init__(self, value: Any = None) -> None:
@@ -300,7 +307,7 @@ class Return(Exception):
         self.args = (value,)
 
 
-class WaitIterator(object):
+class WaitIterator:
     """Provides an iterator to yield the results of awaitables as they finish.
 
     Yielding a set of awaitables like this:
@@ -337,7 +344,7 @@ class WaitIterator(object):
     arguments were used in the construction of the `WaitIterator`,
     ``current_index`` will use the corresponding keyword).
 
-    On Python 3.5, `WaitIterator` implements the async iterator
+    `WaitIterator` implements the async iterator
     protocol, so it can be used with the ``async for`` statement (note
     that in this version the entire iteration is aborted if any value
     raises an exception, while the previous example can continue past
@@ -355,23 +362,23 @@ class WaitIterator(object):
 
     """
 
-    _unfinished = {}  # type: Dict[Future, Union[int, str]]
+    _unfinished: dict[Future, int | str] = {}
 
     def __init__(self, *args: Future, **kwargs: Future) -> None:
         if args and kwargs:
             raise ValueError("You must provide args or kwargs, not both")
 
         if kwargs:
-            self._unfinished = dict((f, k) for (k, f) in kwargs.items())
-            futures = list(kwargs.values())  # type: Sequence[Future]
+            self._unfinished = {f: k for (k, f) in kwargs.items()}
+            futures: Sequence[Future] = list(kwargs.values())
         else:
-            self._unfinished = dict((f, i) for (i, f) in enumerate(args))
+            self._unfinished = {f: i for (i, f) in enumerate(args)}
             futures = args
 
-        self._finished = collections.deque()  # type: Deque[Future]
-        self.current_index = None  # type: Optional[Union[str, int]]
-        self.current_future = None  # type: Optional[Future]
-        self._running_future = None  # type: Optional[Future]
+        self._finished: collections.deque[Future] = collections.deque()
+        self.current_index: str | int | None = None
+        self.current_future: Future | None = None
+        self._running_future: Future | None = None
 
         for future in futures:
             future_add_done_callback(future, self._done_callback)
@@ -428,8 +435,22 @@ class WaitIterator(object):
         return self.next()
 
 
+@overload
 def multi(
-    children: Union[List[_Yieldable], Dict[Any, _Yieldable]],
+    children: Sequence[_Yieldable],
+    quiet_exceptions: type[Exception] | tuple[type[Exception], ...] = (),
+) -> Future[list]: ...
+
+
+@overload
+def multi(
+    children: Mapping[Any, _Yieldable],
+    quiet_exceptions: type[Exception] | tuple[type[Exception], ...] = (),
+) -> Future[dict]: ...
+
+
+def multi(
+    children: Sequence[_Yieldable] | Mapping[Any, _Yieldable],
     quiet_exceptions: "Union[Type[Exception], Tuple[Type[Exception], ...]]" = (),
 ) -> "Union[Future[List], Future[Dict]]":
     """Runs multiple asynchronous operations in parallel.
@@ -475,6 +496,11 @@ def multi(
        with a unified function ``multi``. Added support for yieldables
        other than ``YieldPoint`` and `.Future`.
 
+    .. versionchanged:: 6.6
+       If a child is cancelled, ``multi()`` now raises `asyncio.CancelledError`
+       (without logging it if it is not the first failure), matching
+       `asyncio.gather`. Previously ``multi()`` would never complete.
+
     """
     return multi_future(children, quiet_exceptions=quiet_exceptions)
 
@@ -483,7 +509,7 @@ Multi = multi
 
 
 def multi_future(
-    children: Union[List[_Yieldable], Dict[Any, _Yieldable]],
+    children: Sequence[_Yieldable] | Mapping[Any, _Yieldable],
     quiet_exceptions: "Union[Type[Exception], Tuple[Type[Exception], ...]]" = (),
 ) -> "Union[Future[List], Future[Dict]]":
     """Wait for multiple asynchronous futures in parallel.
@@ -501,8 +527,8 @@ def multi_future(
        Use `multi` instead.
     """
     if isinstance(children, dict):
-        keys = list(children.keys())  # type: Optional[List]
-        children_seq = children.values()  # type: Iterable
+        keys: list | None = list(children.keys())
+        children_seq: Iterable = children.values()
     else:
         keys = None
         children_seq = children
@@ -521,9 +547,13 @@ def multi_future(
             for f in children_futs:
                 try:
                     result_list.append(f.result())
-                except Exception as e:
+                except (Exception, asyncio.CancelledError) as e:
+                    # As in asyncio.gather, a cancelled child is treated as
+                    # an error, and does not cancel the combined future.
                     if future.done():
-                        if not isinstance(e, quiet_exceptions):
+                        if not isinstance(
+                            e, (asyncio.CancelledError, quiet_exceptions)
+                        ):
                             app_log.error(
                                 "Multiple exceptions in yield list", exc_info=True
                             )
@@ -537,7 +567,7 @@ def multi_future(
                 else:
                     future_set_result_unless_cancelled(future, result_list)
 
-    listening = set()  # type: Set[Future]
+    listening: set[Future] = set()
     for f in children_futs:
         if f not in listening:
             listening.add(f)
@@ -567,16 +597,23 @@ def maybe_future(x: Any) -> Future:
 
 
 def with_timeout(
-    timeout: Union[float, datetime.timedelta],
+    timeout: float | datetime.timedelta,
     future: _Yieldable,
     quiet_exceptions: "Union[Type[Exception], Tuple[Type[Exception], ...]]" = (),
+    *,
+    message: str | Callable[[], str] | None = None,
 ) -> Future:
     """Wraps a `.Future` (or other yieldable object) in a timeout.
 
-    Raises `tornado.util.TimeoutError` if the input future does not
+    Raises `TimeoutError` if the input future does not
     complete before ``timeout``, which may be specified in any form
     allowed by `.IOLoop.add_timeout` (i.e. a `datetime.timedelta` or
     an absolute time relative to `.IOLoop.time`)
+
+    ``message`` is used as the message of the `TimeoutError`. It may be
+    a string or a callable returning a string; a callable is only called
+    if the timeout expires, so it may be used to defer the cost of
+    formatting the message.
 
     If the wrapped `.Future` fails after it has timed out, the exception
     will be logged unless it is either of a type contained in
@@ -602,6 +639,9 @@ def with_timeout(
     .. versionchanged:: 6.2
        ``tornado.util.TimeoutError`` is now an alias to ``asyncio.TimeoutError``.
 
+    .. versionchanged:: 6.6
+       Added the ``message`` argument.
+
     """
     # It's tempting to optimize this by cancelling the input future on timeout
     # instead of creating a new one, but A) we can't know if we are the only
@@ -626,7 +666,13 @@ def with_timeout(
 
     def timeout_callback() -> None:
         if not result.done():
-            result.set_exception(TimeoutError("Timeout"))
+            if message is None:
+                msg = "Timeout"
+            elif callable(message):
+                msg = message()
+            else:
+                msg = message
+            result.set_exception(TimeoutError(msg))
         # In case the wrapped future goes on to fail, log it.
         future_add_done_callback(future_converted, error_callback)
 
@@ -668,7 +714,7 @@ def sleep(duration: float) -> "Future[None]":
     return f
 
 
-class _NullFuture(object):
+class _NullFuture:
     """_NullFuture resembles a Future that finished with a result of None.
 
     It's not actually a `Future` to avoid depending on a particular event loop.
@@ -713,7 +759,7 @@ In native coroutines, the equivalent of ``yield gen.moment`` is
 """
 
 
-class Runner(object):
+class Runner:
     """Internal implementation of `tornado.gen.coroutine`.
 
     Maintains information about pending callbacks and their results.
@@ -732,7 +778,7 @@ class Runner(object):
         self.ctx_run = ctx_run
         self.gen = gen
         self.result_future = result_future
-        self.future = _null_future  # type: Union[None, Future]
+        self.future: None | Future = _null_future
         self.running = False
         self.finished = False
         self.io_loop = IOLoop.current()
@@ -758,11 +804,11 @@ class Runner(object):
                 try:
                     try:
                         value = future.result()
-                    except Exception as e:
+                    except (Exception, asyncio.CancelledError) as e:
                         # Save the exception for later. It's important that
                         # gen.throw() not be called inside this try/except block
                         # because that makes sys.exc_info behave unexpectedly.
-                        exc: Optional[Exception] = e
+                        exc: BaseException | None = e
                     else:
                         exc = None
                     finally:
@@ -784,6 +830,12 @@ class Runner(object):
                     future_set_result_unless_cancelled(
                         self.result_future, _value_from_stopiteration(e)
                     )
+                    self.result_future = None  # type: ignore
+                    return
+                except asyncio.CancelledError:
+                    self.finished = True
+                    self.future = _null_future
+                    self.result_future.cancel()
                     self.result_future = None  # type: ignore
                     return
                 except Exception:
@@ -822,7 +874,7 @@ class Runner(object):
         return True
 
     def handle_exception(
-        self, typ: Type[Exception], value: Exception, tb: types.TracebackType
+        self, typ: type[Exception], value: Exception, tb: types.TracebackType
     ) -> bool:
         if not self.running and not self.finished:
             self.future = Future()
@@ -874,7 +926,7 @@ def convert_yielded(yielded: _Yieldable) -> Future:
     elif isawaitable(yielded):
         return _wrap_awaitable(yielded)  # type: ignore
     else:
-        raise BadYieldError("yielded unknown object %r" % (yielded,))
+        raise BadYieldError(f"yielded unknown object {yielded!r}")
 
 
 convert_yielded = singledispatch(convert_yielded)

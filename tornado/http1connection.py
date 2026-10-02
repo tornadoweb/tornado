@@ -22,23 +22,28 @@ import asyncio
 import logging
 import re
 import types
+import zlib
+from collections.abc import Awaitable, Callable
+from typing import Optional, Type, cast
 
+from tornado import gen, httputil, iostream
 from tornado.concurrent import (
     Future,
     future_add_done_callback,
     future_set_result_unless_cancelled,
 )
 from tornado.escape import native_str, utf8
-from tornado import gen
-from tornado import httputil
-from tornado import iostream
-from tornado.log import gen_log, app_log
+from tornado.log import app_log, gen_log
 from tornado.util import GzipDecompressor
 
-
-from typing import cast, Optional, Type, Awaitable, Callable, Union, Tuple
-
 CR_OR_LF_RE = re.compile(b"\r|\n")
+
+
+# The maximum number of informational (1xx) responses to accept before the
+# real response. Each one is processed with a recursive call to
+# _read_message, so an unbounded number of them would exhaust the stack.
+# There is no legitimate use for more than a handful.
+_MAX_1XX_RESPONSES = 10
 
 
 class _QuietException(Exception):
@@ -46,7 +51,7 @@ class _QuietException(Exception):
         pass
 
 
-class _ExceptionLoggingContext(object):
+class _ExceptionLoggingContext:
     """Used with the ``with`` statement when calling delegate methods to
     log any exceptions with the given logger.  Any exceptions caught are
     converted to _QuietException
@@ -61,26 +66,29 @@ class _ExceptionLoggingContext(object):
     def __exit__(
         self,
         typ: "Optional[Type[BaseException]]",
-        value: Optional[BaseException],
+        value: BaseException | None,
         tb: types.TracebackType,
     ) -> None:
         if value is not None:
             assert typ is not None
+            # Let HTTPInputError pass through to higher-level handler
+            if isinstance(value, httputil.HTTPInputError):
+                return None
             self.logger.error("Uncaught exception", exc_info=(typ, value, tb))
             raise _QuietException
 
 
-class HTTP1ConnectionParameters(object):
+class HTTP1ConnectionParameters:
     """Parameters for `.HTTP1Connection` and `.HTTP1ServerConnection`."""
 
     def __init__(
         self,
         no_keep_alive: bool = False,
-        chunk_size: Optional[int] = None,
-        max_header_size: Optional[int] = None,
-        header_timeout: Optional[float] = None,
-        max_body_size: Optional[int] = None,
-        body_timeout: Optional[float] = None,
+        chunk_size: int | None = None,
+        max_header_size: int | None = None,
+        header_timeout: float | None = None,
+        max_body_size: int | None = None,
+        body_timeout: float | None = None,
         decompress: bool = False,
     ) -> None:
         """
@@ -114,8 +122,8 @@ class HTTP1Connection(httputil.HTTPConnection):
         self,
         stream: iostream.IOStream,
         is_client: bool,
-        params: Optional[HTTP1ConnectionParameters] = None,
-        context: Optional[object] = None,
+        params: HTTP1ConnectionParameters | None = None,
+        context: object | None = None,
     ) -> None:
         """
         :arg stream: an `.IOStream`
@@ -147,7 +155,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         self._read_finished = False
         # _finish_future resolves when all data has been written and flushed
         # to the IOStream.
-        self._finish_future = Future()  # type: Future[None]
+        self._finish_future: Future[None] = Future()
         # If true, the connection should be closed after this request
         # (after the response has been written in the server side,
         # and after it has been read in the client)
@@ -156,16 +164,16 @@ class HTTP1Connection(httputil.HTTPConnection):
         # Save the start lines after we read or write them; they
         # affect later processing (e.g. 304 responses and HEAD methods
         # have content-length but no bodies)
-        self._request_start_line = None  # type: Optional[httputil.RequestStartLine]
-        self._response_start_line = None  # type: Optional[httputil.ResponseStartLine]
-        self._request_headers = None  # type: Optional[httputil.HTTPHeaders]
+        self._request_start_line: httputil.RequestStartLine | None = None
+        self._response_start_line: httputil.ResponseStartLine | None = None
+        self._request_headers: httputil.HTTPHeaders | None = None
         # True if we are writing output with chunked encoding.
         self._chunking_output = False
         # While reading a body with a content-length, this is the
         # amount left to read.
-        self._expected_content_remaining = None  # type: Optional[int]
+        self._expected_content_remaining: int | None = None
         # A Future for our outgoing writes, returned by IOStream.write.
-        self._pending_write = None  # type: Optional[Future[None]]
+        self._pending_write: Future[None] | None = None
 
     def read_response(self, delegate: httputil.HTTPMessageDelegate) -> Awaitable[bool]:
         """Read a single HTTP response.
@@ -179,10 +187,24 @@ class HTTP1Connection(httputil.HTTPConnection):
         been read. The result is true if the stream is still open.
         """
         if self.params.decompress:
-            delegate = _GzipMessageDelegate(delegate, self.params.chunk_size)
+            delegate = _GzipMessageDelegate(
+                delegate, self.params.chunk_size, self._max_body_size
+            )
         return self._read_message(delegate)
 
     async def _read_message(self, delegate: httputil.HTTPMessageDelegate) -> bool:
+        try:
+            return await self._read_message_inner(delegate)
+        except _QuietException:
+            # The delegate raised an exception, which has already been logged,
+            # and the delegate has been told that the connection is closed.
+            # Close it, instead of letting _QuietException escape to our caller.
+            self.close()
+            return False
+
+    async def _read_message_inner(
+        self, delegate: httputil.HTTPMessageDelegate, num_1xx: int = 0
+    ) -> bool:
         need_delegate_close = False
         try:
             header_future = self.stream.read_until_regex(
@@ -197,16 +219,16 @@ class HTTP1Connection(httputil.HTTPConnection):
                         header_future,
                         quiet_exceptions=iostream.StreamClosedError,
                     )
-                except gen.TimeoutError:
+                except TimeoutError:
                     self.close()
                     return False
             start_line_str, headers = self._parse_headers(header_data)
             if self.is_client:
                 resp_start_line = httputil.parse_response_start_line(start_line_str)
                 self._response_start_line = resp_start_line
-                start_line = (
+                start_line: httputil.RequestStartLine | httputil.ResponseStartLine = (
                     resp_start_line
-                )  # type: Union[httputil.RequestStartLine, httputil.ResponseStartLine]
+                )
                 # TODO: this will need to change to support client-side keepalive
                 self._disconnect_on_finish = False
             else:
@@ -247,9 +269,19 @@ class HTTP1Connection(httputil.HTTPConnection):
                         raise httputil.HTTPInputError(
                             "Response code %d cannot have body" % code
                         )
+                    if num_1xx >= _MAX_1XX_RESPONSES:
+                        raise httputil.HTTPInputError("Too many 1xx responses")
                     # TODO: client delegates will get headers_received twice
                     # in the case of a 100-continue.  Document or change?
-                    await self._read_message(delegate)
+                    #
+                    # The recursive call reads the real response and owns
+                    # the delegate from here on, so there is nothing left
+                    # for this frame to do. Clear need_delegate_close so
+                    # that the finally block does not call
+                    # on_connection_close() on an already-finished
+                    # delegate.
+                    need_delegate_close = False
+                    return await self._read_message_inner(delegate, num_1xx + 1)
             else:
                 if headers.get("Expect") == "100-continue" and not self._write_finished:
                     self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
@@ -267,15 +299,17 @@ class HTTP1Connection(httputil.HTTPConnection):
                                 body_future,
                                 quiet_exceptions=iostream.StreamClosedError,
                             )
-                        except gen.TimeoutError:
+                        except TimeoutError:
                             gen_log.info("Timeout reading body from %s", self.context)
                             self.stream.close()
                             return False
             self._read_finished = True
             if not self._write_finished or self.is_client:
-                need_delegate_close = False
                 with _ExceptionLoggingContext(app_log):
                     delegate.finish()
+                # If finish() raised, the delegate is told that the connection
+                # is closed, as when any of its other methods raise.
+                need_delegate_close = False
             # If we're waiting for the application to produce an asynchronous
             # response, and we're not detached, register a close callback
             # on the stream (we didn't need one while we were reading)
@@ -311,12 +345,12 @@ class HTTP1Connection(httputil.HTTPConnection):
         quickly in CPython by breaking up reference cycles.
         """
         self._write_callback = None
-        self._write_future = None  # type: Optional[Future[None]]
-        self._close_callback = None  # type: Optional[Callable[[], None]]
+        self._write_future: Future[None] | None = None
+        self._close_callback: Callable[[], None] | None = None
         if self.stream is not None:
             self.stream.set_close_callback(None)
 
-    def set_close_callback(self, callback: Optional[Callable[[], None]]) -> None:
+    def set_close_callback(self, callback: Callable[[], None] | None) -> None:
         """Sets a callback that will be run when the connection is closed.
 
         Note that this callback is slightly different from
@@ -380,16 +414,16 @@ class HTTP1Connection(httputil.HTTPConnection):
 
     def write_headers(
         self,
-        start_line: Union[httputil.RequestStartLine, httputil.ResponseStartLine],
+        start_line: httputil.RequestStartLine | httputil.ResponseStartLine,
         headers: httputil.HTTPHeaders,
-        chunk: Optional[bytes] = None,
+        chunk: bytes | None = None,
     ) -> "Future[None]":
         """Implements `.HTTPConnection.write_headers`."""
         lines = []
         if self.is_client:
             assert isinstance(start_line, httputil.RequestStartLine)
             self._request_start_line = start_line
-            lines.append(utf8("%s %s HTTP/1.1" % (start_line[0], start_line[1])))
+            lines.append(utf8(f"{start_line[0]} {start_line[1]} HTTP/1.1"))
             # Client requests with a non-empty body must have either a
             # Content-Length or a Transfer-Encoding. If Content-Length is not
             # present we'll add our Transfer-Encoding below.
@@ -575,7 +609,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         if not self._finish_future.done():
             future_set_result_unless_cancelled(self._finish_future, None)
 
-    def _parse_headers(self, data: bytes) -> Tuple[str, httputil.HTTPHeaders]:
+    def _parse_headers(self, data: bytes) -> tuple[str, httputil.HTTPHeaders]:
         # The lstrip removes newlines that some implementations sometimes
         # insert between messages of a reused connection.  Per RFC 7230,
         # we SHOULD ignore at least one empty line before the request.
@@ -592,7 +626,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         code: int,
         headers: httputil.HTTPHeaders,
         delegate: httputil.HTTPMessageDelegate,
-    ) -> Optional[Awaitable[None]]:
+    ) -> Awaitable[None] | None:
         if "Content-Length" in headers:
             if "," in headers["Content-Length"]:
                 # Proxies sometimes cause Content-Length headers to get
@@ -607,7 +641,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                 headers["Content-Length"] = pieces[0]
 
             try:
-                content_length: Optional[int] = parse_int(headers["Content-Length"])
+                content_length: int | None = parse_int(headers["Content-Length"])
             except ValueError:
                 # Handles non-integer Content-Length value.
                 raise httputil.HTTPInputError(
@@ -691,27 +725,49 @@ class HTTP1Connection(httputil.HTTPConnection):
     async def _read_body_until_close(
         self, delegate: httputil.HTTPMessageDelegate
     ) -> None:
-        body = await self.stream.read_until_close()
-        if not self._write_finished or self.is_client:
-            with _ExceptionLoggingContext(app_log):
-                ret = delegate.data_received(body)
-                if ret is not None:
-                    await ret
+        # The body is terminated by the connection closing, so there is no
+        # length known in advance. Read incrementally so that max_body_size
+        # is enforced before an over-large body has been buffered, and so
+        # that the body is not limited by the stream's read buffer size.
+        total_size = 0
+        while True:
+            try:
+                body = await self.stream.read_bytes(
+                    self.params.chunk_size, partial=True
+                )
+            except iostream.StreamClosedError:
+                # The connection closing is the normal end of this body.
+                return
+            total_size += len(body)
+            if total_size > self._max_body_size:
+                raise httputil.HTTPInputError("Body too long")
+            if not self._write_finished or self.is_client:
+                with _ExceptionLoggingContext(app_log):
+                    ret = delegate.data_received(body)
+                    if ret is not None:
+                        await ret
 
 
 class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
     """Wraps an `HTTPMessageDelegate` to decode ``Content-Encoding: gzip``."""
 
-    def __init__(self, delegate: httputil.HTTPMessageDelegate, chunk_size: int) -> None:
+    def __init__(
+        self,
+        delegate: httputil.HTTPMessageDelegate,
+        chunk_size: int,
+        max_body_size: int,
+    ) -> None:
         self._delegate = delegate
         self._chunk_size = chunk_size
-        self._decompressor = None  # type: Optional[GzipDecompressor]
+        self._max_body_size = max_body_size
+        self._decompressed_body_size = 0
+        self._decompressor: GzipDecompressor | None = None
 
     def headers_received(
         self,
-        start_line: Union[httputil.RequestStartLine, httputil.ResponseStartLine],
+        start_line: httputil.RequestStartLine | httputil.ResponseStartLine,
         headers: httputil.HTTPHeaders,
-    ) -> Optional[Awaitable[None]]:
+    ) -> Awaitable[None] | None:
         if headers.get("Content-Encoding", "").lower() == "gzip":
             self._decompressor = GzipDecompressor()
             # Downstream delegates will only see uncompressed data,
@@ -725,18 +781,27 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
         if self._decompressor:
             compressed_data = chunk
             while compressed_data:
-                decompressed = self._decompressor.decompress(
-                    compressed_data, self._chunk_size
-                )
+                try:
+                    decompressed = self._decompressor.decompress(
+                        compressed_data, self._chunk_size
+                    )
+                except zlib.error as e:
+                    raise httputil.HTTPInputError("invalid gzip data: %s" % e)
                 if decompressed:
+                    self._decompressed_body_size += len(decompressed)
+                    if self._decompressed_body_size > self._max_body_size:
+                        raise httputil.HTTPInputError("decompressed body too large")
                     ret = self._delegate.data_received(decompressed)
                     if ret is not None:
                         await ret
-                compressed_data = self._decompressor.unconsumed_tail
-                if compressed_data and not decompressed:
+                tail = self._decompressor.unconsumed_tail
+                # A call that finishes a gzip member may return no output,
+                # but it must consume some input.
+                if not decompressed and len(tail) >= len(compressed_data):
                     raise httputil.HTTPInputError(
                         "encountered unconsumed gzip data without making progress"
                     )
+                compressed_data = tail
         else:
             ret = self._delegate.data_received(chunk)
             if ret is not None:
@@ -744,31 +809,31 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
 
     def finish(self) -> None:
         if self._decompressor is not None:
-            tail = self._decompressor.flush()
-            if tail:
-                # The tail should always be empty: decompress returned
-                # all that it can in data_received and the only
-                # purpose of the flush call is to detect errors such
-                # as truncated input. If we did legitimately get a new
-                # chunk at this point we'd need to change the
-                # interface to make finish() a coroutine.
-                raise ValueError(
-                    "decompressor.flush returned data; possible truncated input"
-                )
+            try:
+                # data_received has passed all the data to decompress, so
+                # this returns nothing; it checks for truncated input.
+                self._decompressor.flush()
+            except zlib.error as e:
+                # The wrapped delegate will never see finish(), and since this
+                # delegate has been finished, HTTP1Connection will not call
+                # our on_connection_close either. Close the wrapped delegate
+                # here so it gets exactly one of the two.
+                self._delegate.on_connection_close()
+                raise httputil.HTTPInputError("invalid gzip data: %s" % e)
         return self._delegate.finish()
 
     def on_connection_close(self) -> None:
         return self._delegate.on_connection_close()
 
 
-class HTTP1ServerConnection(object):
+class HTTP1ServerConnection:
     """An HTTP/1.x server."""
 
     def __init__(
         self,
         stream: iostream.IOStream,
-        params: Optional[HTTP1ConnectionParameters] = None,
-        context: Optional[object] = None,
+        params: HTTP1ConnectionParameters | None = None,
+        context: object | None = None,
     ) -> None:
         """
         :arg stream: an `.IOStream`
@@ -781,7 +846,7 @@ class HTTP1ServerConnection(object):
             params = HTTP1ConnectionParameters()
         self.params = params
         self.context = context
-        self._serving_future = None  # type: Optional[Future[None]]
+        self._serving_future: Future[None] | None = None
 
     async def close(self) -> None:
         """Closes the connection.
@@ -822,10 +887,6 @@ class HTTP1ServerConnection(object):
                     iostream.UnsatisfiableReadError,
                     asyncio.CancelledError,
                 ):
-                    return
-                except _QuietException:
-                    # This exception was already logged.
-                    conn.close()
                     return
                 except Exception:
                     gen_log.error("Uncaught exception", exc_info=True)

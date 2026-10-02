@@ -1,30 +1,20 @@
 import asyncio
-from concurrent import futures
-import gc
+import contextvars
 import datetime
+import gc
 import platform
 import sys
 import time
-import weakref
 import unittest
-
-from tornado.concurrent import Future
-from tornado.log import app_log
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
-from tornado.test.util import skipOnTravis, skipNotCPython
-from tornado.web import Application, RequestHandler, HTTPError
+import weakref
+from concurrent import futures
 
 from tornado import gen
-
-try:
-    import contextvars
-except ImportError:
-    contextvars = None  # type: ignore
-
-import typing
-
-if typing.TYPE_CHECKING:
-    from typing import List, Optional  # noqa: F401
+from tornado.concurrent import Future
+from tornado.log import app_log
+from tornado.test.util import AsyncHTTPTestCase, AsyncTestCase, skipNotCPython
+from tornado.testing import ExpectLog, gen_test
+from tornado.web import Application, HTTPError, RequestHandler
 
 
 class GenBasicTest(AsyncTestCase):
@@ -139,7 +129,6 @@ class GenBasicTest(AsyncTestCase):
 
         self.io_loop.run_sync(f)
 
-    @skipOnTravis
     @gen_test
     def test_multi_performance(self):
         # Yielding a list used to have quadratic performance; make
@@ -198,6 +187,29 @@ class GenBasicTest(AsyncTestCase):
             yield gen.Multi(
                 [self.async_exception(RuntimeError("error 1")), self.async_future(2)]
             )
+
+    @gen_test
+    def test_multi_cancelled(self):
+        # As with asyncio.gather, a cancelled child makes multi() raise
+        # CancelledError, but the multi future itself is not cancelled.
+        fut: Future[None] = Future()
+        self.io_loop.add_callback(fut.cancel)
+        multi_future = gen.multi([fut, self.async_future(2)])
+        with self.assertRaises(asyncio.CancelledError):
+            yield multi_future
+        self.assertFalse(multi_future.cancelled())
+
+        # A child that is already cancelled.
+        fut = Future()
+        fut.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            yield gen.multi([fut])
+
+        # Cancellation after the first exception is not logged.
+        fut = Future()
+        self.io_loop.add_callback(fut.cancel)
+        with self.assertRaises(RuntimeError):
+            yield gen.multi([self.async_exception(RuntimeError("error 1")), fut])
 
         # Exception logging may be explicitly quieted.
         with self.assertRaises(RuntimeError):
@@ -442,7 +454,6 @@ class GenCoroutineTest(AsyncTestCase):
 
     @gen_test
     def test_async_return_no_value(self):
-        # Without a return value we don't need python 3.3.
         @gen.coroutine
         def f():
             yield gen.moment
@@ -476,6 +487,74 @@ class GenCoroutineTest(AsyncTestCase):
         future = f()
         with self.assertRaises(ZeroDivisionError):
             yield future
+        self.finished = True
+
+    @gen_test
+    def test_sync_raise_cancelled(self):
+        @gen.coroutine
+        def f():
+            raise asyncio.CancelledError()
+
+        # Like any other exception, CancelledError is not raised when the
+        # function is called, and the future is cancelled as with asyncio.Task.
+        future = f()
+        with self.assertRaises(asyncio.CancelledError):
+            yield future
+        self.assertTrue(future.cancelled())
+        self.finished = True
+
+    @gen_test
+    def test_async_raise_cancelled(self):
+        @gen.coroutine
+        def f():
+            yield gen.moment
+            raise asyncio.CancelledError()
+
+        future = f()
+        with self.assertRaises(asyncio.CancelledError):
+            yield future
+        self.assertTrue(future.cancelled())
+        self.finished = True
+
+    @gen_test
+    def test_yield_cancelled_future(self):
+        @gen.coroutine
+        def f(fut):
+            yield fut
+
+        # Cancelled before the coroutine starts.
+        fut: Future[None] = Future()
+        fut.cancel()
+        future = f(fut)
+        with self.assertRaises(asyncio.CancelledError):
+            yield future
+        self.assertTrue(future.cancelled())
+
+        # Cancelled while the coroutine is waiting on it.
+        fut = Future()
+        future = f(fut)
+        self.io_loop.add_callback(fut.cancel)
+        with self.assertRaises(asyncio.CancelledError):
+            yield future
+        self.assertTrue(future.cancelled())
+        self.finished = True
+
+    @gen_test
+    def test_catch_cancelled_future(self):
+        # A coroutine can catch the CancelledError from a yielded future.
+        @gen.coroutine
+        def f():
+            fut: Future[None] = Future()
+            self.io_loop.add_callback(fut.cancel)
+            try:
+                yield fut
+            except asyncio.CancelledError:
+                pass
+            yield gen.moment
+            return 42
+
+        result = yield f()
+        self.assertEqual(result, 42)
         self.finished = True
 
     @gen_test
@@ -529,7 +608,7 @@ class GenCoroutineTest(AsyncTestCase):
 
         # First, confirm the behavior without moment: each coroutine
         # monopolizes the event loop until it finishes.
-        immediate = Future()  # type: Future[None]
+        immediate: Future[None] = Future()
         immediate.set_result(None)
         yield [f("a", immediate), f("b", immediate)]
         self.assertEqual("".join(calls), "aaaaabbbbb")
@@ -573,15 +652,12 @@ class GenCoroutineTest(AsyncTestCase):
         self.finished = True
 
     @skipNotCPython
-    @unittest.skipIf(
-        (3,) < sys.version_info < (3, 6), "asyncio.Future has reference cycles"
-    )
     def test_coroutine_refcounting(self):
         # On CPython, tasks and their arguments should be released immediately
         # without waiting for garbage collection.
         @gen.coroutine
         def inner():
-            class Foo(object):
+            class Foo:
                 pass
 
             local_var = Foo()
@@ -664,7 +740,7 @@ class GenCoroutineUnfinishedSequenceHandler(RequestHandler):
 class UndecoratedCoroutinesHandler(RequestHandler):
     @gen.coroutine
     def prepare(self):
-        self.chunks = []  # type: List[str]
+        self.chunks: list[str] = []
         yield gen.moment
         self.chunks.append("1")
 
@@ -733,12 +809,41 @@ class GenWebTest(AsyncHTTPTestCase):
 class WithTimeoutTest(AsyncTestCase):
     @gen_test
     def test_timeout(self):
-        with self.assertRaises(gen.TimeoutError):
+        with self.assertRaises(TimeoutError) as cm:
             yield gen.with_timeout(datetime.timedelta(seconds=0.1), Future())
+        self.assertEqual(str(cm.exception), "Timeout")
+
+    @gen_test
+    def test_timeout_message(self):
+        with self.assertRaises(TimeoutError) as cm:
+            yield gen.with_timeout(
+                datetime.timedelta(seconds=0.1), Future(), message="custom"
+            )
+        self.assertEqual(str(cm.exception), "custom")
+
+    @gen_test
+    def test_timeout_message_callable(self):
+        with self.assertRaises(TimeoutError) as cm:
+            yield gen.with_timeout(
+                datetime.timedelta(seconds=0.1), Future(), message=lambda: "lazy"
+            )
+        self.assertEqual(str(cm.exception), "lazy")
+
+    @gen_test
+    def test_timeout_message_callable_not_called_on_success(self):
+        def message():
+            raise Exception("should not be called")
+
+        future: Future[str] = Future()
+        future.set_result("asdf")
+        result = yield gen.with_timeout(
+            datetime.timedelta(seconds=3600), future, message=message
+        )
+        self.assertEqual(result, "asdf")
 
     @gen_test
     def test_completes_before_timeout(self):
-        future = Future()  # type: Future[str]
+        future: Future[str] = Future()
         self.io_loop.add_timeout(
             datetime.timedelta(seconds=0.1), lambda: future.set_result("asdf")
         )
@@ -747,7 +852,7 @@ class WithTimeoutTest(AsyncTestCase):
 
     @gen_test
     def test_fails_before_timeout(self):
-        future = Future()  # type: Future[str]
+        future: Future[str] = Future()
         self.io_loop.add_timeout(
             datetime.timedelta(seconds=0.1),
             lambda: future.set_exception(ZeroDivisionError()),
@@ -756,8 +861,17 @@ class WithTimeoutTest(AsyncTestCase):
             yield gen.with_timeout(datetime.timedelta(seconds=3600), future)
 
     @gen_test
+    def test_cancelled_before_timeout(self):
+        future: Future[str] = Future()
+        self.io_loop.add_timeout(datetime.timedelta(seconds=0.1), future.cancel)
+        timeout_future = gen.with_timeout(datetime.timedelta(seconds=3600), future)
+        with self.assertRaises(asyncio.CancelledError):
+            yield timeout_future
+        self.assertTrue(timeout_future.cancelled())
+
+    @gen_test
     def test_already_resolved(self):
-        future = Future()  # type: Future[str]
+        future: Future[str] = Future()
         future.set_result("asdf")
         result = yield gen.with_timeout(datetime.timedelta(seconds=3600), future)
         self.assertEqual(result, "asdf")
@@ -766,9 +880,9 @@ class WithTimeoutTest(AsyncTestCase):
     def test_timeout_concurrent_future(self):
         # A concurrent future that does not resolve before the timeout.
         with futures.ThreadPoolExecutor(1) as executor:
-            with self.assertRaises(gen.TimeoutError):
+            with self.assertRaises(TimeoutError):
                 yield gen.with_timeout(
-                    self.io_loop.time(), executor.submit(time.sleep, 0.1)
+                    self.io_loop.time(), executor.submit(time.sleep, 0.2)
                 )
 
     @gen_test
@@ -808,9 +922,9 @@ class WaitIteratorTest(AsyncTestCase):
 
     @gen_test
     def test_already_done(self):
-        f1 = Future()  # type: Future[int]
-        f2 = Future()  # type: Future[int]
-        f3 = Future()  # type: Future[int]
+        f1: Future[int] = Future()
+        f2: Future[int] = Future()
+        f3: Future[int] = Future()
         f1.set_result(24)
         f2.set_result(42)
         f3.set_result(84)
@@ -853,7 +967,7 @@ class WaitIteratorTest(AsyncTestCase):
                     "WaitIterator dict status incorrect",
                 )
             else:
-                self.fail("got bad WaitIterator index {}".format(dg.current_index))
+                self.fail(f"got bad WaitIterator index {dg.current_index}")
 
             i += 1
         self.assertIsNone(g.current_index, "bad nil current index")
@@ -873,7 +987,7 @@ class WaitIteratorTest(AsyncTestCase):
 
     @gen_test
     def test_iterator(self):
-        futures = [Future(), Future(), Future(), Future()]  # type: List[Future[int]]
+        futures: list[Future[int]] = [Future(), Future(), Future(), Future()]
 
         self.finish_coroutines(0, futures)
 
@@ -902,7 +1016,7 @@ class WaitIteratorTest(AsyncTestCase):
         # Recreate the previous test with py35 syntax. It's a little clunky
         # because of the way the previous test handles an exception on
         # a single iteration.
-        futures = [Future(), Future(), Future(), Future()]  # type: List[Future[int]]
+        futures: list[Future[int]] = [Future(), Future(), Future(), Future()]
         self.finish_coroutines(0, futures)
         self.finished = False
 
@@ -953,7 +1067,7 @@ class RunnerGCTest(AsyncTestCase):
     def test_gc(self):
         # GitHub issue 1769: Runner objects can get GCed unexpectedly
         # while their future is alive.
-        weakref_scope = [None]  # type: List[Optional[weakref.ReferenceType]]
+        weakref_scope: list[weakref.ReferenceType | None] = [None]
 
         def callback():
             gc.collect(2)
@@ -961,7 +1075,7 @@ class RunnerGCTest(AsyncTestCase):
 
         @gen.coroutine
         def tester():
-            fut = Future()  # type: Future[int]
+            fut: Future[int] = Future()
             weakref_scope[0] = weakref.ref(fut)
             self.io_loop.add_callback(callback)
             yield fut
@@ -973,7 +1087,7 @@ class RunnerGCTest(AsyncTestCase):
         # their loop is closed, even if they're involved in a reference
         # cycle.
         loop = self.get_new_ioloop()
-        result = []  # type: List[Optional[bool]]
+        result: list[bool | None] = []
         wfut = []
 
         @gen.coroutine
@@ -1018,7 +1132,7 @@ class RunnerGCTest(AsyncTestCase):
                 result.append(None)
 
         loop = self.get_new_ioloop()
-        result = []  # type: List[Optional[bool]]
+        result: list[bool | None] = []
         wfut = []
 
         @gen.coroutine
@@ -1053,11 +1167,9 @@ class RunnerGCTest(AsyncTestCase):
         self.assertEqual(result, [None, None])
 
 
-if contextvars is not None:
-    ctx_var = contextvars.ContextVar("ctx_var")  # type: contextvars.ContextVar[int]
+ctx_var: contextvars.ContextVar[int] = contextvars.ContextVar("ctx_var")
 
 
-@unittest.skipIf(contextvars is None, "contextvars module not present")
 class ContextVarsTest(AsyncTestCase):
     async def native_root(self, x):
         ctx_var.set(x)

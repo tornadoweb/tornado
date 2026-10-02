@@ -25,6 +25,7 @@ the same event loop.
 import asyncio
 import atexit
 import concurrent.futures
+import contextvars
 import errno
 import functools
 import select
@@ -33,21 +34,16 @@ import sys
 import threading
 import typing
 import warnings
-from tornado.gen import convert_yielded
-from tornado.ioloop import IOLoop, _Selectable
-
+from collections.abc import Callable
 from typing import (
     Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
     Protocol,
-    Set,
-    Tuple,
     TypeVar,
     Union,
 )
+
+from tornado.gen import convert_yielded, _Yieldable
+from tornado.ioloop import IOLoop, _Selectable
 
 if typing.TYPE_CHECKING:
     from typing_extensions import TypeVarTuple, Unpack
@@ -66,24 +62,21 @@ if typing.TYPE_CHECKING:
     _Ts = TypeVarTuple("_Ts")
 
 # Collection of selector thread event loops to shut down on exit.
-_selector_loops: Set["SelectorThread"] = set()
+_selector_loops: set["SelectorThread"] = set()
 
 
 def _atexit_callback() -> None:
-    for loop in _selector_loops:
-        with loop._select_cond:
-            loop._closing_selector = True
-            loop._select_cond.notify()
-        try:
-            loop._waker_w.send(b"a")
-        except BlockingIOError:
-            pass
-        if loop._thread is not None:
-            # If we don't join our (daemon) thread here, we may get a deadlock
-            # during interpreter shutdown. I don't really understand why. This
-            # deadlock happens every time in CI (both travis and appveyor) but
-            # I've never been able to reproduce locally.
-            loop._thread.join()
+    # Iterate over a copy: closing a selector removes it from _selector_loops.
+    for loop in list(_selector_loops):
+        # SelectorThread.close joins our (daemon) thread. If we don't join it
+        # here, we may get a deadlock during interpreter shutdown. I don't
+        # really understand why. This deadlock happens every time in CI (both
+        # travis and appveyor) but I've never been able to reproduce locally.
+        #
+        # It also closes the waker socketpair. Shutting the thread down without
+        # closing those leaks them until the interpreter finalizes them, which
+        # reports every one as an unclosed socket.
+        loop.close()
     _selector_loops.clear()
 
 
@@ -108,10 +101,10 @@ class BaseAsyncIOLoop(IOLoop):
             # doesn't understand dynamic proxies.
             self.selector_loop = AddThreadSelectorEventLoop(asyncio_loop)  # type: ignore
         # Maps fd to (fileobj, handler function) pair (as in IOLoop.add_handler)
-        self.handlers: Dict[int, Tuple[Union[int, _Selectable], Callable]] = {}
+        self.handlers: dict[int, tuple[int | _Selectable, Callable]] = {}
         # Set of fds listening for reads/writes
-        self.readers: Set[int] = set()
-        self.writers: Set[int] = set()
+        self.readers: set[int] = set()
+        self.writers: set[int] = set()
         self.closing = False
         # If an asyncio loop was closed through an asyncio interface
         # instead of IOLoop.close(), we'd never hear about it and may
@@ -158,7 +151,7 @@ class BaseAsyncIOLoop(IOLoop):
         self.asyncio_loop.close()
 
     def add_handler(
-        self, fd: Union[int, _Selectable], handler: Callable[..., None], events: int
+        self, fd: int | _Selectable, handler: Callable[..., None], events: int
     ) -> None:
         fd, fileobj = self.split_fd(fd)
         if fd in self.handlers:
@@ -171,7 +164,7 @@ class BaseAsyncIOLoop(IOLoop):
             self.selector_loop.add_writer(fd, self._handle_events, fd, IOLoop.WRITE)
             self.writers.add(fd)
 
-    def update_handler(self, fd: Union[int, _Selectable], events: int) -> None:
+    def update_handler(self, fd: int | _Selectable, events: int) -> None:
         fd, fileobj = self.split_fd(fd)
         if events & IOLoop.READ:
             if fd not in self.readers:
@@ -190,7 +183,7 @@ class BaseAsyncIOLoop(IOLoop):
                 self.selector_loop.remove_writer(fd)
                 self.writers.remove(fd)
 
-    def remove_handler(self, fd: Union[int, _Selectable]) -> None:
+    def remove_handler(self, fd: int | _Selectable) -> None:
         fd, fileobj = self.split_fd(fd)
         if fd not in self.handlers:
             return
@@ -264,7 +257,7 @@ class BaseAsyncIOLoop(IOLoop):
 
     def run_in_executor(
         self,
-        executor: Optional[concurrent.futures.Executor],
+        executor: concurrent.futures.Executor | None,
         func: Callable[..., _T],
         *args: Any,
     ) -> "asyncio.Future[_T]":
@@ -370,7 +363,7 @@ def to_tornado_future(asyncio_future: asyncio.Future) -> asyncio.Future:
     return asyncio_future
 
 
-def to_asyncio_future(tornado_future: asyncio.Future) -> asyncio.Future:
+def to_asyncio_future(tornado_future: _Yieldable) -> asyncio.Future:
     """Convert a Tornado yieldable object to an `asyncio.Future`.
 
     .. versionadded:: 4.1
@@ -386,58 +379,76 @@ def to_asyncio_future(tornado_future: asyncio.Future) -> asyncio.Future:
     return convert_yielded(tornado_future)
 
 
-if sys.platform == "win32" and hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
-    # "Any thread" and "selector" should be orthogonal, but there's not a clean
-    # interface for composing policies so pick the right base.
-    _BasePolicy = asyncio.WindowsSelectorEventLoopPolicy  # type: ignore
-else:
-    _BasePolicy = asyncio.DefaultEventLoopPolicy
+_AnyThreadEventLoopPolicy = None
 
 
-class AnyThreadEventLoopPolicy(_BasePolicy):  # type: ignore
-    """Event loop policy that allows loop creation on any thread.
+def __getattr__(name: str) -> typing.Any:
+    # The event loop policy system is deprecated in Python 3.14; simply accessing
+    # the name asyncio.DefaultEventLoopPolicy will raise a warning. Lazily create
+    # the AnyThreadEventLoopPolicy class so that the warning is only raised if
+    # the policy is used.
+    if name != "AnyThreadEventLoopPolicy":
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-    The default `asyncio` event loop policy only automatically creates
-    event loops in the main threads. Other threads must create event
-    loops explicitly or `asyncio.get_event_loop` (and therefore
-    `.IOLoop.current`) will fail. Installing this policy allows event
-    loops to be created automatically on any thread, matching the
-    behavior of Tornado versions prior to 5.0 (or 5.0 on Python 2).
+    global _AnyThreadEventLoopPolicy
+    if _AnyThreadEventLoopPolicy is None:
+        if sys.platform == "win32" and hasattr(
+            asyncio, "WindowsSelectorEventLoopPolicy"
+        ):
+            # "Any thread" and "selector" should be orthogonal, but there's not a clean
+            # interface for composing policies so pick the right base.
+            _BasePolicy = asyncio.WindowsSelectorEventLoopPolicy  # type: ignore
+        else:
+            _BasePolicy = asyncio.DefaultEventLoopPolicy
 
-    Usage::
+        class AnyThreadEventLoopPolicy(_BasePolicy):  # type: ignore
+            """Event loop policy that allows loop creation on any thread.
 
-        asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
+            The default `asyncio` event loop policy only automatically creates
+            event loops in the main threads. Other threads must create event
+            loops explicitly or `asyncio.get_event_loop` (and therefore
+            `.IOLoop.current`) will fail. Installing this policy allows event
+            loops to be created automatically on any thread, matching the
+            behavior of Tornado versions prior to 5.0 (or 5.0 on Python 2).
 
-    .. versionadded:: 5.0
+            Usage::
 
-    .. deprecated:: 6.2
+                asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
 
-        ``AnyThreadEventLoopPolicy`` affects the implicit creation
-        of an event loop, which is deprecated in Python 3.10 and
-        will be removed in a future version of Python. At that time
-        ``AnyThreadEventLoopPolicy`` will no longer be useful.
-        If you are relying on it, use `asyncio.new_event_loop`
-        or `asyncio.run` explicitly in any non-main threads that
-        need event loops.
-    """
+            .. versionadded:: 5.0
 
-    def __init__(self) -> None:
-        super().__init__()
-        warnings.warn(
-            "AnyThreadEventLoopPolicy is deprecated, use asyncio.run "
-            "or asyncio.new_event_loop instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
+            .. deprecated:: 6.2
 
-    def get_event_loop(self) -> asyncio.AbstractEventLoop:
-        try:
-            return super().get_event_loop()
-        except RuntimeError:
-            # "There is no current event loop in thread %r"
-            loop = self.new_event_loop()
-            self.set_event_loop(loop)
-            return loop
+                ``AnyThreadEventLoopPolicy`` affects the implicit creation
+                of an event loop, which is deprecated in Python 3.10 and
+                will be removed in a future version of Python. At that time
+                ``AnyThreadEventLoopPolicy`` will no longer be useful.
+                If you are relying on it, use `asyncio.new_event_loop`
+                or `asyncio.run` explicitly in any non-main threads that
+                need event loops.
+            """
+
+            def __init__(self) -> None:
+                super().__init__()
+                warnings.warn(
+                    "AnyThreadEventLoopPolicy is deprecated, use asyncio.run "
+                    "or asyncio.new_event_loop instead",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+
+            def get_event_loop(self) -> asyncio.AbstractEventLoop:
+                try:
+                    return super().get_event_loop()
+                except RuntimeError:
+                    # "There is no current event loop in thread %r"
+                    loop = self.new_event_loop()
+                    self.set_event_loop(loop)
+                    return loop
+
+        _AnyThreadEventLoopPolicy = AnyThreadEventLoopPolicy
+
+    return _AnyThreadEventLoopPolicy
 
 
 class SelectorThread:
@@ -454,14 +465,17 @@ class SelectorThread:
     _closed = False
 
     def __init__(self, real_loop: asyncio.AbstractEventLoop) -> None:
+        self._main_thread_ctx = contextvars.copy_context()
+
         self._real_loop = real_loop
 
         self._select_cond = threading.Condition()
-        self._select_args: Optional[
-            Tuple[List[_FileDescriptorLike], List[_FileDescriptorLike]]
-        ] = None
+        self._select_args: None | (
+            tuple[list[_FileDescriptorLike], list[_FileDescriptorLike]]
+        ) = None
         self._closing_selector = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
+        self._thread_manager_task: asyncio.Task | None = None
         self._thread_manager_handle = self._thread_manager()
 
         async def thread_manager_anext() -> None:
@@ -469,15 +483,24 @@ class SelectorThread:
             # this generator one step.
             await self._thread_manager_handle.__anext__()
 
+        def start_thread_manager() -> None:
+            # Keep a reference to the task: asyncio only holds a weak one, and a
+            # task that is garbage collected before it runs reports itself as
+            # having been destroyed while pending.
+            self._thread_manager_task = self._real_loop.create_task(
+                thread_manager_anext()
+            )
+
         # When the loop starts, start the thread. Not too soon because we can't
         # clean up if we get to this point but the event loop is closed without
         # starting.
         self._real_loop.call_soon(
-            lambda: self._real_loop.create_task(thread_manager_anext())
+            start_thread_manager,
+            context=self._main_thread_ctx,
         )
 
-        self._readers: Dict[_FileDescriptorLike, Callable] = {}
-        self._writers: Dict[_FileDescriptorLike, Callable] = {}
+        self._readers: dict[_FileDescriptorLike, Callable] = {}
+        self._writers: dict[_FileDescriptorLike, Callable] = {}
 
         # Writing to _waker_w will wake up the selector thread, which
         # watches for _waker_r to be readable.
@@ -496,6 +519,28 @@ class SelectorThread:
         self._wake_selector()
         if self._thread is not None:
             self._thread.join()
+        if self._thread_manager_task is not None:
+            if not self._thread_manager_task.done():
+                # The event loop stopped before the task got a chance to run its
+                # first step (once it runs, it finishes as soon as the async
+                # generator reaches its yield, so a task that is not done here
+                # never started at all).
+                #
+                # Cancelling is not enough to get it out of the PENDING state --
+                # that would require running the loop again, which we cannot do
+                # here -- so also tell it not to report itself as destroyed
+                # while pending, and close the coroutine it never entered.
+                # Otherwise closing such a loop logs an asyncio error and emits
+                # a "coroutine was never awaited" warning when the task is
+                # garbage collected, at an unpredictable later point.
+                self._thread_manager_task._log_destroy_pending = False  # type: ignore[attr-defined]
+                self._thread_manager_task.cancel()
+                # get_coro returns None for a task whose coroutine has already
+                # been cleared, which cannot happen for a task that never ran.
+                coro = self._thread_manager_task.get_coro()
+                if coro is not None:
+                    coro.close()
+            self._thread_manager_task = None
         _selector_loops.discard(self)
         self.remove_reader(self._waker_r)
         self._waker_r.close()
@@ -516,7 +561,7 @@ class SelectorThread:
         self._thread.start()
         self._start_select()
         try:
-            # The presense of this yield statement means that this coroutine
+            # The presence of this yield statement means that this coroutine
             # is actually an asynchronous generator, which has a special
             # shutdown protocol. We wait at this yield point until the
             # event loop's shutdown_asyncgens method is called, at which point
@@ -600,7 +645,9 @@ class SelectorThread:
                     raise
 
             try:
-                self._real_loop.call_soon_threadsafe(self._handle_select, rs, ws)
+                self._real_loop.call_soon_threadsafe(
+                    self._handle_select, rs, ws, context=self._main_thread_ctx
+                )
             except RuntimeError:
                 # "Event loop is closed". Swallow the exception for
                 # consistency with PollIOLoop (and logical consistency
@@ -615,7 +662,7 @@ class SelectorThread:
                 pass
 
     def _handle_select(
-        self, rs: List[_FileDescriptorLike], ws: List[_FileDescriptorLike]
+        self, rs: list[_FileDescriptorLike], ws: list[_FileDescriptorLike]
     ) -> None:
         for r in rs:
             self._handle_event(r, self._readers)
@@ -626,7 +673,7 @@ class SelectorThread:
     def _handle_event(
         self,
         fd: _FileDescriptorLike,
-        cb_map: Dict[_FileDescriptorLike, Callable],
+        cb_map: dict[_FileDescriptorLike, Callable],
     ) -> None:
         try:
             callback = cb_map[fd]

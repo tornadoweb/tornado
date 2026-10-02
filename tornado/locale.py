@@ -37,6 +37,8 @@ supported by `gettext` and related tools).  If neither method is called,
 the `Locale.translate` method will simply return the original string.
 """
 
+from __future__ import annotations
+
 import codecs
 import csv
 import datetime
@@ -44,22 +46,21 @@ import gettext
 import glob
 import os
 import re
+from collections.abc import Iterable
+from typing import Any
 
 from tornado import escape
+from tornado._locale_data import LOCALE_NAMES
 from tornado.log import gen_log
 
-from tornado._locale_data import LOCALE_NAMES
-
-from typing import Iterable, Any, Union, Dict, Optional
-
 _default_locale = "en_US"
-_translations = {}  # type: Dict[str, Any]
+_translations: dict[str, Any] = {}
 _supported_locales = frozenset([_default_locale])
 _use_gettext = False
 CONTEXT_SEPARATOR = "\x04"
 
 
-def get(*locale_codes: str) -> "Locale":
+def get(*locale_codes: str) -> Locale:
     """Returns the closest match for the given locale codes.
 
     We iterate over all given locale codes in order. If we have a tight
@@ -87,7 +88,7 @@ def set_default_locale(code: str) -> None:
     _supported_locales = frozenset(list(_translations.keys()) + [_default_locale])
 
 
-def load_translations(directory: str, encoding: Optional[str] = None) -> None:
+def load_translations(directory: str, encoding: str | None = None) -> None:
     """Loads translations from CSV files in a directory.
 
     Translations are strings with optional Python-style named placeholders
@@ -221,17 +222,17 @@ def get_supported_locales() -> Iterable[str]:
     return _supported_locales
 
 
-class Locale(object):
+class Locale:
     """Object representing a locale.
 
     After calling one of `load_translations` or `load_gettext_translations`,
     call `get` or `get_closest` to get a Locale object.
     """
 
-    _cache = {}  # type: Dict[str, Locale]
+    _cache: dict[str, Locale] = {}
 
     @classmethod
-    def get_closest(cls, *locale_codes: str) -> "Locale":
+    def get_closest(cls, *locale_codes: str) -> Locale:
         """Returns the closest match for the given locale code."""
         for code in locale_codes:
             if not code:
@@ -249,7 +250,7 @@ class Locale(object):
         return cls.get(_default_locale)
 
     @classmethod
-    def get(cls, code: str) -> "Locale":
+    def get(cls, code: str) -> Locale:
         """Returns the Locale for the given locale code.
 
         If it is not supported, we raise an exception.
@@ -258,7 +259,7 @@ class Locale(object):
             assert code in _supported_locales
             translations = _translations.get(code, None)
             if translations is None:
-                locale = CSVLocale(code, {})  # type: Locale
+                locale: Locale = CSVLocale(code, {})
             elif _use_gettext:
                 locale = GettextLocale(code, translations)
             else:
@@ -304,8 +305,8 @@ class Locale(object):
     def translate(
         self,
         message: str,
-        plural_message: Optional[str] = None,
-        count: Optional[int] = None,
+        plural_message: str | None = None,
+        count: int | None = None,
     ) -> str:
         """Returns the translation for the given message for this locale.
 
@@ -320,14 +321,14 @@ class Locale(object):
         self,
         context: str,
         message: str,
-        plural_message: Optional[str] = None,
-        count: Optional[int] = None,
+        plural_message: str | None = None,
+        count: int | None = None,
     ) -> str:
         raise NotImplementedError()
 
     def format_date(
         self,
-        date: Union[int, float, datetime.datetime],
+        date: int | float | datetime.datetime,
         gmt_offset: int = 0,
         relative: bool = True,
         shorter: bool = False,
@@ -349,10 +350,10 @@ class Locale(object):
            datetimes are still assumed to be UTC).
         """
         if isinstance(date, (int, float)):
-            date = datetime.datetime.fromtimestamp(date, datetime.timezone.utc)
+            date = datetime.datetime.fromtimestamp(date, datetime.UTC)
         if date.tzinfo is None:
-            date = date.replace(tzinfo=datetime.timezone.utc)
-        now = datetime.datetime.now(datetime.timezone.utc)
+            date = date.replace(tzinfo=datetime.UTC)
+        now = datetime.datetime.now(datetime.UTC)
         if date > now:
             if relative and (date - now).seconds < 60:
                 # Due to click skew, things are some things slightly
@@ -433,7 +434,7 @@ class Locale(object):
 
     def format_day(
         self, date: datetime.datetime, gmt_offset: int = 0, dow: bool = True
-    ) -> bool:
+    ) -> str:
         """Formats the given date as a day of week.
 
         Example: "Monday, January 22". You can remove the day of week with
@@ -485,15 +486,15 @@ class Locale(object):
 class CSVLocale(Locale):
     """Locale implementation using tornado's CSV translation format."""
 
-    def __init__(self, code: str, translations: Dict[str, Dict[str, str]]) -> None:
+    def __init__(self, code: str, translations: dict[str, dict[str, str]]) -> None:
         self.translations = translations
         super().__init__(code)
 
     def translate(
         self,
         message: str,
-        plural_message: Optional[str] = None,
-        count: Optional[int] = None,
+        plural_message: str | None = None,
+        count: int | None = None,
     ) -> str:
         if plural_message is not None:
             assert count is not None
@@ -510,8 +511,8 @@ class CSVLocale(Locale):
         self,
         context: str,
         message: str,
-        plural_message: Optional[str] = None,
-        count: Optional[int] = None,
+        plural_message: str | None = None,
+        count: int | None = None,
     ) -> str:
         if self.translations:
             gen_log.warning("pgettext is not supported by CSVLocale")
@@ -531,8 +532,8 @@ class GettextLocale(Locale):
     def translate(
         self,
         message: str,
-        plural_message: Optional[str] = None,
-        count: Optional[int] = None,
+        plural_message: str | None = None,
+        count: int | None = None,
     ) -> str:
         if plural_message is not None:
             assert count is not None
@@ -544,8 +545,8 @@ class GettextLocale(Locale):
         self,
         context: str,
         message: str,
-        plural_message: Optional[str] = None,
-        count: Optional[int] = None,
+        plural_message: str | None = None,
+        count: int | None = None,
     ) -> str:
         """Allows to set context for translation, accepts plural forms.
 
@@ -569,8 +570,8 @@ class GettextLocale(Locale):
         if plural_message is not None:
             assert count is not None
             msgs_with_ctxt = (
-                "%s%s%s" % (context, CONTEXT_SEPARATOR, message),
-                "%s%s%s" % (context, CONTEXT_SEPARATOR, plural_message),
+                f"{context}{CONTEXT_SEPARATOR}{message}",
+                f"{context}{CONTEXT_SEPARATOR}{plural_message}",
                 count,
             )
             result = self.ngettext(*msgs_with_ctxt)
@@ -579,7 +580,7 @@ class GettextLocale(Locale):
                 result = self.ngettext(message, plural_message, count)
             return result
         else:
-            msg_with_ctxt = "%s%s%s" % (context, CONTEXT_SEPARATOR, message)
+            msg_with_ctxt = f"{context}{CONTEXT_SEPARATOR}{message}"
             result = self.gettext(msg_with_ctxt)
             if CONTEXT_SEPARATOR in result:
                 # Translation not found

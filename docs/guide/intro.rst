@@ -13,7 +13,7 @@ Tornado can be roughly divided into three major components:
 
 * A web framework (including `.RequestHandler` which is subclassed to
   create web applications, and various supporting classes).
-* Client- and server-side implementions of HTTP (`.HTTPServer` and
+* Client- and server-side implementations of HTTP (`.HTTPServer` and
   `.AsyncHTTPClient`).
 * An asynchronous networking library including the classes `.IOLoop`
   and `.IOStream`, which serve as the building blocks for the HTTP

@@ -132,6 +132,14 @@ class BaseHandler(tornado.web.RequestHandler):
     async def any_author_exists(self):
         return bool(await self.query("SELECT * FROM authors LIMIT 1"))
 
+    def redirect_to_next(self):
+        next = self.get_argument("next", "/")
+        if next.startswith("//") or not next.startswith("/"):
+            # Absolute URLs are not allowed because this would be an open redirect
+            # vulnerability (https://cwe.mitre.org/data/definitions/601.html).
+            raise tornado.web.HTTPError(400)
+        self.redirect(next)
+
 
 class HomeHandler(BaseHandler):
     async def get(self):
@@ -243,7 +251,7 @@ class AuthCreateHandler(BaseHandler):
             tornado.escape.to_unicode(hashed_password),
         )
         self.set_signed_cookie("blogdemo_user", str(author.id))
-        self.redirect(self.get_argument("next", "/"))
+        self.redirect_to_next()
 
 
 class AuthLoginHandler(BaseHandler):
@@ -270,7 +278,7 @@ class AuthLoginHandler(BaseHandler):
         )
         if password_equal:
             self.set_signed_cookie("blogdemo_user", str(author.id))
-            self.redirect(self.get_argument("next", "/"))
+            self.redirect_to_next()
         else:
             self.render("login.html", error="incorrect password")
 
@@ -278,7 +286,7 @@ class AuthLoginHandler(BaseHandler):
 class AuthLogoutHandler(BaseHandler):
     def get(self):
         self.clear_cookie("blogdemo_user")
-        self.redirect(self.get_argument("next", "/"))
+        self.redirect_to_next()
 
 
 class EntryModule(tornado.web.UIModule):

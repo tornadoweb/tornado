@@ -10,34 +10,28 @@ interface of its subclasses, including `.AsyncHTTPClient`, `.IOLoop`,
 and `.Resolver`.
 """
 
+from __future__ import annotations
+
 import array
 import asyncio
-from inspect import getfullargspec
 import os
 import re
 import typing
+import warnings
 import zlib
-
+from collections.abc import Callable, Mapping, Sequence
+from inspect import getfullargspec
+from re import Match
 from typing import (
     Any,
-    Optional,
-    Dict,
-    Mapping,
-    List,
-    Tuple,
-    Match,
-    Callable,
-    Type,
-    Sequence,
 )
 
 if typing.TYPE_CHECKING:
     # Additional imports only used in type comments.
     # This lets us make these imports lazy.
-    import datetime  # noqa: F401
-    from types import TracebackType  # noqa: F401
-    from typing import Union  # noqa: F401
-    import unittest  # noqa: F401
+    import datetime
+    import unittest
+    from types import TracebackType
 
 # Aliases for types that are spelled differently in different Python
 # versions. bytes_type is deprecated and no longer used in Tornado
@@ -48,11 +42,13 @@ basestring_type = str
 
 
 # versionchanged:: 6.2
-# no longer our own TimeoutError, use standard asyncio class
+# no longer our own TimeoutError, use standard asyncio class (which is the
+# builtin TimeoutError since Python 3.11). Kept as an alias for compatibility;
+# new code should use the builtin TimeoutError.
 TimeoutError = asyncio.TimeoutError
 
 
-class ObjectDict(Dict[str, Any]):
+class ObjectDict(dict[str, Any]):
     """Makes a dictionary behave like an object, with attribute-style access."""
 
     def __getattr__(self, name: str) -> Any:
@@ -65,44 +61,145 @@ class ObjectDict(Dict[str, Any]):
         self[name] = value
 
 
-class GzipDecompressor(object):
+class GzipDecompressor:
     """Streaming gzip decompressor.
 
     The interface is like that of `zlib.decompressobj` (without some of the
     optional arguments, but it understands gzip headers and checksums.
+
+    .. versionchanged:: 6.6
+
+       Streams containing multiple gzip members (as defined in :rfc:`1952`
+       section 2.2) are now decompressed in full; previously everything
+       after the first member was ignored. Any data after the last member
+       that is not the start of another member is now an error, as is a
+       stream that ends partway through a member.
     """
 
     def __init__(self) -> None:
+        # The decompressor for the member currently being read. It is None
+        # before the first member and between members, which are the only
+        # places the stream may validly end. (We can't create one up front
+        # and check its eof attribute instead, because a new decompressobj
+        # is not at eof, and an empty stream, such as the body of a
+        # response to a HEAD request, is valid, as it is for
+        # `gzip.decompress`.)
+        self._decompressobj: zlib._Decompress | None = None
+        # Input that has not been passed to ``_decompressobj``, because
+        # ``max_length`` cut a call short. This is what `unconsumed_tail`
+        # reports; callers must pass it back to `decompress`.
+        self._unconsumed_tail = b""
+
+    @staticmethod
+    def _new_decompressobj() -> "zlib._Decompress":
         # Magic parameter makes zlib module understand gzip header
         # http://stackoverflow.com/questions/1838699/how-can-i-decompress-a-gzip-stream-with-zlib
         # This works on cpython and pypy, but not jython.
-        self.decompressobj = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        return zlib.decompressobj(16 + zlib.MAX_WBITS)
 
     def decompress(self, value: bytes, max_length: int = 0) -> bytes:
         """Decompress a chunk, returning newly-available data.
 
-        Some data may be buffered for later processing; `flush` must
-        be called when there is no more input data to ensure that
-        all data was processed.
+        When there is no more input, call `flush` to check that the stream
+        was complete.
 
         If ``max_length`` is given, some input data may be left over
         in ``unconsumed_tail``; you must retrieve this value and pass
         it back to a future call to `decompress` if it is not empty.
+        A call may return less than ``max_length``, or nothing at all,
+        even though ``unconsumed_tail`` is not empty (for example, at the
+        end of one gzip member and the start of the next), so keep
+        calling `decompress` until ``unconsumed_tail`` is empty.
+
+        Raises `zlib.error` if the input is not valid gzip data.
+
+        .. deprecated:: 6.6
+
+           Calling this method without ``max_length`` (or with
+           ``max_length=0``) is deprecated, because a small input can
+           decompress to an arbitrarily large output. In Tornado 7.0,
+           ``max_length`` will be required.
         """
-        return self.decompressobj.decompress(value, max_length)
+        if not max_length:
+            warnings.warn(
+                "GzipDecompressor.decompress without max_length is deprecated",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        result = self._decompress(value, max_length)
+        if not max_length:
+            # Without a limit, callers expect all the output at once, so we
+            # can't leave the start of the next member in unconsumed_tail.
+            while self._unconsumed_tail:
+                result += self._decompress(self._unconsumed_tail, 0)
+        return result
+
+    def _decompress(self, value: bytes, max_length: int) -> bytes:
+        # Each call makes one call to zlib; the caller loops over
+        # unconsumed_tail. This follows `gzip.decompress`, except that the
+        # header, CRC and length are checked by zlib itself.
+        if not value:
+            # Don't start a member (or report it as truncated) without data.
+            self._unconsumed_tail = b""
+            return b""
+        if self._decompressobj is None:
+            # This is the start of a member. zlib would reject anything
+            # else too, but with a less helpful message. value may be a
+            # single byte, in which case zlib checks the second one when it
+            # arrives.
+            if not b"\x1f\x8b".startswith(value[:2]):
+                raise zlib.error("expected a gzip member, got %r" % value[:2])
+            self._decompressobj = self._new_decompressobj()
+        result = self._decompressobj.decompress(value, max_length)
+        if self._decompressobj.eof:
+            # The rest of the input is the next member (or an error), so
+            # the caller must pass it back just like input that max_length
+            # held back. It is in unused_data; unconsumed_tail may hold a
+            # stale copy of it (a CPython bug), so don't look at that.
+            self._unconsumed_tail = self._decompressobj.unused_data
+            self._decompressobj = None
+        else:
+            self._unconsumed_tail = self._decompressobj.unconsumed_tail
+        return result
 
     @property
     def unconsumed_tail(self) -> bytes:
         """Returns the unconsumed portion left over"""
-        return self.decompressobj.unconsumed_tail
+        return self._unconsumed_tail
 
     def flush(self) -> bytes:
-        """Return any remaining buffered data not yet returned by decompress.
+        """Signals the end of the input.
 
-        Also checks for errors such as truncated input.
+        Call this once, after the last call to `decompress`, to check that
+        the stream was complete. Raises `zlib.error` if the input ended
+        partway through a gzip member. Raises `ValueError` if
+        `unconsumed_tail` is not empty; it must be passed back to
+        `decompress` first.
+
+        Always returns an empty byte string, because `decompress` returns
+        all of the output. The return value is kept for compatibility with
+        `zlib.Decompress.flush`, whose interface this follows.
+
         No other methods may be called on this object after `flush`.
+
+        .. versionchanged:: 6.6
+
+           Previously, this decompressed any remaining ``unconsumed_tail``
+           with no limit on the size of the output, and it did not detect
+           truncated input.
         """
-        return self.decompressobj.flush()
+        if self._unconsumed_tail:
+            raise ValueError(
+                "unconsumed_tail must be passed to decompress before flush"
+            )
+        if self._decompressobj is not None:
+            # A member has started but not ended. zlib is not holding back
+            # output that flushing it would return: when max_length cuts it
+            # off, the rest of the member, which includes at least its
+            # 8-byte trailer, is left in unconsumed_tail, which is empty. So
+            # zlib stopped because it ran out of input.
+            raise zlib.error("incomplete or truncated gzip stream")
+        return b""
 
 
 def import_object(name: str) -> Any:
@@ -135,7 +232,7 @@ def import_object(name: str) -> Any:
 
 
 def exec_in(
-    code: Any, glob: Dict[str, Any], loc: Optional[Optional[Mapping[str, Any]]] = None
+    code: Any, glob: dict[str, Any], loc: Mapping[str, Any] | None | None = None
 ) -> None:
     if isinstance(code, str):
         # exec(string) inherits the caller's future imports; compile
@@ -145,7 +242,7 @@ def exec_in(
 
 
 def raise_exc_info(
-    exc_info: Tuple[Optional[type], Optional[BaseException], Optional["TracebackType"]]
+    exc_info: tuple[type | None, BaseException | None, TracebackType | None],
 ) -> typing.NoReturn:
     try:
         if exc_info[1] is not None:
@@ -158,7 +255,7 @@ def raise_exc_info(
         exc_info = (None, None, None)
 
 
-def errno_from_exception(e: BaseException) -> Optional[int]:
+def errno_from_exception(e: BaseException) -> int | None:
     """Provides the errno from an Exception object.
 
     There are cases that the errno attribute was not set so we pull
@@ -201,7 +298,7 @@ def re_unescape(s: str) -> str:
     return _re_unescape_pattern.sub(_re_unescape_replacement, s)
 
 
-class Configurable(object):
+class Configurable:
     """Base class for configurable interfaces.
 
     A configurable interface is an (abstract) class whose constructor
@@ -236,12 +333,12 @@ class Configurable(object):
     # There may be a clever way to use generics here to get more
     # precise types (i.e. for a particular Configurable subclass T,
     # all the types are subclasses of T, not just Configurable).
-    __impl_class = None  # type: Optional[Type[Configurable]]
-    __impl_kwargs = None  # type: Dict[str, Any]
+    __impl_class: type[Configurable] | None = None
+    __impl_kwargs: dict[str, Any] | None = None
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Any:
         base = cls.configurable_base()
-        init_kwargs = {}  # type: Dict[str, Any]
+        init_kwargs: dict[str, Any] = {}
         if cls is base:
             impl = cls.configured_class()
             if base.__impl_kwargs:
@@ -252,7 +349,7 @@ class Configurable(object):
         if impl.configurable_base() is not base:
             # The impl class is itself configurable, so recurse.
             return impl(*args, **init_kwargs)
-        instance = super(Configurable, cls).__new__(impl)
+        instance = super().__new__(impl)
         # initialize vs __init__ chosen for compatibility with AsyncHTTPClient
         # singleton magic.  If we get rid of that we can switch to __init__
         # here too.
@@ -260,8 +357,7 @@ class Configurable(object):
         return instance
 
     @classmethod
-    def configurable_base(cls):
-        # type: () -> Type[Configurable]
+    def configurable_base(cls) -> type[Configurable]:
         """Returns the base class of a configurable hierarchy.
 
         This will normally return the class in which it is defined.
@@ -272,15 +368,14 @@ class Configurable(object):
         raise NotImplementedError()
 
     @classmethod
-    def configurable_default(cls):
-        # type: () -> Type[Configurable]
+    def configurable_default(cls) -> type[Configurable]:
         """Returns the implementation class to be used if none is configured."""
         raise NotImplementedError()
 
     def _initialize(self) -> None:
         pass
 
-    initialize = _initialize  # type: Callable[..., None]
+    initialize: Callable[..., None] = _initialize
     """Initialize a `Configurable` subclass instance.
 
     Configurable classes should use `initialize` instead of ``__init__``.
@@ -290,8 +385,7 @@ class Configurable(object):
     """
 
     @classmethod
-    def configure(cls, impl, **kwargs):
-        # type: (Union[None, str, Type[Configurable]], Any) -> None
+    def configure(cls, impl: None | str | type[Configurable], **kwargs: Any) -> None:
         """Sets the class to use when the base class is instantiated.
 
         Keyword arguments will be saved and added to the arguments passed
@@ -300,15 +394,14 @@ class Configurable(object):
         """
         base = cls.configurable_base()
         if isinstance(impl, str):
-            impl = typing.cast(Type[Configurable], import_object(impl))
+            impl = typing.cast(type[Configurable], import_object(impl))
         if impl is not None and not issubclass(impl, cls):
             raise ValueError("Invalid subclass of %s" % cls)
         base.__impl_class = impl
         base.__impl_kwargs = kwargs
 
     @classmethod
-    def configured_class(cls):
-        # type: () -> Type[Configurable]
+    def configured_class(cls) -> type[Configurable]:
         """Returns the currently configured class."""
         base = cls.configurable_base()
         # Manually mangle the private name to see whether this base
@@ -323,20 +416,22 @@ class Configurable(object):
             raise ValueError("configured class not found")
 
     @classmethod
-    def _save_configuration(cls):
-        # type: () -> Tuple[Optional[Type[Configurable]], Dict[str, Any]]
+    def _save_configuration(
+        cls,
+    ) -> tuple[type[Configurable] | None, dict[str, Any] | None]:
         base = cls.configurable_base()
         return (base.__impl_class, base.__impl_kwargs)
 
     @classmethod
-    def _restore_configuration(cls, saved):
-        # type: (Tuple[Optional[Type[Configurable]], Dict[str, Any]]) -> None
+    def _restore_configuration(
+        cls, saved: tuple[type[Configurable] | None, dict[str, Any] | None]
+    ) -> None:
         base = cls.configurable_base()
         base.__impl_class = saved[0]
         base.__impl_kwargs = saved[1]
 
 
-class ArgReplacer(object):
+class ArgReplacer:
     """Replaces one value in an ``args, kwargs`` pair.
 
     Inspects the function signature to find an argument by name
@@ -347,12 +442,12 @@ class ArgReplacer(object):
     def __init__(self, func: Callable, name: str) -> None:
         self.name = name
         try:
-            self.arg_pos = self._getargnames(func).index(name)  # type: Optional[int]
+            self.arg_pos: int | None = self._getargnames(func).index(name)
         except ValueError:
             # Not a positional parameter
             self.arg_pos = None
 
-    def _getargnames(self, func: Callable) -> List[str]:
+    def _getargnames(self, func: Callable) -> list[str]:
         try:
             return getfullargspec(func).args
         except TypeError:
@@ -368,7 +463,7 @@ class ArgReplacer(object):
             raise
 
     def get_old_value(
-        self, args: Sequence[Any], kwargs: Dict[str, Any], default: Any = None
+        self, args: Sequence[Any], kwargs: dict[str, Any], default: Any = None
     ) -> Any:
         """Returns the old value of the named argument without replacing it.
 
@@ -380,8 +475,8 @@ class ArgReplacer(object):
             return kwargs.get(self.name, default)
 
     def replace(
-        self, new_value: Any, args: Sequence[Any], kwargs: Dict[str, Any]
-    ) -> Tuple[Any, Sequence[Any], Dict[str, Any]]:
+        self, new_value: Any, args: Sequence[Any], kwargs: dict[str, Any]
+    ) -> tuple[Any, Sequence[Any], dict[str, Any]]:
         """Replace the named argument in ``args, kwargs`` with ``new_value``.
 
         Returns ``(old_value, args, kwargs)``.  The returned ``args`` and
@@ -403,8 +498,7 @@ class ArgReplacer(object):
         return old_value, args, kwargs
 
 
-def timedelta_to_seconds(td):
-    # type: (datetime.timedelta) -> float
+def timedelta_to_seconds(td: datetime.timedelta) -> float:
     """Equivalent to ``td.total_seconds()`` (introduced in Python 2.7)."""
     return td.total_seconds()
 
@@ -418,6 +512,8 @@ def _websocket_mask_python(mask: bytes, data: bytes) -> bytes:
 
     This pure-python implementation may be replaced by an optimized version when available.
     """
+    if len(mask) != 4:
+        raise ValueError("mask must be 4 bytes")
     mask_arr = array.array("B", mask)
     unmasked_arr = array.array("B", data)
     for i in range(len(data)):
@@ -438,8 +534,7 @@ else:
         _websocket_mask = _websocket_mask_python
 
 
-def doctests():
-    # type: () -> unittest.TestSuite
+def doctests() -> unittest.TestSuite:
     import doctest
 
     return doctest.DocTestSuite()

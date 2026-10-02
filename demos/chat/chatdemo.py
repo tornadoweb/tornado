@@ -25,7 +25,7 @@ define("port", default=8888, help="run on the given port", type=int)
 define("debug", default=True, help="run in debug mode")
 
 
-class MessageBuffer(object):
+class MessageBuffer:
     def __init__(self):
         # cond is notified whenever the message cache is updated
         self.cond = tornado.locks.Condition()
@@ -71,8 +71,12 @@ class MessageNewHandler(tornado.web.RequestHandler):
         message["html"] = tornado.escape.to_unicode(
             self.render_string("message.html", message=message)
         )
-        if self.get_argument("next", None):
-            self.redirect(self.get_argument("next"))
+        if next := self.get_argument("next", None):
+            if next.startswith("//") or not next.startswith("/"):
+                # Absolute URLs are not allowed because this would be an open redirect
+                # vulnerability (https://cwe.mitre.org/data/definitions/601.html).
+                raise tornado.web.HTTPError(400)
+            self.redirect(next)
         else:
             self.write(message)
         global_message_buffer.add_message(message)

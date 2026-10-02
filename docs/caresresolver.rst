@@ -19,6 +19,9 @@ wrapper ``pycares``).
     the default for ``tornado.simple_httpclient``, but other libraries
     may default to ``AF_UNSPEC``.
 
+    This class requires ``pycares`` version 4. Since this class is deprecated, it will not be
+    updated to support ``pycares`` version 5.
+
     .. deprecated:: 6.2
        This class is deprecated and will be removed in Tornado 7.0. Use the default
        thread-based resolver instead.

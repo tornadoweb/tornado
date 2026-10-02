@@ -1,0 +1,17 @@
+What's new in Tornado 6.5.2
+===========================
+
+Aug 8, 2025
+-----------
+
+Bug fixes
+~~~~~~~~~
+
+- Fixed a bug that resulted in WebSocket pings not being sent at the configured interval.
+- Improved logging for invalid ``Host`` headers. This was previously logged as an uncaught
+  exception with a stack trace, now it is simply a 400 response (logged as a warning in the
+  access log).
+- Restored the ``host`` argument to `.HTTPServerRequest`. This argument is deprecated
+  and will be removed in the future, but its removal with no warning in 6.5.0 was a mistake.
+- Removed a debugging print statement that was left in the code.
+- Improved type hints for ``gen.multi``.

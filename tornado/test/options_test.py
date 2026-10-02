@@ -1,21 +1,17 @@
 import datetime
-from io import StringIO
 import os
 import sys
+from io import StringIO
 from unittest import mock
-import unittest
 
-from tornado.options import OptionParser, Error
+from tornado.options import Error, OptionParser
 from tornado.util import basestring_type
-from tornado.test.util import subTest
-
-import typing
-
-if typing.TYPE_CHECKING:
-    from typing import List  # noqa: F401
 
 
-class Email(object):
+from tornado.test.util import TestCase
+
+
+class Email:
     def __init__(self, value):
         if isinstance(value, str) and "@" in value:
             self._value = value
@@ -27,7 +23,7 @@ class Email(object):
         return self._value
 
 
-class OptionsTest(unittest.TestCase):
+class OptionsTest(TestCase):
     def test_parse_command_line(self):
         options = OptionParser()
         options.define("port", default=80)
@@ -120,7 +116,7 @@ class OptionsTest(unittest.TestCase):
             options.foo = "2"
 
     def test_setattr_with_callback(self):
-        values = []  # type: List[int]
+        values: list[int] = []
         options = OptionParser()
         options.define("foo", default=1, type=int, callback=values.append)
         options.foo = 2
@@ -135,7 +131,7 @@ class OptionsTest(unittest.TestCase):
     def test_iter(self):
         options = self._sample_options()
         # OptionParsers always define 'help'.
-        self.assertEqual(set(["a", "b", "help"]), set(iter(options)))
+        self.assertEqual({"a", "b", "help"}, set(iter(options)))
 
     def test_getitem(self):
         options = self._sample_options()
@@ -166,7 +162,7 @@ class OptionsTest(unittest.TestCase):
 
         frame = sys._getframe(0)
         this_file = frame.f_code.co_filename
-        self.assertEqual(set(["b_group", "", this_file]), options.groups())
+        self.assertEqual({"b_group", "", this_file}, options.groups())
 
         b_group_dict = options.group_dict("b_group")
         self.assertEqual({"b": 2}, b_group_dict)
@@ -277,7 +273,7 @@ class OptionsTest(unittest.TestCase):
             ("foo_bar", "foo-bar"),
         ]
         for a, b in tests:
-            with subTest(self, a=a, b=b):
+            with self.subTest(self, a=a, b=b):
                 options = OptionParser()
                 options.define(a)
                 with self.assertRaises(Error) as cm:

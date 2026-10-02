@@ -19,28 +19,23 @@ import errno
 import os
 import socket
 import ssl
+from collections.abc import Awaitable, Callable, Iterable
+from typing import Any
 
-from tornado import gen
-from tornado.log import app_log
+from tornado import gen, process
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
+from tornado.log import app_log
 from tornado.netutil import (
-    bind_sockets,
-    add_accept_handler,
-    ssl_wrap_socket,
     _DEFAULT_BACKLOG,
+    add_accept_handler,
+    bind_sockets,
+    ssl_wrap_socket,
 )
-from tornado import process
 from tornado.util import errno_from_exception
 
-import typing
-from typing import Union, Dict, Any, Iterable, Optional, Awaitable
 
-if typing.TYPE_CHECKING:
-    from typing import Callable, List  # noqa: F401
-
-
-class TCPServer(object):
+class TCPServer:
     r"""A non-blocking, single-threaded TCP server.
 
     To use `TCPServer`, define a subclass which overrides the `handle_stream`
@@ -75,7 +70,7 @@ class TCPServer(object):
             async def main():
                 server = TCPServer()
                 server.listen(8888)
-                await asyncio.Event.wait()
+                await asyncio.Event().wait()
 
             asyncio.run(main())
 
@@ -123,14 +118,14 @@ class TCPServer(object):
 
     def __init__(
         self,
-        ssl_options: Optional[Union[Dict[str, Any], ssl.SSLContext]] = None,
-        max_buffer_size: Optional[int] = None,
-        read_chunk_size: Optional[int] = None,
+        ssl_options: dict[str, Any] | ssl.SSLContext | None = None,
+        max_buffer_size: int | None = None,
+        read_chunk_size: int | None = None,
     ) -> None:
         self.ssl_options = ssl_options
-        self._sockets = {}  # type: Dict[int, socket.socket]
-        self._handlers = {}  # type: Dict[int, Callable[[], None]]
-        self._pending_sockets = []  # type: List[socket.socket]
+        self._sockets: dict[int, socket.socket] = {}
+        self._handlers: dict[int, Callable[[], None]] = {}
+        self._pending_sockets: list[socket.socket] = []
         self._started = False
         self._stopped = False
         self.max_buffer_size = max_buffer_size
@@ -159,10 +154,10 @@ class TCPServer(object):
     def listen(
         self,
         port: int,
-        address: Optional[str] = None,
+        address: str | None = None,
         family: socket.AddressFamily = socket.AF_UNSPEC,
         backlog: int = _DEFAULT_BACKLOG,
-        flags: Optional[int] = None,
+        flags: int | None = None,
         reuse_port: bool = False,
     ) -> None:
         """Starts accepting connections on the given port.
@@ -212,10 +207,10 @@ class TCPServer(object):
     def bind(
         self,
         port: int,
-        address: Optional[str] = None,
+        address: str | None = None,
         family: socket.AddressFamily = socket.AF_UNSPEC,
         backlog: int = _DEFAULT_BACKLOG,
-        flags: Optional[int] = None,
+        flags: int | None = None,
         reuse_port: bool = False,
     ) -> None:
         """Binds this server to the given port on the given address.
@@ -262,7 +257,7 @@ class TCPServer(object):
             self._pending_sockets.extend(sockets)
 
     def start(
-        self, num_processes: Optional[int] = 1, max_restarts: Optional[int] = None
+        self, num_processes: int | None = 1, max_restarts: int | None = None
     ) -> None:
         """Starts this server in the `.IOLoop`.
 
@@ -318,9 +313,7 @@ class TCPServer(object):
             self._handlers.pop(fd)()
             sock.close()
 
-    def handle_stream(
-        self, stream: IOStream, address: tuple
-    ) -> Optional[Awaitable[None]]:
+    def handle_stream(self, stream: IOStream, address: tuple) -> Awaitable[None] | None:
         """Override to handle a new `.IOStream` from an incoming connection.
 
         This method may be a coroutine; if so any exceptions it raises
@@ -339,7 +332,7 @@ class TCPServer(object):
 
     def _handle_connection(self, connection: socket.socket, address: Any) -> None:
         if self.ssl_options is not None:
-            assert ssl, "Python 2.6+ and OpenSSL required for SSL"
+            assert ssl, "OpenSSL required for SSL"
             try:
                 connection = ssl_wrap_socket(
                     connection,
@@ -352,7 +345,7 @@ class TCPServer(object):
                     return connection.close()
                 else:
                     raise
-            except socket.error as err:
+            except OSError as err:
                 # If the connection is closed immediately after it is created
                 # (as in a port scan), we can get one of several errors.
                 # wrap_socket makes an internal call to getpeername,
@@ -369,11 +362,11 @@ class TCPServer(object):
                     raise
         try:
             if self.ssl_options is not None:
-                stream = SSLIOStream(
+                stream: IOStream = SSLIOStream(
                     connection,
                     max_buffer_size=self.max_buffer_size,
                     read_chunk_size=self.read_chunk_size,
-                )  # type: IOStream
+                )
             else:
                 stream = IOStream(
                     connection,

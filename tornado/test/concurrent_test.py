@@ -12,29 +12,30 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-from concurrent import futures
+import asyncio
 import logging
 import re
 import socket
-import typing
 import unittest
+from concurrent import futures
 
+from tornado import gen
 from tornado.concurrent import (
     Future,
     chain_future,
-    run_on_executor,
     future_set_result_unless_cancelled,
+    run_on_executor,
 )
-from tornado.escape import utf8, to_unicode
-from tornado import gen
+from tornado.escape import to_unicode, utf8
 from tornado.iostream import IOStream
 from tornado.tcpserver import TCPServer
-from tornado.testing import AsyncTestCase, bind_unused_port, gen_test
+from tornado.test.util import AsyncTestCase
+from tornado.testing import bind_unused_port, gen_test
 
 
 class MiscFutureTest(AsyncTestCase):
     def test_future_set_result_unless_cancelled(self):
-        fut = Future()  # type: Future[int]
+        fut: Future[int] = Future()
         future_set_result_unless_cancelled(fut, 42)
         self.assertEqual(fut.result(), 42)
         self.assertFalse(fut.cancelled())
@@ -72,6 +73,29 @@ class ChainFutureTest(AsyncTestCase):
         result = await fut3
         self.assertEqual(result, 42)
 
+    @gen_test
+    async def test_cancelled(self):
+        fut: Future[int] = Future()
+        fut2: Future[int] = Future()
+        chain_future(fut, fut2)
+        fut.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await fut2
+        self.assertTrue(fut2.cancelled())
+
+    @gen_test
+    async def test_cancelled_concurrent_futures(self):
+        fut: futures.Future[int] = futures.Future()
+        fut2: futures.Future[int] = futures.Future()
+        fut3: Future[int] = Future()
+        chain_future(fut, fut2)
+        chain_future(fut2, fut3)
+        fut.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await fut3
+        self.assertTrue(fut2.cancelled())
+        self.assertTrue(fut3.cancelled())
+
 
 # The following series of classes demonstrate and test various styles
 # of use, with and without generators and futures.
@@ -94,7 +118,7 @@ class CapError(Exception):
     pass
 
 
-class BaseCapClient(object):
+class BaseCapClient:
     def __init__(self, port):
         self.port = port
 
@@ -124,33 +148,31 @@ class GeneratorCapClient(BaseCapClient):
         raise gen.Return(self.process_response(data))
 
 
-class ClientTestMixin(object):
-    client_class = None  # type: typing.Callable
-
+class GeneratorCapClientTest(AsyncTestCase):
     def setUp(self):
-        super().setUp()  # type: ignore
+        super().setUp()
         self.server = CapServer()
         sock, port = bind_unused_port()
         self.server.add_sockets([sock])
-        self.client = self.client_class(port=port)
+        self.client = GeneratorCapClient(port=port)
 
     def tearDown(self):
         self.server.stop()
-        super().tearDown()  # type: ignore
+        super().tearDown()
 
-    def test_future(self: typing.Any):
+    def test_future(self):
         future = self.client.capitalize("hello")
         self.io_loop.add_future(future, self.stop)
         self.wait()
         self.assertEqual(future.result(), "HELLO")
 
-    def test_future_error(self: typing.Any):
+    def test_future_error(self):
         future = self.client.capitalize("HELLO")
         self.io_loop.add_future(future, self.stop)
         self.wait()
-        self.assertRaisesRegex(CapError, "already capitalized", future.result)  # type: ignore
+        self.assertRaisesRegex(CapError, "already capitalized", future.result)
 
-    def test_generator(self: typing.Any):
+    def test_generator(self):
         @gen.coroutine
         def f():
             result = yield self.client.capitalize("hello")
@@ -158,7 +180,7 @@ class ClientTestMixin(object):
 
         self.io_loop.run_sync(f)
 
-    def test_generator_error(self: typing.Any):
+    def test_generator_error(self):
         @gen.coroutine
         def f():
             with self.assertRaisesRegex(CapError, "already capitalized"):
@@ -167,14 +189,10 @@ class ClientTestMixin(object):
         self.io_loop.run_sync(f)
 
 
-class GeneratorClientTest(ClientTestMixin, AsyncTestCase):
-    client_class = GeneratorCapClient
-
-
 class RunOnExecutorTest(AsyncTestCase):
     @gen_test
     def test_no_calling(self):
-        class Object(object):
+        class Object:
             def __init__(self):
                 self.executor = futures.thread.ThreadPoolExecutor(1)
 
@@ -188,9 +206,9 @@ class RunOnExecutorTest(AsyncTestCase):
 
     @gen_test
     def test_call_with_no_args(self):
-        class Object(object):
+        class Object:
             def __init__(self):
-                self.executor = futures.thread.ThreadPoolExecutor(1)
+                self.executor = futures.ThreadPoolExecutor(1)
 
             @run_on_executor()
             def f(self):
@@ -202,9 +220,9 @@ class RunOnExecutorTest(AsyncTestCase):
 
     @gen_test
     def test_call_with_executor(self):
-        class Object(object):
+        class Object:
             def __init__(self):
-                self.__executor = futures.thread.ThreadPoolExecutor(1)
+                self.__executor = futures.ThreadPoolExecutor(1)
 
             @run_on_executor(executor="_Object__executor")
             def f(self):
@@ -216,9 +234,9 @@ class RunOnExecutorTest(AsyncTestCase):
 
     @gen_test
     def test_async_await(self):
-        class Object(object):
+        class Object:
             def __init__(self):
-                self.executor = futures.thread.ThreadPoolExecutor(1)
+                self.executor = futures.ThreadPoolExecutor(1)
 
             @run_on_executor()
             def f(self):

@@ -10,6 +10,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import typing
+
 from tornado.httputil import (
     HTTPHeaders,
     HTTPMessageDelegate,
@@ -24,11 +26,11 @@ from tornado.routing import (
     Rule,
     RuleRouter,
 )
-from tornado.testing import AsyncHTTPTestCase
 from tornado.web import Application, HTTPError, RequestHandler
 from tornado.wsgi import WSGIContainer
 
-import typing  # noqa: F401
+
+from tornado.test.util import AsyncHTTPTestCase
 
 
 class BasicRouter(Router):
@@ -57,7 +59,7 @@ class BasicRouterTestCase(AsyncHTTPTestCase):
         self.assertEqual(response.body, b"OK")
 
 
-resources = {}  # type: typing.Dict[str, bytes]
+resources: dict[str, bytes] = {}
 
 
 class GetResource(RequestHandler):
@@ -116,7 +118,7 @@ SecondHandler = _get_named_handler("second_handler")
 class CustomRouter(ReversibleRouter):
     def __init__(self):
         super().__init__()
-        self.routes = {}  # type: typing.Dict[str, typing.Any]
+        self.routes: dict[str, typing.Any] = {}
 
     def add_routes(self, routes):
         self.routes.update(routes)

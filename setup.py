@@ -18,11 +18,7 @@
 import os
 import platform
 import setuptools
-
-try:
-    import wheel.bdist_wheel
-except ImportError:
-    wheel = None
+import sysconfig
 
 
 kwargs = {}
@@ -40,6 +36,23 @@ if (
     platform.python_implementation() == "CPython"
     and os.environ.get("TORNADO_EXTENSION") != "0"
 ):
+
+    can_use_limited_api = not sysconfig.get_config_var("Py_GIL_DISABLED")
+
+    if can_use_limited_api:
+        # [[[cog
+        #   cog.out(f"define_macros = [(\"Py_LIMITED_API\", ")
+        #   cog.out(f"\"0x03{int(min_python_minor):02x}0000\"")
+        #   cog.outl(")]")
+        #   cog.outl(f"bdist_wheel_options = {{\"py_limited_api\": \"cp3{min_python_minor}\"}}")
+        #   ]]]
+        define_macros = [("Py_LIMITED_API", "0x030b0000")]
+        bdist_wheel_options = {"py_limited_api": "cp311"}
+        # [[[end]]]
+    else:
+        define_macros = []
+        bdist_wheel_options = {}
+
     # This extension builds and works on pypy as well, although pypy's jit
     # produces equivalent performance.
     kwargs["ext_modules"] = [
@@ -51,28 +64,21 @@ if (
             optional=os.environ.get("TORNADO_EXTENSION") != "1",
             # Use the stable ABI so our wheels are compatible across python
             # versions.
-            py_limited_api=True,
-            define_macros=[("Py_LIMITED_API", "0x03080000")],
+            py_limited_api=can_use_limited_api,
+            define_macros=define_macros,
         )
     ]
 
-if wheel is not None:
-    # From https://github.com/joerick/python-abi3-package-sample/blob/main/setup.py
-    class bdist_wheel_abi3(wheel.bdist_wheel.bdist_wheel):
-        def get_tag(self):
-            python, abi, plat = super().get_tag()
-
-            if python.startswith("cp"):
-                return "cp38", "abi3", plat
-            return python, abi, plat
-
-    kwargs["cmdclass"] = {"bdist_wheel": bdist_wheel_abi3}
+    if bdist_wheel_options:
+        kwargs["options"] = {"bdist_wheel": bdist_wheel_options}
 
 
 setuptools.setup(
     name="tornado",
     version=version,
-    python_requires=">= 3.8",
+    # [[[cog cog.outl(f"python_requires=\">= 3.{min_python_minor}\",")]]]
+    python_requires=">= 3.11",
+    # [[[end]]]
     packages=["tornado", "tornado.test", "tornado.platform"],
     package_data={
         # data files need to be listed both here (which determines what gets
@@ -112,13 +118,18 @@ setuptools.setup(
     classifiers=[
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3.10",
+        # [[[cog
+        #   for minor in range(int(min_python_minor), int(max_python_minor) + 1):
+        #     cog.outl(f"\"Programming Language :: Python :: 3.{minor}\",")
+        #   ]]]
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
+        "Programming Language :: Python :: 3.14",
+        "Programming Language :: Python :: 3.15",
+        # [[[end]]]
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python :: Implementation :: PyPy",
     ],
-    **kwargs
+    **kwargs,
 )

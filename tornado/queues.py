@@ -25,19 +25,17 @@ to those provided in the standard library's `asyncio package
 
 """
 
+from __future__ import annotations
+
 import collections
 import datetime
 import heapq
+from collections.abc import Awaitable
+from typing import Any, Generic, TypeVar
 
-from tornado import gen, ioloop
+from tornado import ioloop
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado.locks import Event
-
-from typing import Union, TypeVar, Generic, Awaitable, Optional
-import typing
-
-if typing.TYPE_CHECKING:
-    from typing import Deque, Tuple, Any  # noqa: F401
 
 _T = TypeVar("_T")
 
@@ -56,14 +54,12 @@ class QueueFull(Exception):
     pass
 
 
-def _set_timeout(
-    future: Future, timeout: Union[None, float, datetime.timedelta]
-) -> None:
-    if timeout:
+def _set_timeout(future: Future, timeout: None | float | datetime.timedelta) -> None:
+    if timeout is not None:
 
         def on_timeout() -> None:
             if not future.done():
-                future.set_exception(gen.TimeoutError())
+                future.set_exception(TimeoutError())
 
         io_loop = ioloop.IOLoop.current()
         timeout_handle = io_loop.add_timeout(timeout, on_timeout)
@@ -71,7 +67,7 @@ def _set_timeout(
 
 
 class _QueueIterator(Generic[_T]):
-    def __init__(self, q: "Queue[_T]") -> None:
+    def __init__(self, q: Queue[_T]) -> None:
         self.q = q
 
     def __anext__(self) -> Awaitable[_T]:
@@ -148,7 +144,7 @@ class Queue(Generic[_T]):
 
     # Exact type depends on subclass. Could be another generic
     # parameter and use protocols to be more precise here.
-    _queue = None  # type: Any
+    _queue: Any = None
 
     def __init__(self, maxsize: int = 0) -> None:
         if maxsize is None:
@@ -159,8 +155,10 @@ class Queue(Generic[_T]):
 
         self._maxsize = maxsize
         self._init()
-        self._getters = collections.deque([])  # type: Deque[Future[_T]]
-        self._putters = collections.deque([])  # type: Deque[Tuple[_T, Future[None]]]
+        self._getters: collections.deque[Future[_T]] = collections.deque([])
+        self._putters: collections.deque[tuple[_T, Future[None]]] = collections.deque(
+            []
+        )
         self._unfinished_tasks = 0
         self._finished = Event()
         self._finished.set()
@@ -184,19 +182,23 @@ class Queue(Generic[_T]):
             return self.qsize() >= self.maxsize
 
     def put(
-        self, item: _T, timeout: Optional[Union[float, datetime.timedelta]] = None
-    ) -> "Future[None]":
+        self, item: _T, timeout: float | datetime.timedelta | None = None
+    ) -> Future[None]:
         """Put an item into the queue, perhaps waiting until there is room.
 
-        Returns a Future, which raises `tornado.util.TimeoutError` after a
+        Returns a Future, which raises `TimeoutError` after a
         timeout.
 
         ``timeout`` may be a number denoting a time (on the same
         scale as `tornado.ioloop.IOLoop.time`, normally `time.time`), or a
         `datetime.timedelta` object for a deadline relative to the
         current time.
+
+        .. versionchanged:: 6.6
+           A ``timeout`` argument of zero will either return or raise immediately.
+           Previously, zero was treated equivalent to ``None`` (wait forever).
         """
-        future = Future()  # type: Future[None]
+        future: Future[None] = Future()
         try:
             self.put_nowait(item)
         except QueueFull:
@@ -222,13 +224,11 @@ class Queue(Generic[_T]):
         else:
             self.__put_internal(item)
 
-    def get(
-        self, timeout: Optional[Union[float, datetime.timedelta]] = None
-    ) -> Awaitable[_T]:
+    def get(self, timeout: float | datetime.timedelta | None = None) -> Awaitable[_T]:
         """Remove and return an item from the queue.
 
         Returns an awaitable which resolves once an item is available, or raises
-        `tornado.util.TimeoutError` after a timeout.
+        `TimeoutError` after a timeout.
 
         ``timeout`` may be a number denoting a time (on the same
         scale as `tornado.ioloop.IOLoop.time`, normally `time.time`), or a
@@ -244,8 +244,11 @@ class Queue(Generic[_T]):
            ``timedelta`` objects for relative timeouts (consistent
            with other timeouts in Tornado).
 
+        .. versionchanged:: 6.6
+           A ``timeout`` argument of zero will either return or raise immediately.
+           Previously, zero was treated equivalent to ``None`` (wait forever).
         """
-        future = Future()  # type: Future[_T]
+        future: Future[_T] = Future()
         try:
             future.set_result(self.get_nowait())
         except QueueEmpty:
@@ -290,12 +293,16 @@ class Queue(Generic[_T]):
             self._finished.set()
 
     def join(
-        self, timeout: Optional[Union[float, datetime.timedelta]] = None
+        self, timeout: float | datetime.timedelta | None = None
     ) -> Awaitable[None]:
         """Block until all items in the queue are processed.
 
-        Returns an awaitable, which raises `tornado.util.TimeoutError` after a
+        Returns an awaitable, which raises `TimeoutError` after a
         timeout.
+
+        .. versionchanged:: 6.6
+           A ``timeout`` argument of zero will either return or raise immediately.
+           Previously, zero was treated equivalent to ``None`` (wait forever).
         """
         return self._finished.wait(timeout)
 
@@ -328,13 +335,13 @@ class Queue(Generic[_T]):
             self._getters.popleft()
 
     def __repr__(self) -> str:
-        return "<%s at %s %s>" % (type(self).__name__, hex(id(self)), self._format())
+        return f"<{type(self).__name__} at {hex(id(self))} {self._format()}>"
 
     def __str__(self) -> str:
-        return "<%s %s>" % (type(self).__name__, self._format())
+        return f"<{type(self).__name__} {self._format()}>"
 
     def _format(self) -> str:
-        result = "maxsize=%r" % (self.maxsize,)
+        result = f"maxsize={self.maxsize!r}"
         if getattr(self, "_queue", None):
             result += " queue=%r" % self._queue
         if self._getters:

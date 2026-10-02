@@ -12,14 +12,13 @@
 """Bridges between the Twisted package and Tornado."""
 
 import sys
+import typing
 
 from twisted.internet.defer import Deferred  # type: ignore
 from twisted.python import failure  # type: ignore
 
-from tornado.concurrent import Future, future_set_exc_info
 from tornado import gen
-
-import typing  # noqa: F401
+from tornado.concurrent import Future, future_set_exc_info
 
 
 def install() -> None:
@@ -50,7 +49,7 @@ if hasattr(gen.convert_yielded, "register"):
 
     @gen.convert_yielded.register(Deferred)
     def _(d: Deferred) -> Future:
-        f = Future()  # type: Future[typing.Any]
+        f: Future[typing.Any] = Future()
 
         def errback(failure: failure.Failure) -> None:
             try:

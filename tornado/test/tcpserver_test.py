@@ -1,17 +1,15 @@
+import platform
 import socket
 import subprocess
 import sys
 import textwrap
-import unittest
 
 from tornado import gen
 from tornado.iostream import IOStream
 from tornado.log import app_log
 from tornado.tcpserver import TCPServer
-from tornado.test.util import skipIfNonUnix
-from tornado.testing import AsyncTestCase, ExpectLog, bind_unused_port, gen_test
-
-from typing import Tuple
+from tornado.test.util import AsyncTestCase, TestCase, skipIfNonUnix
+from tornado.testing import ExpectLog, bind_unused_port, gen_test
 
 
 class TCPServerTest(AsyncTestCase):
@@ -93,7 +91,7 @@ class TCPServerTest(AsyncTestCase):
         def connect(c):
             try:
                 yield c.connect(server_addr)
-            except EnvironmentError:
+            except OSError:
                 pass
             else:
                 connected_clients.append(c)
@@ -117,16 +115,31 @@ class TCPServerTest(AsyncTestCase):
 
 
 @skipIfNonUnix
-class TestMultiprocess(unittest.TestCase):
+class TestMultiprocess(TestCase):
     # These tests verify that the two multiprocess examples from the
     # TCPServer docs work. Both tests start a server with three worker
     # processes, each of which prints its task id to stdout (a single
     # byte, so we don't have to worry about atomicity of the shared
     # stdout stream) and then exits.
-    def run_subproc(self, code: str) -> Tuple[str, str]:
+    def run_subproc(self, code: str) -> tuple[str, str]:
+        args = [sys.executable, "-Werror::DeprecationWarning"]
+        if sys.platform == "darwin" and platform.machine() == "x86_64":
+            # os.fork() warns when the process is multi-threaded, but it asks
+            # the OS for the thread count, so OS-level threads that have no
+            # Python state are counted too. An x86_64 interpreter on macOS
+            # starts with a second such thread before any user code runs, so
+            # the warning says nothing about what tornado is doing:
+            #     arch -x86_64 python3.15 -Werror -c 'import os; os.fork()'
+            # fails, while the arm64 half of the same universal2 build passes.
+            # Reported as https://github.com/python/cpython/issues/157870; run
+            # that one-liner to check whether this is still needed. Ignore just
+            # that one message; every other DeprecationWarning stays fatal, and
+            # arm64 macOS keeps the strict check. A filter's message field
+            # matches the start of the warning text.
+            args.append("-Wignore:This process (pid=:DeprecationWarning")
         try:
             result = subprocess.run(
-                [sys.executable, "-Werror::DeprecationWarning"],
+                args,
                 capture_output=True,
                 input=code,
                 encoding="utf8",
@@ -141,8 +154,7 @@ class TestMultiprocess(unittest.TestCase):
     def test_listen_single(self):
         # As a sanity check, run the single-process version through this test
         # harness too.
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import asyncio
             from tornado.tcpserver import TCPServer
 
@@ -152,15 +164,13 @@ class TestMultiprocess(unittest.TestCase):
 
             asyncio.run(main())
             print('012', end='')
-        """
-        )
+        """)
         out, err = self.run_subproc(code)
         self.assertEqual("".join(sorted(out)), "012")
         self.assertEqual(err, "")
 
     def test_bind_start(self):
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import warnings
 
             from tornado.ioloop import IOLoop
@@ -174,15 +184,13 @@ class TestMultiprocess(unittest.TestCase):
             server.start(3)
             IOLoop.current().run_sync(lambda: None)
             print(task_id(), end='')
-        """
-        )
+        """)
         out, err = self.run_subproc(code)
         self.assertEqual("".join(sorted(out)), "012")
         self.assertEqual(err, "")
 
     def test_add_sockets(self):
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import asyncio
             from tornado.netutil import bind_sockets
             from tornado.process import fork_processes, task_id
@@ -196,15 +204,13 @@ class TestMultiprocess(unittest.TestCase):
                 server.add_sockets(sockets)
             asyncio.run(post_fork_main())
             print(task_id(), end='')
-        """
-        )
+        """)
         out, err = self.run_subproc(code)
         self.assertEqual("".join(sorted(out)), "012")
         self.assertEqual(err, "")
 
     def test_listen_multi_reuse_port(self):
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import asyncio
             import socket
             from tornado.netutil import bind_sockets
@@ -223,8 +229,7 @@ class TestMultiprocess(unittest.TestCase):
                 server.listen(port, address='127.0.0.1', reuse_port=True)
             asyncio.run(main())
             print(task_id(), end='')
-            """
-        )
+            """)
         out, err = self.run_subproc(code)
         self.assertEqual("".join(sorted(out)), "012")
         self.assertEqual(err, "")

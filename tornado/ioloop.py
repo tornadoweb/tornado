@@ -23,38 +23,37 @@ loop interface directly. The `IOLoop.current` class method provides the
 
 """
 
+from __future__ import annotations
+
 import asyncio
 import concurrent.futures
 import datetime
 import functools
+import math
 import numbers
 import os
+import random
 import sys
 import time
-import math
-import random
+import typing
 import warnings
+from collections.abc import Awaitable, Callable
 from inspect import isawaitable
+from typing import Any, Protocol, TypedDict, TypeVar
 
 from tornado.concurrent import (
     Future,
-    is_future,
     chain_future,
-    future_set_exc_info,
     future_add_done_callback,
+    future_set_exc_info,
+    is_future,
 )
 from tornado.log import app_log
-from tornado.util import Configurable, TimeoutError, import_object
-
-import typing
-from typing import Union, Any, Type, Optional, Callable, TypeVar, Tuple, Awaitable
-
-if typing.TYPE_CHECKING:
-    from typing import Dict, List, Set  # noqa: F401
-
-    from typing_extensions import Protocol
-else:
-    Protocol = object
+from tornado.util import (  # noqa: F401 (TimeoutError re-exported for compatibility)
+    Configurable,
+    TimeoutError,
+    import_object,
+)
 
 
 class _Selectable(Protocol):
@@ -154,7 +153,7 @@ class IOLoop(Configurable):
     ERROR = 0x018
 
     # In Python 3, _ioloop_for_asyncio maps from asyncio loops to IOLoops.
-    _ioloop_for_asyncio = dict()  # type: Dict[asyncio.AbstractEventLoop, IOLoop]
+    _ioloop_for_asyncio: dict[asyncio.AbstractEventLoop, IOLoop] = dict()
 
     # Maintain a set of all pending tasks to follow the warning in the docs
     # of asyncio.create_tasks:
@@ -166,22 +165,20 @@ class IOLoop(Configurable):
     # https://github.com/python/cpython/issues/91887
     # If that change is accepted, this can eventually be removed.
     # If it is not, we will consider the rationale and may remove this.
-    _pending_tasks = set()  # type: Set[Future]
+    _pending_tasks: set[Future] = set()
 
     @classmethod
-    def configure(
-        cls, impl: "Union[None, str, Type[Configurable]]", **kwargs: Any
-    ) -> None:
+    def configure(cls, impl: None | str | type[Configurable], **kwargs: Any) -> None:
         from tornado.platform.asyncio import BaseAsyncIOLoop
 
         if isinstance(impl, str):
             impl = import_object(impl)
         if isinstance(impl, type) and not issubclass(impl, BaseAsyncIOLoop):
             raise RuntimeError("only AsyncIOLoop is allowed when asyncio is available")
-        super(IOLoop, cls).configure(impl, **kwargs)
+        super().configure(impl, **kwargs)
 
     @staticmethod
-    def instance() -> "IOLoop":
+    def instance() -> IOLoop:
         """Deprecated alias for `IOLoop.current()`.
 
         .. versionchanged:: 5.0
@@ -234,16 +231,16 @@ class IOLoop(Configurable):
 
     @typing.overload
     @staticmethod
-    def current() -> "IOLoop":
+    def current() -> IOLoop:
         pass
 
     @typing.overload
     @staticmethod
-    def current(instance: bool = True) -> Optional["IOLoop"]:  # noqa: F811
+    def current(instance: bool = True) -> IOLoop | None:
         pass
 
     @staticmethod
-    def current(instance: bool = True) -> Optional["IOLoop"]:  # noqa: F811
+    def current(instance: bool = True) -> IOLoop | None:
         """Returns the current thread's `IOLoop`.
 
         If an `IOLoop` is currently running or has been marked as
@@ -282,7 +279,7 @@ class IOLoop(Configurable):
             if instance:
                 from tornado.platform.asyncio import AsyncIOMainLoop
 
-                current = AsyncIOMainLoop()  # type: Optional[IOLoop]
+                current: IOLoop | None = AsyncIOMainLoop()
             else:
                 current = None
         return current
@@ -349,11 +346,11 @@ class IOLoop(Configurable):
         pass
 
     @classmethod
-    def configurable_base(cls) -> Type[Configurable]:
+    def configurable_base(cls) -> type[Configurable]:
         return IOLoop
 
     @classmethod
-    def configurable_default(cls) -> Type[Configurable]:
+    def configurable_default(cls) -> type[Configurable]:
         from tornado.platform.asyncio import AsyncIOLoop
 
         return AsyncIOLoop
@@ -395,14 +392,14 @@ class IOLoop(Configurable):
     ) -> None:
         pass
 
-    @typing.overload  # noqa: F811
+    @typing.overload
     def add_handler(
         self, fd: _S, handler: Callable[[_S, int], None], events: int
     ) -> None:
         pass
 
-    def add_handler(  # noqa: F811
-        self, fd: Union[int, _Selectable], handler: Callable[..., None], events: int
+    def add_handler(
+        self, fd: int | _Selectable, handler: Callable[..., None], events: int
     ) -> None:
         """Registers the given handler to receive the given events for ``fd``.
 
@@ -420,7 +417,7 @@ class IOLoop(Configurable):
         """
         raise NotImplementedError()
 
-    def update_handler(self, fd: Union[int, _Selectable], events: int) -> None:
+    def update_handler(self, fd: int | _Selectable, events: int) -> None:
         """Changes the events we listen for ``fd``.
 
         .. versionchanged:: 4.0
@@ -429,7 +426,7 @@ class IOLoop(Configurable):
         """
         raise NotImplementedError()
 
-    def remove_handler(self, fd: Union[int, _Selectable]) -> None:
+    def remove_handler(self, fd: int | _Selectable) -> None:
         """Stop listening for events on ``fd``.
 
         .. versionchanged:: 4.0
@@ -459,7 +456,7 @@ class IOLoop(Configurable):
         """
         raise NotImplementedError()
 
-    def run_sync(self, func: Callable, timeout: Optional[float] = None) -> Any:
+    def run_sync(self, func: Callable, timeout: float | None = None) -> Any:
         """Starts the `IOLoop`, runs the given function, and stops the loop.
 
         The function must return either an awaitable object or
@@ -471,7 +468,7 @@ class IOLoop(Configurable):
 
         The keyword-only argument ``timeout`` may be used to set
         a maximum duration for the function.  If the timeout expires,
-        a `asyncio.TimeoutError` is raised.
+        a `TimeoutError` is raised.
 
         This method is useful to allow asynchronous calls in a
         ``main()`` function::
@@ -491,7 +488,12 @@ class IOLoop(Configurable):
         .. versionchanged:: 6.2
            ``tornado.util.TimeoutError`` is now an alias to ``asyncio.TimeoutError``.
         """
-        future_cell = [None]  # type: List[Optional[Future]]
+
+        class FutureCell(TypedDict):
+            future: Future | None
+            timeout_called: bool
+
+        future_cell: FutureCell = {"future": None, "timeout_called": False}
 
         def run() -> None:
             try:
@@ -501,39 +503,46 @@ class IOLoop(Configurable):
 
                     result = convert_yielded(result)
             except Exception:
-                fut = Future()  # type: Future[Any]
-                future_cell[0] = fut
+                fut: Future[Any] = Future()
+                future_cell["future"] = fut
                 future_set_exc_info(fut, sys.exc_info())
             else:
                 if is_future(result):
-                    future_cell[0] = result
+                    future_cell["future"] = result
                 else:
                     fut = Future()
-                    future_cell[0] = fut
+                    future_cell["future"] = fut
                     fut.set_result(result)
-            assert future_cell[0] is not None
-            self.add_future(future_cell[0], lambda future: self.stop())
+            assert future_cell["future"] is not None
+            self.add_future(future_cell["future"], lambda future: self.stop())
 
         self.add_callback(run)
         if timeout is not None:
 
             def timeout_callback() -> None:
+                # signal that timeout is triggered
+                future_cell["timeout_called"] = True
                 # If we can cancel the future, do so and wait on it. If not,
                 # Just stop the loop and return with the task still pending.
                 # (If we neither cancel nor wait for the task, a warning
                 # will be logged).
-                assert future_cell[0] is not None
-                if not future_cell[0].cancel():
+                assert future_cell["future"] is not None
+                if not future_cell["future"].cancel():
                     self.stop()
 
             timeout_handle = self.add_timeout(self.time() + timeout, timeout_callback)
         self.start()
         if timeout is not None:
             self.remove_timeout(timeout_handle)
-        assert future_cell[0] is not None
-        if future_cell[0].cancelled() or not future_cell[0].done():
-            raise TimeoutError("Operation timed out after %s seconds" % timeout)
-        return future_cell[0].result()
+        assert future_cell["future"] is not None
+        if future_cell["future"].cancelled() or not future_cell["future"].done():
+            if future_cell["timeout_called"]:
+                raise TimeoutError("Operation timed out after %s seconds" % timeout)
+            else:
+                # timeout not called; maybe stop() was called explicitly
+                # or some other cancellation
+                raise RuntimeError("Event loop stopped before Future completed.")
+        return future_cell["future"].result()
 
     def time(self) -> float:
         """Returns the current time according to the `IOLoop`'s clock.
@@ -551,10 +560,10 @@ class IOLoop(Configurable):
 
     def add_timeout(
         self,
-        deadline: Union[float, datetime.timedelta],
+        deadline: float | datetime.timedelta,
         callback: Callable,
         *args: Any,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> object:
         """Runs the ``callback`` at the time ``deadline`` from the I/O loop.
 
@@ -649,7 +658,7 @@ class IOLoop(Configurable):
     ) -> None:
         """Calls the given callback on the next I/O loop iteration.
 
-        Intended to be afe for use from a Python signal handler; should not be
+        Intended to be safe for use from a Python signal handler; should not be
         used otherwise.
 
         .. deprecated:: 6.4
@@ -670,8 +679,8 @@ class IOLoop(Configurable):
 
     def add_future(
         self,
-        future: "Union[Future[_T], concurrent.futures.Future[_T]]",
-        callback: Callable[["Future[_T]"], None],
+        future: Future[_T] | concurrent.futures.Future[_T],
+        callback: Callable[[Future[_T]], None],
     ) -> None:
         """Schedules a callback on the ``IOLoop`` when the given
         `.Future` is finished.
@@ -703,10 +712,10 @@ class IOLoop(Configurable):
 
     def run_in_executor(
         self,
-        executor: Optional[concurrent.futures.Executor],
+        executor: concurrent.futures.Executor | None,
         func: Callable[..., _T],
-        *args: Any
-    ) -> "Future[_T]":
+        *args: Any,
+    ) -> Future[_T]:
         """Runs a function in a ``concurrent.futures.Executor``. If
         ``executor`` is ``None``, the IO loop's default executor will be used.
 
@@ -718,14 +727,14 @@ class IOLoop(Configurable):
             if not hasattr(self, "_executor"):
                 from tornado.process import cpu_count
 
-                self._executor = concurrent.futures.ThreadPoolExecutor(
-                    max_workers=(cpu_count() * 5)
-                )  # type: concurrent.futures.Executor
+                self._executor: concurrent.futures.Executor = (
+                    concurrent.futures.ThreadPoolExecutor(max_workers=(cpu_count() * 5))
+                )
             executor = self._executor
         c_future = executor.submit(func, *args)
         # Concurrent Futures are not usable with await. Wrap this in a
         # Tornado Future instead, using self.add_future for thread-safety.
-        t_future = Future()  # type: Future[_T]
+        t_future: Future[_T] = Future()
         self.add_future(c_future, lambda f: chain_future(f, t_future))
         return t_future
 
@@ -770,9 +779,7 @@ class IOLoop(Configurable):
         """Avoid unhandled-exception warnings from spawned coroutines."""
         future.result()
 
-    def split_fd(
-        self, fd: Union[int, _Selectable]
-    ) -> Tuple[int, Union[int, _Selectable]]:
+    def split_fd(self, fd: int | _Selectable) -> tuple[int, int | _Selectable]:
         # """Returns an (fd, obj) pair from an ``fd`` parameter.
 
         # We accept both raw file descriptors and file-like objects as
@@ -792,7 +799,7 @@ class IOLoop(Configurable):
             return fd, fd
         return fd.fileno(), fd
 
-    def close_fd(self, fd: Union[int, _Selectable]) -> None:
+    def close_fd(self, fd: int | _Selectable) -> None:
         # """Utility method to close an ``fd``.
 
         # If ``fd`` is a file-like object, we close it directly; otherwise
@@ -819,7 +826,7 @@ class IOLoop(Configurable):
         self._pending_tasks.discard(f)
 
 
-class _Timeout(object):
+class _Timeout:
     """An IOLoop timeout, a UNIX timestamp and a callback"""
 
     # Reduce memory overhead when there are lots of pending callbacks
@@ -832,23 +839,23 @@ class _Timeout(object):
             raise TypeError("Unsupported deadline %r" % deadline)
         self.deadline = deadline
         self.callback = callback
-        self.tdeadline = (
+        self.tdeadline: tuple[float, int] = (
             deadline,
             next(io_loop._timeout_counter),
-        )  # type: Tuple[float, int]
+        )
 
     # Comparison methods to sort by deadline, with object id as a tiebreaker
     # to guarantee a consistent ordering.  The heapq module uses __le__
     # in python2.5, and __lt__ in 2.6+ (sort() and most other comparisons
     # use __lt__).
-    def __lt__(self, other: "_Timeout") -> bool:
+    def __lt__(self, other: _Timeout) -> bool:
         return self.tdeadline < other.tdeadline
 
-    def __le__(self, other: "_Timeout") -> bool:
+    def __le__(self, other: _Timeout) -> bool:
         return self.tdeadline <= other.tdeadline
 
 
-class PeriodicCallback(object):
+class PeriodicCallback:
     """Schedules the given callback to be called periodically.
 
     The callback is called every ``callback_time`` milliseconds when
@@ -888,8 +895,8 @@ class PeriodicCallback(object):
 
     def __init__(
         self,
-        callback: Callable[[], Optional[Awaitable]],
-        callback_time: Union[datetime.timedelta, float],
+        callback: Callable[[], Awaitable | None],
+        callback_time: datetime.timedelta | float,
         jitter: float = 0,
     ) -> None:
         self.callback = callback
@@ -901,7 +908,7 @@ class PeriodicCallback(object):
             self.callback_time = callback_time
         self.jitter = jitter
         self._running = False
-        self._timeout = None  # type: object
+        self._timeout: object = None
 
     def start(self) -> None:
         """Starts the timer."""
