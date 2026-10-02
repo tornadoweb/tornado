@@ -1585,6 +1585,15 @@ class StaticFileTest(WebTestCase):
         response = self.get_and_head("/static/robots.txt", headers={"Range": "asdf"})
         self.assertEqual(response.code, 200)
 
+    def test_static_range_non_digit_bound(self):
+        # RFC 9110 byte positions are digits. int() also accepts underscores.
+        response = self.get_and_head(
+            "/static/robots.txt", headers={"Range": "bytes=1_0-1_2"}
+        )
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.headers.get("Content-Length"), "26")
+        self.assertIsNone(response.headers.get("Content-Range"))
+
     def test_static_unsatisfiable_range_zero_suffix(self):
         response = self.get_and_head(
             "/static/robots.txt", headers={"Range": "bytes=-0"}
