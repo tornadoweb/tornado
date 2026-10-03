@@ -524,6 +524,24 @@ Foo: even
         self.assertEqual(headers["quux"], "xyzzy")
         self.assertEqual(sorted(headers.get_all()), [("Foo", "bar"), ("Quux", "xyzzy")])
 
+    def test_delitem(self):
+        # Deleting a header must not depend on whether the combined-value
+        # cache happens to be populated for it. The cache is invalidated by
+        # add(), so a multi-valued header that was never read through
+        # __getitem__ has no cache entry.
+        headers = HTTPHeaders()
+        headers["foo"] = "bar"
+        del headers["foo"]
+        self.assertEqual(sorted(headers.get_all()), [])
+        with self.assertRaises(KeyError):
+            del headers["foo"]
+
+        headers = HTTPHeaders()
+        headers.add("Set-Cookie", "a=b")
+        headers.add("Set-Cookie", "c=d")
+        del headers["set-cookie"]
+        self.assertEqual(sorted(headers.get_all()), [])
+
     def test_string(self):
         headers = HTTPHeaders()
         headers.add("Foo", "1")

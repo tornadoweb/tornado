@@ -345,7 +345,10 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
 
     def __delitem__(self, name: str) -> None:
         norm_name = _normalize_header(name)
-        del self._combined_cache[norm_name]
+        # _combined_cache is populated lazily by __getitem__ and invalidated
+        # by add(), so the name may be absent from it even when the header is
+        # present. Only _as_list determines whether the key exists.
+        self._combined_cache.pop(norm_name, None)
         del self._as_list[norm_name]
 
     def __len__(self) -> int:
