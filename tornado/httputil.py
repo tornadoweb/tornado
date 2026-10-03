@@ -949,6 +949,10 @@ class ParseMultipartConfig:
     """The maximum number of parts accepted in a multipart request.
 
     Each ``<input>`` element in an HTML form corresponds to at least one "part".
+
+    This is a conservative limit on the number of segments created while parsing,
+    not an exact count of form fields or files. The usually-empty segment before
+    the first boundary also counts towards this limit.
     """
 
     max_part_header_size: int = 10 * 1024
@@ -1116,9 +1120,6 @@ def parse_multipart_form_data(
     parts = data[:final_boundary_index].split(
         b"--" + boundary + b"\r\n", config.max_parts + 1
     )
-    # The initial boundary produces an empty segment, not a form part.
-    if not parts[0]:
-        parts.pop(0)
     if len(parts) > config.max_parts:
         raise HTTPInputError("multipart/form-data has too many parts")
     for part in parts:
