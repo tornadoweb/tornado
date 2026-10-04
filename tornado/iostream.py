@@ -206,6 +206,17 @@ class _StreamBuffer:
         assert size == 0
         self._first_pos = pos
 
+    def clear(self) -> None:
+        """
+        Discard all buffered data, releasing our views of large buffers.
+        """
+        for is_large, b in self._buffers:
+            if is_large:
+                typing.cast(memoryview, b).release()
+        self._buffers.clear()
+        self._first_pos = 0
+        self._size = 0
+
 
 class BaseIOStream:
     """A utility class to write to and read from a non-blocking file or socket.
@@ -661,6 +672,11 @@ class BaseIOStream:
         # Clear the buffers so they can be cleared immediately even
         # if the IOStream object is kept alive by a reference cycle.
         # TODO: Clear the read buffer too; it currently breaks some tests.
+        if self._write_buffer is not None:
+            # Release our views of the caller's data from large writes
+            # that did not complete, so the caller can resize it (on PyPy,
+            # views are not freed until garbage collection).
+            self._write_buffer.clear()
         self._write_buffer = None  # type: ignore
 
     def reading(self) -> bool:
