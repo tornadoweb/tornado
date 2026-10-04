@@ -1018,13 +1018,24 @@ class BaseIOStream:
         if loc == 0:
             return b""
         assert loc <= self._read_buffer_size
-        # Slice the bytearray buffer into bytes, without intermediate copying.
-        # The views must be released before the bytearray is resized
-        # (explicitly, since PyPy does not free them until garbage collection).
-        with memoryview(self._read_buffer) as m, m[:loc] as view:
-            b = view.tobytes()
+        buf = self._read_buffer
+        if loc == len(buf):
+            # Taking the whole buffer is the most common case, and bytes()
+            # copies it without a memoryview.
+            b = bytes(buf)
+        elif loc <= 2048:
+            # Copying a small slice twice is cheaper than creating and
+            # releasing memoryviews.
+            b = bytes(buf[:loc])
+        else:
+            # Slice the bytearray buffer into bytes, without intermediate
+            # copying. The views must be released before the bytearray is
+            # resized (explicitly, since PyPy does not free them until
+            # garbage collection).
+            with memoryview(buf) as m, m[:loc] as view:
+                b = view.tobytes()
         self._read_buffer_size -= loc
-        del self._read_buffer[:loc]
+        del buf[:loc]
         return b
 
     def _check_closed(self) -> None:
