@@ -1026,6 +1026,26 @@ class TestIOStreamMixin(TestReadWriteMixin):
             server.close()
             client.close()
 
+    @gen_test
+    def test_write_bytearray_resizable_after_close(self):
+        # Like test_write_bytearray_resizable, but the stream is closed
+        # while the data is still in the write buffer (here because the
+        # stream is still connecting).
+        listener, port = bind_unused_port()
+        self.addCleanup(listener.close)
+        stream = self._make_client_iostream(socket.socket())
+        connect_fut = stream.connect(("127.0.0.1", port))
+        data = bytearray(b"x" * 10000)
+        write_fut = stream.write(data)  # type: ignore
+        # Hold a reference to the write buffer so the test doesn't depend on
+        # when it is freed (at once on CPython, at garbage collection on PyPy).
+        write_buffer = stream._write_buffer  # noqa: F841
+        stream.close()
+        for fut in [connect_fut, write_fut]:
+            with self.assertRaises(StreamClosedError):
+                yield fut
+        del data[:]
+
 
 class TestIOStreamWebHTTP(AsyncHTTPTestCase, TestIOStreamWebMixin):
     def _make_client_iostream(self):
