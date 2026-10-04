@@ -140,12 +140,12 @@ class BaseAsyncIOLoop(IOLoop):
             self.remove_handler(fd)
             if all_fds:
                 self.close_fd(fileobj)
-        # Remove the mapping before closing the asyncio loop. If this
-        # happened in the other order, we could race against another
-        # initialize() call which would see the closed asyncio loop,
-        # assume it was closed from the asyncio side, and do this
-        # cleanup for us, leading to a KeyError.
-        del IOLoop._ioloop_for_asyncio[self.asyncio_loop]
+        # Drop our mapping before closing the asyncio loop. Another
+        # initialize() may already have removed it: asyncio.run() closes
+        # the loop without IOLoop.close(), and initialize() sweeps closed
+        # loops out of the map. A missing key must not raise.
+        # https://github.com/tornadoweb/tornado/issues/3292
+        IOLoop._ioloop_for_asyncio.pop(self.asyncio_loop, None)
         if self.selector_loop is not self.asyncio_loop:
             self.selector_loop.close()
         self.asyncio_loop.close()
