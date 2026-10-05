@@ -1695,46 +1695,62 @@ class RequestHandler:
     def _cross_origin_protection(self) -> None:
         if self.application.settings.get("xsrf_cookies"):
             self.check_xsrf_cookie()
-        if self.application.settings.get("xsrf_protection"):
+        if self.application.settings.get("cross_origin_protection"):
             match sfs := self.request.headers.get("sec-fetch-site"):
-                # hey, we can finally use this now!
                 case "same-origin" | "none":
+                    # Same origin or direct navigation
                     return
                 case None:
+                    # No sec-fetch-site: Old browser, non-HTTPS, or non-browser client.
+                    # Browsers should send Origin.
                     if (origin := self.request.headers.get("origin")) is not None:
                         if self._origin_matches_host(
                             origin
-                        ) or self.check_allowed_origin(origin):
+                        ) or self.check_trusted_origin(origin):
                             return
                         else:
-                            raise HTTPError(403, "Origin %r not allowed", origin)
+                            raise HTTPError(403, "Origin %r not allowed" % origin)
                     else:
                         return  # probably non-browser client
                 case _:  # cross-site, same-site
                     origin = self.request.headers.get("origin")
-                    if origin and self.check_allowed_origin(origin):
+                    if origin and self.check_trusted_origin(origin):
                         return
                     else:
                         raise HTTPError(
                             403,
-                            "Sec-Fetch-Site %s & origin %r not allowed",
-                            sfs,
-                            origin,
+                            "Sec-Fetch-Site %s & origin %r not allowed" % (sfs, origin),
                         )
 
     def _origin_matches_host(self, origin: str) -> bool:
         host = self.request.headers.get("Host")
         return urllib.parse.urlsplit(origin).netloc == host
 
-    def check_allowed_origin(self, origin: str) -> bool:
-        """Check if a request should be allowed based on its origin
+    def check_trusted_origin(self, origin: str) -> bool:
+        """Check if a request should be allowed based on its origin.
 
-        This is called for requests with an unsafe method that appear to be
-        cross-origin. By default, it checks if the origin is found in the
-        application setting ``allowed_origins``, but it may be overridden.
+        This method is a part of the `cross_origin_protection` mechanism.
+        It is only used when that feature is enabled in the application settings.
+
+        This is called for requests with a state-modifying method (POST, PUT,
+        DELETE, etc.) that appear to be cross-origin. By default, it checks if
+        the origin is found in the application setting ``trusted_origins``, but
+        it may be overridden.
+
         Return True to allow the request, or False to reject it.
+
+        Overriding this method to always return True excludes this handler from
+        cross-origin protection, and may be appropriate for endpoints designed
+        to be invoked from any origin (such endpoints would generally have to use
+        something other than cookies for authentication in order to be safe).
+
+        Applications that wish to allow cross-origin but same-site requests may
+        do so by overriding this method to parse the origin and see if it is a
+        subdomain of a trusted domain.
+
+        .. versionadded:: 6.6
         """
-        return origin in self.application.settings.get("allowed_origins", [])
+        return origin in self.application.settings.get("trusted_origins", [])
 
     def static_url(
         self, path: str, include_host: bool | None = None, **kwargs: Any
@@ -2669,6 +2685,12 @@ class ErrorHandler(RequestHandler):
     def check_xsrf_cookie(self) -> None:
         # POSTs to an ErrorHandler don't actually have side effects,
         # so we don't need to check the xsrf token.  This allows POSTs
+        # to the wrong url to return a 404 instead of 403.
+        pass
+
+    def check_trusted_origins(self) -> None:
+        # POSTs to an ErrorHandler don't actually have side effects,
+        # so we can treat any origin as trusted.  This allows POSTs
         # to the wrong url to return a 404 instead of 403.
         pass
 

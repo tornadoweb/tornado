@@ -3195,13 +3195,13 @@ class XSRFCookieKwargsTest(SimpleHandlerTestCase):
         self.assertTrue(abs((expires - header_expires).total_seconds()) < 10)
 
 
-class CheckSameOriginTest(SimpleHandlerTestCase):
+class CrossOriginProtectionTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def post(self):
             self.write("ok")
 
     def get_app_kwargs(self):
-        return dict(xsrf_protection=True)
+        return dict(cross_origin_protection=True)
 
     def _post(self, headers):
         return self.fetch("/", method="POST", body="x=1", headers=headers)
@@ -3219,13 +3219,9 @@ class CheckSameOriginTest(SimpleHandlerTestCase):
         response = self._post({"Origin": self.get_url("")})
         self.assertEqual(response.code, 200)
 
-    def test_fallback_referrer_success(self):
-        response = self._post({"Referrer": self.get_url("/foo/bar")})
-        self.assertEqual(response.code, 200)
-
     def test_fallback_fail(self):
         with ExpectLog(gen_log, ".*Origin .* not allowed"):
-            response = self._post({"Origin": "https://evil.example.com/"})
+            response = self._post({"Origin": "https://evil.example.com"})
         self.assertEqual(response.code, 403)
 
     def test_fallback_no_origin(self):

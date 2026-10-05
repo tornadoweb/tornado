@@ -189,18 +189,21 @@ the Google credentials in a cookie for later access:
 
 See the `tornado.auth` module documentation for more details.
 
-.. _xsrf:
+.. _cross_origin_protection:
 
-Cross-site request forgery protection
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Cross-origin protection
+~~~~~~~~~~~~~~~~~~~~~~~
 
-`Cross-site request
-forgery <http://en.wikipedia.org/wiki/Cross-site_request_forgery>`_, or
-XSRF, is a common problem for personalized web applications.
+Cross-origin protection guards against a class of attacks most commonly known as
+`cross-site request
+forgery <http://en.wikipedia.org/wiki/Cross-site_request_forgery>`_ (XSRF or CSRF).
+This is a common problem for personalized web applications, in which a third-party
+site can construct a request which a visitor's browser will submit to your application
+along with the visitor's authentication cookies.
 
 Modern browsers send a header which the server can use to identify and block
 cross-site requests. Tornado from version 6.6 can check this for you, if you
-enable the application setting ``xsrf_protection``:
+enable the application setting ``cross_origin_protection``:
 
 .. testcode::
 
@@ -213,12 +216,28 @@ enable the application setting ``xsrf_protection``:
         (r"/login", LoginHandler),
     ], **settings)
 
+.. note::
+    This feature is a new security measure in the web stack. Tornado uses
+    the same terminology as Go's `cross-origin protection 
+    <https://pkg.go.dev/net/http#CrossOriginResourcePolicy>`_, with an algorithm based
+    on `this blog post by Filippo Valsorda <https://words.filippo.io/csrf/>`_. Other
+    packages and documents refer to it by different names, such as "fetch metadata"
+    or ``Sec-Fetch-Site``.
+    
+    Conversely, this feature is **unrelated** to Cross-Origin Resource Sharing (CORS)
+    and the ``Access-Control-Allow-Origin`` header. Applications using
+    ``cross_origin_protection`` should still consider their CORS requirements.
+
+
 With this setting, the application will reject state-changing requests if the
 `Sec-Fetch-Site <https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Sec-Fetch-Site>`_
 header is set to something other than ``same-origin`` or ``none``. If that
 header is missing, it rejects these requests if the ``Origin`` and ``Host``
 headers do not match. You can allow specific additional origins with the
-``allowed_origins`` application setting (a list).
+``trusted_origins`` application setting (a list).
+
+The ``cross_origin_protection`` setting was introduced in Tornado 6.6 and defaults
+to False. It is expected that in Tornado 6.7 it will be enabled by default.
 
 .. note::
 
@@ -227,40 +246,56 @@ headers do not match. You can allow specific additional origins with the
    not affect application state, and are not checked on the server, but the
    browser can still keep the response from leaking.
 
-This protection is convenient, because it requires no changes in the HTML or
-Javascript making the requests. It should be sufficient for many web
-applications, but there are some caveats:
+This protection is more convenient than older methods like XSRF cookies, described
+below, because it does not require any modifications to the HTML or JavaScript making
+the requests. It should be sufficient to protect most web applications from XSRF
+attacks.
 
-- Browsers only send the ``Sec-Fetch-Site`` header for encrypted (HTTPS) sites
-  (plus localhost). Plain HTTP sites will use the fallback based on the
-  ``Origin`` & ``Host`` headers.
-- All major browsers have supported ``Sec-Fetch-Site`` since 2023, but users
-  of niche browsers and users stuck on old versions will likewise rely on the
-  fallback check.
-- Misbehaving reverse proxies may strip the ``Sec-Fetch-Site`` header.
-- Reverse proxies will often rewrite the ``Host`` header, which will mean the
-  fallback check rejects valid requests. This can be worked around by putting
-  the expected domain that the browser will see in the ``allowed_origins`` list.
-- Lastly, if you rely on this protection, be sure that your site is running with
-  Tornado 6.6 or newer.
+Some applications may need to customize the ``trusted_origins`` application setting (or
+override ``RequestHandler.check_trusted_origin``) to include additional domains that
+should be allowed to send cross-site requests. Note that an origin looks like the
+beginning of a url but never includes a trailing slash:
 
-If any of these points are a concern, or you want an extra line of defence,
-you can combine this form of XSRF protection with the older method using a
-cookie. If both mechanisms are enabled, requests must pass both checks.
+.. code-block:: python
+
+    "trusted_origins": [
+        "https://example.com",
+        "https://example.org",
+    ],
+
+An "origin" is a smaller scope than a "site" (a site includes subdomains). This means that
+applications built for a site-based based security model may need to include their subdomains as
+"trusted origins" to transition to ``cross_origin_protection``. Wildcards are not supported in
+the ``trusted_origins`` application setting but can be implemented by overriding
+``RequestHandler.check_trusted_origin``.
+
+This protection relies on the ``Sec-Fetch-Site`` HTTP header, and, as a fallback for 
+when that header is not present, the ``Origin`` and ``Host`` headers. Any proxies
+or routers in your application serving stack must be configured to pass these headers
+through. Note that as XSRF is fundamentally a browser-based attack, requests from
+non-browser clients (which do not send ``Sec-Fetch-Site`` or ``Origin``) are always
+permitted.
+
+All major browsers have supported the ``Sec-Fetch-Site`` header since 2023, although
+this header is only sent on HTTPS connections or to localhost. For older browsers or 
+unencrypted applications, we fall back to comparing the ``Origin`` and ``Host``
+headers.
 
 .. _xsrf-cookies:
 
 XSRF cookies
 ^^^^^^^^^^^^
 
-The longer-standing solution to prevent XSRF is to cookie every user
-with an unpredictable value and include that value as an additional
-argument with every form submission on your site. If the cookie and the
-value in the form submission do not match, then the request is likely
-forged.
+Tornado supports a second, older method of preventing XSRF attacks using cookies. 
+This involves modifying every form submission on your site to include a value that
+can be compared with a cookie set for this purpose. This is an intrusive modification
+and is no longer recommended for new applications, although it was the only option
+available in Tornado before version 6.6.
 
-Tornado comes with built-in XSRF protection. To include it in your site,
-include the application setting ``xsrf_cookies``:
+To use cookie-based XSRF protection, set the application setting ``xsrf_cookies`` to
+``True``, and modify your application as described below. The ``xsrf_cookies`` setting
+will emit deprecation warnings beginning in Tornado 6.7 and may be removed in future
+versions (Tornado 7.0 at the earliest).
 
 .. testcode::
 

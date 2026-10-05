@@ -151,7 +151,7 @@
 
       The `Application` object serving this request
 
-   .. automethod:: RequestHandler.check_allowed_origin
+   .. automethod:: RequestHandler.check_trusted_origin
    .. automethod:: RequestHandler.check_etag_header
    .. automethod:: RequestHandler.check_xsrf_cookie
    .. automethod:: RequestHandler.compute_etag
@@ -244,11 +244,15 @@
 
          Authentication and security settings:
 
-         * ``allowed_origins``: A list of origins (as in the HTTP Origin header)
-           from which to allow non-safe requests when ``xsrf_protection``
+         * ``trusted_origins``: A list of origins (as in the HTTP Origin header.
+           An origin looks like the start of a url but never includes a trailing
+           slash:  ``https://example.com``)
+           from which to allow state-modifying requests when ``xsrf_protection``
            is enabled. New in Tornado 6.6.
          * ``cookie_secret``: Used by `RequestHandler.get_signed_cookie`
            and `.set_signed_cookie` to sign cookies.
+         * ``cross_origin_protection``: If ``True``, :ref:`cross_origin_protection` is enabled.
+           New in Tornado 6.6.
          * ``key_version``: Used by requestHandler `.set_signed_cookie`
            to sign cookies with a specific key when ``cookie_secret``
            is a key dictionary.
@@ -272,8 +276,6 @@
            with ``xsrf_cookie_kwargs``, such as
            ``{"xsrf_cookie_name": "__Host-xsrf", "xsrf_cookie_kwargs":
            {"secure": True}}``
-         * ``xsrf_protection``: If ``True``, :ref:`xsrf` is enabled.
-           New in Tornado 6.6.
          * ``twitter_consumer_key``, ``twitter_consumer_secret``,
            ``friendfeed_consumer_key``, ``friendfeed_consumer_secret``,
            ``google_consumer_key``, ``google_consumer_secret``,
