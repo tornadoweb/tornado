@@ -961,6 +961,10 @@ class ParseMultipartConfig:
     """The maximum number of parts accepted in a multipart request.
 
     Each ``<input>`` element in an HTML form corresponds to at least one "part".
+
+    This is a conservative limit on the number of segments created while parsing,
+    not an exact count of form fields or files. The usually-empty segment before
+    the first boundary also counts towards this limit.
     """
 
     max_part_header_size: int = 10 * 1024
