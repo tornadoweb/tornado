@@ -1,0 +1,18 @@
+What's new in Tornado 6.7.0
+===========================
+
+In development
+--------------
+
+Deprecation notices
+~~~~~~~~~~~~~~~~~~~
+
+- `.BaseIOStream.read_until_close` is deprecated. Use `.BaseIOStream.read_bytes` with
+  ``partial=True`` in a loop for finer flow control and clearer error reporting.
+
+`tornado.iostream`
+~~~~~~~~~~~~~~~~~~
+
+- `.BaseIOStream.read_until_close` is now implemented as a loop over `.BaseIOStream.read_bytes`
+  with ``partial=True`` rather than through its own dedicated code path. Externally observable
+  behavior is unchanged.
