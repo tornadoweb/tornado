@@ -79,7 +79,7 @@ import urllib.parse
 import warnings
 from inspect import isclass
 from io import BytesIO
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import tornado
 from tornado import escape, gen, httputil, iostream, locale, template
@@ -1693,9 +1693,21 @@ class RequestHandler:
         )
 
     def _cross_origin_protection(self) -> None:
-        if self.application.settings.get("xsrf_cookies"):
+        # Does the request need cross-origin protection?
+        is_websocket = False
+        if self.request.method in ("HEAD", "OPTIONS", "GET"):
+            if (
+                self.request.method == "GET"
+                and self.request.headers.get("upgrade", "").lower() == "websocket"
+            ):
+                is_websocket = True
+            else:
+                return
+
+        if not is_websocket and self.application.settings.get("xsrf_cookies"):
             self.check_xsrf_cookie()
-        if self.application.settings.get("cross_origin_protection"):
+        # Websocket cross-origin protection is always enabled for historical reasons.
+        if is_websocket or self.application.settings.get("cross_origin_protection"):
             match sfs := self.request.headers.get("sec-fetch-site"):
                 case "same-origin" | "none":
                     # Same origin or direct navigation
@@ -1704,9 +1716,9 @@ class RequestHandler:
                     # No sec-fetch-site: Old browser, non-HTTPS, or non-browser client.
                     # Browsers should send Origin.
                     if (origin := self.request.headers.get("origin")) is not None:
-                        if self._origin_matches_host(
+                        if self._origin_matches_host(origin) or self.check_origin(
                             origin
-                        ) or self.check_trusted_origin(origin):
+                        ):
                             return
                         else:
                             raise HTTPError(403, "Origin %r not allowed" % origin)
@@ -1714,7 +1726,7 @@ class RequestHandler:
                         return  # probably non-browser client
                 case _:  # cross-site, same-site
                     origin = self.request.headers.get("origin")
-                    if origin and self.check_trusted_origin(origin):
+                    if origin and self.check_origin(origin):
                         return
                     else:
                         raise HTTPError(
@@ -1723,19 +1735,29 @@ class RequestHandler:
                         )
 
     def _origin_matches_host(self, origin: str) -> bool:
-        host = self.request.headers.get("Host")
-        return urllib.parse.urlsplit(origin).netloc == host
+        origin = urlparse(origin).netloc.lower()
+        host = self.request.headers.get("Host", "").lower()
 
-    def check_trusted_origin(self, origin: str) -> bool:
+        # Check to see that origin matches host directly, including ports.
+        # Note that ideally we'd also match the scheme, but that would make it a
+        # requirement to configure x-forwarded-scheme headers correctly and
+        # introduce additional configuration risk. Since this method comes into
+        # play on a fallback path (mainly non-HTTPS), this is acceptable.
+        return origin == host
+
+    def check_origin(self, origin: str) -> bool:
         """Check if a request should be allowed based on its origin.
 
-        This method is a part of the `cross_origin_protection` mechanism.
-        It is only used when that feature is enabled in the application settings.
+        This method is called for requests that appear to be cross-origin.
+        It is always called for WebSocket connections. For other types of requests,
+        it is called only if the ``cross_origin_protection`` feature is enabled.
 
-        This is called for requests with a state-modifying method (POST, PUT,
-        DELETE, etc.) that appear to be cross-origin. By default, it checks if
-        the origin is found in the application setting ``trusted_origins``, but
-        it may be overridden.
+        With ``cross_origin_protection`` enabled, this is called for requests with a
+        state-modifying method (POST, PUT, DELETE, etc.) that appear to be
+        cross-origin.
+
+        By default, it checks if the origin is found in the application setting
+        ``trusted_origins``, but it may be overridden.
 
         Return True to allow the request, or False to reject it.
 
@@ -1748,7 +1770,13 @@ class RequestHandler:
         do so by overriding this method to parse the origin and see if it is a
         subdomain of a trusted domain.
 
-        .. versionadded:: 6.6
+        .. versionchanged:: 6.6
+           Previously, this method lived on `.WebSocketHandler` and was called
+           unconditionally for websocket connections. In Tornado 6.6, it moved to
+           the base `.RequestHandler` class, and it is no longer called when the
+           request can be determined to be same-origin. When ``cross_origin_protection``
+           is enabled in application settings, this method is also called for
+           non-websocket state-modifying requests.
         """
         return origin in self.application.settings.get("trusted_origins", [])
 
@@ -1887,8 +1915,7 @@ class RequestHandler:
                 k: self.decode_argument(v, name=k) for (k, v) in kwargs.items()
             }
             # XSRF checks (if enabled) - header based & cookie based
-            if self.request.method not in ("GET", "HEAD", "OPTIONS"):
-                self._cross_origin_protection()
+            self._cross_origin_protection()
 
             result = self.prepare()
             if result is not None:
@@ -2688,11 +2715,11 @@ class ErrorHandler(RequestHandler):
         # to the wrong url to return a 404 instead of 403.
         pass
 
-    def check_trusted_origins(self) -> None:
+    def check_origin(self, origin: str) -> bool:
         # POSTs to an ErrorHandler don't actually have side effects,
         # so we can treat any origin as trusted.  This allows POSTs
         # to the wrong url to return a 404 instead of 403.
-        pass
+        return True
 
 
 class RedirectHandler(RequestHandler):

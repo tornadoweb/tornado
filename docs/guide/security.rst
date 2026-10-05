@@ -267,7 +267,7 @@ An "origin" is a smaller scope than a "site" (a site includes subdomains). This 
 applications built for a site-based based security model may need to include their subdomains as
 "trusted origins" to transition to ``cross_origin_protection``. Wildcards are not supported in
 the ``trusted_origins`` application setting but can be implemented by overriding
-``RequestHandler.check_trusted_origin``.
+``RequestHandler.check_origin``.
 
 This protection relies on the ``Sec-Fetch-Site`` HTTP header, and, as a fallback for 
 when that header is not present, the ``Origin`` and ``Host`` headers. Any proxies

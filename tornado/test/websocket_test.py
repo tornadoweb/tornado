@@ -547,8 +547,9 @@ class WebSocketTest(WebSocketBaseTestCase):
         url = "ws://127.0.0.1:%d/echo" % port
         headers = {"Origin": "127.0.0.1:%d" % port}
 
-        with self.assertRaises(HTTPError) as cm:
-            yield websocket_connect(HTTPRequest(url, headers=headers))
+        with ExpectLog(gen_log, "403.*Origin .* not allowed"):
+            with self.assertRaises(HTTPError) as cm:
+                yield websocket_connect(HTTPRequest(url, headers=headers))
         self.assertEqual(cm.exception.code, 403)
 
     @gen_test
@@ -560,8 +561,9 @@ class WebSocketTest(WebSocketBaseTestCase):
         # domain
         headers = {"Origin": "http://somewhereelse.com"}
 
-        with self.assertRaises(HTTPError) as cm:
-            yield websocket_connect(HTTPRequest(url, headers=headers))
+        with ExpectLog(gen_log, "403.*Origin .* not allowed"):
+            with self.assertRaises(HTTPError) as cm:
+                yield websocket_connect(HTTPRequest(url, headers=headers))
 
         self.assertEqual(cm.exception.code, 403)
 
@@ -583,8 +585,9 @@ class WebSocketTest(WebSocketBaseTestCase):
         # resolver to websocket_connect we could test sibling domains as well.
         headers = {"Origin": "http://subtenant.localhost"}
 
-        with self.assertRaises(HTTPError) as cm:
-            yield websocket_connect(HTTPRequest(url, headers=headers))
+        with ExpectLog(gen_log, "403.*Origin .* not allowed"):
+            with self.assertRaises(HTTPError) as cm:
+                yield websocket_connect(HTTPRequest(url, headers=headers))
 
         self.assertEqual(cm.exception.code, 403)
 
