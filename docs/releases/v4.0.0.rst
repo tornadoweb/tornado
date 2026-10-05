@@ -304,7 +304,7 @@ Other notes
   do for most other browser-initiated communications.  This can be surprising
   and a security risk, so we disallow these connections on the server side
   by default.  To accept cross-origin websocket connections, override
-  the new method ``.WebSocketHandler.check_origin``.
+  the new method ``WebSocketHandler.check_origin``.
 * `.WebSocketHandler.close` and `.WebSocketClientConnection.close` now
   support ``code`` and ``reason`` arguments to send a status code and
   message to the other side of the connection when closing.  Both classes

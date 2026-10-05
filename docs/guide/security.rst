@@ -209,7 +209,7 @@ enable the application setting ``cross_origin_protection``:
 
     settings = {
         "login_url": "/login",
-        "xsrf_protection": True,
+        "cross_origin_protection": True,
     }
     application = tornado.web.Application([
         (r"/", MainHandler),
@@ -219,7 +219,7 @@ enable the application setting ``cross_origin_protection``:
 .. note::
     This feature is a new security measure in the web stack. Tornado uses
     the same terminology as Go's `cross-origin protection 
-    <https://pkg.go.dev/net/http#CrossOriginResourcePolicy>`_, with an algorithm based
+    <https://pkg.go.dev/net/http#CrossOriginProtection>`_, with an algorithm based
     on `this blog post by Filippo Valsorda <https://words.filippo.io/csrf/>`_. Other
     packages and documents refer to it by different names, such as "fetch metadata"
     or ``Sec-Fetch-Site``.
@@ -246,13 +246,19 @@ to False. It is expected that in Tornado 6.7 it will be enabled by default.
    not affect application state, and are not checked on the server, but the
    browser can still keep the response from leaking.
 
+   The exception is WebSocket connections, which begin with a ``GET`` request
+   but are not subject to the browser's same-origin policy. `.WebSocketHandler`
+   always performs these checks, whether or not ``cross_origin_protection``
+   is enabled, and it uses the same ``trusted_origins`` setting and
+   `.RequestHandler.check_origin` method.
+
 This protection is more convenient than older methods like XSRF cookies, described
 below, because it does not require any modifications to the HTML or JavaScript making
 the requests. It should be sufficient to protect most web applications from XSRF
 attacks.
 
 Some applications may need to customize the ``trusted_origins`` application setting (or
-override ``RequestHandler.check_trusted_origin``) to include additional domains that
+override `.RequestHandler.check_origin`) to include additional domains that
 should be allowed to send cross-site requests. Note that an origin looks like the
 beginning of a url but never includes a trailing slash:
 
@@ -264,17 +270,18 @@ beginning of a url but never includes a trailing slash:
     ],
 
 An "origin" is a smaller scope than a "site" (a site includes subdomains). This means that
-applications built for a site-based based security model may need to include their subdomains as
+applications built for a site-based security model may need to include their subdomains as
 "trusted origins" to transition to ``cross_origin_protection``. Wildcards are not supported in
 the ``trusted_origins`` application setting but can be implemented by overriding
-``RequestHandler.check_origin``.
+`.RequestHandler.check_origin`.
 
 This protection relies on the ``Sec-Fetch-Site`` HTTP header, and, as a fallback for 
 when that header is not present, the ``Origin`` and ``Host`` headers. Any proxies
 or routers in your application serving stack must be configured to pass these headers
 through. Note that as XSRF is fundamentally a browser-based attack, requests from
 non-browser clients (which do not send ``Sec-Fetch-Site`` or ``Origin``) are always
-permitted.
+permitted. This means that if a proxy strips both of these headers, or a very old
+browser does not send them, the protection is silently disabled.
 
 All major browsers have supported the ``Sec-Fetch-Site`` header since 2023, although
 this header is only sent on HTTPS connections or to localhost. For older browsers or 

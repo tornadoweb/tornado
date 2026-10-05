@@ -79,7 +79,7 @@ import urllib.parse
 import warnings
 from inspect import isclass
 from io import BytesIO
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode
 
 import tornado
 from tornado import escape, gen, httputil, iostream, locale, template
@@ -1735,7 +1735,7 @@ class RequestHandler:
                         )
 
     def _origin_matches_host(self, origin: str) -> bool:
-        origin = urlparse(origin).netloc.lower()
+        origin = urllib.parse.urlsplit(origin).netloc.lower()
         host = self.request.headers.get("Host", "").lower()
 
         # Check to see that origin matches host directly, including ports.
@@ -1748,27 +1748,51 @@ class RequestHandler:
     def check_origin(self, origin: str) -> bool:
         """Check if a request should be allowed based on its origin.
 
-        This method is called for requests that appear to be cross-origin.
-        It is always called for WebSocket connections. For other types of requests,
-        it is called only if the ``cross_origin_protection`` feature is enabled.
+        This method is part of :ref:`cross_origin_protection`. It is called
+        for requests that appear to be cross-origin, with the value of the
+        ``Origin`` HTTP header (e.g. ``https://example.com``). It is not
+        called for requests that are known to be same-origin, or for requests
+        without an ``Origin`` header (which do not come from a browser).
 
-        With ``cross_origin_protection`` enabled, this is called for requests with a
-        state-modifying method (POST, PUT, DELETE, etc.) that appear to be
-        cross-origin.
+        It is always called for WebSocket connections. For other requests, it
+        is called only for state-modifying methods (POST, PUT, DELETE, etc.)
+        when the ``cross_origin_protection`` application setting is enabled.
 
-        By default, it checks if the origin is found in the application setting
-        ``trusted_origins``, but it may be overridden.
-
-        Return True to allow the request, or False to reject it.
+        Return True to allow the request, or False to reject it. By default,
+        it checks if the origin is found in the application setting
+        ``trusted_origins``.
 
         Overriding this method to always return True excludes this handler from
         cross-origin protection, and may be appropriate for endpoints designed
-        to be invoked from any origin (such endpoints would generally have to use
-        something other than cookies for authentication in order to be safe).
+        to be invoked from any origin::
+
+            def check_origin(self, origin):
+                return True
+
+        .. warning::
+
+           This is an important security measure; don't disable it
+           without understanding the security implications. Endpoints that
+           accept requests from any origin must not rely on cookies for
+           authentication (or must use some other form of XSRF protection,
+           such as ``xsrf_cookies``). This is especially important for
+           WebSockets, which are not subject to the browser's same-origin
+           policy or CORS. See `these
+           <https://www.christian-schneider.net/CrossSiteWebSocketHijacking.html>`_
+           `articles
+           <https://devcenter.heroku.com/articles/websocket-security>`_
+           for more.
 
         Applications that wish to allow cross-origin but same-site requests may
         do so by overriding this method to parse the origin and see if it is a
-        subdomain of a trusted domain.
+        subdomain of a trusted domain::
+
+            def check_origin(self, origin):
+                parsed_origin = urllib.parse.urlsplit(origin)
+                return parsed_origin.netloc.endswith(".mydomain.com")
+
+        .. versionadded:: 4.0
+           Introduced as ``WebSocketHandler.check_origin``.
 
         .. versionchanged:: 6.6
            Previously, this method lived on `.WebSocketHandler` and was called
