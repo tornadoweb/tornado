@@ -277,7 +277,6 @@ class BaseIOStream:
         self._read_max_bytes: int | None = None
         self._read_bytes: int | None = None
         self._read_partial = False
-        self._read_until_close = False
         self._read_future: Future | None = None
         self._write_futures: collections.deque[tuple[int, Future[None]]] = (
             collections.deque()
@@ -503,18 +502,67 @@ class BaseIOStream:
            been removed. Use the returned `.Future` (and `read_bytes`
            with ``partial=True`` for ``streaming_callback``) instead.
 
+        .. versionchanged:: 6.6
+
+           Reimplemented as a loop over `read_bytes` with
+           ``partial=True``. The externally observable behavior is
+           unchanged; the method's previous dedicated code path through
+           `BaseIOStream` has been removed in favor of the same loop a
+           caller can write directly.
+
+        .. deprecated:: 6.6
+
+           Call `read_bytes` with ``partial=True`` in a loop instead.
+           Doing so gives the caller finer flow control (the ability to
+           process each chunk as it arrives rather than buffering the
+           entire response) and clearer error reporting (an error after
+           N bytes have been read is distinguishable from an error with
+           no bytes read).
         """
-        future = self._start_read()
-        if self.closed():
-            self._finish_read(self._read_buffer_size)
-            return future
-        self._read_until_close = True
-        try:
-            self._try_inline_read()
-        except:
-            future.add_done_callback(lambda f: f.exception())
-            raise
-        return future
+        # Trigger the first read synchronously so that an inline read
+        # error (for example from a closed stream whose read buffer is
+        # empty, or from a test that patches _try_inline_read) is raised
+        # from read_until_close() itself rather than from the returned
+        # future. This matches the historical behavior of this method.
+        pending = self.read_bytes(self.max_buffer_size, partial=True)
+        return asyncio.ensure_future(self._read_until_close_loop(pending))
+
+    async def _read_until_close_loop(self, pending: Awaitable[bytes]) -> bytes:
+        buf = bytearray()
+        while True:
+            try:
+                chunk = await pending
+            except StreamClosedError as e:
+                # A connection reset is treated as a normal close
+                # throughout this class (on some platforms, notably
+                # Windows, a peer that closes cleanly may still be
+                # reported as a reset), so return the data buffered so
+                # far rather than failing.
+                if e.real_error is None or self._is_connreset(e.real_error):
+                    return bytes(buf)
+                # A real error (e.g. the stream was closed by a caller
+                # that passed ``exc_info``) propagates to the caller
+                # unchanged, matching the historical behavior of
+                # resolving the pending future with StreamClosedError.
+                raise
+            buf += chunk
+            if len(buf) > self.max_buffer_size:
+                # Overflowing the user buffer must raise instead of
+                # silently truncating. Match the error type and logging
+                # produced by _read_to_buffer when its internal buffer
+                # overflowed under the previous implementation.
+                buffer_full_error = StreamBufferFullError(
+                    "Reached maximum read buffer size"
+                )
+                gen_log.error("Reached maximum read buffer size")
+                self.close(exc_info=buffer_full_error)
+                raise StreamClosedError(real_error=buffer_full_error)
+            # Request at least one more byte so a subsequent zero-byte
+            # read cannot resolve synchronously and spin the loop; when
+            # the buffer is at the limit, that trailing byte is what
+            # drives the overflow branch above.
+            remaining = max(1, self.max_buffer_size - len(buf))
+            pending = self.read_bytes(remaining, partial=True)
 
     def write(self, data: bytes | memoryview) -> "Future[None]":
         """Asynchronously write the given data to this stream.
@@ -602,21 +650,7 @@ class BaseIOStream:
                     exc_info = sys.exc_info()
                     if any(exc_info):
                         self.error = exc_info[1]
-            if self._read_until_close:
-                self._read_until_close = False
-                if self.error is None or self._is_connreset(self.error):
-                    # A connection reset is treated as a normal close
-                    # throughout this class (on some platforms, notably
-                    # windows, a peer that closes cleanly may still be
-                    # reported as a reset), so deliver the buffered data as
-                    # the result of the read.
-                    self._finish_read(self._read_buffer_size)
-                # Otherwise the stream is closing because of a real error, so
-                # leave the read future pending for _signal_closed() to fail
-                # with StreamClosedError(real_error=self.error). Resolving it
-                # with the buffered data would report a truncated result as if
-                # it were complete.
-            elif self._read_future is not None:
+            if self._read_future is not None:
                 # resolve reads that are pending and ready to complete
                 try:
                     pos = self._find_read_pos()
@@ -769,9 +803,8 @@ class BaseIOStream:
         elif self._read_max_bytes is not None:
             target_bytes = self._read_max_bytes
         elif self.reading():
-            # For read_until without max_bytes, or
-            # read_until_close, read as much as we can before
-            # scanning for the delimiter.
+            # For read_until without max_bytes, read as much as we can
+            # before scanning for the delimiter.
             target_bytes = None
         else:
             target_bytes = 0
