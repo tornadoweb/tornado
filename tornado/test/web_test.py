@@ -2230,11 +2230,18 @@ class ClearHeaderTest(SimpleHandlerTestCase):
             self.set_header("h2", "bar")
             self.clear_header("h1")
             self.clear_header("nonexistent")
+            # Multi-valued headers are added with add_header() and have no
+            # entry in HTTPHeaders' combined-value cache, so clearing them
+            # used to raise KeyError.
+            self.add_header("Set-Cookie", "a=b")
+            self.add_header("Set-Cookie", "c=d")
+            self.clear_header("Set-Cookie")
 
     def test_clear_header(self):
         response = self.fetch("/")
         self.assertNotIn("h1", response.headers)
         self.assertEqual(response.headers["h2"], "bar")
+        self.assertNotIn("Set-Cookie", response.headers)
 
 
 class Header204Test(SimpleHandlerTestCase):
