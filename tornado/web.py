@@ -1794,6 +1794,20 @@ class RequestHandler:
            authentication (or must use some other form of XSRF protection,
            such as ``xsrf_cookies``).
 
+        Applications that support both cookies and non-cookie credentials
+        (such as a token in the URL or an ``Authorization`` header) may
+        override this method to allow cross-origin requests that carry
+        such a credential. In this case, the override must verify the
+        credential, not merely check that one is present, unless the
+        application's authentication rejects any request with an invalid
+        credential. Otherwise an attacker could add an invalid token to a
+        cross-site request, which would pass this check and then be
+        authenticated by the victim's cookies. Applications whose
+        credentials cannot be verified here (for example, because
+        verification is asynchronous) should disable
+        ``cross_origin_protection`` and perform their own checks after
+        authentication.
+
         Applications that wish to allow cross-origin but same-site requests may
         do so by overriding this method to parse the origin and see if it is a
         subdomain of a trusted domain::
