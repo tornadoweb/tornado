@@ -388,6 +388,16 @@ class CookieTest(WebTestCase):
             def get(self):
                 self.set_cookie("foo", "bar", max_age=10)
 
+        class SetCookieMaxAgeSanitizedHandler(RequestHandler):
+            def get(self):
+                # A non-int max_age (e.g. an attacker-controlled string
+                # containing cookie attributes) is rejected instead of being
+                # written into the Set-Cookie header verbatim.
+                try:
+                    self.set_cookie("foo", "bar", max_age="86400; Path=/evil")
+                except ValueError:
+                    self.set_status(400)
+
         class SetCookieExpiresDaysHandler(RequestHandler):
             def get(self):
                 self.set_cookie("foo", "bar", expires_days=10)
@@ -413,6 +423,7 @@ class CookieTest(WebTestCase):
             ("/forbidden_char", SetCookieForbiddenCharHandler),
             ("/set_overwrite", SetCookieOverwriteHandler),
             ("/set_max_age", SetCookieMaxAgeHandler),
+            ("/set_max_age_sanitized", SetCookieMaxAgeSanitizedHandler),
             ("/set_expires_days", SetCookieExpiresDaysHandler),
             ("/set_falsy_flags", SetCookieFalsyFlags),
             ("/set_deprecated", SetCookieDeprecatedArgs),
@@ -485,6 +496,15 @@ class CookieTest(WebTestCase):
         response = self.fetch("/set_max_age")
         headers = response.headers.get_list("Set-Cookie")
         self.assertEqual(sorted(headers), ["foo=bar; Max-Age=10; Path=/"])
+
+    def test_set_cookie_max_age_sanitized(self):
+        # A max_age that is not a valid int could smuggle extra cookie
+        # attributes past the attribute allowlist (GHSA-c6v4-qj2h-f748);
+        # it must be rejected rather than written to the header verbatim.
+        response = self.fetch("/set_max_age_sanitized")
+        self.assertEqual(response.code, 400)
+        for header in response.headers.get_list("Set-Cookie"):
+            self.assertNotIn("evil", header)
 
     def test_set_cookie_expires_days(self):
         response = self.fetch("/set_expires_days")

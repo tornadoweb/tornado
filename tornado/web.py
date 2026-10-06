@@ -726,7 +726,10 @@ class RequestHandler:
             morsel["path"] = path
         if max_age:
             # Note change from _ to -.
-            morsel["max-age"] = str(max_age)
+            # Normalize through int() so that a non-int max_age (which could
+            # smuggle extra cookie attributes past the attribute allowlist)
+            # is rejected instead of being written to the header verbatim.
+            morsel["max-age"] = str(int(max_age))
         if httponly:
             # Note that SimpleCookie ignores the value here. The presence of an
             # httponly (or secure) key is treated as true.
