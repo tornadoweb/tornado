@@ -151,6 +151,7 @@
 
       The `Application` object serving this request
 
+   .. automethod:: RequestHandler.check_origin
    .. automethod:: RequestHandler.check_etag_header
    .. automethod:: RequestHandler.check_xsrf_cookie
    .. automethod:: RequestHandler.compute_etag
@@ -245,13 +246,20 @@
 
          * ``cookie_secret``: Used by `RequestHandler.get_signed_cookie`
            and `.set_signed_cookie` to sign cookies.
+         * ``cross_origin_protection``: If ``True``, :ref:`cross_origin_protection` is enabled.
+           New in Tornado 6.6.
          * ``key_version``: Used by requestHandler `.set_signed_cookie`
            to sign cookies with a specific key when ``cookie_secret``
            is a key dictionary.
          * ``login_url``: The `authenticated` decorator will redirect
            to this url if the user is not logged in.  Can be further
            customized by overriding `RequestHandler.get_login_url`
-         * ``xsrf_cookies``: If ``True``, :ref:`xsrf` will be enabled.
+         * ``trusted_origins``: A list of origins (as in the HTTP ``Origin``
+           header, such as ``https://example.com``, without a trailing slash)
+           from which to allow cross-origin requests. Used by the default
+           implementation of `RequestHandler.check_origin`, for both
+           ``cross_origin_protection`` and websockets. New in Tornado 6.6.
+         * ``xsrf_cookies``: If ``True``, :ref:`xsrf-cookies` will be enabled.
          * ``xsrf_cookie_version``: Controls the version of new XSRF
            cookies produced by this server.  Should generally be left
            at the default (which will always be the highest supported

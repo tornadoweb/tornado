@@ -32,7 +32,6 @@ from typing import (
     Union,
     cast,
 )
-from urllib.parse import urlparse
 
 import tornado
 from tornado import gen, httpclient, httputil, simple_httpclient
@@ -191,7 +190,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
     access from JavaScript.  This can be surprising and is a potential
     security hole, so since Tornado 4.0 `WebSocketHandler` requires
     applications that wish to receive cross-origin websockets to opt in
-    by overriding the `~WebSocketHandler.check_origin` method (see that
+    by overriding the `~.RequestHandler.check_origin` method (see that
     method's docs for details).  Failure to do so is the most likely
     cause of 403 errors when making a websocket connection.
 
@@ -253,31 +252,12 @@ class WebSocketHandler(tornado.web.RequestHandler):
             gen_log.debug(log_msg)
             return
 
-        # Handle WebSocket Origin naming convention differences
-        # The difference between version 8 and 13 is that in 8 the
-        # client sends a "Sec-Websocket-Origin" header and in 13 it's
-        # simply "Origin".
-        if "Origin" in self.request.headers:
-            origin = self.request.headers.get("Origin")
-        else:
-            origin = self.request.headers.get("Sec-Websocket-Origin", None)
-
-        # If there was an origin header, check to make sure it matches
-        # according to check_origin. When the origin is None, we assume it
-        # did not come from a browser and that it can be passed on.
-        if origin is not None and not self.check_origin(origin):
-            self.set_status(403)
-            log_msg = "Cross origin websockets not allowed"
-            self.finish(log_msg)
-            gen_log.debug(log_msg)
-            return
-
         self.ws_connection = self.get_websocket_protocol()
         if self.ws_connection:
             await self.ws_connection.accept_connection(self)
         else:
             self.set_status(426, "Upgrade Required")
-            self.set_header("Sec-WebSocket-Version", "7, 8, 13")
+            self.set_header("Sec-WebSocket-Version", "13")
 
     @property
     def ping_interval(self) -> float | None:
@@ -511,62 +491,6 @@ class WebSocketHandler(tornado.web.RequestHandler):
             self.ws_connection.close(code, reason)
             self.ws_connection = None
 
-    def check_origin(self, origin: str) -> bool:
-        """Override to enable support for allowing alternate origins.
-
-        The ``origin`` argument is the value of the ``Origin`` HTTP
-        header, the url responsible for initiating this request.  This
-        method is not called for clients that do not send this header;
-        such requests are always allowed (because all browsers that
-        implement WebSockets support this header, and non-browser
-        clients do not have the same cross-site security concerns).
-
-        Should return ``True`` to accept the request or ``False`` to
-        reject it. By default, rejects all requests with an origin on
-        a host other than this one.
-
-        This is a security protection against cross site scripting attacks on
-        browsers, since WebSockets are allowed to bypass the usual same-origin
-        policies and don't use CORS headers.
-
-        .. warning::
-
-           This is an important security measure; don't disable it
-           without understanding the security implications. In
-           particular, if your authentication is cookie-based, you
-           must either restrict the origins allowed by
-           ``check_origin()`` or implement your own XSRF-like
-           protection for websocket connections. See `these
-           <https://www.christian-schneider.net/CrossSiteWebSocketHijacking.html>`_
-           `articles
-           <https://devcenter.heroku.com/articles/websocket-security>`_
-           for more.
-
-        To accept all cross-origin traffic (which was the default prior to
-        Tornado 4.0), simply override this method to always return ``True``::
-
-            def check_origin(self, origin):
-                return True
-
-        To allow connections from any subdomain of your site, you might
-        do something like::
-
-            def check_origin(self, origin):
-                parsed_origin = urllib.parse.urlparse(origin)
-                return parsed_origin.netloc.endswith(".mydomain.com")
-
-        .. versionadded:: 4.0
-
-        """
-        parsed_origin = urlparse(origin)
-        origin = parsed_origin.netloc
-        origin = origin.lower()
-
-        host = self.request.headers.get("Host")
-
-        # Check to see that origin matches host directly, including ports
-        return origin == host
-
     def set_nodelay(self, value: bool) -> None:
         """Set the no-delay flag for this stream.
 
@@ -611,7 +535,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
     def get_websocket_protocol(self) -> Optional["WebSocketProtocol"]:
         websocket_version = self.request.headers.get("Sec-WebSocket-Version")
-        if websocket_version in ("7", "8", "13"):
+        if websocket_version == "13":
             params = _WebSocketParams(
                 ping_interval=self.ping_interval,
                 ping_timeout=self.ping_timeout,
@@ -825,8 +749,11 @@ class _PerMessageDeflateDecompressor:
 class WebSocketProtocol13(WebSocketProtocol):
     """Implementation of the WebSocket protocol from RFC 6455.
 
-    This class supports versions 7 and 8 of the protocol in addition to the
-    final version 13.
+    This class supports protocol version 13.
+
+    .. versionchanged:: 6.6
+       Previously, this class supported versions 7 and 8 of the WebSocket protocol in addition to
+       version 13.
     """
 
     # Bit masks for the first byte of a frame.

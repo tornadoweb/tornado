@@ -3681,6 +3681,265 @@ class XSRFCookieKwargsTest(SimpleHandlerTestCase):
         self.assertTrue(abs((expires - header_expires).total_seconds()) < 10)
 
 
+class CrossOriginProtectionTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            self.write("ok")
+
+        def head(self):
+            pass
+
+        def options(self):
+            pass
+
+        def post(self):
+            self.write("ok")
+
+    def get_app_kwargs(self):
+        return dict(
+            cross_origin_protection=True,
+            trusted_origins=["https://trusted.example.com"],
+        )
+
+    def _post(self, headers):
+        return self.fetch("/", method="POST", body="x=1", headers=headers)
+
+    def test_sec_fetch_site_success(self):
+        response = self._post({"Sec-Fetch-Site": "same-origin"})
+        self.assertEqual(response.code, 200)
+
+    def test_sec_fetch_site_fail(self):
+        with ExpectLog(gen_log, ".*Sec-Fetch-Site .* not allowed"):
+            response = self._post({"Sec-Fetch-Site": "cross-site"})
+        self.assertEqual(response.code, 403)
+
+    def test_fallback_success(self):
+        response = self._post({"Origin": self.get_url("")})
+        self.assertEqual(response.code, 200)
+
+    def test_fallback_fail(self):
+        with ExpectLog(gen_log, ".*Origin .* not allowed"):
+            response = self._post({"Origin": "https://evil.example.com"})
+        self.assertEqual(response.code, 403)
+
+    def test_fallback_no_origin(self):
+        response = self._post({})
+        self.assertEqual(response.code, 200)
+
+    def test_sec_fetch_site_none(self):
+        # Direct navigation (e.g. typing a URL or using a bookmark).
+        response = self._post({"Sec-Fetch-Site": "none"})
+        self.assertEqual(response.code, 200)
+
+    def test_sec_fetch_site_same_site(self):
+        # Same-site (e.g. a sibling subdomain) is not the same origin.
+        with ExpectLog(gen_log, ".*Sec-Fetch-Site same-site .* not allowed"):
+            response = self._post(
+                {
+                    "Sec-Fetch-Site": "same-site",
+                    "Origin": "https://other.example.com",
+                }
+            )
+        self.assertEqual(response.code, 403)
+
+    def test_sec_fetch_site_takes_precedence_over_origin(self):
+        # If Sec-Fetch-Site is present, a matching Origin header is not enough.
+        with ExpectLog(gen_log, ".*Sec-Fetch-Site cross-site .* not allowed"):
+            response = self._post(
+                {"Sec-Fetch-Site": "cross-site", "Origin": self.get_url("")}
+            )
+        self.assertEqual(response.code, 403)
+
+    def test_sec_fetch_site_trusted_origin(self):
+        response = self._post(
+            {"Sec-Fetch-Site": "cross-site", "Origin": "https://trusted.example.com"}
+        )
+        self.assertEqual(response.code, 200)
+
+    def test_sec_fetch_site_cross_site_no_origin(self):
+        with ExpectLog(gen_log, ".*Sec-Fetch-Site cross-site .* not allowed"):
+            response = self._post({"Sec-Fetch-Site": "cross-site"})
+        self.assertEqual(response.code, 403)
+
+    def test_fallback_trusted_origin(self):
+        response = self._post({"Origin": "https://trusted.example.com"})
+        self.assertEqual(response.code, 200)
+
+    def test_fallback_trusted_origin_exact_match(self):
+        # Origins are compared exactly; a trailing slash or a different scheme
+        # does not match.
+        for origin in ["https://trusted.example.com/", "http://trusted.example.com"]:
+            with self.subTest(origin=origin):
+                with ExpectLog(gen_log, ".*Origin .* not allowed"):
+                    response = self._post({"Origin": origin})
+                self.assertEqual(response.code, 403)
+
+    def test_fallback_null_origin(self):
+        # Browsers send "null" for opaque origins such as sandboxed iframes.
+        with ExpectLog(gen_log, ".*Origin 'null' not allowed"):
+            response = self._post({"Origin": "null"})
+        self.assertEqual(response.code, 403)
+
+    def test_fallback_origin_with_path(self):
+        response = self._post({"Origin": self.get_url("/foo")})
+        self.assertEqual(response.code, 200)
+
+    def test_fallback_case_insensitive(self):
+        url = self.get_url("")
+        response = self._post({"Origin": url.upper().replace("HTTP://", "http://")})
+        self.assertEqual(response.code, 200)
+
+    def test_fallback_ignores_referer(self):
+        # Only Origin is used; Referer is not consulted.
+        with ExpectLog(gen_log, ".*Origin .* not allowed"):
+            response = self._post(
+                {"Origin": "https://evil.example.com", "Referer": self.get_url("/")}
+            )
+        self.assertEqual(response.code, 403)
+
+    def test_safe_methods_not_checked(self):
+        for method in ["GET", "HEAD", "OPTIONS"]:
+            with self.subTest(method=method):
+                response = self.fetch(
+                    "/",
+                    method=method,
+                    headers={
+                        "Sec-Fetch-Site": "cross-site",
+                        "Origin": "https://evil.example.com",
+                    },
+                )
+                self.assertEqual(response.code, 200)
+
+    def test_other_unsafe_methods_checked(self):
+        # Methods without a handler would return 405, but the origin check
+        # happens first.
+        for method in ["PUT", "DELETE", "PATCH"]:
+            with self.subTest(method=method):
+                with ExpectLog(gen_log, ".*Sec-Fetch-Site .* not allowed"):
+                    response = self.fetch(
+                        "/",
+                        method=method,
+                        body=None if method == "DELETE" else "",
+                        headers={"Sec-Fetch-Site": "cross-site"},
+                    )
+                self.assertEqual(response.code, 403)
+
+
+class CrossOriginProtectionDisabledTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def post(self):
+            self.write("ok")
+
+    def test_disabled_by_default(self):
+        response = self.fetch(
+            "/",
+            method="POST",
+            body="",
+            headers={"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.com"},
+        )
+        self.assertEqual(response.code, 200)
+
+
+class CrossOriginProtectionCheckOriginTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def check_origin(self, origin):
+            return origin.endswith(".example.com")
+
+        def post(self):
+            self.write("ok")
+
+    def get_app_kwargs(self):
+        return dict(cross_origin_protection=True)
+
+    def _post(self, headers):
+        return self.fetch("/", method="POST", body="", headers=headers)
+
+    def test_override_allows(self):
+        for headers in [
+            {"Sec-Fetch-Site": "same-site", "Origin": "https://app.example.com"},
+            {"Origin": "https://app.example.com"},
+        ]:
+            with self.subTest(headers=headers):
+                self.assertEqual(self._post(headers).code, 200)
+
+    def test_override_rejects(self):
+        for headers in [
+            {"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.com"},
+            {"Origin": "https://evil.com"},
+        ]:
+            with self.subTest(headers=headers):
+                with ExpectLog(gen_log, ".*not allowed"):
+                    self.assertEqual(self._post(headers).code, 403)
+
+    def test_override_not_called_for_same_origin(self):
+        # check_origin is only consulted for requests that appear to be
+        # cross-origin.
+        self.assertEqual(self._post({"Sec-Fetch-Site": "same-origin"}).code, 200)
+        self.assertEqual(self._post({"Origin": self.get_url("")}).code, 200)
+
+
+class CrossOriginProtectionWithXSRFCookiesTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            self.write(self.xsrf_token)
+
+        def post(self):
+            self.write("ok")
+
+    def get_app_kwargs(self):
+        return dict(cross_origin_protection=True, xsrf_cookies=True)
+
+    def setUp(self):
+        super().setUp()
+        self.xsrf_token = native_str(self.fetch("/").body)
+
+    def _post(self, headers, with_token):
+        if with_token:
+            headers = dict(headers)
+            headers["Cookie"] = "_xsrf=" + self.xsrf_token
+            headers["X-Xsrftoken"] = self.xsrf_token
+        return self.fetch("/", method="POST", body="", headers=headers)
+
+    def test_both_pass(self):
+        response = self._post({"Sec-Fetch-Site": "same-origin"}, with_token=True)
+        self.assertEqual(response.code, 200)
+
+    def test_cookie_fails(self):
+        with ExpectLog(gen_log, ".*'_xsrf' argument missing"):
+            response = self._post({"Sec-Fetch-Site": "same-origin"}, with_token=False)
+        self.assertEqual(response.code, 403)
+
+    def test_origin_fails(self):
+        with ExpectLog(gen_log, ".*Sec-Fetch-Site .* not allowed"):
+            response = self._post(
+                {"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.com"},
+                with_token=True,
+            )
+        self.assertEqual(response.code, 403)
+
+
+class ErrorHandlerCrossOriginTest(WebTestCase):
+    cross_site_headers = {"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.com"}
+
+    def get_handlers(self):
+        return [("/error", ErrorHandler, dict(status_code=417))]
+
+    def get_app_kwargs(self):
+        return dict(cross_origin_protection=True)
+
+    def test_error_cross_origin(self):
+        response = self.fetch(
+            "/error", method="POST", body="", headers=self.cross_site_headers
+        )
+        self.assertEqual(response.code, 417)
+
+    def test_404_cross_origin(self):
+        response = self.fetch(
+            "/404", method="POST", body="", headers=self.cross_site_headers
+        )
+        self.assertEqual(response.code, 404)
+
+
 class FinishExceptionTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):
