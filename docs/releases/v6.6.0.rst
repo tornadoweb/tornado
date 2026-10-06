@@ -135,7 +135,9 @@ Type annotation changes
 
 - New feature ``cross_origin_protection`` provides a new mechanism for protecting against
   XSRF and other cross-origin attacks. This feature is easier to use than ``xsrf_cookies``
-  and is expected to become the default in Tornado 6.7.
+  and is expected to become the default in Tornado 6.7. Additional origins can be allowed
+  with the new ``trusted_origins`` application setting or by overriding the new method
+  `.RequestHandler.check_trusted_origin`. See :ref:`cross_origin_protection` for details.
 - `asyncio.CancelledError` is now handled correctly instead of leaving connections to hang.
 - ``raise HTTPError(204)`` no longer attempts to incorrectly send a response body.
 - Signed values with valid signatures but certain formatting errors are now ignored instead of
@@ -148,4 +150,10 @@ Type annotation changes
 `tornado.websocket`
 ~~~~~~~~~~~~~~~~~~~
 
+- `.WebSocketHandler.check_origin` is no longer called for requests that can be determined
+  to be same-origin, using the ``Sec-Fetch-Site`` header or (if that header is absent) by
+  comparing the ``Origin`` and ``Host`` headers. Its default implementation now calls
+  `.RequestHandler.check_trusted_origin`, so origins listed in the ``trusted_origins``
+  application setting are allowed. Applications that override ``check_origin`` to restrict
+  origins further than the default will no longer see same-origin requests.
 - `asyncio.CancelledError` no longer breaks the websocket loop without closing the connection.

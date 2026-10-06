@@ -3867,9 +3867,9 @@ class CrossOriginProtectionDisabledTest(SimpleHandlerTestCase):
         self.assertEqual(response.code, 200)
 
 
-class CrossOriginProtectionCheckOriginTest(SimpleHandlerTestCase):
+class CrossOriginProtectionCheckTrustedOriginTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
-        def check_origin(self, origin):
+        def check_trusted_origin(self, origin):
             return origin.endswith(".example.com")
 
         def post(self):
@@ -3899,10 +3899,73 @@ class CrossOriginProtectionCheckOriginTest(SimpleHandlerTestCase):
                     self.assertEqual(self._post(headers).code, 403)
 
     def test_override_not_called_for_same_origin(self):
-        # check_origin is only consulted for requests that appear to be
+        # check_trusted_origin is only consulted for requests that appear to be
         # cross-origin.
         self.assertEqual(self._post({"Sec-Fetch-Site": "same-origin"}).code, 200)
         self.assertEqual(self._post({"Origin": self.get_url("")}).code, 200)
+
+
+class CrossOriginProtectionBeforePrepareTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        prepared = False
+
+        def prepare(self):
+            # Record whether prepare ran on the class; the handler instance
+            # is not available to the test.
+            type(self).prepared = True
+
+        def check_origin(self, origin):
+            # Before Tornado 6.6, check_origin was a WebSocketHandler method
+            # that was called after prepare(), so some applications define
+            # it on all their handlers and rely on state set in prepare().
+            # Cross-origin protection must not call it.
+            raise Exception("check_origin should not be called")
+
+        def get(self):
+            self.write("ok")
+
+        def post(self):
+            self.write("ok")
+
+    def get_app_kwargs(self):
+        return dict(cross_origin_protection=True)
+
+    def setUp(self):
+        super().setUp()
+        self.Handler.prepared = False
+
+    def test_rejected_before_prepare(self):
+        with ExpectLog(gen_log, ".*Sec-Fetch-Site cross-site .* not allowed"):
+            response = self.fetch(
+                "/",
+                method="POST",
+                body="",
+                headers={"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.com"},
+            )
+        self.assertEqual(response.code, 403)
+        self.assertFalse(self.Handler.prepared)
+
+    def test_check_origin_not_called(self):
+        with ExpectLog(gen_log, ".*Origin .* not allowed"):
+            response = self.fetch(
+                "/", method="POST", body="", headers={"Origin": "https://evil.com"}
+            )
+        self.assertEqual(response.code, 403)
+
+    def test_websocket_upgrade_header_not_checked(self):
+        # A GET with an Upgrade: websocket header to a handler that is not a
+        # WebSocketHandler is treated like any other GET.
+        response = self.fetch(
+            "/",
+            headers={
+                "Upgrade": "websocket",
+                "Connection": "Upgrade",
+                "Sec-Fetch-Site": "cross-site",
+                "Origin": "https://evil.com",
+            },
+        )
+        self.assertEqual(response.code, 200)
+        self.assertTrue(self.Handler.prepared)
 
 
 class CrossOriginProtectionWithXSRFCookiesTest(SimpleHandlerTestCase):

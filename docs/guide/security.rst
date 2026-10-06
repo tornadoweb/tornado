@@ -249,8 +249,10 @@ to False. It is expected that in Tornado 6.7 it will be enabled by default.
    The exception is WebSocket connections, which begin with a ``GET`` request
    but are not subject to the browser's same-origin policy. `.WebSocketHandler`
    always performs these checks, whether or not ``cross_origin_protection``
-   is enabled, and it uses the same ``trusted_origins`` setting and
-   `.RequestHandler.check_origin` method.
+   is enabled. Instead of `.RequestHandler.check_trusted_origin`, it calls
+   `.WebSocketHandler.check_origin` (after `~.RequestHandler.prepare`), whose
+   default implementation calls ``check_trusted_origin`` and therefore also
+   uses the ``trusted_origins`` setting.
 
 This protection is more convenient than older methods like XSRF cookies, described
 below, because it does not require any modifications to the HTML or JavaScript making
@@ -258,7 +260,7 @@ the requests. It should be sufficient to protect most web applications from XSRF
 attacks.
 
 Some applications may need to customize the ``trusted_origins`` application setting (or
-override `.RequestHandler.check_origin`) to include additional domains that
+override `.RequestHandler.check_trusted_origin`) to include additional domains that
 should be allowed to send cross-site requests. Note that an origin looks like the
 beginning of a url but never includes a trailing slash:
 
@@ -273,7 +275,12 @@ An "origin" is a smaller scope than a "site" (a site includes subdomains). This 
 applications built for a site-based security model may need to include their subdomains as
 "trusted origins" to transition to ``cross_origin_protection``. Wildcards are not supported in
 the ``trusted_origins`` application setting but can be implemented by overriding
-`.RequestHandler.check_origin`.
+`.RequestHandler.check_trusted_origin`.
+
+`.RequestHandler.check_trusted_origin` is called before `~.RequestHandler.prepare`,
+so it cannot depend on how (or whether) the request is authenticated. This is
+intentional: cookies are attached to cross-site requests automatically, so the
+origin must be checked before the request is allowed to act on its cookies.
 
 This protection relies on the ``Sec-Fetch-Site`` HTTP header, and, as a fallback for 
 when that header is not present, the ``Origin`` and ``Host`` headers. Any proxies

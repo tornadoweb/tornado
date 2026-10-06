@@ -614,9 +614,8 @@ class WebSocketTest(WebSocketBaseTestCase):
         url = "ws://127.0.0.1:%d/echo" % port
         headers = {"Origin": "127.0.0.1:%d" % port}
 
-        with ExpectLog(gen_log, "403.*Origin .* not allowed"):
-            with self.assertRaises(HTTPError) as cm:
-                yield websocket_connect(HTTPRequest(url, headers=headers))
+        with self.assertRaises(HTTPError) as cm:
+            yield websocket_connect(HTTPRequest(url, headers=headers))
         self.assertEqual(cm.exception.code, 403)
 
     @gen_test
@@ -628,9 +627,8 @@ class WebSocketTest(WebSocketBaseTestCase):
         # domain
         headers = {"Origin": "http://somewhereelse.com"}
 
-        with ExpectLog(gen_log, "403.*Origin .* not allowed"):
-            with self.assertRaises(HTTPError) as cm:
-                yield websocket_connect(HTTPRequest(url, headers=headers))
+        with self.assertRaises(HTTPError) as cm:
+            yield websocket_connect(HTTPRequest(url, headers=headers))
 
         self.assertEqual(cm.exception.code, 403)
 
@@ -652,9 +650,8 @@ class WebSocketTest(WebSocketBaseTestCase):
         # resolver to websocket_connect we could test sibling domains as well.
         headers = {"Origin": "http://subtenant.localhost"}
 
-        with ExpectLog(gen_log, "403.*Origin .* not allowed"):
-            with self.assertRaises(HTTPError) as cm:
-                yield websocket_connect(HTTPRequest(url, headers=headers))
+        with self.assertRaises(HTTPError) as cm:
+            yield websocket_connect(HTTPRequest(url, headers=headers))
 
         self.assertEqual(cm.exception.code, 403)
 
@@ -739,13 +736,31 @@ class PermissiveOriginHandler(EchoHandler):
         return True
 
 
+class TokenOriginHandler(EchoHandler):
+    def prepare(self):
+        self.token_authenticated = self.get_argument("token", None) == "secret"
+
+    def check_origin(self, origin):
+        return self.token_authenticated
+
+
+class TrustedOriginOverrideHandler(EchoHandler):
+    def check_trusted_origin(self, origin):
+        return origin.endswith(".example.com") and "evil" not in origin
+
+
 class WebSocketOriginTest(WebSocketBaseTestCase):
     # Origin checks for websockets are always enabled, independent of the
     # cross_origin_protection setting. (Basic Origin/Host comparisons are
     # covered in WebSocketTest).
     def get_app(self):
         return Application(
-            [("/echo", EchoHandler), ("/permissive", PermissiveOriginHandler)],
+            [
+                ("/echo", EchoHandler),
+                ("/permissive", PermissiveOriginHandler),
+                ("/token", TokenOriginHandler),
+                ("/trusted_override", TrustedOriginOverrideHandler),
+            ],
             trusted_origins=["http://trusted.example.com"],
             # xsrf_cookies must not interfere with websockets, which are GET
             # requests and cannot carry an XSRF token.
@@ -764,9 +779,8 @@ class WebSocketOriginTest(WebSocketBaseTestCase):
     @gen.coroutine
     def assert_rejected(self, path, headers):
         url = "ws://127.0.0.1:%d%s" % (self.get_http_port(), path)
-        with ExpectLog(gen_log, "403.*not allowed"):
-            with self.assertRaises(HTTPError) as cm:
-                yield websocket_connect(HTTPRequest(url, headers=headers))
+        with self.assertRaises(HTTPError) as cm:
+            yield websocket_connect(HTTPRequest(url, headers=headers))
         self.assertEqual(cm.exception.code, 403)
 
     @gen_test
@@ -826,18 +840,46 @@ class WebSocketOriginTest(WebSocketBaseTestCase):
     def test_mixed_case_upgrade_header(self):
         # The Upgrade header is case-insensitive; a mixed-case value must not
         # bypass the origin check.
-        with ExpectLog(gen_log, "403.*not allowed"):
-            response = self.fetch(
-                "/echo",
-                headers={
-                    "Upgrade": "WebSocket",
-                    "Connection": "Upgrade",
-                    "Origin": "http://evil.example.com",
-                    "Sec-WebSocket-Version": "13",
-                    "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
-                },
-            )
+        response = self.fetch(
+            "/echo",
+            headers={
+                "Upgrade": "WebSocket",
+                "Connection": "Upgrade",
+                "Origin": "http://evil.example.com",
+                "Sec-WebSocket-Version": "13",
+                "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+            },
+        )
         self.assertEqual(response.code, 403)
+
+    @gen_test
+    def test_check_origin_after_prepare(self):
+        # check_origin may depend on state set in prepare (e.g. by
+        # authentication). This handler allows any origin if a token is
+        # present.
+        yield self.connect_with_headers(
+            "/token?token=secret",
+            {"Origin": "http://evil.example.com", "Sec-Fetch-Site": "cross-site"},
+        )
+        yield self.connect_with_headers(
+            "/token?token=secret", {"Origin": "http://evil.example.com"}
+        )
+        yield self.assert_rejected(
+            "/token",
+            {"Origin": "http://evil.example.com", "Sec-Fetch-Site": "cross-site"},
+        )
+
+    @gen_test
+    def test_check_trusted_origin_override(self):
+        # The default check_origin calls check_trusted_origin.
+        yield self.connect_with_headers(
+            "/trusted_override",
+            {"Origin": "http://sub.example.com", "Sec-Fetch-Site": "same-site"},
+        )
+        yield self.assert_rejected(
+            "/trusted_override",
+            {"Origin": "http://evil.example.com", "Sec-Fetch-Site": "cross-site"},
+        )
 
 
 @abstract_base_test

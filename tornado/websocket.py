@@ -190,7 +190,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
     access from JavaScript.  This can be surprising and is a potential
     security hole, so since Tornado 4.0 `WebSocketHandler` requires
     applications that wish to receive cross-origin websockets to opt in
-    by overriding the `~.RequestHandler.check_origin` method (see that
+    by overriding the `~WebSocketHandler.check_origin` method (see that
     method's docs for details).  Failure to do so is the most likely
     cause of 403 errors when making a websocket connection.
 
@@ -250,6 +250,21 @@ class WebSocketHandler(tornado.web.RequestHandler):
             log_msg = '"Connection" must be "Upgrade".'
             self.finish(log_msg)
             gen_log.debug(log_msg)
+            return
+
+        # Browsers do not apply the same-origin policy to websockets, so
+        # cross-origin protection is always enabled for them, independent
+        # of the cross_origin_protection application setting. This happens
+        # here, after prepare(), instead of with the rest of cross-origin
+        # protection in RequestHandler._execute, because check_origin
+        # overrides may rely on things done in prepare() (such as
+        # authentication).
+        error = self._check_cross_origin(self.check_origin)
+        if error is not None:
+            self.set_status(403)
+            log_msg = "Cross origin websockets not allowed"
+            self.finish(log_msg)
+            gen_log.debug("%s: %s", log_msg, error)
             return
 
         self.ws_connection = self.get_websocket_protocol()
@@ -490,6 +505,70 @@ class WebSocketHandler(tornado.web.RequestHandler):
         if self.ws_connection:
             self.ws_connection.close(code, reason)
             self.ws_connection = None
+
+    def check_origin(self, origin: str) -> bool:
+        """Override to enable support for allowing alternate origins.
+
+        The ``origin`` argument is the value of the ``Origin`` HTTP header,
+        the url responsible for initiating this request. This method is
+        only called for requests that appear to be cross-origin: it is not
+        called when the ``Sec-Fetch-Site`` header indicates a same-origin
+        request, when (in the absence of ``Sec-Fetch-Site``) the ``Origin``
+        header matches the ``Host`` header, or for clients that do not send
+        an ``Origin`` header (because all browsers that implement WebSockets
+        support this header, and non-browser clients do not have the same
+        cross-site security concerns).
+
+        Should return ``True`` to accept the request or ``False`` to
+        reject it. By default, it calls `.RequestHandler.check_trusted_origin`,
+        which accepts origins listed in the ``trusted_origins`` application
+        setting.
+
+        This method is called after `~.RequestHandler.prepare`, so it may
+        rely on anything that ``prepare`` does (such as authentication).
+
+        This is a security protection against cross site scripting attacks on
+        browsers, since WebSockets are allowed to bypass the usual same-origin
+        policies and don't use CORS headers.
+
+        .. warning::
+
+           This is an important security measure; don't disable it
+           without understanding the security implications. In
+           particular, if your authentication is cookie-based, you
+           must either restrict the origins allowed by
+           ``check_origin()`` or implement your own XSRF-like
+           protection for websocket connections. See `these
+           <https://www.christian-schneider.net/CrossSiteWebSocketHijacking.html>`_
+           `articles
+           <https://devcenter.heroku.com/articles/websocket-security>`_
+           for more.
+
+        To accept all cross-origin traffic (which was the default prior to
+        Tornado 4.0), simply override this method to always return ``True``::
+
+            def check_origin(self, origin):
+                return True
+
+        To allow connections from any subdomain of your site, you might
+        do something like::
+
+            def check_origin(self, origin):
+                parsed_origin = urllib.parse.urlparse(origin)
+                return parsed_origin.netloc.endswith(".mydomain.com")
+
+        .. versionadded:: 4.0
+
+        .. versionchanged:: 6.6
+           This method is no longer called for requests that can be
+           determined to be same-origin (including via the ``Sec-Fetch-Site``
+           header). The default implementation now calls
+           `.RequestHandler.check_trusted_origin` (which uses the
+           ``trusted_origins`` application setting); the comparison of the
+           ``Origin`` and ``Host`` headers is performed before this method
+           is called.
+        """
+        return self.check_trusted_origin(origin)
 
     def set_nodelay(self, value: bool) -> None:
         """Set the no-delay flag for this stream.

@@ -1709,46 +1709,44 @@ class RequestHandler:
         )
 
     def _cross_origin_protection(self) -> None:
-        # Does the request need cross-origin protection?
-        is_websocket = False
+        # Safe methods are not checked. WebSocket connections (which begin
+        # with a GET) are checked separately in WebSocketHandler.get, after
+        # prepare().
         if self.request.method in ("HEAD", "OPTIONS", "GET"):
-            if (
-                self.request.method == "GET"
-                and self.request.headers.get("upgrade", "").lower() == "websocket"
-            ):
-                is_websocket = True
-            else:
-                return
+            return
 
-        if not is_websocket and self.application.settings.get("xsrf_cookies"):
+        if self.application.settings.get("xsrf_cookies"):
             self.check_xsrf_cookie()
-        # Websocket cross-origin protection is always enabled for historical reasons.
-        if is_websocket or self.application.settings.get("cross_origin_protection"):
-            match sfs := self.request.headers.get("sec-fetch-site"):
-                case "same-origin" | "none":
-                    # Same origin or direct navigation
-                    return
-                case None:
-                    # No sec-fetch-site: Old browser, non-HTTPS, or non-browser client.
-                    # Browsers should send Origin.
-                    if (origin := self.request.headers.get("origin")) is not None:
-                        if self._origin_matches_host(origin) or self.check_origin(
-                            origin
-                        ):
-                            return
-                        else:
-                            raise HTTPError(403, "Origin %r not allowed" % origin)
-                    else:
-                        return  # probably non-browser client
-                case _:  # cross-site, same-site
-                    origin = self.request.headers.get("origin")
-                    if origin and self.check_origin(origin):
-                        return
-                    else:
-                        raise HTTPError(
-                            403,
-                            "Sec-Fetch-Site %s & origin %r not allowed" % (sfs, origin),
-                        )
+        if self.application.settings.get("cross_origin_protection"):
+            error = self._check_cross_origin(self.check_trusted_origin)
+            if error is not None:
+                raise HTTPError(403, error)
+
+    def _check_cross_origin(self, check: Callable[[str], bool]) -> str | None:
+        """Implements the cross-origin protection algorithm.
+
+        ``check`` is called with the ``Origin`` header for requests that
+        appear to be cross-origin. Returns None if the request is allowed,
+        or a message describing why it is not.
+        """
+        match sfs := self.request.headers.get("sec-fetch-site"):
+            case "same-origin" | "none":
+                # Same origin or direct navigation
+                return None
+            case None:
+                # No sec-fetch-site: Old browser, non-HTTPS, or non-browser client.
+                # Browsers should send Origin.
+                origin = self.request.headers.get("origin")
+                if origin is None:
+                    return None  # probably non-browser client
+                if self._origin_matches_host(origin) or check(origin):
+                    return None
+                return "Origin %r not allowed" % origin
+            case _:  # cross-site, same-site
+                origin = self.request.headers.get("origin")
+                if origin and check(origin):
+                    return None
+                return "Sec-Fetch-Site %s & origin %r not allowed" % (sfs, origin)
 
     def _origin_matches_host(self, origin: str) -> bool:
         origin = urllib.parse.urlsplit(origin).netloc.lower()
@@ -1761,28 +1759,31 @@ class RequestHandler:
         # play on a fallback path (mainly non-HTTPS), this is acceptable.
         return origin == host
 
-    def check_origin(self, origin: str) -> bool:
-        """Check if a request should be allowed based on its origin.
+    def check_trusted_origin(self, origin: str) -> bool:
+        """Check if a cross-origin request should be allowed based on its origin.
 
         This method is part of :ref:`cross_origin_protection`. It is called
-        for requests that appear to be cross-origin, with the value of the
-        ``Origin`` HTTP header (e.g. ``https://example.com``). It is not
-        called for requests that are known to be same-origin, or for requests
-        without an ``Origin`` header (which do not come from a browser).
+        only when the ``cross_origin_protection`` application setting is
+        enabled, for state-modifying requests (POST, PUT, DELETE, etc.) that
+        appear to be cross-origin, with the value of the ``Origin`` HTTP
+        header (e.g. ``https://example.com``). It is not called for requests
+        that are known to be same-origin, or for requests without an
+        ``Origin`` header (which do not come from a browser).
 
-        It is always called for WebSocket connections. For other requests, it
-        is called only for state-modifying methods (POST, PUT, DELETE, etc.)
-        when the ``cross_origin_protection`` application setting is enabled.
+        This method is called before `prepare`, so it must not rely on
+        anything that `prepare` does (such as authentication). It should
+        decide based only on the origin (and other attributes of the request
+        itself).
 
-        Return True to allow the request, or False to reject it. By default,
-        it checks if the origin is found in the application setting
-        ``trusted_origins``.
+        Return True to allow the request, or False to reject it with a 403
+        error. By default, it checks if the origin is found in the
+        application setting ``trusted_origins``.
 
         Overriding this method to always return True excludes this handler from
         cross-origin protection, and may be appropriate for endpoints designed
         to be invoked from any origin::
 
-            def check_origin(self, origin):
+            def check_trusted_origin(self, origin):
                 return True
 
         .. warning::
@@ -1791,32 +1792,21 @@ class RequestHandler:
            without understanding the security implications. Endpoints that
            accept requests from any origin must not rely on cookies for
            authentication (or must use some other form of XSRF protection,
-           such as ``xsrf_cookies``). This is especially important for
-           WebSockets, which are not subject to the browser's same-origin
-           policy or CORS. See `these
-           <https://www.christian-schneider.net/CrossSiteWebSocketHijacking.html>`_
-           `articles
-           <https://devcenter.heroku.com/articles/websocket-security>`_
-           for more.
+           such as ``xsrf_cookies``).
 
         Applications that wish to allow cross-origin but same-site requests may
         do so by overriding this method to parse the origin and see if it is a
         subdomain of a trusted domain::
 
-            def check_origin(self, origin):
+            def check_trusted_origin(self, origin):
                 parsed_origin = urllib.parse.urlsplit(origin)
                 return parsed_origin.netloc.endswith(".mydomain.com")
 
-        .. versionadded:: 4.0
-           Introduced as ``WebSocketHandler.check_origin``.
+        This method is also the default implementation of
+        `.WebSocketHandler.check_origin`, so overriding it affects websocket
+        connections as well (unless ``check_origin`` is also overridden).
 
-        .. versionchanged:: 6.6
-           Previously, this method lived on `.WebSocketHandler` and was called
-           unconditionally for websocket connections. In Tornado 6.6, it moved to
-           the base `.RequestHandler` class, and it is no longer called when the
-           request can be determined to be same-origin. When ``cross_origin_protection``
-           is enabled in application settings, this method is also called for
-           non-websocket state-modifying requests.
+        .. versionadded:: 6.6
         """
         return origin in self.application.settings.get("trusted_origins", [])
 
@@ -1954,7 +1944,7 @@ class RequestHandler:
             self.path_kwargs = {
                 k: self.decode_argument(v, name=k) for (k, v) in kwargs.items()
             }
-            # XSRF checks (if enabled) - header based & cookie based
+            # XSRF checks (if enabled): cookie-based and/or cross-origin protection.
             self._cross_origin_protection()
 
             result = self.prepare()
@@ -2773,7 +2763,7 @@ class ErrorHandler(RequestHandler):
         # to the wrong url to return a 404 instead of 403.
         pass
 
-    def check_origin(self, origin: str) -> bool:
+    def check_trusted_origin(self, origin: str) -> bool:
         # POSTs to an ErrorHandler don't actually have side effects,
         # so we can treat any origin as trusted.  This allows POSTs
         # to the wrong url to return a 404 instead of 403.
