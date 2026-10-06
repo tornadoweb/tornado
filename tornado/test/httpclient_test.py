@@ -291,6 +291,9 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
     # implementation asks for brotli, so this is only true where the client
     # decodes an encoding it did not request (see BrotliBombHandler).
     decompresses_brotli = False
+    # Set by subclasses whose client accepts obsolete line folding in
+    # response headers (see test_multi_line_headers).
+    supports_line_folding = False
 
     def get_app(self):
         return Application(
@@ -786,9 +789,16 @@ X-XSS-Protection: 1;
 
             netutil.add_accept_handler(sock, accept_callback)  # type: ignore
             try:
-                resp = self.fetch("http://127.0.0.1:%d/" % port)
-                resp.rethrow()
-                self.assertEqual(resp.headers["X-XSS-Protection"], "1; mode=block")
+                if self.supports_line_folding:
+                    resp = self.fetch("http://127.0.0.1:%d/" % port)
+                    resp.rethrow()
+                    self.assertEqual(resp.headers["X-XSS-Protection"], "1; mode=block")
+                else:
+                    with ExpectLog(
+                        gen_log, "Malformed HTTP message.*folding", level=logging.INFO
+                    ):
+                        with self.assertRaises(HTTPError):
+                            self.fetch("http://127.0.0.1:%d/" % port, raise_error=True)
             finally:
                 self.io_loop.remove_handler(sock.fileno())
 

@@ -328,6 +328,11 @@ class HTTP1Connection(httputil.HTTPConnection):
             gen_log.info("Malformed HTTP message from %s: %s", self.context, e)
             if not self.is_client:
                 await self.stream.write(b"HTTP/1.1 400 Bad Request\r\n\r\n")
+            elif not need_delegate_close:
+                # The error came before headers_received, so the delegate
+                # doesn't know about this message yet. Tell it the
+                # connection is closed so a client request doesn't hang.
+                need_delegate_close = True
             self.close()
             return False
         finally:
