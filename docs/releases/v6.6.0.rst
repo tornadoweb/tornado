@@ -32,29 +32,44 @@ Deprecation notices
   Tornado 6.5.2); use ``headers["Host"]`` instead. It will be removed in Tornado 6.7.
 - The ``start_line`` argument to the ``HTTPServerRequest`` constructor will become required in
   Tornado 6.7. The ``method``, ``uri``, and ``version`` arguments are deprecated and will be
-  removed at the same time. All remaining arguments will become keyword-only.
+  removed at the same time. All remaining arguments will become keyword-only. A
+  `DeprecationWarning` is now emitted when ``start_line`` is not provided or when the ``host``,
+  ``method``, or ``uri`` arguments are used.
 - `tornado.auth.OpenIdMixin` is deprecated and will be removed in Tornado 6.7 (this is a change
   in the timeline; it was previously scheduled for removal in Tornado 7.0).
+- ``tornado.util.TimeoutError``, ``tornado.gen.TimeoutError``, and ``tornado.ioloop.TimeoutError``
+  are deprecated. They are aliases for the builtin `TimeoutError`, which should be used instead.
+  (No warning is emitted when these aliases are used.)
+- Calling `.GzipDecompressor.decompress` without a ``max_length`` argument (or with
+  ``max_length=0``) is deprecated and emits a `DeprecationWarning`. In Tornado 7.0,
+  ``max_length`` will be required.
+- The ``xsrf_cookies`` application setting is expected to be deprecated in Tornado 6.7 (with
+  warnings) in favor of ``cross_origin_protection``. It will not be removed before Tornado 7.0.
 
 Type annotation changes
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-- `.tornado.gen.multi` now has overload annotations to indicate that its return type depends
+- `tornado.gen.multi` now has overload annotations to indicate that its return type depends
   on its inputs (list vs dict).
 - `.HTTPServerRequest.method` and ``uri`` attributes are now typed as ``str`` instead of
-  ``str | None``
+  ``str | None``.
 
 ``tornado.curl_httpclient``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - The minimum supported version of libcurl is now 7.81 (which is the version shipped by
   Ubuntu 22.04 LTS).
+- Passing a coroutine as the ``streaming_callback`` argument now fails with a `TypeError`.
+  (Coroutine streaming callbacks are only supported by ``simple_httpclient``.)
 
 `tornado.gen`
 ~~~~~~~~~~~~~
 
 - `asyncio.CancelledError` is now handled correctly in coroutines, `.multi`, and `.chain_future`.
 - `.WaitIterator` now supports multiple copies of the same `.Future` object.
+- `.with_timeout` has a new ``message`` argument, which sets the message of the `TimeoutError`.
+  It may be a string or a callable that returns a string (which is only called if the timeout
+  expires).
 
 ``tornado.http1connection``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -71,13 +86,19 @@ Type annotation changes
 - A chunk in a chunked body that is not followed by ``\r\n`` is now reported as an
   `.HTTPInputError` instead of raising ``AssertionError`` (or being silently accepted when
   Python is run with ``-O``).
+- Gzipped bodies containing multiple members are now decompressed correctly. Trailing garbage
+  at the end of a body or in between members is now an error instead of being silently ignored,
+  as is a body that is truncated partway through a member. This applies both to responses
+  received by ``simple_httpclient`` and to requests received by a server with
+  ``decompress_request=True``.
 
 `tornado.httputil`
 ~~~~~~~~~~~~~~~~~~
 
-- If the ``start_line`` argument to `.HTTPServerRequest` is not provided, both ``method`` and
-  ``uri`` must be provided.
-- ``.HTTPHeaders.__del__`` no longer raises KeyError at inappropriate times.
+- If ``start_line`` is not passed to `.HTTPServerRequest`, missing ``method`` and ``uri``
+  arguments now default to ``GET`` and ``/`` (with a `DeprecationWarning`) instead of leaving
+  these attributes as ``None``.
+- ``HTTPHeaders.__delitem__`` no longer raises `KeyError` at inappropriate times.
 
 `tornado.iostream`
 ~~~~~~~~~~~~~~~~~~
@@ -85,7 +106,7 @@ Type annotation changes
 - Fixed a socket leak when a timeout occurs during a TLS handshake, or when the connection
   of a `.SSLIOStream` is cancelled.
 - Fixed errors relating to "existing exports of data" on PyPy 8.0.
-- Tests now pass when Python is built with AWS-LC or BoringCrypto instead of OpenSSL. 
+- Tests now pass when Python is built with AWS-LC or BoringCrypto instead of OpenSSL.
 
 `tornado.locale`
 ~~~~~~~~~~~~~~~~
@@ -123,13 +144,12 @@ Type annotation changes
 - A ``timeout`` value of zero will either return or raise immediately. Previously, zero was
   treated as equivalent to ``None`` (wait forever). This affects `.Queue.get`, `.Queue.put`, and
   `.Queue.join`.
- 
+
 ``tornado.simple_httpclient``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- Gzipped responses containing multiple members are now decompressed correctly. Trailing
-  garbage at the end of a file or in between members is now an error instead of being
-  silently ignored.
+- Gzipped responses containing multiple members are now decompressed correctly, and malformed
+  gzip data is now an error (see ``tornado.http1connection`` above).
 - Improved error messages for timeouts during the connection phase.
 - The ``streaming_callback`` argument to ``SimpleAsyncHTTPClient.fetch`` may now be a coroutine.
 
@@ -138,6 +158,17 @@ Type annotation changes
 
 - When a connection attempt is cancelled, sockets are now closed immediately instead of waiting
   for the connection to either complete or time out.
+
+`tornado.util`
+~~~~~~~~~~~~~~
+
+- `.GzipDecompressor` now decompresses streams containing multiple gzip members in full;
+  previously everything after the first member was ignored. Data after the last member that is
+  not the start of another member is now an error, as is a stream that ends partway through a
+  member. `.GzipDecompressor.flush` now raises `zlib.error` for truncated input and always
+  returns an empty byte string (since `~.GzipDecompressor.decompress` returns all of the
+  output); it raises `ValueError` if `~.GzipDecompressor.unconsumed_tail` has not been passed
+  back to ``decompress``.
 
 `tornado.web`
 ~~~~~~~~~~~~~
@@ -149,11 +180,14 @@ Type annotation changes
   `.RequestHandler.check_trusted_origin`. See :ref:`cross_origin_protection` for details.
 - `asyncio.CancelledError` is now handled correctly instead of leaving connections to hang.
 - ``raise HTTPError(204)`` no longer attempts to incorrectly send a response body.
+- Writing a response body with a status code that does not allow one (such as 204 or 304) now
+  raises `RuntimeError` instead of `AssertionError` (so the check is no longer skipped when
+  Python runs with ``-O``).
 - Signed values with valid signatures but certain formatting errors are now ignored instead of
   raising errors (consistent with historical behavior for other formatting errors).
 - The ``max_age`` argument to `.RequestHandler.set_cookie` can no longer be abused for
   attribute injection.
-- `.RedirectHandler` now refused to generate protocol-relative redirects via formatted URLs,
+- `.RedirectHandler` now refuses to generate protocol-relative redirects via formatted URLs,
   which could potentially be used as an open redirect.
 
 `tornado.websocket`
@@ -172,3 +206,6 @@ Type annotation changes
   most recent ping is answered (as permitted by RFC 6455 section 5.5.3). Previously, a peer that
   sent pings without reading the pongs could cause the server's memory usage to grow without
   limit. ``on_ping`` is still called for every ping.
+- Versions 7 and 8 of the WebSocket protocol (pre-standard drafts from 2011) are no longer
+  supported; only version 13 (:rfc:`6455`) is accepted. The ``Sec-WebSocket-Origin`` header
+  used by those versions is no longer consulted.
