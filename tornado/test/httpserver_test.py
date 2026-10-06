@@ -283,6 +283,17 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
         stream.close()
 
 
+class AbsoluteFormHandler(RequestHandler):
+    def get(self):
+        self.write(
+            {
+                "path": self.request.path,
+                "host": self.request.host,
+                "uri": self.request.uri,
+            }
+        )
+
+
 class EchoHandler(RequestHandler):
     def get(self):
         self.write(recursive_unicode(self.request.arguments))
@@ -412,7 +423,7 @@ class HTTPServerTest(AsyncHTTPTestCase):
 
 class HTTPServerRawTest(AsyncHTTPTestCase):
     def get_app(self):
-        return Application([("/echo", EchoHandler)])
+        return Application([("/echo", EchoHandler), ("/app/path", AbsoluteFormHandler)])
 
     def setUp(self):
         super().setUp()
@@ -439,6 +450,24 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
             self.assertEqual("HTTP/1.1", start_line.version)
             self.assertEqual(400, start_line.code)
             self.assertEqual("Bad Request", start_line.reason)
+
+    def test_absolute_form_request_target(self):
+        # A proxy that forwards the absoluteURI form should hit the path,
+        # and the host from the target replaces Host.
+        self.stream.write(
+            b"GET http://origin.example/app/path?foo=1 HTTP/1.1\r\n"
+            b"Host: ignored.example\r\n"
+            b"Connection: close\r\n"
+            b"\r\n"
+        )
+        start_line, headers, response = self.io_loop.run_sync(
+            lambda: read_stream_body(self.stream)
+        )
+        self.assertEqual(200, start_line.code)
+        data = json_decode(response)
+        self.assertEqual(data["path"], "/app/path")
+        self.assertEqual(data["host"], "origin.example")
+        self.assertEqual(data["uri"], "/app/path?foo=1")
 
     def test_malformed_first_line_log(self):
         with ExpectLog(gen_log, ".*Malformed HTTP request line", level=logging.INFO):
