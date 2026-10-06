@@ -761,8 +761,13 @@ Transfer-Encoding: chunked
                 )
 
     def test_multi_line_headers(self):
-        # Multi-line http headers are rare but rfc-allowed
-        # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.2
+        # Line folding is an obsolete way of representing headers split across multiple lines.
+        # https://www.rfc-editor.org/info/rfc9112/#section-5.2
+        #
+        # The spec requires user agents to unfold them, but simple_httpclient
+        # rejects them as of Tornado 6.6 while libcurl still accepts them. Either
+        # outcome is acceptable here; what matters is that the client doesn't hang
+        # and doesn't misparse the header.
         sock, port = bind_unused_port()
         with closing(sock):
 
@@ -782,9 +787,21 @@ X-XSS-Protection: 1;
 
             netutil.add_accept_handler(sock, accept_callback)  # type: ignore
             try:
-                resp = self.fetch("http://127.0.0.1:%d/" % port)
-                resp.rethrow()
-                self.assertEqual(resp.headers["X-XSS-Protection"], "1; mode=block")
+                with ExpectLog(
+                    gen_log,
+                    "Malformed HTTP message.*folding",
+                    level=logging.INFO,
+                    required=False,
+                ):
+                    try:
+                        resp = self.fetch("http://127.0.0.1:%d/" % port)
+                    except HTTPError as e:
+                        self.assertEqual(e.code, 599)
+                    else:
+                        resp.rethrow()
+                        self.assertEqual(
+                            resp.headers["X-XSS-Protection"], "1; mode=block"
+                        )
             finally:
                 self.io_loop.remove_handler(sock.fileno())
 
