@@ -394,7 +394,7 @@ class CookieTest(WebTestCase):
                 # containing cookie attributes) is rejected instead of being
                 # written into the Set-Cookie header verbatim.
                 try:
-                    self.set_cookie("foo", "bar", max_age="86400; Path=/evil")
+                    self.set_cookie("foo", "bar", max_age="86400; Path=/evil")  # type: ignore[arg-type]
                 except ValueError:
                     self.set_status(400)
 
