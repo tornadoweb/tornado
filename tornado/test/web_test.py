@@ -4148,6 +4148,18 @@ class RedirectHandlerTest(WebTestCase):
         self.assertEqual(response.code, 301)
         self.assertEqual(response.headers["Location"], "/b/a/c")
 
+    def test_redirect_double_slash(self):
+        # Note that the redirect pattern we're using reorders the components.
+        response = self.fetch("/a/example.com/b", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers["Location"], "/example.com/a/b")
+
+        # With a double slash this becomes //example.com/a/b, which is a protocol-relative
+        # redirect to another host, which we disallow because it is an open redirect.
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = self.fetch("/a//example.com/a/b", follow_redirects=False)
+        self.assertEqual(response.code, 500)
+
 
 class AcceptLanguageTest(WebTestCase):
     """Test evaluation of Accept-Language header"""

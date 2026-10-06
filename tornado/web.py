@@ -2822,6 +2822,10 @@ class RedirectHandler(RequestHandler):
                 to_url,
                 list(httputil.qs_to_qsl(self.request.query_arguments)),  # type: ignore
             )
+        if to_url.startswith("//") and not self._url.startswith("//"):
+            raise ValueError(
+                "Redirect URL cannot start with '//' if template does not."
+            )
         self.redirect(to_url, permanent=self._permanent)
 
 
