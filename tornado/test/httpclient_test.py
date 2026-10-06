@@ -761,8 +761,12 @@ Transfer-Encoding: chunked
                 )
 
     def test_multi_line_headers(self):
-        # Multi-line http headers are rare but rfc-allowed
-        # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.2
+        # Line folding is an obsolete way of representing headers split across multiple lines.
+        # https://www.rfc-editor.org/info/rfc9112/#section-5.2
+        #
+        # They must either be folded into a single line or rejected.
+        # Tornado 6.6 removed support for line folding in simple_httpclient, but they are
+        # still supported in libcurl.
         sock, port = bind_unused_port()
         with closing(sock):
 

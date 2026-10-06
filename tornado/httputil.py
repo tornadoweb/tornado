@@ -184,7 +184,6 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
         # on demand (and cleared whenever the list is modified).
         self._as_list: dict[str, list[str]] = {}
         self._combined_cache: dict[str, str] = {}
-        self._last_key: str | None = None
         if len(args) == 1 and len(kwargs) == 0 and isinstance(args[0], HTTPHeaders):
             # Copy constructor
             for k, v in args[0].get_all():
@@ -208,7 +207,6 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
             if _FORBIDDEN_HEADER_CHARS_RE.search(value):
                 raise HTTPInputError("Invalid header value %r" % value)
         norm_name = _normalize_header(name)
-        self._last_key = norm_name
         if norm_name in self:
             self._combined_cache.pop(norm_name, None)
             self._as_list[norm_name].append(value)
@@ -249,6 +247,11 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
            In Tornado 7.0, certain deprecated features of HTTP will become errors.
            Specifically, line folding and the use of LF (with CR) as a line separator
            will be removed.
+
+        .. versionchanged:: 6.6
+           Support for line folding was removed due to security/DoS concerns. This removal
+           was ahead of the original removal schedule announced for Tornado 7.0.
+           Support for LF without CR remains until Tornado 7.0.
         """
         if m := re.search(r"\r?\n$", line):
             # RFC 9112 section 2.2: a recipient MAY recognize a single LF as a line
@@ -259,27 +262,14 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
             # Empty line, or the final CRLF of a header block.
             return
         if line[0] in HTTP_WHITESPACE:
-            # continuation of a multi-line header
-            # TODO(7.0): Remove support for line folding.
-            if self._last_key is None:
-                raise HTTPInputError("first header line cannot start with whitespace")
-            new_part = " " + line.strip(HTTP_WHITESPACE)
-            if _chars_are_bytes:
-                if not _ABNF.field_value.fullmatch(new_part[1:]):
-                    raise HTTPInputError("Invalid header continuation %r" % new_part)
-            else:
-                if _FORBIDDEN_HEADER_CHARS_RE.search(new_part):
-                    raise HTTPInputError("Invalid header value %r" % new_part)
-            self._as_list[self._last_key][-1] += new_part
-            self._combined_cache.pop(self._last_key, None)
-        else:
-            try:
-                name, value = line.split(":", 1)
-            except ValueError:
-                raise HTTPInputError("no colon in header line")
-            self.add(
-                name, value.strip(HTTP_WHITESPACE), _chars_are_bytes=_chars_are_bytes
+            raise HTTPInputError(
+                "header line cannot start with whitespace, folding not supported"
             )
+        try:
+            name, value = line.split(":", 1)
+        except ValueError:
+            raise HTTPInputError("no colon in header line")
+        self.add(name, value.strip(HTTP_WHITESPACE), _chars_are_bytes=_chars_are_bytes)
 
     @classmethod
     def parse(cls, headers: str, *, _chars_are_bytes: bool = True) -> HTTPHeaders:
