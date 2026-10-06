@@ -14,6 +14,16 @@ General changes
 - Windows on ARM is now supported and prebuilt wheels are available.
 - Prebuilt wheels are now available for ``riscv64``, ``ppc64le``, and ``s390x`` architectures on
   Linux. These architectures are experimental and have limited support and testing.
+- PyPy 8.0 is now supported (for both Python 3.11 and 3.12).
+- Error messages have been improved in many places.
+- Improved handling of `asyncio.CancelledError` in various parts of the framework.
+
+Feature highlights
+~~~~~~~~~~~~~~~~~~
+
+- New feature ``cross_origin_protection`` provides a new mechanism for protecting against
+  XSRF and other cross-origin attacks. This feature is easier to use than ``xsrf_cookies``
+  and is expected to become the default in Tornado 6.7.
 
 Deprecation notices
 ~~~~~~~~~~~~~~~~~~~
@@ -40,21 +50,39 @@ Type annotation changes
 - The minimum supported version of libcurl is now 7.81 (which is the version shipped by
   Ubuntu 22.04 LTS).
 
-``tornado.simple_httpclient``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+`tornado.gen`
+~~~~~~~~~~~~~
 
-- The ``streaming_callback`` argument to ``SimpleAsyncHTTPClient.fetch`` may now be a coroutine.
+- `asyncio.CancelledError` is now handled correctly in coroutines, `.multi`, and `.chain_future`.
+- `.WaitIterator` now supports multiple copies of the same `.Future` object.
 
 ``tornado.http1connection``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - Invalid ``Host`` headers are now logged at the INFO level instead of as an uncaught exception.
+- Line folding in HTTP headers is no longer supported. This was deprecated in Tornado 6.5 but is
+  being removed sooner than originally scheduled to avoid DoS risk.
 
 `tornado.httputil`
 ~~~~~~~~~~~~~~~~~~
 
 - If the ``start_line`` argument to `.HTTPServerRequest` is not provided, both ``method`` and
   ``uri`` must be provided.
+- ``.HTTPHeaders.__del__`` no longer raises KeyError at inappropriate times.
+
+`tornado.iostream`
+~~~~~~~~~~~~~~~~~~
+
+- Fixed a socket leak when a timeout occurs during a TLS handshake, or when the connection
+  of a `.SSLIOStream` is cancelled.
+- Fixed errors relating to "existing exports of data" on PyPy 8.0.
+- Tests now pass when Python is built with AWS-LC or BoringCrypto instead of OpenSSL. 
+
+`tornado.locale`
+~~~~~~~~~~~~~~~~
+
+- `.format_date` now correctly handles times in the future that are close to a multiple of
+  24 hours away.
 
 `tornado.locks`
 ~~~~~~~~~~~~~~~
@@ -87,3 +115,37 @@ Type annotation changes
   treated as equivalent to ``None`` (wait forever). This affects `.Queue.get`, `.Queue.put`, and
   `.Queue.join`.
  
+``tornado.simple_httpclient``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Gzipped responses containing multiple members are now decompressed correctly. Trailing
+  garbage at the end of a file or in between members is now an error instead of being
+  silently ignored.
+- Improved error messages for timeouts during the connection phase.
+- The ``streaming_callback`` argument to ``SimpleAsyncHTTPClient.fetch`` may now be a coroutine.
+
+`tornado.tcpclient`
+~~~~~~~~~~~~~~~~~~~
+
+- When a connection attempt is cancelled, sockets are now closed immediately instead of waiting
+  for the connection to either complete or time out.
+
+`tornado.web`
+~~~~~~~~~~~~~
+
+- New feature ``cross_origin_protection`` provides a new mechanism for protecting against
+  XSRF and other cross-origin attacks. This feature is easier to use than ``xsrf_cookies``
+  and is expected to become the default in Tornado 6.7.
+- `asyncio.CancelledError` is now handled correctly instead of leaving connections to hang.
+- ``raise HTTPError(204)`` no longer attempts to incorrectly send a response body.
+- Signed values with valid signatures but certain formatting errors are now ignored instead of
+  raising errors (consistent with historical behavior for other formatting errors).
+- The ``max_age`` argument to `.RequestHandler.set_cookie` can no longer be abused for
+  attribute injection.
+- `.RedirectHandler` now refused to generate protocol-relative redirects via formatted URLs,
+  which could potentially be used as an open redirect.
+
+`tornado.websocket`
+~~~~~~~~~~~~~~~~~~~
+
+- `asyncio.CancelledError` no longer breaks the websocket loop without closing the connection.
