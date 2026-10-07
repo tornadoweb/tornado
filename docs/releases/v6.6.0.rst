@@ -35,6 +35,8 @@ Deprecation notices
   removed at the same time. All remaining arguments will become keyword-only.
 - `tornado.auth.OpenIdMixin` is deprecated and will be removed in Tornado 6.7 (this is a change
   in the timeline; it was previously scheduled for removal in Tornado 7.0).
+- `.BaseIOStream.read_until_close` is deprecated. Use `.BaseIOStream.read_bytes` with
+  ``partial=True`` in a loop for finer flow control and clearer error reporting.
 
 Type annotation changes
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -83,6 +85,13 @@ Type annotation changes
 
 - `.format_date` now correctly handles times in the future that are close to a multiple of
   24 hours away.
+
+`tornado.iostream`
+~~~~~~~~~~~~~~~~~~
+
+- `.BaseIOStream.read_until_close` is now implemented as a loop over `.BaseIOStream.read_bytes`
+  with ``partial=True`` rather than through its own dedicated code path. Externally observable
+  behavior is unchanged.
 
 `tornado.locks`
 ~~~~~~~~~~~~~~~

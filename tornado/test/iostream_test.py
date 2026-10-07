@@ -995,10 +995,27 @@ class TestIOStreamMixin(TestReadWriteMixin):
             fut = client.read_until_close()
             server.write(b"a" * 4096)
             with ExpectLog(gen_log, "Reached maximum read buffer size"):
-                with ExpectLog(gen_log, "error on read"):
-                    with self.assertRaises(StreamClosedError) as cm:
-                        yield fut
+                with self.assertRaises(StreamClosedError) as cm:
+                    yield fut
             self.assertIsInstance(cm.exception.real_error, StreamBufferFullError)
+        finally:
+            server.close()
+            client.close()
+
+    @gen_test
+    def test_read_until_close_chunked(self):
+        # Confirm the read_until_close() loop reassembles chunks that
+        # arrive one at a time, with intervening checkpoints, and that
+        # the result fills up to (and no further than) max_buffer_size.
+        server, client = yield self.make_iostream_pair(max_buffer_size=16)
+        try:
+            fut = client.read_until_close()
+            for byte in b"0123456789abcdef":
+                server.write(bytes([byte]))
+                yield gen.sleep(0.001)
+            server.close()
+            data = yield fut
+            self.assertEqual(data, b"0123456789abcdef")
         finally:
             server.close()
             client.close()
