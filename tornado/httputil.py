@@ -463,7 +463,7 @@ class HTTPServerRequest:
        temporarily restored in 6.5.2. It will be removed in Tornado 6.7.
 
     .. deprecated:: 6.6
-       Creating a ``HTTPServerRequest`` with out a ``start_line`` argument is deprecated.
+       Creating an ``HTTPServerRequest`` without a ``start_line`` argument is deprecated.
        This argument will require a non-None value in Tornado 6.7. The ``method``, ``uri``,
        and ``version`` arguments are deprecated and will be removed in Tornado 6.7, along
        with the previously-deprecated ``host`` argument. At this time all remaining arguments

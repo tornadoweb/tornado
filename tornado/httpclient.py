@@ -505,6 +505,11 @@ class HTTPRequest:
 
         .. versionadded:: 4.5
            The ``proxy_auth_mode`` argument.
+
+        .. versionchanged:: 6.6
+           With ``simple_httpclient``, ``streaming_callback`` may be a
+           coroutine; the next chunk is not read until it completes. This
+           is not supported by ``curl_httpclient``.
         """
         # Note that some of these attributes go through property setters
         # defined below.

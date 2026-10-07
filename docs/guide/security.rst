@@ -189,6 +189,13 @@ the Google credentials in a cookie for later access:
 
 See the `tornado.auth` module documentation for more details.
 
+..
+   The ``xsrf`` label is kept so that links to the old "Cross-site request
+   forgery protection" section continue to work. Internal links should use
+   ``cross_origin_protection`` or ``xsrf-cookies`` instead.
+
+.. _xsrf:
+
 .. _cross_origin_protection:
 
 Cross-origin protection
