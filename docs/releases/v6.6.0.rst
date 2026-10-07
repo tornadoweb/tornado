@@ -166,3 +166,9 @@ Type annotation changes
   application setting are allowed. Applications that override ``check_origin`` to restrict
   origins further than the default will no longer see same-origin requests.
 - `asyncio.CancelledError` no longer breaks the websocket loop without closing the connection.
+- Receiving messages now yields to the event loop periodically, so a peer that sends many small
+  messages faster than they can be processed can no longer block the event loop indefinitely.
+- When a ping is received while the pong for a previous ping has not yet been sent, only the
+  most recent ping is answered (as permitted by RFC 6455 section 5.5.3). Previously, a peer that
+  sent pings without reading the pongs could cause the server's memory usage to grow without
+  limit. ``on_ping`` is still called for every ping.

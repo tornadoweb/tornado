@@ -98,6 +98,15 @@ class _WebSocketDelegate(Protocol):
 
 _default_max_message_size = 10 * 1024 * 1024
 
+# Reads of frames that have already arrived complete without returning
+# control to the IOLoop, so a peer that sends frames faster than we can
+# process them could otherwise monopolize the IOLoop. We yield to the IOLoop
+# after receiving this many bytes, with each frame also counting as
+# _FRAME_YIELD_COST bytes since the per-frame overhead dominates when the
+# frames are small.
+_YIELD_THRESHOLD = 256 * 1024
+_FRAME_YIELD_COST = 1024
+
 # log to "gen_log" but suppress duplicate log messages
 de_dupe_gen_log = functools.lru_cache(gen_log.log)
 
@@ -876,6 +885,11 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._wire_bytes_in = 0
         self._wire_bytes_out = 0
         self._received_pong: bool = False
+        # The Future for our most recent pong write, if it has not completed,
+        # and the payload of the most recent ping received while it was
+        # outstanding. See _send_pong.
+        self._pong_future: Future[None] | None = None
+        self._pending_pong: bytes | None = None
         self.close_code: int | None = None
         self.close_reason: str | None = None
         self._ping_coroutine: asyncio.Task | None = None
@@ -1136,8 +1150,14 @@ class WebSocketProtocol13(WebSocketProtocol):
 
     async def _receive_frame_loop(self) -> None:
         try:
+            work = 0  # See _YIELD_THRESHOLD
             while not self.client_terminated:
+                start = self._wire_bytes_in
                 await self._receive_frame()
+                work += _FRAME_YIELD_COST + self._wire_bytes_in - start
+                if work >= _YIELD_THRESHOLD:
+                    work = 0
+                    await asyncio.sleep(0)
         except StreamClosedError:
             self._abort()
         finally:
@@ -1269,10 +1289,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             self.close(self.close_code)
         elif opcode == 0x9:
             # Ping
-            try:
-                self._write_frame(True, 0xA, data)
-            except StreamClosedError:
-                self._abort()
+            self._send_pong(data)
             self._run_callback(self.handler.on_ping, data)
         elif opcode == 0xA:
             # Pong
@@ -1281,6 +1298,40 @@ class WebSocketProtocol13(WebSocketProtocol):
         else:
             self._abort()
         return None
+
+    def _send_pong(self, data: bytes) -> None:
+        # If a peer sends pings faster than it reads our pongs, the pongs
+        # would accumulate in our write buffer without limit. RFC 6455
+        # section 5.5.3 allows us to respond only to the most recent ping
+        # when we have not yet sent the pongs for previous ones, so we have
+        # at most one pong outstanding and remember the latest ping to answer
+        # when it has been sent.
+        if self._pong_future is not None and not self._pong_future.done():
+            self._pending_pong = data
+            return
+        # This ping supersedes any that were waiting for an answer.
+        self._pending_pong = None
+        if self.server_terminated:
+            # No frames may be sent after a close frame.
+            return
+        try:
+            self._pong_future = self._write_frame(True, 0xA, data)
+        except StreamClosedError:
+            self._abort()
+            return
+        self._pong_future.add_done_callback(self._on_pong_sent)
+
+    def _on_pong_sent(self, future: "Future[None]") -> None:
+        if self._pong_future is future:
+            self._pong_future = None
+        if future.cancelled() or future.exception() is not None:
+            # The stream was closed.
+            self._pending_pong = None
+            return
+        if self._pending_pong is not None:
+            data = self._pending_pong
+            self._pending_pong = None
+            self._send_pong(data)
 
     def close(self, code: int | None = None, reason: str | None = None) -> None:
         """Closes the WebSocket connection."""
