@@ -532,3 +532,56 @@ class LockTests(AsyncTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AsyncContextManagerCancellationTest(AsyncTestCase):
+    @gen_test
+    async def test_cancel_after_handoff(self):
+        for cls in (locks.Semaphore, locks.BoundedSemaphore, locks.Lock):
+            with self.subTest(primitive=cls.__name__):
+                primitive = cls()
+                await primitive.acquire()
+
+                async def worker():
+                    async with primitive:
+                        self.fail("cancelled waiter entered the context")
+
+                task = asyncio.create_task(worker())
+                await asyncio.sleep(0)
+                successor = asyncio.ensure_future(primitive.acquire())
+                primitive.release()
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+                try:
+                    self.assertTrue(successor.done())
+                    await successor
+                    primitive.release()
+                finally:
+                    successor.cancel()
+
+    @gen_test
+    async def test_cancel_before_handoff(self):
+        for cls in (locks.Semaphore, locks.BoundedSemaphore, locks.Lock):
+            with self.subTest(primitive=cls.__name__):
+                primitive = cls()
+                await primitive.acquire()
+
+                async def worker():
+                    async with primitive:
+                        self.fail("cancelled waiter entered the context")
+
+                task = asyncio.create_task(worker())
+                await asyncio.sleep(0)
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+                successor = asyncio.ensure_future(primitive.acquire())
+                try:
+                    self.assertFalse(successor.done())
+                    primitive.release()
+                    self.assertTrue(successor.done())
+                    await successor
+                    primitive.release()
+                finally:
+                    successor.cancel()
