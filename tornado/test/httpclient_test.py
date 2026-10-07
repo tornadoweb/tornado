@@ -30,6 +30,7 @@ from io import BytesIO
 
 from tornado.escape import utf8, native_str, to_unicode, json_encode, json_decode
 from tornado import gen, netutil
+from tornado.locks import Event
 from tornado.httpclient import (
     HTTPClient,
     HTTPError,
@@ -99,12 +100,18 @@ class RedirectWithoutLocationHandler(RequestHandler):
 
 
 class ChunkHandler(RequestHandler):
+    def initialize(self, first_chunk_received: Event | None = None) -> None:
+        self.first_chunk_received = first_chunk_received
+
     @gen.coroutine
     def get(self):
         self.write("asdf")
         self.flush()
-        # Wait a bit to ensure the chunks are sent and received separately.
-        yield gen.sleep(0.01)
+        if self.first_chunk_received is not None and self.get_argument("wait", None):
+            # Don't send the second chunk until the client has received the
+            # first, so they can't be coalesced and the test can verify that
+            # chunks are delivered as they arrive.
+            yield self.first_chunk_received.wait()
         self.write("qwer")
 
 
@@ -293,6 +300,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
     decompresses_brotli = False
 
     def get_app(self):
+        self.first_chunk_received = Event()
         return Application(
             [
                 url("/hello", HelloWorldHandler),
@@ -300,7 +308,11 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
                 url("/put", PutHandler),
                 url("/redirect", RedirectHandler),
                 url("/redirect_without_location", RedirectWithoutLocationHandler),
-                url("/chunk", ChunkHandler),
+                url(
+                    "/chunk",
+                    ChunkHandler,
+                    dict(first_chunk_received=self.first_chunk_received),
+                ),
                 url("/auth", AuthHandler),
                 url("/countdown/([0-9]+)", CountdownHandler, name="countdown"),
                 url("/echopost", EchoPostHandler),
@@ -457,7 +469,12 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         self.assertEqual(response.body, b"asdfqwer")
 
         chunks: list[bytes] = []
-        response = self.fetch("/chunk", streaming_callback=chunks.append)
+
+        def streaming_callback(chunk):
+            chunks.append(chunk)
+            self.first_chunk_received.set()
+
+        response = self.fetch("/chunk?wait=1", streaming_callback=streaming_callback)
         self.assertEqual(chunks, [b"asdf", b"qwer"])
         self.assertFalse(response.body)
 
@@ -705,9 +722,10 @@ Transfer-Encoding: chunked
             # comes in.
             self.assertEqual(headers["content-type"], "text/html; charset=UTF-8")
             chunks.append(chunk)
+            self.first_chunk_received.set()
 
         self.fetch(
-            "/chunk",
+            "/chunk?wait=1",
             header_callback=header_callback,
             streaming_callback=streaming_callback,
         )
