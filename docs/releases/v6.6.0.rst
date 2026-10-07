@@ -62,6 +62,15 @@ Type annotation changes
 - Invalid ``Host`` headers are now logged at the INFO level instead of as an uncaught exception.
 - Line folding in HTTP headers is no longer supported. This was deprecated in Tornado 6.5 but is
   being removed sooner than originally scheduled to avoid DoS risk.
+- Reading a request or response body now yields to the event loop periodically, so a peer that
+  sends a body faster than it can be processed (especially with many tiny chunks in chunked
+  encoding) can no longer block the event loop for the duration of the body.
+- Small chunks of a body using chunked encoding are now coalesced before being passed to
+  ``data_received``, so the pieces seen by the application no longer correspond to the HTTP
+  chunk boundaries.
+- A chunk in a chunked body that is not followed by ``\r\n`` is now reported as an
+  `.HTTPInputError` instead of raising ``AssertionError`` (or being silently accepted when
+  Python is run with ``-O``).
 
 `tornado.httputil`
 ~~~~~~~~~~~~~~~~~~

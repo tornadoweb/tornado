@@ -1241,9 +1241,10 @@ class StreamingChunkSizeTest(AsyncHTTPTestCase):
             write(self.BODY[:20])
             write(self.BODY[20:])
 
-        chunks = self.fetch_chunk_sizes(body_producer=body_producer)
-        # HTTP chunk boundaries translate to application-visible breaks
-        self.assertEqual([16, 4, 16, 14], chunks)
+        # HTTP chunk boundaries are not preserved: small chunks may be
+        # coalesced, so the assertions in fetch_chunk_sizes are as specific
+        # as we can get.
+        self.fetch_chunk_sizes(body_producer=body_producer)
 
     def test_chunked_compressed(self):
         compressed = self.compress(self.BODY)
