@@ -1012,6 +1012,15 @@ class MaskFunctionMixin(TestCase):
             b"\xff\xfa\xff\xff\xfb\xfe",
         )
 
+    def test_lengths(self: typing.Any):
+        # Cover every alignment of the tail as well as longer inputs.
+        mask = b"\x9b\x31\xe7\x04"
+        for n in list(range(40)) + [255, 256, 1000, 65537]:
+            data = bytes((i * 7 + 3) & 0xFF for i in range(n))
+            expected = bytes(b ^ mask[i % 4] for i, b in enumerate(data))
+            with self.subTest(n=n):
+                self.assertEqual(self.mask(mask, data), expected)
+
     def test_length_validation(self: typing.Any):
         # Test all lengths of mask that are not 4 bytes.
         for mask in (b"", b"a", b"ab", b"abc", b"abcde", b"abcdef"):

@@ -12,7 +12,6 @@ and `.Resolver`.
 
 from __future__ import annotations
 
-import array
 import asyncio
 import os
 import re
@@ -514,11 +513,12 @@ def _websocket_mask_python(mask: bytes, data: bytes) -> bytes:
     """
     if len(mask) != 4:
         raise ValueError("mask must be 4 bytes")
-    mask_arr = array.array("B", mask)
-    unmasked_arr = array.array("B", data)
-    for i in range(len(data)):
-        unmasked_arr[i] = unmasked_arr[i] ^ mask_arr[i % 4]
-    return unmasked_arr.tobytes()
+    # Treat the data and the repeated mask as (very large) integers so the
+    # XOR happens in C instead of looping over each byte in Python.
+    n = len(data)
+    q, r = divmod(n, 4)
+    full_mask = int.from_bytes(mask * q + mask[:r], "little")
+    return (int.from_bytes(data, "little") ^ full_mask).to_bytes(n, "little")
 
 
 if os.environ.get("TORNADO_NO_EXTENSION") or os.environ.get("TORNADO_EXTENSION") == "0":
