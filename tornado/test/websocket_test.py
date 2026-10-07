@@ -10,6 +10,7 @@ import unittest
 from tornado import gen
 from tornado.concurrent import Future
 from tornado.httpclient import HTTPError, HTTPRequest
+from tornado.iostream import IOStream
 from tornado.locks import Event
 from tornado.log import app_log, gen_log
 from tornado.netutil import Resolver
@@ -1146,6 +1147,95 @@ class ServerPingTimeoutTest(WebSocketBaseTestCase):
 
         # client should have received a close operation
         self.assertEqual(ws.protocol.close_code, 1000)
+
+
+class FloodTest(WebSocketBaseTestCase):
+    def get_app(self):
+        test = self
+        self.handler_future: Future[WebSocketHandler] = Future()
+        self.pings: list[bytes] = []
+        self.num_messages = 0
+
+        class Handler(TestWebSocketHandler):
+            def open(self):
+                test.handler_future.set_result(self)
+
+            def on_message(self, message):
+                test.num_messages += 1
+
+            def on_ping(self, data):
+                test.pings.append(data)
+
+        return Application([("/", Handler)])
+
+    @gen_test
+    def test_many_small_messages_yield(self):
+        # Reading many small frames that have all arrived at once yields
+        # to the IOLoop periodically instead of blocking it until they have
+        # all been processed.
+        num_messages = 5000
+        # Masked binary frames with a one-byte payload and an all-zero mask.
+        frames = b"\x82\x81\x00\x00\x00\x00x" * num_messages
+        stream = IOStream(socket.socket())
+        self.conns_to_close.append(stream)
+        yield stream.connect(("127.0.0.1", self.get_http_port()))
+        stream.write(
+            b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\n"
+            b"Connection: Upgrade\r\nSec-WebSocket-Version: 13\r\n"
+            b"Sec-WebSocket-Key: MDEyMzQ1Njc4OWFiY2RlZg==\r\n\r\n" + frames
+        )
+        yield self.handler_future
+
+        ticks = [0]
+
+        def tick():
+            if self.num_messages < num_messages:
+                ticks[0] += 1
+                self.io_loop.add_callback(tick)
+
+        tick()
+        while self.num_messages < num_messages:
+            yield gen.sleep(0.01)
+        self.assertGreater(ticks[0], 10)
+
+    @gen_test
+    def test_pong_most_recent_ping(self):
+        # While a pong is waiting to be sent, we only respond to the most
+        # recent of any further pings.
+        ws = yield self.ws_connect("/")
+        handler = yield self.handler_future
+        protocol = handler.ws_connection
+        assert protocol is not None
+        written: list[tuple[int, bytes]] = []
+        write_futures: list[Future[None]] = []
+
+        def write_frame(fin, opcode, data, flags=0):
+            written.append((opcode, data))
+            write_futures.append(Future())
+            return write_futures[-1]
+
+        protocol._write_frame = write_frame  # type: ignore
+
+        for data in [b"1", b"2", b"3"]:
+            ws.ping(data)
+        while len(self.pings) < 3:
+            yield gen.sleep(0.01)
+        self.assertEqual(self.pings, [b"1", b"2", b"3"])
+        # Only the first pong has been written; the second is skipped and the
+        # third is sent once the first has been.
+        self.assertEqual(written, [(0xA, b"1")])
+        write_futures[0].set_result(None)
+        yield gen.moment
+        self.assertEqual(written, [(0xA, b"1"), (0xA, b"3")])
+        write_futures[1].set_result(None)
+        yield gen.moment
+        self.assertEqual(written, [(0xA, b"1"), (0xA, b"3")])
+
+        # Once nothing is outstanding, pings are answered immediately.
+        ws.ping(b"4")
+        while len(self.pings) < 4:
+            yield gen.sleep(0.01)
+        self.assertEqual(written[-1], (0xA, b"4"))
 
 
 class PingCalculationTest(TestCase):
