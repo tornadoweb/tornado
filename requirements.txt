@@ -135,7 +135,7 @@ typing-extensions==4.16.0
     #   tox
 urllib3==2.8.0
     # via requests
-virtualenv==21.7.10
+virtualenv==21.7.13
     # via tox
 wheel==0.48.0
     # via pip-tools
