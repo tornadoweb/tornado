@@ -4178,6 +4178,16 @@ class ApplicationTest(AsyncTestCase):
 
 
 class URLSpecReverseTest(TestCase):
+    def test_reverse_percent_literals(self):
+        for pattern, args, expected in [
+            (r"/hello%20world/(.*)", ("a b",), "/hello%20world/a%20b"),
+            (r"/(.*)/100%25", ("value",), "/value/100%25"),
+            (r"/%s/(.*)/%s", ("value",), "/%s/value/%s"),
+            (r"/hello%20world", (), "/hello%20world"),
+        ]:
+            with self.subTest(pattern=pattern):
+                self.assertEqual(url(pattern, None).reverse(*args), expected)
+
     def test_reverse(self):
         self.assertEqual("/favicon.ico", url(r"/favicon\.ico", None).reverse())
         self.assertEqual("/favicon.ico", url(r"^/favicon\.ico$", None).reverse())
