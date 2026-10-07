@@ -12,9 +12,11 @@ and `.Resolver`.
 
 from __future__ import annotations
 
+import array
 import asyncio
 import os
 import re
+import sys
 import typing
 import warnings
 import zlib
@@ -502,23 +504,38 @@ def timedelta_to_seconds(td: datetime.timedelta) -> float:
     return td.total_seconds()
 
 
-def _websocket_mask_python(mask: bytes, data: bytes) -> bytes:
-    """Websocket masking function.
-
-    `mask` is a `bytes` object of length 4; `data` is a `bytes` object of any length.
-    Returns a `bytes` object of the same length as `data` with the mask applied
-    as specified in section 5.3 of RFC 6455.
-
-    This pure-python implementation may be replaced by an optimized version when available.
-    """
+def _websocket_mask_int(mask: bytes, data: bytes) -> bytes:
+    # Treat the data and the repeated mask as (very large) integers so the
+    # XOR happens in C instead of looping over each byte in Python. This is
+    # much faster on CPython, but slower than the simple loop on PyPy.
     if len(mask) != 4:
         raise ValueError("mask must be 4 bytes")
-    # Treat the data and the repeated mask as (very large) integers so the
-    # XOR happens in C instead of looping over each byte in Python.
     n = len(data)
     q, r = divmod(n, 4)
     full_mask = int.from_bytes(mask * q + mask[:r], "little")
     return (int.from_bytes(data, "little") ^ full_mask).to_bytes(n, "little")
+
+
+def _websocket_mask_loop(mask: bytes, data: bytes) -> bytes:
+    # A simple byte-at-a-time loop, which PyPy's JIT handles well.
+    if len(mask) != 4:
+        raise ValueError("mask must be 4 bytes")
+    mask_arr = array.array("B", mask)
+    unmasked_arr = array.array("B", data)
+    for i in range(len(data)):
+        unmasked_arr[i] = unmasked_arr[i] ^ mask_arr[i % 4]
+    return unmasked_arr.tobytes()
+
+
+# _websocket_mask_python(mask, data) applies the websocket mask as specified
+# in section 5.3 of RFC 6455. `mask` is a `bytes` object of length 4; `data`
+# is a `bytes` object of any length. Returns a `bytes` object of the same
+# length as `data`. This pure-python implementation may be replaced by an
+# optimized version when available.
+if sys.implementation.name == "pypy":
+    _websocket_mask_python = _websocket_mask_loop
+else:
+    _websocket_mask_python = _websocket_mask_int
 
 
 if os.environ.get("TORNADO_NO_EXTENSION") or os.environ.get("TORNADO_EXTENSION") == "0":
