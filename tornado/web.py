@@ -674,14 +674,9 @@ class RequestHandler:
            In Tornado 7.0 this will be changed to only accept lowercase
            arguments.
         """
-        # The cookie library only accepts type str, in both python 2 and 3
         name = escape.native_str(name)
         value = escape.native_str(value)
-        if re.search(r"[\x00-\x20]", value):
-            # Legacy check for control characters in cookie values. This check is no longer needed
-            # since the cookie library escapes these characters correctly now. It will be removed
-            # in the next feature release.
-            raise ValueError(f"Invalid cookie {name!r}: {value!r}")
+
         for attr_name, attr_value in [
             ("name", name),
             ("domain", domain),
