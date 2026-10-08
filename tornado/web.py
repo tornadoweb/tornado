@@ -2920,6 +2920,14 @@ class StaticFileHandler(RequestHandler):
 
     CACHE_MAX_AGE = 86400 * 365 * 10  # 10 years
 
+    #: The largest content (in bytes) that `get_content_version` will hash.
+    #: Hashing is synchronous, so this bounds how long
+    #: `~RequestHandler.static_url` can block the event loop. Larger files
+    #: get no version. Subclasses may change it.
+    #:
+    #: .. versionadded:: 6.6
+    MAX_VERSION_CONTENT_SIZE = 64 * 1024 * 1024
+
     _static_hashes: dict[str, str | None] = {}
     _lock = threading.Lock()  # protects _static_hashes
 
@@ -3110,9 +3118,19 @@ class StaticFileHandler(RequestHandler):
         as long as they are unique and understood by the subclass's
         overridden `get_content`.
 
+        Raises `HTTPError` (403) if ``path`` leads outside of ``root`` (as
+        written, e.g. with ``../``; symlinks are checked later by
+        `validate_absolute_path`). This check is also what keeps
+        `get_version` (and therefore `~RequestHandler.static_url`) from
+        reading files outside of the static directory.
+
         .. versionadded:: 3.1
+
+        .. versionchanged:: 6.6
+           Paths outside of ``root`` now raise `HTTPError`.
         """
         abspath = os.path.abspath(os.path.join(root, path))
+        cls._check_in_root(root, abspath, path)
         return abspath
 
     def validate_absolute_path(self, root: str, absolute_path: str) -> str | None:
@@ -3136,9 +3154,15 @@ class StaticFileHandler(RequestHandler):
         .. versionadded:: 3.1
         """
         root = self._check_in_root(root, absolute_path, self.path)
-        allowed_symlink_directories = self._allowed_symlink_directories(
-            root, self.allowed_symlink_directory
-        )
+        # Symlinks may point anywhere inside allowed_symlink_directory, which
+        # defaults to the directory being served. Resolve that default here,
+        # against the same root the checks above used, and normalize the one
+        # directory that is allowed by default (or configured as a plain
+        # string) to a list, so that _resolve_symlink_target has only one
+        # shape to deal with.
+        allowed_symlink_directories = self.allowed_symlink_directory or root
+        if isinstance(allowed_symlink_directories, str):
+            allowed_symlink_directories = [allowed_symlink_directories]
         # The check above is on the path as written, which is cheap and
         # rejects traversal without touching the filesystem. Resolve
         # symlinks only once it has passed, so that the remaining checks -
@@ -3182,6 +3206,20 @@ class StaticFileHandler(RequestHandler):
         # generation each resolve the path again. Every one of those is a
         # separate trip through the filesystem that could observe a
         # different file from the one validated here.
+        self._stat_result = self._stat_regular_file(absolute_path, self.path)
+        return absolute_path
+
+    @staticmethod
+    def _stat_regular_file(absolute_path: str, path_message: str) -> os.stat_result:
+        """Stats ``absolute_path`` and checks that it is a regular file.
+
+        Raises `HTTPError` (404) if the path cannot be stat'ed, or (403) if
+        it is anything other than a regular file. Directories, devices (such
+        as ``/dev/zero``, or ``CON`` and ``NUL``, which exist in every
+        directory on Windows), FIFOs and sockets must never be read: some of
+        them never end, and opening a FIFO blocks until there is a writer.
+        ``path_message`` is used only to build the error message.
+        """
         try:
             stat_result = os.stat(absolute_path)
         except OSError:
@@ -3189,9 +3227,8 @@ class StaticFileHandler(RequestHandler):
             # false when the path cannot be stat'ed at all.
             raise HTTPError(404)
         if not stat.S_ISREG(stat_result.st_mode):
-            raise HTTPError(403, "%s is not a file", self.path)
-        self._stat_result = stat_result
-        return absolute_path
+            raise HTTPError(403, "%s is not a file", path_message)
+        return stat_result
 
     @staticmethod
     def _check_in_root(root: str, absolute_path: str, path_message: str) -> str:
@@ -3218,23 +3255,6 @@ class StaticFileHandler(RequestHandler):
         if not (absolute_path + os.path.sep).startswith(root):
             raise HTTPError(403, "%s is not in root static directory", path_message)
         return root
-
-    @staticmethod
-    def _allowed_symlink_directories(
-        root: str, allowed_symlink_directory: str | list[str] | None
-    ) -> list[str]:
-        """Returns the directories symlinks may point into, as a list.
-
-        Symlinks may point anywhere inside allowed_symlink_directory, which
-        defaults to the directory being served (``root``, as returned by
-        `_check_in_root`). The one directory that is allowed by default (or
-        configured as a plain string) is normalized to a list, so that
-        `_resolve_symlink_target` has only one shape to deal with.
-        """
-        allowed_symlink_directories = allowed_symlink_directory or root
-        if isinstance(allowed_symlink_directories, str):
-            allowed_symlink_directories = [allowed_symlink_directories]
-        return allowed_symlink_directories
 
     @staticmethod
     def _resolve_symlink_target(
@@ -3310,7 +3330,14 @@ class StaticFileHandler(RequestHandler):
         as it helps reduce memory fragmentation.
 
         .. versionadded:: 3.1
+
+        .. versionchanged:: 6.6
+           Raises `HTTPError` if ``abspath`` is not a regular file.
         """
+        # validate_absolute_path has already checked this when serving a
+        # request, but get_content_version (for static_url) reaches this
+        # method with nothing but get_absolute_path in between.
+        cls._stat_regular_file(abspath, abspath)
         with open(abspath, "rb") as file:
             if start is not None:
                 file.seek(start)
@@ -3339,15 +3366,34 @@ class StaticFileHandler(RequestHandler):
         This class method may be overridden by subclasses.  The
         default implementation is a SHA-512 hash of the file's contents.
 
+        The hash is computed synchronously, so content larger than
+        `MAX_VERSION_CONTENT_SIZE` is not hashed (and gets no version)
+        rather than blocking the event loop for a long time.
+
         .. versionadded:: 3.1
+
+        .. versionchanged:: 6.6
+           Content larger than `MAX_VERSION_CONTENT_SIZE` raises `ValueError`.
         """
         data = cls.get_content(abspath)
+        chunks = [data] if isinstance(data, bytes) else data
         hasher = hashlib.sha512()
-        if isinstance(data, bytes):
-            hasher.update(data)
-        else:
-            for chunk in data:
+        size = 0
+        try:
+            for chunk in chunks:
+                size += len(chunk)
+                if size > cls.MAX_VERSION_CONTENT_SIZE:
+                    raise ValueError(
+                        "content is larger than MAX_VERSION_CONTENT_SIZE (%d bytes)"
+                        % cls.MAX_VERSION_CONTENT_SIZE
+                    )
                 hasher.update(chunk)
+        finally:
+            # Close the file now, rather than when the generator is collected,
+            # if we stopped early.
+            close = getattr(chunks, "close", None)
+            if close is not None:
+                close()
         return hasher.hexdigest()
 
     def _stat(self) -> os.stat_result:
@@ -3498,56 +3544,19 @@ class StaticFileHandler(RequestHandler):
            This method was previously recommended for subclasses to override;
            `get_content_version` is now preferred as it allows the base
            class to handle caching of the result.
-
-        .. versionchanged:: 6.6
-           Paths outside ``static_path`` (including symlinks that point
-           outside of ``allowed_symlink_directory`` as configured in
-           ``static_handler_args``) and paths that are not regular files
-           are no longer read, and get no version.
         """
-        root = settings["static_path"]
-        abs_path = cls.get_absolute_path(root, path)
-        allowed_symlink_directory = settings.get("static_handler_args", {}).get(
-            "allowed_symlink_directory"
-        )
-
-        def validate() -> str:
-            # The same checks validate_absolute_path applies when the file is
-            # served. Without them, static_url() would read (and leak a hash
-            # of) any file on the system named with ../ or reached through a
-            # symlink, and a path like /dev/zero would hang the event loop.
-            checked_root = cls._check_in_root(root, abs_path, path)
-            resolved_path = cls._resolve_symlink_target(
-                abs_path,
-                cls._allowed_symlink_directories(
-                    checked_root, allowed_symlink_directory
-                ),
-                path,
-            )
-            if not stat.S_ISREG(os.stat(resolved_path).st_mode):
-                raise HTTPError(403, "%s is not a file", path)
-            return resolved_path
-
-        return cls._get_cached_version(abs_path, validate)
+        abs_path = cls.get_absolute_path(settings["static_path"], path)
+        return cls._get_cached_version(abs_path)
 
     @classmethod
-    def _get_cached_version(
-        cls, abs_path: str, validate: Callable[[], str] | None = None
-    ) -> str | None:
-        """Returns the (cached) version of the file at ``abs_path``.
-
-        ``validate``, if given, is called before the file is first read; it
-        returns the path to read or raises if the file must not be read.
-        Callers that have already validated ``abs_path`` may omit it.
-        """
+    def _get_cached_version(cls, abs_path: str) -> str | None:
         with cls._lock:
             hashes = cls._static_hashes
             if abs_path not in hashes:
                 try:
-                    content_path = abs_path if validate is None else validate()
-                    hashes[abs_path] = cls.get_content_version(content_path)
-                except Exception:
-                    gen_log.error("Could not open static file %r", abs_path)
+                    hashes[abs_path] = cls.get_content_version(abs_path)
+                except Exception as e:
+                    gen_log.error("Could not open static file %r: %s", abs_path, e)
                     hashes[abs_path] = None
             hsh = hashes.get(abs_path)
             if hsh:
