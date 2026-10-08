@@ -5,6 +5,7 @@ import copy
 import datetime
 import email.utils
 import gzip
+import hashlib
 import http
 import itertools
 import logging
@@ -1911,6 +1912,92 @@ class MultiRootStaticFileHandler(StaticFileHandler):
                 root = candidate
                 break
         return super().validate_absolute_path(root, absolute_path)
+
+
+@unittest.skipIf(os.name != "posix", "non-posix OS")
+class StaticFileVersionPathTest(TestCase):
+    """``get_version`` (used by ``static_url``) must apply the same path
+    checks as serving the file, so that it never reads, or leaks a hash of,
+    anything outside the static directory.
+    """
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmpdir)
+        self.root = os.path.join(self.tmpdir, "static")
+        self.outside = os.path.join(self.tmpdir, "outside")
+        os.mkdir(self.root)
+        os.mkdir(self.outside)
+        with open(os.path.join(self.root, "inside.txt"), "w", encoding="utf-8") as f:
+            f.write("inside")
+        with open(os.path.join(self.outside, "secret.txt"), "w", encoding="utf-8") as f:
+            f.write("secret")
+        os.symlink(
+            os.path.join(self.outside, "secret.txt"),
+            os.path.join(self.root, "link.txt"),
+        )
+        os.symlink(
+            os.path.join(self.root, "inside.txt"),
+            os.path.join(self.root, "internal.txt"),
+        )
+        StaticFileHandler.reset()
+        self.addCleanup(StaticFileHandler.reset)
+        super().setUp()
+
+    def get_version(self, path, **static_handler_args):
+        settings = dict(static_path=self.root)
+        if static_handler_args:
+            settings["static_handler_args"] = static_handler_args
+        return StaticFileHandler.get_version(settings, path)
+
+    def test_regular_file(self):
+        self.assertEqual(
+            self.get_version("inside.txt"), hashlib.sha512(b"inside").hexdigest()
+        )
+
+    def test_symlink_within_root(self):
+        self.assertEqual(
+            self.get_version("internal.txt"), hashlib.sha512(b"inside").hexdigest()
+        )
+
+    def test_traversal(self):
+        with ExpectLog(gen_log, "Could not open static file"):
+            self.assertIsNone(self.get_version("../outside/secret.txt"))
+
+    def test_symlink_escaping_root(self):
+        with ExpectLog(gen_log, "Could not open static file"):
+            self.assertIsNone(self.get_version("link.txt"))
+
+    def test_allowed_symlink_directory(self):
+        # static_handler_args configures the handler that will serve the
+        # file, so get_version honors its allowed_symlink_directory too.
+        self.assertEqual(
+            self.get_version("link.txt", allowed_symlink_directory=self.tmpdir),
+            hashlib.sha512(b"secret").hexdigest(),
+        )
+
+    def test_allowed_symlink_directory_does_not_allow_traversal(self):
+        with ExpectLog(gen_log, "Could not open static file"):
+            self.assertIsNone(
+                self.get_version(
+                    "../outside/secret.txt", allowed_symlink_directory=self.tmpdir
+                )
+            )
+
+    @unittest.skipIf(not os.path.exists("/dev/zero"), "no /dev/zero")
+    def test_device_file(self):
+        # Hashing /dev/zero would never finish. Reach it through a symlink
+        # that is explicitly allowed, so that only the regular-file check
+        # stands in the way.
+        os.symlink("/dev/zero", os.path.join(self.root, "zero"))
+        with ExpectLog(gen_log, "Could not open static file"):
+            self.assertIsNone(self.get_version("zero", allowed_symlink_directory="/"))
+
+    def test_fifo(self):
+        # Opening a FIFO with no writer would block forever.
+        os.mkfifo(os.path.join(self.root, "fifo"))
+        with ExpectLog(gen_log, "Could not open static file"):
+            self.assertIsNone(self.get_version("fifo"))
 
 
 @unittest.skipIf(os.name != "posix", "non-posix OS")

@@ -3135,31 +3135,10 @@ class StaticFileHandler(RequestHandler):
 
         .. versionadded:: 3.1
         """
-        # os.path.abspath strips a trailing /.
-        # We must add it back to `root` so that we only match files
-        # in a directory named `root` instead of files starting with
-        # that prefix.
-        root = os.path.abspath(root)
-        if not root.endswith(os.path.sep):
-            # abspath always removes a trailing slash, except when
-            # root is '/'. This is an unusual case, but several projects
-            # have independently discovered this technique to disable
-            # Tornado's path validation and (hopefully) do their own,
-            # so we need to support it.
-            root += os.path.sep
-        # The trailing slash also needs to be temporarily added back
-        # the requested path so a request to root/ will match.
-        if not (absolute_path + os.path.sep).startswith(root):
-            raise HTTPError(403, "%s is not in root static directory", self.path)
-        # Symlinks may point anywhere inside allowed_symlink_directory, which
-        # defaults to the directory being served. Resolve that default here,
-        # against the same root the checks above used, and normalize the one
-        # directory that is allowed by default (or configured as a plain
-        # string) to a list, so that _resolve_symlink_target has only one
-        # shape to deal with.
-        allowed_symlink_directories = self.allowed_symlink_directory or root
-        if isinstance(allowed_symlink_directories, str):
-            allowed_symlink_directories = [allowed_symlink_directories]
+        root = self._check_in_root(root, absolute_path, self.path)
+        allowed_symlink_directories = self._allowed_symlink_directories(
+            root, self.allowed_symlink_directory
+        )
         # The check above is on the path as written, which is cheap and
         # rejects traversal without touching the filesystem. Resolve
         # symlinks only once it has passed, so that the remaining checks -
@@ -3213,6 +3192,49 @@ class StaticFileHandler(RequestHandler):
             raise HTTPError(403, "%s is not a file", self.path)
         self._stat_result = stat_result
         return absolute_path
+
+    @staticmethod
+    def _check_in_root(root: str, absolute_path: str, path_message: str) -> str:
+        """Checks that ``absolute_path`` (as written) is inside ``root``.
+
+        Returns the normalized root, with a trailing separator. Raises
+        `HTTPError` (403) if the path is outside of it. ``path_message``
+        is used only to build the error message.
+        """
+        # os.path.abspath strips a trailing /.
+        # We must add it back to `root` so that we only match files
+        # in a directory named `root` instead of files starting with
+        # that prefix.
+        root = os.path.abspath(root)
+        if not root.endswith(os.path.sep):
+            # abspath always removes a trailing slash, except when
+            # root is '/'. This is an unusual case, but several projects
+            # have independently discovered this technique to disable
+            # Tornado's path validation and (hopefully) do their own,
+            # so we need to support it.
+            root += os.path.sep
+        # The trailing slash also needs to be temporarily added back
+        # the requested path so a request to root/ will match.
+        if not (absolute_path + os.path.sep).startswith(root):
+            raise HTTPError(403, "%s is not in root static directory", path_message)
+        return root
+
+    @staticmethod
+    def _allowed_symlink_directories(
+        root: str, allowed_symlink_directory: str | list[str] | None
+    ) -> list[str]:
+        """Returns the directories symlinks may point into, as a list.
+
+        Symlinks may point anywhere inside allowed_symlink_directory, which
+        defaults to the directory being served (``root``, as returned by
+        `_check_in_root`). The one directory that is allowed by default (or
+        configured as a plain string) is normalized to a list, so that
+        `_resolve_symlink_target` has only one shape to deal with.
+        """
+        allowed_symlink_directories = allowed_symlink_directory or root
+        if isinstance(allowed_symlink_directories, str):
+            allowed_symlink_directories = [allowed_symlink_directories]
+        return allowed_symlink_directories
 
     @staticmethod
     def _resolve_symlink_target(
@@ -3476,17 +3498,54 @@ class StaticFileHandler(RequestHandler):
            This method was previously recommended for subclasses to override;
            `get_content_version` is now preferred as it allows the base
            class to handle caching of the result.
+
+        .. versionchanged:: 6.6
+           Paths outside ``static_path`` (including symlinks that point
+           outside of ``allowed_symlink_directory`` as configured in
+           ``static_handler_args``) and paths that are not regular files
+           are no longer read, and get no version.
         """
-        abs_path = cls.get_absolute_path(settings["static_path"], path)
-        return cls._get_cached_version(abs_path)
+        root = settings["static_path"]
+        abs_path = cls.get_absolute_path(root, path)
+        allowed_symlink_directory = settings.get("static_handler_args", {}).get(
+            "allowed_symlink_directory"
+        )
+
+        def validate() -> str:
+            # The same checks validate_absolute_path applies when the file is
+            # served. Without them, static_url() would read (and leak a hash
+            # of) any file on the system named with ../ or reached through a
+            # symlink, and a path like /dev/zero would hang the event loop.
+            checked_root = cls._check_in_root(root, abs_path, path)
+            resolved_path = cls._resolve_symlink_target(
+                abs_path,
+                cls._allowed_symlink_directories(
+                    checked_root, allowed_symlink_directory
+                ),
+                path,
+            )
+            if not stat.S_ISREG(os.stat(resolved_path).st_mode):
+                raise HTTPError(403, "%s is not a file", path)
+            return resolved_path
+
+        return cls._get_cached_version(abs_path, validate)
 
     @classmethod
-    def _get_cached_version(cls, abs_path: str) -> str | None:
+    def _get_cached_version(
+        cls, abs_path: str, validate: Callable[[], str] | None = None
+    ) -> str | None:
+        """Returns the (cached) version of the file at ``abs_path``.
+
+        ``validate``, if given, is called before the file is first read; it
+        returns the path to read or raises if the file must not be read.
+        Callers that have already validated ``abs_path`` may omit it.
+        """
         with cls._lock:
             hashes = cls._static_hashes
             if abs_path not in hashes:
                 try:
-                    hashes[abs_path] = cls.get_content_version(abs_path)
+                    content_path = abs_path if validate is None else validate()
+                    hashes[abs_path] = cls.get_content_version(content_path)
                 except Exception:
                     gen_log.error("Could not open static file %r", abs_path)
                     hashes[abs_path] = None
