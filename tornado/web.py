@@ -1846,6 +1846,15 @@ class RequestHandler:
         that value will be used as the default for all `static_url`
         calls that do not pass ``include_host`` as a keyword argument.
 
+        In the default implementation, a ``path`` that leads outside of
+        ``static_path`` (e.g. with ``../``) raises `HTTPError` (403).
+        Symlinks inside ``static_path`` are followed when computing the
+        version, even if they point outside of it; see `StaticFileHandler`.
+
+        .. versionchanged:: 6.6
+           Paths outside of ``static_path`` now raise `HTTPError`, and
+           files that are not regular files (or are larger than
+           `StaticFileHandler.MAX_VERSION_CONTENT_SIZE`) get no version.
         """
         self.require_setting("static_path", "static_url")
         get_url = self.settings.get(
@@ -2869,6 +2878,15 @@ class StaticFileHandler(RequestHandler):
     pointing elsewhere can set the ``allowed_symlink_directory`` initializer
     argument to a directory containing all of the intended targets, or to a
     list of such directories. It defaults to the ``path`` argument.
+
+    This symlink check applies only when serving files. `make_static_url`
+    (and therefore `RequestHandler.static_url`) runs without a handler
+    instance, so it cannot see ``allowed_symlink_directory``, and it will
+    compute a version hash for any regular file that a symlink inside the
+    static directory points to, wherever that file is. The file's contents
+    are never served this way, but its hash (and whether it exists) is
+    revealed in the URL. Symlinks in the static directory should therefore
+    only be created by people trusted with the files they point to.
 
     To maximize the effectiveness of browser caching, this class supports
     versioned urls (by default using the argument ``?v=``).  If a version
