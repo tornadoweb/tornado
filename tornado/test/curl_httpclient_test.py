@@ -189,8 +189,15 @@ class CustomFailReasonHandler(RequestHandler):
         self.set_status(400, "Custom reason")
 
 
+class NonUtf8HeaderHandler(RequestHandler):
+    def get(self):
+        self.set_header("X-Test", "caf\u00e9")
+
+
 @unittest.skipIf(pycurl is None, "pycurl module not present")
 class CurlHTTPClientTestCase(AsyncHTTPTestCase):
+    http_client: "CurlAsyncHTTPClient"
+
     def setUp(self):
         super().setUp()
         self.http_client = create_client()
@@ -206,6 +213,7 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
                 ),
                 ("/custom_reason", CustomReasonHandler),
                 ("/custom_fail_reason", CustomFailReasonHandler),
+                ("/non_utf8_header", NonUtf8HeaderHandler),
             ]
         )
 
@@ -218,6 +226,49 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
     def test_custom_reason(self):
         response = self.fetch("/custom_reason")
         self.assertEqual(response.reason, "Custom reason")
+
+    def test_debug_non_utf8(self):
+        for debug_type, prefix in ((0, ""), (1, "< "), (2, "> ")):
+            with self.subTest(debug_type=debug_type):
+                with self.assertLogs("tornado.curl_httpclient", "DEBUG") as logs:
+                    self.http_client._curl_debug(debug_type, b"caf\xe9\r\n\x00\xff")
+                self.assertEqual(
+                    [record.getMessage() for record in logs.records],
+                    [prefix + "b'caf\\xe9\\r\\n\\x00\\xff'"],
+                )
+
+    def test_debug_utf8(self):
+        for debug_type, expected in (
+            (0, ["caf\u00e9\r\nsecond"]),
+            (1, ["< caf\u00e9", "< second"]),
+            (2, ["> caf\u00e9", "> second"]),
+        ):
+            with self.subTest(debug_type=debug_type):
+                with self.assertLogs("tornado.curl_httpclient", "DEBUG") as logs:
+                    self.http_client._curl_debug(
+                        debug_type, utf8("caf\u00e9\r\nsecond\r\n")
+                    )
+                self.assertEqual(
+                    [record.getMessage() for record in logs.records], expected
+                )
+
+    def test_debug_binary_data(self):
+        with self.assertLogs("tornado.curl_httpclient", "DEBUG") as logs:
+            for debug_type in (3, 4, 5, 6):
+                self.http_client._curl_debug(debug_type, b"\x00\xff")
+        self.assertEqual(
+            [record.getMessage() for record in logs.records], ["> b'\\x00\\xff'"]
+        )
+
+    def test_debug_non_utf8_response_header(self):
+        with self.assertLogs("tornado.curl_httpclient", "DEBUG") as logs:
+            response = self.fetch("/non_utf8_header")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.headers["X-Test"], "caf\u00e9")
+        self.assertIn(
+            "< b'X-Test: caf\\xe9\\r\\n'",
+            [record.getMessage() for record in logs.records],
+        )
 
     def test_fail_custom_reason(self):
         response = self.fetch("/custom_fail_reason")
