@@ -645,6 +645,56 @@ class ParseRequestStartLineTest(TestCase):
         self.assertEqual(parsed_start_line.version, self.VERSION)
 
 
+class AbsoluteFormRequestTargetTest(TestCase):
+    def test_absolute_form_replaces_host_and_path(self):
+        # RFC 9112 section 3.2.2: the request-target host wins over Host.
+        headers = HTTPHeaders({"Host": "ignored.example"})
+        request = HTTPServerRequest(
+            start_line=RequestStartLine(
+                "GET", "http://origin.example:8080/app/path?x=1", "HTTP/1.1"
+            ),
+            headers=headers,
+        )
+        self.assertEqual(request.uri, "/app/path?x=1")
+        self.assertEqual(request.path, "/app/path")
+        self.assertEqual(request.query, "x=1")
+        self.assertEqual(request.host, "origin.example:8080")
+        self.assertEqual(request.headers["Host"], "origin.example:8080")
+        self.assertEqual(request.arguments["x"], [b"1"])
+
+    def test_absolute_form_without_path_or_host_header(self):
+        request = HTTPServerRequest(
+            start_line=RequestStartLine("GET", "https://example.com", "HTTP/1.1")
+        )
+        self.assertEqual(request.uri, "/")
+        self.assertEqual(request.path, "/")
+        self.assertEqual(request.host, "example.com")
+        # The connection protocol is unchanged; only the target host is taken.
+        self.assertEqual(request.protocol, "http")
+
+    def test_absolute_form_ipv6(self):
+        request = HTTPServerRequest(
+            start_line=RequestStartLine(
+                "GET", "http://[2001:db8::1]:9/echo", "HTTP/1.1"
+            )
+        )
+        self.assertEqual(request.path, "/echo")
+        self.assertEqual(request.host, "[2001:db8::1]:9")
+
+    def test_origin_form_and_scheme_relative_path_unchanged(self):
+        request = HTTPServerRequest(
+            start_line=RequestStartLine("GET", "/foo", "HTTP/1.0"),
+            headers=HTTPHeaders({"Host": "example.com"}),
+        )
+        self.assertEqual(request.path, "/foo")
+        self.assertEqual(request.host, "example.com")
+        relative = HTTPServerRequest(
+            start_line=RequestStartLine("GET", "//doubleslash", "HTTP/1.0")
+        )
+        self.assertEqual(relative.uri, "//doubleslash")
+        self.assertEqual(relative.path, "//doubleslash")
+
+
 class ParseCookieTest(TestCase):
     # These tests copied from Django:
     # https://github.com/django/django/pull/6277/commits/da810901ada1cae9fc1f018f879f11a7fb467b28

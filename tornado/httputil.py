@@ -365,6 +365,35 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
     __unicode__ = __str__
 
 
+def _normalize_absolute_form(uri: str) -> tuple[str, str] | None:
+    """Return origin-form target and host for an absolute-form request-target.
+
+    RFC 9112 section 3.2.2 requires an origin server to accept
+    ``GET http://host/path HTTP/1.1`` and to use that target's host
+    instead of the Host header. Origin-form, authority-form, and
+    asterisk-form targets are left unchanged.
+    """
+    parsed = urlparse(uri)
+    if parsed.scheme.lower() not in ("http", "https") or not parsed.netloc:
+        return None
+    hostname = parsed.hostname
+    if not hostname:
+        return None
+    if ":" in hostname:
+        hostname = "[%s]" % hostname
+    if parsed.port is not None:
+        host = "%s:%d" % (hostname, parsed.port)
+    else:
+        host = hostname
+    path = parsed.path or "/"
+    if not path.startswith("/"):
+        return None
+    origin = path
+    if parsed.query:
+        origin += "?" + parsed.query
+    return origin, host
+
+
 class HTTPServerRequest:
     """A single HTTP request.
 
@@ -376,7 +405,8 @@ class HTTPServerRequest:
 
     .. attribute:: uri
 
-       The requested uri.
+       The requested uri, in origin-form. An absolute-form request-target
+       is rewritten to its path and query (see `host`).
 
     .. attribute:: path
 
@@ -418,6 +448,9 @@ class HTTPServerRequest:
     .. attribute:: host
 
        The requested hostname, usually taken from the ``Host`` header.
+       If the request-target is absolute-form, the host is taken from
+       that target and the ``Host`` header is ignored (RFC 9112
+       section 3.2.2).
 
     .. attribute:: arguments
 
@@ -516,6 +549,14 @@ class HTTPServerRequest:
             )
             self.headers["Host"] = host
             del host
+
+        if self.uri is not None:
+            absolute = _normalize_absolute_form(self.uri)
+            if absolute is not None:
+                self.uri, absolute_host = absolute
+                # The request-target host replaces Host, including a Host
+                # supplied via the deprecated constructor argument.
+                self.headers["Host"] = absolute_host
 
         self.body = body or b""
 
