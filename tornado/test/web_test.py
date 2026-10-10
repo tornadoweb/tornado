@@ -2065,6 +2065,13 @@ class StaticDefaultFilenameRootTest(WebTestCase):
             )
         self.assertEqual(response.code, 403)
 
+    def test_no_open_redirect_backslash(self):
+        # Browsers treat a backslash like a slash, so a redirect to /\evil.com
+        # is protocol-relative too. This form doesn't need the server-side path.
+        with ExpectLog(gen_log, ".*cannot redirect path with two initial slashes"):
+            response = self.fetch("/\\evil.com/../dir", follow_redirects=False)
+        self.assertEqual(response.code, 403)
+
 
 class StaticFileWithPathTest(WebTestCase):
     def get_app_kwargs(self):
@@ -4252,6 +4259,15 @@ class RedirectHandlerTest(WebTestCase):
         with ExpectLog(app_log, "Uncaught exception"):
             response = self.fetch("/a//example.com/a/b", follow_redirects=False)
         self.assertEqual(response.code, 500)
+
+        # Browsers treat backslashes like slashes and ignore tabs and newlines,
+        # so these variants are also protocol-relative. Path arguments are
+        # url-decoded, so they can be smuggled in with percent-encoding.
+        for path in ["/a/%5Cexample.com/b", "/a/%09/example.com/b"]:
+            with self.subTest(path=path):
+                with ExpectLog(app_log, "Uncaught exception"):
+                    response = self.fetch(path, follow_redirects=False)
+                self.assertEqual(response.code, 500)
 
 
 class AcceptLanguageTest(WebTestCase):

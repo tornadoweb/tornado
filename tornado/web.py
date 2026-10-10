@@ -2829,7 +2829,7 @@ class RedirectHandler(RequestHandler):
                 to_url,
                 list(httputil.qs_to_qsl(self.request.query_arguments)),  # type: ignore
             )
-        if to_url.startswith("//") and not self._url.startswith("//"):
+        if _is_protocol_relative(to_url) and not _is_protocol_relative(self._url):
             raise ValueError(
                 "Redirect URL cannot start with '//' if template does not."
             )
@@ -3176,7 +3176,7 @@ class StaticFileHandler(RequestHandler):
             # but there is some prefix to the path that was already
             # trimmed by the routing
             if not self.request.path.endswith("/"):
-                if self.request.path.startswith("//"):
+                if _is_protocol_relative(self.request.path):
                     # A redirect with two initial slashes is a "protocol-relative" URL.
                     # This means the next path segment is treated as a hostname instead
                     # of a part of the path, making this effectively an open redirect.
@@ -4091,3 +4091,17 @@ def _create_signature_v2(secret: str | bytes, s: bytes) -> bytes:
 
 def is_absolute(path: str) -> bool:
     return any(path.startswith(x) for x in ["/", "http:", "https:"])
+
+
+def _is_protocol_relative(url: str) -> bool:
+    """Returns True if a browser would treat ``url`` as a protocol-relative URL.
+
+    A protocol-relative URL (``//example.com/path``) names a host, so redirecting
+    to one that was built from untrusted input is an open redirect. Browsers
+    follow the WHATWG URL spec, which strips leading control characters and
+    spaces, removes tabs and newlines anywhere in the URL, and treats backslashes
+    like forward slashes, so a plain ``startswith("//")`` check is not enough.
+    """
+    url = url.lstrip("".join(chr(i) for i in range(0x21)))
+    url = url.replace("\t", "").replace("\n", "").replace("\r", "")
+    return url[:1] in ("/", "\\") and url[1:2] in ("/", "\\")
