@@ -245,8 +245,9 @@ class Locale:
                 code = parts[0].lower() + "_" + parts[1].upper()
             if code in _supported_locales:
                 return cls.get(code)
-            if parts[0].lower() in _supported_locales:
-                return cls.get(parts[0].lower())
+            language = parts[0].lower()
+            if language in _supported_locales:
+                return cls._get(code, language)
         return cls.get(_default_locale)
 
     @classmethod
@@ -255,9 +256,14 @@ class Locale:
 
         If it is not supported, we raise an exception.
         """
+        return cls._get(code, code)
+
+    @classmethod
+    def _get(cls, code: str, translation_code: str) -> Locale:
+        if translation_code not in _supported_locales:
+            raise ValueError("Unsupported locale code: %s" % code)
         if code not in cls._cache:
-            assert code in _supported_locales
-            translations = _translations.get(code, None)
+            translations = _translations.get(translation_code, None)
             if translations is None:
                 locale: Locale = CSVLocale(code, {})
             elif _use_gettext:
