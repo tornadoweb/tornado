@@ -137,6 +137,67 @@ class SSLTest(AsyncHTTPSTestCase):
         self.assertFalse(expect_log.logged_stack)
 
 
+class SSLClientCertificateTest(AsyncHTTPSTestCase):
+    def get_app(self):
+        class CertificateHandler(RequestHandler):
+            def get(self):
+                binary_form = self.get_argument("binary_form", None)
+                if binary_form is None:
+                    certificate = self.request.get_ssl_certificate()
+                else:
+                    certificate = self.request.get_ssl_certificate(
+                        binary_form=binary_form == "true"
+                    )
+                if certificate is None:
+                    self.set_status(204)
+                else:
+                    self.write(certificate)
+
+        return Application([("/", CertificateHandler)])
+
+    def get_ssl_options(self):
+        options = super().get_ssl_options()
+        options.update(cert_reqs=ssl.CERT_OPTIONAL, ca_certs=options["certfile"])
+        return options
+
+    def test_get_ssl_certificate(self):
+        options = self.get_ssl_options()
+        for path in ["/", "/?binary_form=false"]:
+            with self.subTest(path=path):
+                response = self.fetch(
+                    path,
+                    client_cert=options["certfile"],
+                    client_key=options["keyfile"],
+                    raise_error=True,
+                )
+                certificate = json_decode(response.body)
+                self.assertEqual(
+                    certificate["subject"], [[["commonName", "foo.example.com"]]]
+                )
+                self.assertEqual(
+                    certificate["subjectAltName"], [["DNS", "foo.example.com"]]
+                )
+
+    def test_get_ssl_certificate_binary(self):
+        options = self.get_ssl_options()
+        response = self.fetch(
+            "/?binary_form=true",
+            client_cert=options["certfile"],
+            client_key=options["keyfile"],
+            raise_error=True,
+        )
+        with open(options["certfile"], encoding="ascii") as cert_file:
+            expected = ssl.PEM_cert_to_DER_cert(cert_file.read())
+        self.assertEqual(response.body, expected)
+
+    def test_no_client_certificate(self):
+        for path in ["/", "/?binary_form=false", "/?binary_form=true"]:
+            with self.subTest(path=path):
+                response = self.fetch(path, raise_error=True)
+                self.assertEqual(response.code, 204)
+                self.assertEqual(response.body, b"")
+
+
 class BadSSLOptionsTest(TestCase):
     def test_missing_arguments(self):
         application = Application()
