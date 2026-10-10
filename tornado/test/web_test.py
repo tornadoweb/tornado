@@ -5,6 +5,7 @@ import copy
 import datetime
 import email.utils
 import gzip
+import hashlib
 import http
 import itertools
 import logging
@@ -1300,6 +1301,12 @@ class CancellationTest(WebTestCase):
         self.assertTrue(self.handler_task.cancelled())
 
 
+# Windows has some magic filenames that are special and (in some ways) "exist"
+# in every directory. These filenames are used to access stdio and hardware
+# devices and so must never be read as static files.
+WINDOWS_SPECIAL_FILENAMES = ["CON", "PRN", "AUX", "NUL", "COM1", "LPT1"]
+
+
 class StaticFileTest(WebTestCase):
     # The expected SHA-512 hash of robots.txt, used in tests that call
     # StaticFileHandler.get_version
@@ -1380,25 +1387,14 @@ class StaticFileTest(WebTestCase):
         )
 
     def test_static_windows_special_filenames(self):
-        # Windows has some magic filenames that are special and (in some ways) "exist"
-        # in every directory. These filenames are used to access stdio and hardware
-        # devices and so should not be served as static files.
-        filenames = [
-            "CON",
-            "PRN",
-            "AUX",
-            "NUL",
-            "COM1",
-            "LPT1",
-        ]
-        for filename in filenames:
+        for filename in WINDOWS_SPECIAL_FILENAMES:
             with self.subTest(filename=filename):
                 # The 403 below is raised with a log message, so it must be
                 # expected here. It is not required because the 404 path (and
                 # every platform other than windows) does not log anything.
                 with ExpectLog(
                     gen_log,
-                    ".*is not in root static directory",
+                    ".*is not (in root static directory|a file)",
                     required=False,
                     level=logging.WARNING,
                 ):
@@ -1406,8 +1402,9 @@ class StaticFileTest(WebTestCase):
                 # The exact behavior of these filenames differs across versions of
                 # Windows and Python.
                 # https://github.com/python/cpython/issues/90520#issuecomment-1093942179
-                # This sometimes hits the "file not in static root directory" check (which
-                # returns 403) and sometimes the "file does not exist" check (which returns 404).
+                # This sometimes hits the "file not in static root directory" or "not a
+                # file" checks (which return 403) and sometimes the "file does not exist"
+                # check (which returns 404).
                 # Either outcome is fine as long as we don't actually try to serve the file.
                 self.assertIn(response.code, (404, 403))
 
@@ -1911,6 +1908,98 @@ class MultiRootStaticFileHandler(StaticFileHandler):
                 root = candidate
                 break
         return super().validate_absolute_path(root, absolute_path)
+
+
+class StaticFileVersionPathTest(TestCase):
+    """``get_version`` (used by ``static_url``) must never read anything
+    outside the static directory, or anything that is not a regular file.
+    """
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmpdir)
+        self.root = os.path.join(self.tmpdir, "static")
+        self.outside = os.path.join(self.tmpdir, "outside")
+        os.mkdir(self.root)
+        os.mkdir(self.outside)
+        os.mkdir(os.path.join(self.root, "subdir"))
+        with open(os.path.join(self.root, "inside.txt"), "w", encoding="utf-8") as f:
+            f.write("inside")
+        with open(os.path.join(self.outside, "secret.txt"), "w", encoding="utf-8") as f:
+            f.write("secret")
+        StaticFileHandler.reset()
+        self.addCleanup(StaticFileHandler.reset)
+        super().setUp()
+
+    def get_version(self, path, handler_class=StaticFileHandler):
+        return handler_class.get_version(dict(static_path=self.root), path)
+
+    def test_regular_file(self):
+        self.assertEqual(
+            self.get_version("inside.txt"), hashlib.sha512(b"inside").hexdigest()
+        )
+
+    def test_traversal(self):
+        with self.assertRaises(HTTPError) as cm:
+            self.get_version("../outside/secret.txt")
+        self.assertEqual(cm.exception.status_code, 403)
+
+    def test_directory(self):
+        with ExpectLog(gen_log, "Could not open static file.*is not a file"):
+            self.assertIsNone(self.get_version("subdir"))
+
+    def test_windows_special_filenames(self):
+        # These exist (as devices) in every directory on Windows; elsewhere
+        # they are simply missing. Either way they must get no version.
+        for filename in WINDOWS_SPECIAL_FILENAMES:
+            with self.subTest(filename=filename):
+                with ExpectLog(gen_log, "Could not open static file", required=False):
+                    try:
+                        version = self.get_version(filename)
+                    except HTTPError as e:
+                        # Some versions of Python on Windows turn these into
+                        # paths like \\.\CON, which get_absolute_path
+                        # rejects as being outside the root.
+                        self.assertEqual(e.status_code, 403)
+                    else:
+                        self.assertIsNone(version)
+
+    def test_max_size(self):
+        class SmallStaticFileHandler(StaticFileHandler):
+            MAX_VERSION_CONTENT_SIZE = len(b"inside")
+
+        self.assertEqual(
+            self.get_version("inside.txt", SmallStaticFileHandler),
+            hashlib.sha512(b"inside").hexdigest(),
+        )
+        SmallStaticFileHandler.reset()
+        SmallStaticFileHandler.MAX_VERSION_CONTENT_SIZE -= 1
+        with ExpectLog(gen_log, "Could not open static file.*larger than"):
+            self.assertIsNone(self.get_version("inside.txt", SmallStaticFileHandler))
+
+    @unittest.skipIf(os.name != "posix", "non-posix OS")
+    def test_symlink_within_root(self):
+        os.symlink(
+            os.path.join(self.root, "inside.txt"),
+            os.path.join(self.root, "internal.txt"),
+        )
+        self.assertEqual(
+            self.get_version("internal.txt"), hashlib.sha512(b"inside").hexdigest()
+        )
+
+    @unittest.skipIf(not os.path.exists("/dev/zero"), "no /dev/zero")
+    def test_symlink_to_device(self):
+        # Hashing /dev/zero would never finish.
+        os.symlink("/dev/zero", os.path.join(self.root, "zero"))
+        with ExpectLog(gen_log, "Could not open static file.*is not a file"):
+            self.assertIsNone(self.get_version("zero"))
+
+    @unittest.skipIf(not hasattr(os, "mkfifo"), "no FIFOs")
+    def test_fifo(self):
+        # Opening a FIFO with no writer would block forever.
+        os.mkfifo(os.path.join(self.root, "fifo"))
+        with ExpectLog(gen_log, "Could not open static file.*is not a file"):
+            self.assertIsNone(self.get_version("fifo"))
 
 
 @unittest.skipIf(os.name != "posix", "non-posix OS")
