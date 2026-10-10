@@ -2815,6 +2815,14 @@ class RedirectHandler(RequestHandler):
     .. versionchanged:: 5.0
        If any query arguments are present, they will be copied to the
        destination URL.
+
+    .. versionchanged:: 6.6
+       Substituted values may no longer change the scheme or netloc (user
+       info, host, and port) of the destination URL. For example, with a
+       ``url`` of ``"/{0}/b"``, a request that would redirect to
+       ``//example.com/b`` (a protocol-relative URL pointing to another host)
+       now fails with a 400 error. As a consequence, substitutions cannot be
+       used in the scheme or netloc part of the ``url``.
     """
 
     def initialize(self, url: str, permanent: bool = True) -> None:
@@ -2823,15 +2831,23 @@ class RedirectHandler(RequestHandler):
 
     def get(self, *args: Any, **kwargs: Any) -> None:
         to_url = self._url.format(*args, **kwargs)
+        # The scheme and netloc of the redirect must come from the template, not
+        # from the request. Find out what they are by formatting the template
+        # with a placeholder that cannot extend a scheme or netloc.
+        expected_url = self._url.format(
+            *("/" for _ in args), **{k: "/" for k in kwargs}
+        )
+        try:
+            unchanged = _scheme_and_netloc(to_url) == _scheme_and_netloc(expected_url)
+        except ValueError:
+            unchanged = False
+        if not unchanged:
+            raise HTTPError(400, "Redirect URL cannot change the scheme or netloc")
         if self.request.query_arguments:
             # TODO: figure out typing for the next line.
             to_url = httputil.url_concat(
                 to_url,
                 list(httputil.qs_to_qsl(self.request.query_arguments)),  # type: ignore
-            )
-        if _is_protocol_relative(to_url) and not _is_protocol_relative(self._url):
-            raise ValueError(
-                "Redirect URL cannot start with '//' if template does not."
             )
         self.redirect(to_url, permanent=self._permanent)
 
@@ -4093,15 +4109,35 @@ def is_absolute(path: str) -> bool:
     return any(path.startswith(x) for x in ["/", "http:", "https:"])
 
 
+def _normalize_url_like_browser(url: str) -> str:
+    """Approximates how a browser cleans up a URL before parsing it.
+
+    Browsers follow the WHATWG URL spec, which strips leading and trailing
+    control characters and spaces, removes tabs and newlines anywhere in the
+    URL, and (for http and https) treats backslashes like forward slashes. Checks
+    on redirect URLs built from untrusted input must account for this.
+    """
+    url = url.strip("".join(chr(i) for i in range(0x21)))
+    url = url.replace("\t", "").replace("\n", "").replace("\r", "")
+    return url.replace("\\", "/")
+
+
 def _is_protocol_relative(url: str) -> bool:
     """Returns True if a browser would treat ``url`` as a protocol-relative URL.
 
     A protocol-relative URL (``//example.com/path``) names a host, so redirecting
-    to one that was built from untrusted input is an open redirect. Browsers
-    follow the WHATWG URL spec, which strips leading control characters and
-    spaces, removes tabs and newlines anywhere in the URL, and treats backslashes
-    like forward slashes, so a plain ``startswith("//")`` check is not enough.
+    to one that was built from untrusted input is an open redirect.
     """
-    url = url.lstrip("".join(chr(i) for i in range(0x21)))
-    url = url.replace("\t", "").replace("\n", "").replace("\r", "")
-    return url[:1] in ("/", "\\") and url[1:2] in ("/", "\\")
+    return _normalize_url_like_browser(url).startswith("//")
+
+
+def _scheme_and_netloc(url: str) -> tuple[str, str]:
+    """Returns the scheme and netloc a browser would see in ``url``.
+
+    The netloc includes the user info and port as well as the host.
+
+    Both are empty for a relative URL. Raises `ValueError` for some malformed
+    URLs.
+    """
+    parts = urllib.parse.urlsplit(_normalize_url_like_browser(url))
+    return parts.scheme.lower(), parts.netloc.lower()

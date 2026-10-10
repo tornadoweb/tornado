@@ -4225,6 +4225,8 @@ class RedirectHandlerTest(WebTestCase):
         return [
             ("/src", WebRedirectHandler, {"url": "/dst"}),
             ("/src2", WebRedirectHandler, {"url": "/dst2?foo=bar"}),
+            (r"/any/(.*)", WebRedirectHandler, {"url": "{0}"}),
+            (r"/moved(.*)", WebRedirectHandler, {"url": "https://example.com{0}"}),
             (r"/(.*?)/(.*?)/(.*)", WebRedirectHandler, {"url": "/{1}/{0}/{2}"}),
         ]
 
@@ -4256,18 +4258,50 @@ class RedirectHandlerTest(WebTestCase):
 
         # With a double slash this becomes //example.com/a/b, which is a protocol-relative
         # redirect to another host, which we disallow because it is an open redirect.
-        with ExpectLog(app_log, "Uncaught exception"):
+        with ExpectLog(gen_log, ".*Redirect URL cannot change the scheme or netloc"):
             response = self.fetch("/a//example.com/a/b", follow_redirects=False)
-        self.assertEqual(response.code, 500)
+        self.assertEqual(response.code, 400)
 
         # Browsers treat backslashes like slashes and ignore tabs and newlines,
         # so these variants are also protocol-relative. Path arguments are
         # url-decoded, so they can be smuggled in with percent-encoding.
         for path in ["/a/%5Cexample.com/b", "/a/%09/example.com/b"]:
             with self.subTest(path=path):
-                with ExpectLog(app_log, "Uncaught exception"):
+                with ExpectLog(
+                    gen_log, ".*Redirect URL cannot change the scheme or netloc"
+                ):
                     response = self.fetch(path, follow_redirects=False)
-                self.assertEqual(response.code, 500)
+                self.assertEqual(response.code, 400)
+
+    def test_redirect_cannot_change_host(self):
+        # Substitutions directly after the host can extend it or add userinfo.
+        response = self.fetch("/moved/x", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers["Location"], "https://example.com/x")
+        for path in ["/moved.evil.com/x", "/moved@evil.com/x", "/moved:8080/x"]:
+            with self.subTest(path=path):
+                with ExpectLog(
+                    gen_log, ".*Redirect URL cannot change the scheme or netloc"
+                ):
+                    response = self.fetch(path, follow_redirects=False)
+                self.assertEqual(response.code, 400)
+
+    def test_template_starting_with_substitution(self):
+        # A relative URL is fine, but the client cannot supply an absolute one.
+        response = self.fetch("/any/foo/bar", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers["Location"], "foo/bar")
+        for path in [
+            "/any/https://evil.com/",
+            "/any/%5C%5Cevil.com/",
+            "/any/javascript:alert(1)",
+        ]:
+            with self.subTest(path=path):
+                with ExpectLog(
+                    gen_log, ".*Redirect URL cannot change the scheme or netloc"
+                ):
+                    response = self.fetch(path, follow_redirects=False)
+                self.assertEqual(response.code, 400)
 
 
 class AcceptLanguageTest(WebTestCase):
