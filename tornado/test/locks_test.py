@@ -530,10 +530,6 @@ class LockTests(AsyncTestCase):
                 pass
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class AsyncContextManagerCancellationTest(AsyncTestCase):
     @gen_test
     async def test_cancel_after_handoff(self):
@@ -585,3 +581,7 @@ class AsyncContextManagerCancellationTest(AsyncTestCase):
                     primitive.release()
                 finally:
                     successor.cancel()
+
+
+if __name__ == "__main__":
+    unittest.main()
