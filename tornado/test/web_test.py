@@ -1977,6 +1977,31 @@ class StaticFileVersionPathTest(TestCase):
         with ExpectLog(gen_log, "Could not open static file.*larger than"):
             self.assertIsNone(self.get_version("inside.txt", SmallStaticFileHandler))
 
+    def test_cache_limit(self):
+        reads = []
+
+        class LimitedStaticFileHandler(StaticFileHandler):
+            MAX_CACHED_VERSIONS = 2
+
+            @classmethod
+            def get_content_version(cls, abspath):
+                reads.append(os.path.basename(abspath))
+                return super().get_content_version(abspath)
+
+        LimitedStaticFileHandler.reset()
+        for name in ["a", "b", "c"]:
+            with open(os.path.join(self.root, name), "w", encoding="utf-8") as f:
+                f.write(name)
+        for name in ["a", "b", "a", "c", "a", "b"]:
+            self.assertEqual(
+                self.get_version(name, LimitedStaticFileHandler),
+                hashlib.sha512(name.encode()).hexdigest(),
+            )
+        # "a" was used more recently than "b" when "c" was added, so only
+        # "b" was evicted and had to be read again.
+        self.assertEqual(reads, ["a", "b", "c", "b"])
+        self.assertEqual(len(LimitedStaticFileHandler._static_hashes), 2)
+
     @unittest.skipIf(os.name != "posix", "non-posix OS")
     def test_symlink_within_root(self):
         os.symlink(
