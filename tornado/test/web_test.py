@@ -2068,7 +2068,13 @@ class StaticDefaultFilenameRootTest(WebTestCase):
     def test_no_open_redirect_backslash(self):
         # Browsers treat a backslash like a slash, so a redirect to /\evil.com
         # is protocol-relative too. This form doesn't need the server-side path.
-        with ExpectLog(gen_log, ".*cannot redirect path with two initial slashes"):
+        if os.name == "posix":
+            expected_log = ".*cannot redirect path with two initial slashes"
+        else:
+            # On Windows the backslash makes this an absolute path, so it is
+            # rejected earlier by the check that the file is under the root.
+            expected_log = ".*is not in root static directory"
+        with ExpectLog(gen_log, expected_log):
             response = self.fetch("/\\evil.com/../dir", follow_redirects=False)
         self.assertEqual(response.code, 403)
 
