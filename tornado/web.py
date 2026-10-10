@@ -1846,6 +1846,13 @@ class RequestHandler:
         that value will be used as the default for all `static_url`
         calls that do not pass ``include_host`` as a keyword argument.
 
+        ``path`` should name one of the application's known static files,
+        typically as a literal in a template. It should not be derived from
+        untrusted input such as request arguments: computing the version
+        reads the file, and each distinct path occupies an entry in a cache
+        of versions. Map untrusted input to a known set of files before
+        calling this method.
+
         In the default implementation, a ``path`` that leads outside of
         ``static_path`` (e.g. with ``../``) raises `HTTPError` (403).
         Symlinks inside ``static_path`` are followed when computing the
@@ -2962,6 +2969,17 @@ class StaticFileHandler(RequestHandler):
     #: .. versionadded:: 6.6
     MAX_VERSION_CONTENT_SIZE = 64 * 1024 * 1024
 
+    #: The maximum number of versions that `get_version` keeps cached. When
+    #: the cache is full, the least recently used entry is discarded (and its
+    #: file will be read again if it is needed). This is far more than most
+    #: applications have static files; it exists to bound memory usage if
+    #: `~RequestHandler.static_url` is called with many distinct paths.
+    #: Subclasses may change it.
+    #:
+    #: .. versionadded:: 6.6
+    MAX_CACHED_VERSIONS = 10000
+
+    # Ordered from least to most recently used.
     _static_hashes: dict[str, str | None] = {}
     _lock = threading.Lock()  # protects _static_hashes
 
@@ -3574,6 +3592,11 @@ class StaticFileHandler(RequestHandler):
         The returned value should be a string, or ``None`` if no version
         could be determined.
 
+        As with `~RequestHandler.static_url`, ``path`` should name a known
+        static file and should not be derived from untrusted input. Versions
+        are cached (up to `MAX_CACHED_VERSIONS` entries) until ``reset`` is
+        called.
+
         .. versionchanged:: 3.1
            This method was previously recommended for subclasses to override;
            `get_content_version` is now preferred as it allows the base
@@ -3586,16 +3609,19 @@ class StaticFileHandler(RequestHandler):
     def _get_cached_version(cls, abs_path: str) -> str | None:
         with cls._lock:
             hashes = cls._static_hashes
-            if abs_path not in hashes:
+            if abs_path in hashes:
+                # Move the entry to the end to mark it as most recently used.
+                hsh = hashes[abs_path] = hashes.pop(abs_path)
+            else:
                 try:
-                    hashes[abs_path] = cls.get_content_version(abs_path)
+                    hsh = cls.get_content_version(abs_path)
                 except Exception as e:
                     gen_log.error("Could not open static file %r: %s", abs_path, e)
-                    hashes[abs_path] = None
-            hsh = hashes.get(abs_path)
-            if hsh:
-                return hsh
-        return None
+                    hsh = None
+                while hashes and len(hashes) >= cls.MAX_CACHED_VERSIONS:
+                    del hashes[next(iter(hashes))]
+                hashes[abs_path] = hsh
+            return hsh or None
 
 
 class FallbackHandler(RequestHandler):
