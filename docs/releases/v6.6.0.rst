@@ -187,8 +187,22 @@ Type annotation changes
   raising errors (consistent with historical behavior for other formatting errors).
 - The ``max_age`` argument to `.RequestHandler.set_cookie` can no longer be abused for
   attribute injection.
-- `.RedirectHandler` now refuses to generate protocol-relative redirects via formatted URLs,
-  which could potentially be used as an open redirect.
+- `.RedirectHandler` no longer allows values substituted into its ``url`` to change the scheme or
+  netloc (user info, host, and port) of the redirect, which could be used as an open redirect.
+  This includes protocol-relative URLs (``//example.com``) and variants that browsers treat the
+  same way, such as ``/\example.com``. Such requests now fail with a 400 error. As a
+  consequence, substitutions can no longer be used in the scheme or netloc part of the ``url``.
+- The check that prevents `.StaticFileHandler` from redirecting to a protocol-relative URL (when
+  ``default_filename`` is used) now also recognizes variants that use backslashes.
+- `.RequestHandler.static_url` (and `.StaticFileHandler.get_version`) now raise
+  `~tornado.web.HTTPError` (403) for paths outside of ``static_path`` instead of reading and
+  hashing files elsewhere on the filesystem. Files that are not regular files (such as devices or
+  FIFOs), and files larger than the new `.StaticFileHandler.MAX_VERSION_CONTENT_SIZE`, get no
+  version. Symlinks inside the static directory are still followed when computing versions; see
+  `.StaticFileHandler` for details. ``static_url`` is intended for an application's known static
+  files and should not be called with untrusted input.
+- The cache of static file versions is now limited to
+  `.StaticFileHandler.MAX_CACHED_VERSIONS` entries.
 
 `tornado.websocket`
 ~~~~~~~~~~~~~~~~~~~
