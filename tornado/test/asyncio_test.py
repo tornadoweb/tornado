@@ -158,6 +158,30 @@ class LeakTest(TestCase):
         # dangling entry in the map (but only one).
         self.assertEqual(new_count, 1)
 
+    def test_close_after_swept_mapping(self):
+        # asyncio.run() closes the loop without IOLoop.close(). The next
+        # initialize() then drops that closed loop from the map. close()
+        # on the finished IOLoop must not raise.
+        # https://github.com/tornadoweb/tornado/issues/3292
+        holder = {}
+
+        async def inner():
+            holder["ioloop"] = IOLoop.current()
+
+        asyncio.run(inner())
+        finished = holder["ioloop"]
+        self.assertTrue(finished.asyncio_loop.is_closed())
+        self.assertIn(finished.asyncio_loop, IOLoop._ioloop_for_asyncio)
+
+        other = asyncio.new_event_loop()
+        sweeper = AsyncIOLoop(asyncio_loop=other, make_current=False)
+        try:
+            self.assertNotIn(finished.asyncio_loop, IOLoop._ioloop_for_asyncio)
+            finished.close(all_fds=True)
+            finished.close(all_fds=True)
+        finally:
+            sweeper.close()
+
 
 class SelectorThreadLeakTest(TestCase):
     # These tests are only relevant on windows, but they should pass anywhere.
