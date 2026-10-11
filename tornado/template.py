@@ -474,12 +474,7 @@ class Loader(BaseLoader):
         self.root = os.path.abspath(root_directory)
 
     def resolve_path(self, name: str, parent_path: str | None = None) -> str:
-        if (
-            parent_path
-            and not parent_path.startswith("<")
-            and not parent_path.startswith("/")
-            and not name.startswith("/")
-        ):
+        if parent_path and not parent_path.startswith("<") and not os.path.isabs(name):
             current_path = os.path.join(self.root, parent_path)
             file_dir = os.path.dirname(os.path.abspath(current_path))
             relative_path = os.path.abspath(os.path.join(file_dir, name))
