@@ -15,3 +15,5 @@ MANIFEST
 # Used in demo apps
 secrets.cfg
 .mypy_cache/
+config.bat
+node_modules

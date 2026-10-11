@@ -11,6 +11,7 @@ Recommended usage:
 - Visit "http://localhost:8888" in your browser.
 """
 
+import utils.session
 import asyncio
 import json
 import tornado
