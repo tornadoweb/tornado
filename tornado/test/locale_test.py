@@ -1,3 +1,4 @@
+import codecs
 import datetime
 import os
 import shutil
@@ -58,6 +59,39 @@ class TranslationLoaderTest(TestCase):
                 self.assertEqual(locale.translate("school"), "\u00e9cole")
             finally:
                 shutil.rmtree(tmpdir)
+
+    def test_csv_mixed_encodings(self):
+        for utf8_encoding in ["utf-8", "utf-8-sig"]:
+            for utf16_encoding, bom in [
+                ("utf-16-le", codecs.BOM_UTF16_LE),
+                ("utf-16-be", codecs.BOM_UTF16_BE),
+            ]:
+                with self.subTest(utf8=utf8_encoding, utf16=utf16_encoding):
+                    self.clear_locale_cache()
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        with open(os.path.join(tmpdir, "fr_FR.csv"), "wb") as f:
+                            f.write("school,\u00e9cole\n".encode(utf8_encoding))
+                        with open(os.path.join(tmpdir, "de_DE.csv"), "wb") as f:
+                            f.write(bom + "school,Schule\n".encode(utf16_encoding))
+                        tornado.locale.load_translations(tmpdir)
+                        self.assertEqual(
+                            tornado.locale.get("fr_FR").translate("school"),
+                            "\u00e9cole",
+                        )
+                        self.assertEqual(
+                            tornado.locale.get("de_DE").translate("school"), "Schule"
+                        )
+
+    def test_csv_explicit_encoding(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for code, translation in [("fr_FR", "\u00e9cole"), ("es_ES", "ni\u00f1o")]:
+                with open(os.path.join(tmpdir, code + ".csv"), "wb") as f:
+                    f.write(("word," + translation + "\n").encode("latin1"))
+            tornado.locale.load_translations(tmpdir, encoding="latin1")
+            self.assertEqual(
+                tornado.locale.get("fr_FR").translate("word"), "\u00e9cole"
+            )
+            self.assertEqual(tornado.locale.get("es_ES").translate("word"), "ni\u00f1o")
 
     def test_gettext(self):
         tornado.locale.load_gettext_translations(

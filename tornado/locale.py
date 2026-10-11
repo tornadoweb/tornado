@@ -138,20 +138,21 @@ def load_translations(directory: str, encoding: str | None = None) -> None:
             )
             continue
         full_path = os.path.join(directory, path)
-        if encoding is None:
+        file_encoding = encoding
+        if file_encoding is None:
             # Try to autodetect encoding based on the BOM.
             with open(full_path, "rb") as bf:
                 data = bf.read(len(codecs.BOM_UTF16_LE))
             if data in (codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE):
-                encoding = "utf-16"
+                file_encoding = "utf-16"
             else:
                 # utf-8-sig is "utf-8 with optional BOM". It's discouraged
                 # in most cases but is common with CSV files because Excel
                 # cannot read utf-8 files without a BOM.
-                encoding = "utf-8-sig"
+                file_encoding = "utf-8-sig"
         # python 3: csv.reader requires a file open in text mode.
         # Specify an encoding to avoid dependence on $LANG environment variable.
-        with open(full_path, encoding=encoding) as f:
+        with open(full_path, encoding=file_encoding) as f:
             _translations[locale] = {}
             for i, row in enumerate(csv.reader(f)):
                 if not row or len(row) < 2:
