@@ -27,7 +27,7 @@ from tornado.web import Application, RequestHandler
 
 try:
     import tornado.websocket  # noqa: F401
-    from tornado.util import _websocket_mask_python
+    from tornado.util import _websocket_mask_int, _websocket_mask_loop
 except ImportError:
     # The unittest module presents misleading errors on ImportError
     # (it acts as if websocket_test could not be found, hiding the underlying
@@ -1013,6 +1013,15 @@ class MaskFunctionMixin(TestCase):
             b"\xff\xfa\xff\xff\xfb\xfe",
         )
 
+    def test_lengths(self: typing.Any):
+        # Cover every alignment of the tail as well as longer inputs.
+        mask = b"\x9b\x31\xe7\x04"
+        for n in list(range(40)) + [255, 256, 1000, 65537]:
+            data = bytes((i * 7 + 3) & 0xFF for i in range(n))
+            expected = bytes(b ^ mask[i % 4] for i, b in enumerate(data))
+            with self.subTest(n=n):
+                self.assertEqual(self.mask(mask, data), expected)
+
     def test_length_validation(self: typing.Any):
         # Test all lengths of mask that are not 4 bytes.
         for mask in (b"", b"a", b"ab", b"abc", b"abcde", b"abcdef"):
@@ -1021,9 +1030,14 @@ class MaskFunctionMixin(TestCase):
                     self.mask(mask, b"data asdf")
 
 
-class PythonMaskFunctionTest(MaskFunctionMixin):
+class PythonIntMaskFunctionTest(MaskFunctionMixin):
     def mask(self, mask, data):
-        return _websocket_mask_python(mask, data)
+        return _websocket_mask_int(mask, data)
+
+
+class PythonLoopMaskFunctionTest(MaskFunctionMixin):
+    def mask(self, mask, data):
+        return _websocket_mask_loop(mask, data)
 
 
 @unittest.skipIf(speedups is None, "tornado.speedups module not present")
