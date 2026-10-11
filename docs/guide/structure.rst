@@ -249,6 +249,28 @@ guaranteed to be the current exception in `sys.exc_info`, so
 ``write_error`` must use e.g.  `traceback.format_exception` instead of
 `traceback.format_exc`).
 
+Tornado does not add an ``Allow`` header to 405 (Method Not Allowed)
+responses.  HTTP requires this header in a 405 response, but the allowed
+methods can vary by resource or request.  ``RequestHandler.SUPPORTED_METHODS``
+is a dispatch whitelist, not a list of the methods implemented by a particular
+handler.  Set ``Allow`` in ``write_error`` using the methods allowed for that
+resource; ``send_error`` clears response headers before calling
+``write_error``::
+
+    class ReadOnlyHandler(RequestHandler):
+        allowed_methods = ("GET",)
+
+        def get(self):
+            self.write("read-only resource")
+
+        def write_error(self, status_code, **kwargs):
+            if status_code == 405:
+                self.set_header("Allow", ", ".join(self.allowed_methods))
+            super().write_error(status_code, **kwargs)
+
+RFC 9110 requires this header for 405 responses; see
+`section 15.5.6 <https://www.rfc-editor.org/rfc/rfc9110#section-15.5.6>`_.
+
 It is also possible to generate an error page from regular handler
 methods instead of ``write_error`` by calling
 `~.RequestHandler.set_status`, writing a response, and returning.
