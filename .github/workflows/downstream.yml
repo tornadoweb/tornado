@@ -1,0 +1,30 @@
+name: Downstream
+
+on:
+  push:
+    branches:
+      - "branch[0-9]*"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  # A newer push to the same branch supersedes the run.
+  group: downstream-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  downstream:
+    name: Downstream testbed
+    if: github.repository == 'tornadoweb/tornado'
+    uses: tornadoweb/tornado-testbed/.github/workflows/testbed.yml@main
+    with:
+      # Pin to the pushed commit, not the branch name, so a later push
+      # can't change what this run tests.
+      tornado_spec: git+https://github.com/tornadoweb/tornado.git@${{ github.sha }}
+      # [[[cog cog.outl(f"python_version: '3.{default_python_minor}'")]]]
+      python_version: '3.13'
+      # [[[end]]]
+      fail_on_regression: false
+    permissions:
+      contents: read
