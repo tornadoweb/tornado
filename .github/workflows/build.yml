@@ -129,6 +129,9 @@ jobs:
     permissions:
       # This permission is required for pypi's "trusted publisher" feature
       id-token: write
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/tornado/
     steps:
       - uses: actions/download-artifact@v7
         with:
@@ -149,6 +152,11 @@ jobs:
     permissions:
       # This permission is required for pypi's "trusted publisher" feature
       id-token: write
+    environment:
+      # The pypi environment is configured to require approval before a job starts, so
+      # the build will stop here until the final release is approved by a maintainer.
+      name: pypi
+      url: https://pypi.org/project/tornado/
     steps:
       - uses: actions/download-artifact@v7
         with:
