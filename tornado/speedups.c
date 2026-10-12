@@ -11,6 +11,7 @@ static PyObject *websocket_mask(PyObject *self, PyObject *args)
     const char *data;
     Py_ssize_t data_len;
     Py_ssize_t i;
+    Py_ssize_t n;
     PyObject *result;
     char *buf;
 
@@ -33,30 +34,31 @@ static PyObject *websocket_mask(PyObject *self, PyObject *args)
         return NULL;
     }
     buf = PyBytes_AsString(result);
+    n = data_len; /* &data_len escaped to PyArg_ParseTuple; a local copy lets the compiler vectorize */
 
     if (sizeof(size_t) >= 8)
     {
         uint64_mask = uint32_mask;
         uint64_mask = (uint64_mask << 32) | uint32_mask;
 
-        while (data_len >= 8)
+        while (n >= 8)
         {
             ((uint64_t *)buf)[0] = ((uint64_t *)data)[0] ^ uint64_mask;
             data += 8;
             buf += 8;
-            data_len -= 8;
+            n -= 8;
         }
     }
 
-    while (data_len >= 4)
+    while (n >= 4)
     {
         ((uint32_t *)buf)[0] = ((uint32_t *)data)[0] ^ uint32_mask;
         data += 4;
         buf += 4;
-        data_len -= 4;
+        n -= 4;
     }
 
-    for (i = 0; i < data_len; i++)
+    for (i = 0; i < n; i++)
     {
         buf[i] = data[i] ^ mask[i];
     }
