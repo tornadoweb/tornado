@@ -992,6 +992,24 @@ class WaitIteratorTest(AsyncTestCase):
             self.assertEqual(results, [42] * len(expected_indices))
             self.assertEqual(indices, expected_indices)
 
+    @gen_test
+    async def test_awaitables(self):
+        async def delayed(value, delay):
+            await gen.sleep(delay)
+            return value
+
+        g = gen.WaitIterator(delayed(1, 0.02), delayed(2, 0))
+        results = []
+        async for r in g:
+            results.append((g.current_index, r))
+        self.assertEqual(results, [(1, 2), (0, 1)])
+
+        dg = gen.WaitIterator(a=delayed("a", 0), b=delayed("b", 0.02))
+        results = []
+        async for r in dg:
+            results.append((dg.current_index, r))
+        self.assertEqual(results, [("a", "a"), ("b", "b")])
+
     def finish_coroutines(self, iteration, futures):
         if iteration == 3:
             futures[2].set_result(24)
