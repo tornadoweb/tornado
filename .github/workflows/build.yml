@@ -28,6 +28,7 @@ jobs:
   build_sdist:
     name: Build sdist
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
         with:
@@ -52,6 +53,7 @@ jobs:
   build_wheels:
     name: Build wheels on ${{ matrix.os }}${{ matrix.name_suffix || '' }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -102,6 +104,7 @@ jobs:
     name: Upload to PyPI (test)
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     if: github.repository == 'tornadoweb/tornado' && github.event_name == 'workflow_dispatch'
     permissions:
       # This permission is required for pypi's "trusted publisher" feature
@@ -125,6 +128,7 @@ jobs:
     name: Upload to PyPI (prod)
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     if: github.repository == 'tornadoweb/tornado' && github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
     permissions:
       # This permission is required for pypi's "trusted publisher" feature

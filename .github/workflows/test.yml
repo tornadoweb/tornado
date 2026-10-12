@@ -18,6 +18,7 @@ jobs:
   test_quick:
     name: Run quick tests
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
         with:
@@ -40,6 +41,7 @@ jobs:
     name: Run full tests
     needs: test_quick
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     strategy:
       matrix:
         include:
@@ -131,6 +133,7 @@ jobs:
     name: Run windows tests
     needs: test_quick
     runs-on: windows-2025
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
         with:
@@ -147,6 +150,7 @@ jobs:
   zizmor:
     name: Analyze action configs with zizmor
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     needs: test_quick
     steps:
       - uses: actions/checkout@v6
@@ -168,6 +172,7 @@ jobs:
     # test coverage.
     name: Test with cibuildwheel
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     needs: test_quick
     steps:
       - uses: actions/checkout@v6
@@ -188,6 +193,7 @@ jobs:
     # edited manually.
     name: Test cog generation
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     needs: test_quick
     steps:
       - uses: actions/checkout@v6
