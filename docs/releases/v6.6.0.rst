@@ -35,7 +35,7 @@ Deprecation notices
   removed at the same time. All remaining arguments will become keyword-only. A
   `DeprecationWarning` is now emitted when ``start_line`` is not provided or when the ``host``,
   ``method``, or ``uri`` arguments are used.
-- `tornado.auth.OpenIdMixin` is deprecated and will be removed in Tornado 6.7 (this is a change
+- ``tornado.auth.OpenIdMixin`` is deprecated and will be removed in Tornado 6.7 (this is a change
   in the timeline; it was previously scheduled for removal in Tornado 7.0).
 - ``tornado.util.TimeoutError``, ``tornado.gen.TimeoutError``, and ``tornado.ioloop.TimeoutError``
   are deprecated. They are aliases for the builtin `TimeoutError`, which should be used instead.
