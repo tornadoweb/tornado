@@ -25,6 +25,5 @@ jobs:
       # [[[cog cog.outl(f"python_version: '3.{default_python_minor}'")]]]
       python_version: '3.13'
       # [[[end]]]
-      fail_on_regression: false
     permissions:
       contents: read
