@@ -330,7 +330,15 @@ class TCPClient:
                 source_port=source_port,
             ),
         )
-        af, addr, stream = await connector.start(connect_timeout=timeout)
+        connect_future = connector.start(connect_timeout=timeout)
+        try:
+            af, addr, stream = await connect_future
+        except asyncio.CancelledError:
+            # Cancellation can arrive after the connection succeeds but
+            # before this coroutine receives the stream.
+            if not connect_future.cancelled() and connect_future.exception() is None:
+                connect_future.result()[2].close()
+            raise
         # TODO: For better performance we could cache the (af, addr)
         # information here and reuse it on subsequent connections to
         # the same host. (http://tools.ietf.org/html/rfc6555#section-4.2)
@@ -348,6 +356,15 @@ class TCPClient:
                     )
                 else:
                     stream = await tls_future
+            except asyncio.CancelledError:
+                if (
+                    tls_future.done()
+                    and not tls_future.cancelled()
+                    and tls_future.exception() is None
+                ):
+                    # Cancelling a completed future does not close its stream.
+                    tls_future.result().close()
+                raise
             finally:
                 # If we're exiting early (timeout or cancellation), cancel
                 # the handshake so the new SSLIOStream (which now owns the
