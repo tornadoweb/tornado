@@ -26,6 +26,8 @@ click==8.5.0
     #   pip-tools
 colorama==0.4.6
     # via tox
+coverage==7.16.2
+    # via -r requirements.in
 distlib==0.4.3
     # via virtualenv
 docutils==0.22.4
