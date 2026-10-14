@@ -1,17 +1,35 @@
 # Test coverage configuration.
 # Usage:
+#   tox -e coverage
+# or, without tox:
 #   pip install coverage
 #   coverage erase  # clears previous data if any
 #   coverage run -m tornado.test.runtests
+#   coverage combine
 #   coverage report  # prints to stdout
 #   coverage html  # creates ./htmlcov/*.html including annotated source
 [run]
 branch = true
-source = tornado
-omit = 
-    tornado/platform/*
-    tornado/test/*
-    */_auto2to3*
+source_pkgs = tornado
+omit =
+    */tornado/test/*
+# Each process writes its own data file; run `coverage combine` before
+# reporting.
+parallel = true
+# Several tests (autoreload, process, import) start new python processes,
+# and autoreload re-execs itself. Measure those too.
+patch =
+    subprocess
+    execv
+    _exit
+    fork
+
+[paths]
+# tox runs the tests against an installed copy of tornado; map those paths
+# back to the source tree so reports point at the files in this repo.
+source =
+    tornado/
+    */site-packages/tornado/
 
 [report]
 # Ignore missing source files, i.e. fake template-generated "files"
