@@ -20,7 +20,9 @@ from tornado.test.util import (
     AsyncHTTPTestCase,
     TestCase,
     abstract_base_test,
+    assert_memory_budget,
     ignore_deprecation,
+    skipNotCPython,
 )
 from tornado.testing import ExpectLog, bind_unused_port, gen_test
 from tornado.web import Application, RequestHandler
@@ -949,6 +951,35 @@ class CompressionTestMixin(WebSocketBaseTestCase):
         ws.write_message("a" * 2048)
         response = yield ws.read_message()
         self.assertIsNone(response)
+
+
+@skipNotCPython
+class CompressedMessageMemoryTest(WebSocketBaseTestCase):
+    MAX_MESSAGE_SIZE = 1024 * 1024
+
+    def get_app(self):
+        return Application(
+            [("/", EchoHandler, dict(compression_options={}))],
+            websocket_max_message_size=self.MAX_MESSAGE_SIZE,
+        )
+
+    @gen_test
+    def test_compression_bomb(self):
+        # A small compressed message that decompresses to far more than
+        # max_message_size must be rejected without decompressing it all
+        # into memory. (Peak memory is about twice max_message_size as of
+        # 2026-10.)
+        ws = yield self.ws_connect("/", compression_options={})
+        message = b"\0" * (16 * self.MAX_MESSAGE_SIZE)
+        with assert_memory_budget(
+            self.MAX_MESSAGE_SIZE,
+            max_ratio=3,
+            msg="Decompressing a message is not bounded by max_message_size",
+        ):
+            ws.write_message(message, binary=True)
+            response = yield ws.read_message()
+        self.assertIsNone(response)
+        self.assertEqual(ws.close_code, 1009)
 
 
 @abstract_base_test
