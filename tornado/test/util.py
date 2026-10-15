@@ -10,7 +10,7 @@ import time
 import typing
 import unittest
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 
 import tornado.testing
 from tornado.testing import bind_unused_port
@@ -189,6 +189,10 @@ def abstract_base_test(cls: _TestCaseType) -> _TestCaseType:
 # repeated until it has run for at least this long.
 _MIN_MEASUREMENT_TIME = 0.1
 
+# The minimum duration of the preliminary measurement in
+# assert_linear_scaling (see there).
+_QUICK_MEASUREMENT_TIME = 0.02
+
 
 def _time_calls(func: Callable[[int], object], n: int, iterations: int) -> float:
     """Return the CPU time used by ``iterations`` calls of ``func(n)``.
@@ -205,11 +209,13 @@ def _time_calls(func: Callable[[int], object], n: int, iterations: int) -> float
     return time.process_time() - start
 
 
-def _calibrate(func: Callable[[int], object], n: int) -> tuple[int, float]:
+def _calibrate(
+    func: Callable[[int], object], n: int, min_time: float = _MIN_MEASUREMENT_TIME
+) -> tuple[int, float]:
     """Return a usable iteration count for ``func(n)``, and its timing.
 
-    The count is doubled until the measurement lasts at least
-    `_MIN_MEASUREMENT_TIME`, in the same way as `timeit.Timer.autorange`. The
+    The count is doubled until the measurement lasts at least ``min_time``,
+    in the same way as `timeit.Timer.autorange`. The
     discarded measurements also serve as a warmup. The last measurement is
     returned along with the count so that the caller can use it as one of its
     samples.
@@ -217,7 +223,7 @@ def _calibrate(func: Callable[[int], object], n: int) -> tuple[int, float]:
     iterations = 1
     while True:
         elapsed = _time_calls(func, n, iterations)
-        if elapsed >= _MIN_MEASUREMENT_TIME:
+        if elapsed >= min_time:
             return iterations, elapsed
         iterations *= 2
 
@@ -261,7 +267,26 @@ def assert_linear_scaling(
     * The whole measurement is retried up to ``attempts`` times before
       failing. A change in complexity class is reproducible; a scheduling
       hiccup usually isn't.
+
+    All this takes about a second, so it is preceded by a single quick
+    measurement, which passes the test if the ratio is under three quarters
+    of ``max_ratio``. (Interference that inflates the time for ``n1`` could
+    let a quick measurement pass code that should fail, but only by a
+    factor larger than the margin between ``max_ratio`` and the ratio of a
+    real change in complexity class. Linear code often measures a little
+    over ``n2 / n1``, so a threshold of half of ``max_ratio`` would send
+    most passing tests to the slow measurement.)
     """
+    gc_was_enabled = gc.isenabled()
+    gc.disable()
+    try:
+        iterations1, elapsed1 = _calibrate(func, n1, _QUICK_MEASUREMENT_TIME)
+        iterations2, elapsed2 = _calibrate(func, n2, _QUICK_MEASUREMENT_TIME)
+    finally:
+        if gc_was_enabled:
+            gc.enable()
+    if (elapsed2 / iterations2) / (elapsed1 / iterations1) <= max_ratio * 0.75:
+        return
     t1 = t2 = 0.0
     for _ in range(attempts):
         gc_was_enabled = gc.isenabled()
@@ -283,3 +308,35 @@ def assert_linear_scaling(
         f"{msg}: n={n1} took {t1:.4f}s and n={n2} took {t2:.4f}s, a ratio of "
         f"{t2 / t1:.1f} (limit {max_ratio}), in each of {attempts} attempts"
     )
+
+
+@contextlib.contextmanager
+def assert_memory_budget(
+    input_size: int, *, max_ratio: float, msg: str
+) -> Generator[None, None, None]:
+    """Fail if the body of the ``with`` block allocates more than
+    ``max_ratio`` bytes at once for each byte of its input (whose size is
+    ``input_size``).
+
+    The input may also be a configured limit, such as ``max_body_size``,
+    when the point of the test is that memory use is bounded by the limit
+    and not by what the client sends.
+
+    Unlike time, memory use can be measured exactly, so a single
+    measurement is enough. Requires `tracemalloc` (which PyPy lacks), so
+    callers should use `skipNotCPython`.
+    """
+    import tracemalloc
+
+    tracemalloc.start()
+    try:
+        yield
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    ratio = peak / input_size
+    if ratio > max_ratio:
+        raise AssertionError(
+            f"{msg}: {input_size} bytes of input used {peak} bytes of memory, "
+            f"a ratio of {ratio:.1f} (limit {max_ratio})"
+        )
