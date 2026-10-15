@@ -49,7 +49,12 @@ from tornado.httputil import (
     parse_request_start_line,
     parse_response_start_line,
 )
-from tornado.util import GzipDecompressor, _websocket_mask_python
+from tornado.util import (
+    GzipDecompressor,
+    _websocket_mask_int,
+    _websocket_mask_loop,
+    _websocket_mask_python,
+)
 from tornado.websocket import (
     _DecompressTooLargeError,
     _PerMessageDeflateCompressor,
@@ -362,6 +367,14 @@ class WebSocketPropertyTest(TestCase):
         masked = _websocket_mask_python(mask, data)
         self.assertEqual(len(masked), len(data))
         self.assertEqual(_websocket_mask_python(mask, masked), data)
+
+    @given(st.binary(min_size=4, max_size=4), st.binary(max_size=1000))
+    def test_mask_python_implementations_match(self, mask, data):
+        # There are two pure-python implementations, chosen by interpreter;
+        # check both regardless of which one is in use.
+        self.assertEqual(
+            _websocket_mask_int(mask, data), _websocket_mask_loop(mask, data)
+        )
 
     @unittest.skipIf(speedups is None, "tornado.speedups module not present")
     @given(st.binary(min_size=4, max_size=4), st.binary(max_size=1000))
