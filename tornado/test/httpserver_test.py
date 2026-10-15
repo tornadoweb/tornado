@@ -64,7 +64,7 @@ async def read_stream_body(stream):
             chunks.append(chunk)
 
         def finish(self):
-            conn.detach()  # type: ignore
+            conn.detach()
 
     conn = HTTP1Connection(stream, True)
     delegate = Delegate()
@@ -121,7 +121,7 @@ class SSLTest(AsyncHTTPSTestCase):
         # misbehaving.
         with ExpectLog(gen_log, "(SSL Error|uncaught exception)"):
             with ExpectLog(gen_log, "Uncaught exception", required=False):
-                with self.assertRaises((IOError, HTTPError)):  # type: ignore
+                with self.assertRaises((IOError, HTTPError)):
                     self.fetch(
                         self.get_url("/").replace("https:", "http:"),
                         request_timeout=3600,
@@ -132,7 +132,7 @@ class SSLTest(AsyncHTTPSTestCase):
     def test_error_logging(self):
         # No stack traces are logged for SSL errors.
         with ExpectLog(gen_log, "SSL Error") as expect_log:
-            with self.assertRaises((IOError, HTTPError)):  # type: ignore
+            with self.assertRaises((IOError, HTTPError)):
                 self.fetch(
                     self.get_url("/").replace("https:", "http:"), raise_error=True
                 )

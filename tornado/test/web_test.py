@@ -233,7 +233,7 @@ class SecureCookieV2Test(TestCase):
 
 
 class FinalReturnTest(WebTestCase):
-    final_return: Future
+    final_return: Future[None]
 
     def get_handlers(self):
         test = self
@@ -838,7 +838,7 @@ class GetArgumentHandler(RequestHandler):
         elif self.get_argument("source", None) == "body":
             method = self.get_body_argument
         else:
-            method = self.get_argument  # type: ignore
+            method = self.get_argument
         self.finish(method("foo", "default"))
 
 
@@ -1257,7 +1257,7 @@ class CancellationTest(WebTestCase):
 
     def setUp(self):
         super().setUp()
-        self.handler_task: asyncio.Task | None = None
+        self.handler_task: asyncio.Task[None] | None = None
         self.handler_started = Event()
 
     # A handler that awaits something that was cancelled gets the usual
@@ -1888,21 +1888,21 @@ class MultiRootStaticFileHandler(StaticFileHandler):
     directory. Jupyter's ``FileFindHandler`` is built this way.
     """
 
-    root: tuple  # type: ignore[assignment]
+    root: tuple[str, ...]  # type: ignore[assignment]
 
     def initialize(self, path):  # type: ignore[override]
         self.root = tuple(os.path.abspath(p) + os.path.sep for p in path)
         self.default_filename = None
 
     @classmethod
-    def get_absolute_path(cls, roots, path):  # type: ignore[override]
+    def get_absolute_path(cls, roots, path):
         for root in roots:
             candidate = os.path.abspath(os.path.join(root, path))
             if os.path.exists(candidate):
                 return candidate
         return os.path.abspath(os.path.join(roots[0], path))
 
-    def validate_absolute_path(self, root, absolute_path):  # type: ignore[override]
+    def validate_absolute_path(self, root, absolute_path):
         for candidate in self.root:
             if (absolute_path + os.path.sep).startswith(candidate):
                 root = candidate
@@ -2910,7 +2910,7 @@ class AllHTTPMethodsTest(SimpleHandlerTestCase):
             assert self.request.method is not None
             self.write(self.request.method)
 
-        get = delete = options = post = put = method  # type: ignore
+        get = delete = options = post = put = method
 
     def test_standard_methods(self):
         response = self.fetch("/", method="HEAD")
@@ -2925,9 +2925,7 @@ class AllHTTPMethodsTest(SimpleHandlerTestCase):
 
 class PatchMethodTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
-        SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + (  # type: ignore
-            "OTHER",
-        )
+        SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ("OTHER",)
 
         def patch(self):
             self.write("patch")
@@ -3338,7 +3336,7 @@ class ClientCloseTest(SimpleHandlerTestCase):
                 self.write("requires HTTP/1.x")
 
     def test_client_close(self):
-        with self.assertRaises((HTTPClientError, unittest.SkipTest)):  # type: ignore
+        with self.assertRaises((HTTPClientError, unittest.SkipTest)):
             response = self.fetch("/", raise_error=True)
             if response.body == b"requires HTTP/1.x":
                 self.skipTest("requires HTTP/1.x")
@@ -3668,7 +3666,7 @@ class XSRFTest(SimpleHandlerTestCase):
             method="POST",
             body=b"",
             headers=dict(
-                {"X-Xsrftoken": self.xsrf_token},  # type: ignore
+                {"X-Xsrftoken": self.xsrf_token},
                 **self.cookie_headers(),
             ),
         )

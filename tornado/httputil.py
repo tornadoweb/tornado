@@ -32,7 +32,7 @@ import re
 import time
 import unicodedata
 from functools import lru_cache
-from http.client import responses  # noqa: F401 (re-exported)
+from http.client import responses as responses  # noqa: F401
 from ssl import SSLError
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 import warnings
@@ -553,7 +553,7 @@ class HTTPServerRequest:
         self.connection = connection
         self.server_connection = server_connection
         self._start_time = time.time()
-        self._finish_time = None
+        self._finish_time: float | None = None
 
         if self.uri is not None:
             self.path, sep, self.query = self.uri.partition("?")
@@ -574,7 +574,7 @@ class HTTPServerRequest:
         self.body_arguments: dict[str, list[bytes]] = {}
 
     @property
-    def cookies(self) -> dict[str, http.cookies.Morsel]:
+    def cookies(self) -> dict[str, http.cookies.Morsel[typing.Any]]:
         """A dictionary of ``http.cookies.Morsel`` objects."""
         if not hasattr(self, "_cookies"):
             self._cookies: http.cookies.SimpleCookie = http.cookies.SimpleCookie()
@@ -596,7 +596,7 @@ class HTTPServerRequest:
 
     def full_url(self) -> str:
         """Reconstructs the full URL for this request."""
-        return self.protocol + "://" + self.host + self.uri  # type: ignore[operator]
+        return self.protocol + "://" + self.host + self.uri
 
     def request_time(self) -> float:
         """Returns the amount of time it took for this request to execute."""
@@ -605,7 +605,9 @@ class HTTPServerRequest:
         else:
             return self._finish_time - self._start_time
 
-    def get_ssl_certificate(self, binary_form: bool = False) -> None | dict | bytes:
+    def get_ssl_certificate(
+        self, binary_form: bool = False
+    ) -> None | dict[typing.Any, typing.Any] | bytes:
         """Returns the client's SSL certificate, if any.
 
         To use client certificates, the HTTPServer's
@@ -1148,7 +1150,7 @@ def parse_multipart_form_data(
 
 
 def format_timestamp(
-    ts: int | float | tuple | time.struct_time | datetime.datetime,
+    ts: int | float | tuple[typing.Any, ...] | time.struct_time | datetime.datetime,
 ) -> str:
     """Formats a timestamp in the format used by HTTP.
 
@@ -1367,7 +1369,7 @@ def qs_to_qsl(qs: dict[str, list[AnyStr]]) -> Iterable[tuple[str, AnyStr]]:
 _unquote_sub = re.compile(r"\\(?:([0-3][0-7][0-7])|(.))").sub
 
 
-def _unquote_replace(m: re.Match) -> str:
+def _unquote_replace(m: re.Match[str]) -> str:
     if m[1]:
         return chr(int(m[1], 8))
     else:

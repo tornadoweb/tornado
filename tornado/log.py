@@ -74,7 +74,7 @@ def _stderr_supports_color() -> bool:
 
 def _safe_unicode(s: Any) -> str:
     try:
-        return _unicode(s)
+        return cast(str, _unicode(s))
     except UnicodeDecodeError:
         return repr(s)
 
@@ -198,7 +198,7 @@ class LogFormatter(logging.Formatter):
         else:
             record.color = record.end_color = ""
 
-        formatted = self._fmt % record.__dict__
+        formatted: str = self._fmt % record.__dict__
 
         if record.exc_info:
             if not record.exc_text:

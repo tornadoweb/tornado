@@ -16,10 +16,11 @@ the whole snapshot. Some names differ between platforms (for example,
 `tornado.netutil.bind_unix_socket` doesn't exist on Windows), so the
 comparison only runs on Linux with CPython, where the snapshot is generated.
 
-Names that a module imports from elsewhere are only listed if the import
-has a comment saying they are re-exported, like::
+Names that a module imports from elsewhere are only listed if they are
+imported in the redundant ``import X as X`` form, which is also how mypy
+(with ``no_implicit_reexport``) recognizes a re-export, like::
 
-    from tornado.util import TimeoutError  # re-exported for compatibility
+    from tornado.util import TimeoutError as TimeoutError
 
 The docs build checks that everything it documents appears in the snapshot::
 
@@ -96,18 +97,16 @@ def _assigned_names(module: types.ModuleType) -> set[str]:
 
 
 def _reexported_names(module: types.ModuleType) -> set[str]:
-    """Names imported by ``from ... import`` statements that have a comment
-    saying they are re-exported."""
+    """Names imported in the ``import X as X`` form at the top level of
+    the module."""
     with open(inspect.getfile(module), encoding="utf-8") as f:
         source = f.read()
-    lines = source.splitlines()
     names: set[str] = set()
     for stmt in ast.parse(source).body:
-        if isinstance(stmt, ast.ImportFrom):
-            assert stmt.end_lineno is not None
-            text = "\n".join(lines[stmt.lineno - 1 : stmt.end_lineno])
-            if "re-export" in text:
-                names.update(alias.asname or alias.name for alias in stmt.names)
+        if isinstance(stmt, (ast.Import, ast.ImportFrom)):
+            names.update(
+                alias.name for alias in stmt.names if alias.asname == alias.name
+            )
     return names
 
 
@@ -145,7 +144,7 @@ def _format_default(value: typing.Any) -> str:
     return "..."
 
 
-def _format_signature(func: typing.Callable) -> str:
+def _format_signature(func: typing.Callable[..., typing.Any]) -> str:
     """A function's signature without annotations."""
     try:
         sig = inspect.signature(func)

@@ -67,9 +67,9 @@ class _Connector:
 
     def __init__(
         self,
-        addrinfo: list[tuple],
+        addrinfo: list[tuple[Any, ...]],
         connect: Callable[
-            [socket.AddressFamily, tuple], tuple[IOStream, "Future[IOStream]"]
+            [socket.AddressFamily, tuple[Any, ...]], tuple[IOStream, "Future[IOStream]"]
         ],
     ) -> None:
         self.io_loop = IOLoop.current()
@@ -84,14 +84,14 @@ class _Connector:
         self.streams: set[IOStream] = set()
         # Addresses with connection attempts in progress. Used for
         # error messages.
-        self.pending_addrs: set[tuple] = set()
+        self.pending_addrs: set[tuple[Any, ...]] = set()
 
     @staticmethod
     def split(
-        addrinfo: list[tuple],
+        addrinfo: list[tuple[Any, ...]],
     ) -> tuple[
-        list[tuple[socket.AddressFamily, tuple]],
-        list[tuple[socket.AddressFamily, tuple]],
+        list[tuple[socket.AddressFamily, tuple[Any, ...]]],
+        list[tuple[socket.AddressFamily, tuple[Any, ...]]],
     ]:
         """Partition the ``addrinfo`` list by address family.
 
@@ -125,7 +125,9 @@ class _Connector:
         future_add_done_callback(self.future, self.on_future_done)
         return self.future
 
-    def try_connect(self, addrs: Iterator[tuple[socket.AddressFamily, tuple]]) -> None:
+    def try_connect(
+        self, addrs: Iterator[tuple[socket.AddressFamily, tuple[Any, ...]]]
+    ) -> None:
         try:
             af, addr = next(addrs)
         except StopIteration:
@@ -157,9 +159,9 @@ class _Connector:
 
     def on_connect_done(
         self,
-        addrs: Iterator[tuple[socket.AddressFamily, tuple]],
+        addrs: Iterator[tuple[socket.AddressFamily, tuple[Any, ...]]],
         af: socket.AddressFamily,
-        addr: tuple,
+        addr: tuple[Any, ...],
         future: "Future[IOStream]",
     ) -> None:
         self.remaining -= 1
@@ -360,7 +362,7 @@ class TCPClient:
         self,
         max_buffer_size: int | None,
         af: socket.AddressFamily,
-        addr: tuple,
+        addr: tuple[Any, ...],
         source_ip: str | None = None,
         source_port: int | None = None,
     ) -> tuple[IOStream, "Future[IOStream]"]:

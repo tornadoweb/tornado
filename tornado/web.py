@@ -98,7 +98,7 @@ from tornado.routing import (
     Rule,
     _RuleList,
 )
-from tornado.routing import URLSpec  # re-exported for compatibility
+from tornado.routing import URLSpec as URLSpec  # re-exported for compatibility
 from tornado.util import ObjectDict, _websocket_mask, unicode_type
 
 url = URLSpec
@@ -225,7 +225,7 @@ class RequestHandler:
         self.request.connection.set_close_callback(  # type: ignore
             self.on_connection_close
         )
-        self.initialize(**kwargs)  # type: ignore
+        self.initialize(**kwargs)
 
     def _initialize(self) -> None:
         pass
@@ -612,7 +612,7 @@ class RequestHandler:
             )
 
     @property
-    def cookies(self) -> dict[str, http.cookies.Morsel]:
+    def cookies(self) -> dict[str, http.cookies.Morsel[Any]]:
         """An alias for
         `self.request.cookies <.httputil.HTTPServerRequest.cookies>`."""
         return self.request.cookies
@@ -643,7 +643,7 @@ class RequestHandler:
         name: str,
         value: str | bytes,
         domain: str | None = None,
-        expires: float | tuple | datetime.datetime | None = None,
+        expires: float | tuple[Any, ...] | datetime.datetime | None = None,
         path: str = "/",
         expires_days: float | None = None,
         # Keyword-only args start here for historical reasons.
@@ -965,7 +965,7 @@ class RequestHandler:
         self.set_header("Location", utf8(url))
         self.finish()
 
-    def write(self, chunk: str | bytes | dict) -> None:
+    def write(self, chunk: str | bytes | dict[Any, Any]) -> None:
         """Writes the given chunk to the output buffer.
 
         To write the output to the network, use the `flush()` method below.
@@ -1197,7 +1197,7 @@ class RequestHandler:
         """
         settings = self.application.settings
         if "template_loader" in settings:
-            return settings["template_loader"]
+            return cast(template.BaseLoader, settings["template_loader"])
         kwargs = {}
         if "autoescape" in settings:
             # autoescape=None means "no escaping", so we have to be sure
@@ -1261,7 +1261,9 @@ class RequestHandler:
         """Check if we should not send body content for given `status_code`"""
         return status_code in (204, 304) or (100 <= status_code < 200)
 
-    def finish(self, chunk: str | bytes | dict | None = None) -> "Future[None]":
+    def finish(
+        self, chunk: str | bytes | dict[Any, Any] | None = None
+    ) -> "Future[None]":
         """Finishes this response, ending the HTTP request.
 
         Passing a ``chunk`` to ``finish()`` is equivalent to passing that
@@ -1520,7 +1522,7 @@ class RequestHandler:
         By default, we use the ``login_url`` application setting.
         """
         self.require_setting("login_url", "@tornado.web.authenticated")
-        return self.application.settings["login_url"]
+        return cast(str, self.application.settings["login_url"])
 
     def get_template_path(self) -> str | None:
         """Override to customize template path for each handler.
@@ -1876,7 +1878,7 @@ class RequestHandler:
         else:
             base = ""
 
-        return base + get_url(self.settings, path, **kwargs)
+        return base + cast(str, get_url(self.settings, path, **kwargs))
 
     def require_setting(self, name: str, feature: str = "this feature") -> None:
         """Raises an exception if the given app setting is not defined."""
@@ -2250,9 +2252,7 @@ class _ApplicationRouter(ReversibleRuleRouter):
         rule = super().process_rule(rule)
 
         if isinstance(rule.target, (list, tuple)):
-            rule.target = _ApplicationRouter(
-                self.application, rule.target  # type: ignore
-            )
+            rule.target = _ApplicationRouter(self.application, rule.target)
 
         return rule
 
@@ -3560,7 +3560,7 @@ class StaticFileHandler(RequestHandler):
         file corresponding to the given ``path``.
 
         """
-        url = settings.get("static_url_prefix", "/static/") + path
+        url: str = settings.get("static_url_prefix", "/static/") + path
         if not include_version:
             return url
 

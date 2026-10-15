@@ -119,7 +119,7 @@ def bind_sockets(
     if flags is None:
         flags = socket.AI_PASSIVE
     bound_port = None
-    unique_addresses: set = set()
+    unique_addresses: set[Any] = set()
     for res in sorted(
         socket.getaddrinfo(address, port, family, socket.SOCK_STREAM, 0, flags),
         key=lambda x: x[0],
@@ -134,7 +134,7 @@ def bind_sockets(
             sys.platform == "darwin"
             and address == "localhost"
             and af == socket.AF_INET6
-            and sockaddr[3] != 0  # type: ignore
+            and sockaddr[3] != 0
         ):
             # Mac OS X includes a link-local address fe80::1%lo0 in the
             # getaddrinfo results for 'localhost'.  However, the firewall
@@ -579,7 +579,7 @@ class OverrideResolver(Resolver):
        Added support for host-port-family triplets.
     """
 
-    def initialize(self, resolver: Resolver, mapping: dict) -> None:
+    def initialize(self, resolver: Resolver, mapping: dict[Any, Any]) -> None:
         self.resolver = resolver
         self.mapping = mapping
 

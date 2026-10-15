@@ -42,8 +42,8 @@ class TestIOLoop(AsyncTestCase):
             old_add_callback(callback, *args, **kwargs)
 
         loop.add_callback = types.MethodType(add_callback, loop)  # type: ignore
-        loop.add_callback(lambda: {})  # type: ignore
-        loop.add_callback(lambda: [])  # type: ignore
+        loop.add_callback(lambda: {})
+        loop.add_callback(lambda: [])
         loop.add_timeout(datetime.timedelta(milliseconds=50), loop.stop)
         loop.start()
         self.assertLess(self.calls, 10)
@@ -426,7 +426,7 @@ class TestIOLoop(AsyncTestCase):
     def test_explicit_asyncio_loop(self):
         asyncio_loop = asyncio.new_event_loop()
         loop = IOLoop(asyncio_loop=asyncio_loop, make_current=False)
-        assert loop.asyncio_loop is asyncio_loop  # type: ignore
+        assert loop.asyncio_loop is asyncio_loop
         with self.assertRaises(RuntimeError):
             # Can't register two IOLoops with the same asyncio_loop
             IOLoop(asyncio_loop=asyncio_loop, make_current=False)

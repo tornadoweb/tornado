@@ -82,13 +82,13 @@ def test_runner_factory(stderr):
             result = super().run(test)
             if result.skipped:
                 skip_reasons = {reason for (test, reason) in result.skipped}
-                self.stream.write(  # type: ignore
+                self.stream.write(
                     textwrap.fill(
                         "Some tests were skipped because: %s"
                         % ", ".join(sorted(skip_reasons))
                     )
                 )
-                self.stream.write("\n")  # type: ignore
+                self.stream.write("\n")
             return result
 
     return TornadoTextTestRunner
@@ -179,7 +179,7 @@ def main():
     # anything written by anything but the test runner as an error.
     orig_stderr = sys.stderr
     counting_stderr = CountingStderr(orig_stderr)
-    sys.stderr = counting_stderr  # type: ignore
+    sys.stderr = counting_stderr
 
     import tornado.testing
 

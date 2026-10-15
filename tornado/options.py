@@ -152,10 +152,11 @@ class OptionParser:
     def __setattr__(self, name: str, value: Any) -> None:
         name = self._normalize_name(name)
         if isinstance(self._options.get(name), _Option):
-            return self._options[name].set(value)
+            self._options[name].set(value)
+            return
         raise AttributeError("Unrecognized option %r" % name)
 
-    def __iter__(self) -> Iterator:
+    def __iter__(self) -> Iterator[Any]:
         return (opt.name for opt in self._options.values())
 
     def __contains__(self, name: str) -> bool:

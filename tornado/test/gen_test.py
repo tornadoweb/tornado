@@ -7,6 +7,7 @@ import sys
 import time
 import unittest
 import weakref
+import typing
 from concurrent import futures
 
 from tornado import gen
@@ -1086,7 +1087,7 @@ class RunnerGCTest(AsyncTestCase):
     def test_gc(self):
         # GitHub issue 1769: Runner objects can get GCed unexpectedly
         # while their future is alive.
-        weakref_scope: list[weakref.ReferenceType | None] = [None]
+        weakref_scope: list[weakref.ReferenceType[typing.Any] | None] = [None]
 
         def callback():
             gc.collect(2)
