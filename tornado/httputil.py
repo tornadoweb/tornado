@@ -32,17 +32,13 @@ import re
 import time
 import unicodedata
 from functools import lru_cache
-from http.client import responses
+from http.client import responses  # noqa: F401 (re-exported)
 from ssl import SSLError
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 import warnings
 
 from tornado.escape import native_str, parse_qs_bytes, to_unicode, utf8
 from tornado.util import ObjectDict, unicode_type
-
-# responses is unused in this file, but we re-export it to other files.
-# Reference it so pyflakes doesn't complain.
-responses
 
 import typing
 from collections.abc import Awaitable, Generator, Iterable, Iterator, Mapping

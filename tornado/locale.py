@@ -50,7 +50,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from tornado import escape
-from tornado._locale_data import LOCALE_NAMES
+from tornado._locale_data import LOCALE_NAMES  # re-exported for compatibility
 from tornado.log import gen_log
 
 _default_locale = "en_US"

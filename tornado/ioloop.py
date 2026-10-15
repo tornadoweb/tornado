@@ -49,11 +49,8 @@ from tornado.concurrent import (
     is_future,
 )
 from tornado.log import app_log
-from tornado.util import (  # noqa: F401 (TimeoutError re-exported for compatibility)
-    Configurable,
-    TimeoutError,
-    import_object,
-)
+from tornado.util import Configurable, import_object
+from tornado.util import TimeoutError  # re-exported for compatibility
 
 
 class _Selectable(Protocol):

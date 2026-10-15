@@ -57,6 +57,8 @@ __all__ = [
     "testing",
     "util",
     "web",
+    "websocket",
+    "wsgi",
 ]
 
 
