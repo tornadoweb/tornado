@@ -425,13 +425,60 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
             with self.assertRaises(HTTPTimeoutError) as cm:
                 self.io_loop.run_sync(
                     lambda: client.fetch(
-                        self.get_url("/hello"), connect_timeout=0.1, raise_error=True
+                        self.get_url("/hello"), request_timeout=0.1, raise_error=True
                     )
                 )
 
             self.assertEqual(str(cm.exception), "Timeout in request queue")
             self.triggers.popleft()()
             self.io_loop.run_sync(lambda: fut1)
+
+    @gen_test
+    def test_queue_time_counts_against_request_timeout(self):
+        # The request_timeout covers the whole fetch, so it is not restarted
+        # when the request leaves the queue.
+        timeout = 0.5
+        if os.name == "nt" or os.environ.get("EMULATION") == "1":
+            timeout = 1.0
+
+        with closing(self.create_client(max_clients=1)) as client:
+            fut1 = client.fetch(self.get_url("/trigger?wake=false"))
+            while not self.triggers:
+                yield gen.sleep(0.01)
+            start = self.io_loop.time()
+            fut2 = client.fetch(
+                self.get_url("/trigger?wake=false"), request_timeout=timeout
+            )
+            # Spend half of the timeout in the queue, then let the second
+            # request through to a handler that never finishes.
+            yield gen.sleep(timeout / 2)
+            self.triggers.popleft()()
+            yield fut1
+            with self.assertRaises(HTTPTimeoutError) as cm:
+                yield fut2
+            self.assertEqual(str(cm.exception), "Timeout during request")
+            # Restarting the timer would take about 1.5 * timeout.
+            self.assertLess(self.io_loop.time() - start, timeout * 1.4)
+            self.triggers.popleft()()
+            yield gen.sleep(0)
+
+    @gen_test
+    def test_queue_time_does_not_count_against_connect_timeout(self):
+        timeout = 0.2
+        if os.name == "nt" or os.environ.get("EMULATION") == "1":
+            timeout = 0.5
+
+        with closing(self.create_client(max_clients=1)) as client:
+            fut1 = client.fetch(self.get_url("/trigger?wake=false"))
+            while not self.triggers:
+                yield gen.sleep(0.01)
+            fut2 = client.fetch(self.get_url("/hello"), connect_timeout=timeout)
+            # Wait in the queue for longer than the connect_timeout.
+            yield gen.sleep(timeout * 2)
+            self.triggers.popleft()()
+            yield fut1
+            response = yield fut2
+            self.assertEqual(response.body, b"Hello world!")
 
     def test_no_content_length(self):
         response = self.fetch("/no_content_length")
