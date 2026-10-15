@@ -28,6 +28,9 @@
 * The fastest way to run the tests is to bypass `tox` and run `python3 -m tornado.test`.
   To run a subset of tests, add a module, class, or method name to the command line:
   `python3 -m tornado.test.httputil_test`.
+* `tox -e coverage` measures test coverage across the `-full` configurations and writes an
+  HTML report to `.tox/coverage-data/html`. CI fails if total coverage drops below the floor
+  set in `tox.ini`; raise the floor when you raise coverage.
 * Tests can also be run with the standard library's `unittest` package CLI. This is useful
   for integration with some editors. However, this mode skips a few checks, notably the
   requirement that tests do not generate any log output without corresponding ExpectLog

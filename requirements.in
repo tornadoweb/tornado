@@ -1,4 +1,5 @@
 black
+coverage
 flake8
 mypy>=0.941
 pip-tools
