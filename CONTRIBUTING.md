@@ -31,6 +31,11 @@
 * `tox -e coverage` measures test coverage across the `-full` configurations and writes an
   HTML report to `.tox/coverage-data/html`. CI fails if total coverage drops below the floor
   set in `tox.ini`; raise the floor when you raise coverage.
+* `tornado/test/property_test.py` holds property-based tests using `hypothesis`, which is
+  installed in the `-full` configurations (the tests are skipped without it). They are a good
+  place for invariants of parsers and encoders: round-trips, agreement with a simple model, and
+  "malformed input raises `HTTPInputError` and nothing else". When one fails, also add the
+  failing input as an example-based test so it stays covered.
 * Tests can also be run with the standard library's `unittest` package CLI. This is useful
   for integration with some editors. However, this mode skips a few checks, notably the
   requirement that tests do not generate any log output without corresponding ExpectLog
