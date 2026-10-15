@@ -96,9 +96,9 @@ from tornado.routing import (
     ReversibleRouter,
     ReversibleRuleRouter,
     Rule,
-    URLSpec,
     _RuleList,
 )
+from tornado.routing import URLSpec  # re-exported for compatibility
 from tornado.util import ObjectDict, _websocket_mask, unicode_type
 
 url = URLSpec
