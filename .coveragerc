@@ -13,6 +13,9 @@ branch = true
 source_pkgs = tornado
 omit =
     */tornado/test/*
+    # Deprecated; still tested in the -full configurations, but we don't
+    # track its coverage.
+    */tornado/platform/caresresolver.py
 # Each process writes its own data file; run `coverage combine` before
 # reporting.
 parallel = true
