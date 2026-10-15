@@ -353,6 +353,8 @@ class Locale:
             date = datetime.datetime.fromtimestamp(date, datetime.UTC)
         if date.tzinfo is None:
             date = date.replace(tzinfo=datetime.UTC)
+        else:
+            date = date.astimezone(datetime.UTC)
         now = datetime.datetime.now(datetime.UTC)
         if date > now:
             if relative and (date - now).total_seconds() < 60:
