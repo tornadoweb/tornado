@@ -55,6 +55,9 @@
   out the base in another directory and run
   `python maint/benchmark/compare_benchmarks.py --base ../base --head .`. When you add a
   parser or a resource-budget test for one, add a benchmark of its worst-case input too.
+* Don't remove a public name, argument or behavior without deprecating it first: it should
+  emit a `DeprecationWarning` and have a `.. deprecated::` note (saying what to use instead)
+  for at least one minor release before it goes. See `maint/RELEASING.md`.
 * `tox -e lint` runs flake8, black and mypy. mypy runs in strict mode, relaxed for the tests
   (see `setup.cfg`), and reports `# type: ignore` comments that are no longer needed. Names
   that a module re-exports need the `import X as X` form. It also type-checks the client code
