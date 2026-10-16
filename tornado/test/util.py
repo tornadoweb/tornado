@@ -134,7 +134,7 @@ def exec_test(caller_globals, caller_locals, s):
     # Flatten the real global and local namespace into our fake
     # globals: it's all global from the perspective of code defined
     # in s.
-    global_namespace = dict(caller_globals, **caller_locals)  # type: ignore
+    global_namespace = dict(caller_globals, **caller_locals)
     local_namespace: dict[str, typing.Any] = {}
     exec(textwrap.dedent(s), global_namespace, local_namespace)
     return local_namespace

@@ -50,7 +50,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from tornado import escape
-from tornado._locale_data import LOCALE_NAMES  # re-exported for compatibility
+from tornado._locale_data import LOCALE_NAMES as LOCALE_NAMES
 from tornado.log import gen_log
 
 _default_locale = "en_US"
@@ -464,7 +464,8 @@ class Locale:
         if len(parts) == 0:
             return ""
         if len(parts) == 1:
-            return parts[0]
+            part: str = parts[0]
+            return part
         comma = " \u0648 " if self.code.startswith("fa") else ", "
         return _("%(commas)s and %(last)s") % {
             "commas": comma.join(parts[:-1]),

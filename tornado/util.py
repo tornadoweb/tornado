@@ -267,9 +267,9 @@ def errno_from_exception(e: BaseException) -> int | None:
     """
 
     if hasattr(e, "errno"):
-        return e.errno  # type: ignore
+        return typing.cast(int | None, e.errno)
     elif e.args:
-        return e.args[0]
+        return typing.cast(int | None, e.args[0])
     else:
         return None
 
@@ -440,7 +440,7 @@ class ArgReplacer:
     and similar wrappers.
     """
 
-    def __init__(self, func: Callable, name: str) -> None:
+    def __init__(self, func: Callable[..., Any], name: str) -> None:
         self.name = name
         try:
             self.arg_pos: int | None = self._getargnames(func).index(name)
@@ -448,7 +448,7 @@ class ArgReplacer:
             # Not a positional parameter
             self.arg_pos = None
 
-    def _getargnames(self, func: Callable) -> list[str]:
+    def _getargnames(self, func: Callable[..., Any]) -> list[str]:
         try:
             return getfullargspec(func).args
         except TypeError:
@@ -459,8 +459,8 @@ class ArgReplacer:
                 # getfullargspec that we need here. Note that for static
                 # functions the @cython.binding(True) decorator must
                 # be used (for methods it works out of the box).
-                code = func.func_code  # type: ignore
-                return code.co_varnames[: code.co_argcount]
+                code = func.func_code
+                return typing.cast(list[str], code.co_varnames[: code.co_argcount])
             raise
 
     def get_old_value(

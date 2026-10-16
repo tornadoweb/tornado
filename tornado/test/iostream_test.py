@@ -727,7 +727,7 @@ class TestReadWriteMixin(AsyncTestCase):
         try:
             data = bytearray(b"x" * 10000)
             fut = rs.read_bytes(len(data))
-            yield ws.write(data)  # type: ignore
+            yield ws.write(data)
             self.assertEqual((yield fut), bytes(data))
             del data[:]
         finally:
@@ -745,7 +745,7 @@ class TestReadWriteMixin(AsyncTestCase):
             # Write more than the OS buffers can hold (nobody is reading)
             # so that the write is still pending when we close.
             data = bytearray(b"x" * (10 * 1024 * 1024))
-            fut = ws.write(data)  # type: ignore
+            fut = ws.write(data)
             self.assertTrue(ws.writing())
             # Hold a reference to the write buffer so the test doesn't depend
             # on when it is freed (at once on CPython, at GC on PyPy).
@@ -770,7 +770,7 @@ class TestReadWriteMixin(AsyncTestCase):
             with self.assertRaises(StreamClosedError):
                 # Depending on timing this may fail synchronously or
                 # asynchronously; either way the write must not complete.
-                yield ws.write(data)  # type: ignore
+                yield ws.write(data)
             self.assertTrue(ws.closed())
             del data[:]
         finally:
@@ -975,7 +975,7 @@ class TestIOStreamMixin(TestReadWriteMixin):
                     raise ConnectionResetError(errno.ECONNRESET, "Connection reset")
                 return result
 
-            rs.read_from_fd = read_from_fd  # type: ignore[method-assign]
+            rs.read_from_fd = read_from_fd
             ws.write(b"1234")
             data = yield rs.read_bytes(1)
             self.assertEqual(data, b"1")
@@ -1103,7 +1103,7 @@ class TestIOStreamMixin(TestReadWriteMixin):
         stream = self._make_client_iostream(socket.socket())
         connect_fut = stream.connect(("127.0.0.1", port))
         data = bytearray(b"x" * 10000)
-        write_fut = stream.write(data)  # type: ignore
+        write_fut = stream.write(data)
         # Hold a reference to the write buffer so the test doesn't depend on
         # when it is freed (at once on CPython, at garbage collection on PyPy).
         write_buffer = stream._write_buffer  # noqa: F841

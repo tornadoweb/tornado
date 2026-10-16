@@ -56,7 +56,7 @@ _ERRNO_CONNRESET = (errno.ECONNRESET, errno.ECONNABORTED, errno.EPIPE, errno.ETI
 
 if hasattr(errno, "WSAECONNRESET"):
     _ERRNO_CONNRESET += (  # type: ignore
-        errno.WSAECONNRESET,  # type: ignore
+        errno.WSAECONNRESET,
         errno.WSAECONNABORTED,  # type: ignore
         errno.WSAETIMEDOUT,  # type: ignore
     )
@@ -273,12 +273,12 @@ class BaseIOStream:
         self._total_write_index = 0
         self._total_write_done_index = 0
         self._read_delimiter: bytes | None = None
-        self._read_regex: Pattern | None = None
+        self._read_regex: Pattern[bytes] | None = None
         self._read_max_bytes: int | None = None
         self._read_bytes: int | None = None
         self._read_partial = False
         self._read_until_close = False
-        self._read_future: Future | None = None
+        self._read_future: Future[Any] | None = None
         self._write_futures: collections.deque[tuple[int, Future[None]]] = (
             collections.deque()
         )
@@ -633,7 +633,7 @@ class BaseIOStream:
         self._signal_closed()
 
     def _signal_closed(self) -> None:
-        futures: list[Future] = []
+        futures: list[Future[Any]] = []
         if self._read_future is not None:
             futures.append(self._read_future)
             self._read_future = None
@@ -817,7 +817,7 @@ class BaseIOStream:
         if pos is not None:
             self._read_from_buffer(pos)
 
-    def _start_read(self) -> Future:
+    def _start_read(self) -> Future[Any]:
         if self._read_future is not None:
             # It is an error to start a read while a prior read is unresolved.
             # However, if the prior read is unresolved because the stream was
@@ -983,7 +983,7 @@ class BaseIOStream:
                 self._check_max_bytes(self._read_regex, self._read_buffer_size)
         return None
 
-    def _check_max_bytes(self, delimiter: bytes | Pattern, size: int) -> None:
+    def _check_max_bytes(self, delimiter: bytes | Pattern[bytes], size: int) -> None:
         if self._read_max_bytes is not None and size > self._read_max_bytes:
             raise UnsatisfiableReadError(
                 "delimiter %r not found within %d bytes"
@@ -1179,7 +1179,7 @@ class IOStream(BaseIOStream):
 
     def write_to_fd(self, data: memoryview) -> int:
         try:
-            return self.socket.send(data)  # type: ignore
+            return self.socket.send(data)
         finally:
             # Avoid keeping to data, which can be a memoryview.
             # See https://github.com/tornadoweb/tornado/pull/2008
@@ -1499,7 +1499,7 @@ class SSLIOStream(IOStream):
         super()._handle_write()
 
     def connect(
-        self, address: tuple, server_hostname: str | None = None
+        self, address: tuple[Any, ...], server_hostname: str | None = None
     ) -> "Future[SSLIOStream]":
         self._server_hostname = server_hostname
         # Ignore the result of connect(). If it fails,
@@ -1584,7 +1584,7 @@ class SSLIOStream(IOStream):
         if len(data) >> 30:
             data = memoryview(data)[: 1 << 30]
         try:
-            return self.socket.send(data)  # type: ignore
+            return self.socket.send(data)
         except ssl.SSLError as e:
             if e.args[0] == ssl.SSL_ERROR_WANT_WRITE:
                 # In Python 3.5+, SSLSocket.send raises a WANT_WRITE error if
@@ -1664,7 +1664,7 @@ class PipeIOStream(BaseIOStream):
 
     def write_to_fd(self, data: memoryview) -> int:
         try:
-            return os.write(self.fd, data)  # type: ignore
+            return os.write(self.fd, data)
         finally:
             # Avoid keeping to data, which can be a memoryview.
             # See https://github.com/tornadoweb/tornado/pull/2008
@@ -1672,7 +1672,7 @@ class PipeIOStream(BaseIOStream):
 
     def read_from_fd(self, buf: bytearray | memoryview) -> int | None:
         try:
-            return self._fio.readinto(buf)  # type: ignore
+            return self._fio.readinto(buf)
         except OSError as e:
             if errno_from_exception(e) == errno.EBADF:
                 # If the writing half of a pipe is closed, select will

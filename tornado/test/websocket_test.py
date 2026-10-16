@@ -1259,7 +1259,7 @@ class FloodTest(WebSocketBaseTestCase):
             write_futures.append(Future())
             return write_futures[-1]
 
-        protocol._write_frame = write_frame  # type: ignore
+        protocol._write_frame = write_frame
 
         for data in [b"1", b"2", b"3"]:
             ws.ping(data)

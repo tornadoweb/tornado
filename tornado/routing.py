@@ -432,7 +432,8 @@ class ReversibleRuleRouter(ReversibleRouter, RuleRouter):
 
     def reverse_url(self, name: str, *args: Any) -> str | None:
         if name in self.named_rules:
-            return self.named_rules[name].matcher.reverse(*args)
+            url: str | None = self.named_rules[name].matcher.reverse(*args)
+            return url
 
         for rule in self.rules:
             if isinstance(rule.target, ReversibleRouter):
@@ -522,7 +523,7 @@ class AnyMatches(Matcher):
 class HostMatches(Matcher):
     """Matches requests from hosts specified by ``host_pattern`` regex."""
 
-    def __init__(self, host_pattern: str | Pattern) -> None:
+    def __init__(self, host_pattern: str | Pattern[str]) -> None:
         if isinstance(host_pattern, basestring_type):
             if not host_pattern.endswith("$"):
                 host_pattern += "$"
@@ -542,7 +543,7 @@ class DefaultHostMatches(Matcher):
     Always returns no match if ``X-Real-Ip`` header is present.
     """
 
-    def __init__(self, application: Any, host_pattern: Pattern) -> None:
+    def __init__(self, application: Any, host_pattern: Pattern[str]) -> None:
         self.application = application
         self.host_pattern = host_pattern
 
@@ -557,7 +558,7 @@ class DefaultHostMatches(Matcher):
 class PathMatches(Matcher):
     """Matches requests with paths specified by ``path_pattern`` regex."""
 
-    def __init__(self, path_pattern: str | Pattern) -> None:
+    def __init__(self, path_pattern: str | Pattern[str]) -> None:
         if isinstance(path_pattern, basestring_type):
             if not path_pattern.endswith("$"):
                 path_pattern += "$"
@@ -661,7 +662,7 @@ class URLSpec(Rule):
 
     def __init__(
         self,
-        pattern: str | Pattern,
+        pattern: str | Pattern[str],
         handler: Any,
         kwargs: dict[str, Any] | None = None,
         name: str | None = None,

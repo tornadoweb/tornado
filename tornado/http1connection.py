@@ -56,7 +56,7 @@ _YIELD_THRESHOLD = 256 * 1024
 _CHUNK_YIELD_COST = 1024
 
 
-def _is_done(future: Awaitable) -> bool:
+def _is_done(future: Awaitable[object]) -> bool:
     # IOStream's read methods are declared to return Awaitables, but they
     # are actually Futures which may already be resolved.
     return isinstance(future, Future) and future.done()

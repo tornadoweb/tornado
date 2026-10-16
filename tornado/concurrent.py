@@ -71,7 +71,7 @@ class DummyExecutor(futures.Executor):
 dummy_executor = DummyExecutor()
 
 
-def run_on_executor(*args: Any, **kwargs: Any) -> Callable:
+def run_on_executor(*args: Any, **kwargs: Any) -> Callable[..., Any]:
     """Decorator to run a synchronous method asynchronously on an executor.
 
     Returns a future.
@@ -114,12 +114,12 @@ def run_on_executor(*args: Any, **kwargs: Any) -> Callable:
 
     # Fully type-checking decorators is tricky, and this one is
     # discouraged anyway so it doesn't have all the generic magic.
-    def run_on_executor_decorator(fn: Callable) -> Callable[..., Future]:
+    def run_on_executor_decorator(fn: Callable[..., Any]) -> Callable[..., Future[Any]]:
         executor = kwargs.get("executor", "executor")
 
         @functools.wraps(fn)
-        def wrapper(self: Any, *args: Any, **kwargs: Any) -> Future:
-            async_future: Future = Future()
+        def wrapper(self: Any, *args: Any, **kwargs: Any) -> Future[Any]:
+            async_future: Future[Any] = Future()
             conc_future = getattr(self, executor).submit(fn, self, *args, **kwargs)
             chain_future(conc_future, async_future)
             return async_future
@@ -165,8 +165,8 @@ def chain_future(
         if a.cancelled():
             b.cancel()
             return
-        if hasattr(a, "exc_info") and a.exc_info() is not None:  # type: ignore
-            future_set_exc_info(b, a.exc_info())  # type: ignore
+        if hasattr(a, "exc_info") and a.exc_info() is not None:
+            future_set_exc_info(b, a.exc_info())
         else:
             a_exc = a.exception()
             if a_exc is not None:

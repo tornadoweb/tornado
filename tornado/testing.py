@@ -138,7 +138,9 @@ class AsyncTestCase(unittest.TestCase):
         self.__timeout: object | None = None
 
         # Not used in this class itself, but used by @gen_test
-        self._test_generator: Generator | Coroutine | None = None
+        self._test_generator: (
+            Generator[Any, Any, Any] | Coroutine[Any, Any, Any] | None
+        ) = None
 
     def setUp(self) -> None:
         py_ver = sys.version_info
@@ -216,7 +218,8 @@ class AsyncTestCase(unittest.TestCase):
         .. deprecated:: 6.3
            This method will be removed in Tornado 7.0.
         """
-        return IOLoop(make_current=False)
+        loop: IOLoop = IOLoop(make_current=False)
+        return loop
 
     def _handle_exception(
         self, typ: type[Exception], value: Exception, tb: TracebackType
@@ -247,7 +250,7 @@ class AsyncTestCase(unittest.TestCase):
         self.__rethrow()
         return ret
 
-    def _callTestMethod(self, method: Callable) -> None:
+    def _callTestMethod(self, method: Callable[..., Any]) -> None:
         """Run the given test method, raising an error if it returns non-None.
 
         Failure to decorate asynchronous test methods with ``@gen_test`` can lead to tests
@@ -440,10 +443,11 @@ class AsyncHTTPTestCase(AsyncTestCase):
             url = path
         else:
             url = self.get_url(path)
-        return self.io_loop.run_sync(
+        response: HTTPResponse = self.io_loop.run_sync(
             lambda: self.http_client.fetch(url, raise_error=raise_error, **kwargs),
             timeout=get_async_test_timeout(),
         )
+        return response
 
     def get_httpserver_options(self) -> dict[str, Any]:
         """May be overridden by subclasses to return additional
@@ -513,23 +517,32 @@ class AsyncHTTPSTestCase(AsyncHTTPTestCase):
 
 
 @typing.overload
-def gen_test(
-    *, timeout: float | None = None
-) -> Callable[[Callable[..., Union[Generator, "Coroutine"]]], Callable[..., None]]:
+def gen_test(*, timeout: float | None = None) -> Callable[
+    [Callable[..., Union[Generator[Any, Any, Any], "Coroutine[Any, Any, Any]"]]],
+    Callable[..., None],
+]:
     pass
 
 
 @typing.overload
-def gen_test(func: Callable[..., Union[Generator, "Coroutine"]]) -> Callable[..., None]:
+def gen_test(
+    func: Callable[..., Union[Generator[Any, Any, Any], "Coroutine[Any, Any, Any]"]],
+) -> Callable[..., None]:
     pass
 
 
 def gen_test(
-    func: Callable[..., Union[Generator, "Coroutine"]] | None = None,
+    func: (
+        Callable[..., Union[Generator[Any, Any, Any], "Coroutine[Any, Any, Any]"]]
+        | None
+    ) = None,
     timeout: float | None = None,
 ) -> (
     Callable[..., None]
-    | Callable[[Callable[..., Union[Generator, "Coroutine"]]], Callable[..., None]]
+    | Callable[
+        [Callable[..., Union[Generator[Any, Any, Any], "Coroutine[Any, Any, Any]"]]],
+        Callable[..., None],
+    ]
 ):
     """Testing equivalent of ``@gen.coroutine``, to be applied to test methods.
 
@@ -569,7 +582,9 @@ def gen_test(
     if timeout is None:
         timeout = get_async_test_timeout()
 
-    def wrap(f: Callable[..., Union[Generator, "Coroutine"]]) -> Callable[..., None]:
+    def wrap(
+        f: Callable[..., Union[Generator[Any, Any, Any], "Coroutine[Any, Any, Any]"]],
+    ) -> Callable[..., None]:
         # Stack up several decorators to allow us to access the generator
         # object itself.  In the innermost wrapper, we capture the generator
         # and save it in an attribute of self.  Next, we run the wrapped
@@ -581,7 +596,7 @@ def gen_test(
         @functools.wraps(f)
         def pre_coroutine(
             self: AsyncTestCase, *args: Any, **kwargs: Any
-        ) -> Generator | Coroutine:
+        ) -> Generator[Any, Any, Any] | Coroutine[Any, Any, Any]:
             # Type comments used to avoid pypy3 bug.
             result = f(self, *args, **kwargs)
             if isinstance(result, Generator) or inspect.iscoroutine(result):
@@ -598,9 +613,10 @@ def gen_test(
         @functools.wraps(coro)
         def post_coroutine(self: AsyncTestCase, *args: Any, **kwargs: Any) -> None:
             try:
-                return self.io_loop.run_sync(
+                self.io_loop.run_sync(
                     functools.partial(coro, self, *args, **kwargs), timeout=timeout
                 )
+                return
             except TimeoutError as e:
                 # run_sync raises an error with an unhelpful traceback.
                 # If the underlying generator is still running, we can throw the
@@ -854,7 +870,7 @@ def main(**kwargs: Any) -> None:
     # test discovery, which is incompatible with auto2to3), so don't
     # set module if we're not asking for a specific test.
     if len(argv) > 1:
-        unittest.main(module=None, argv=argv, **kwargs)  # type: ignore
+        unittest.main(module=None, argv=argv, **kwargs)
     else:
         unittest.main(defaultTest="all", argv=argv, **kwargs)
 

@@ -21,7 +21,7 @@ import subprocess
 import sys
 import threading
 import time
-import typing  # noqa: F401
+import typing
 import unicodedata
 import unittest
 import zlib
@@ -157,13 +157,13 @@ class PatchHandler(RequestHandler):
 
 
 class AllMethodsHandler(RequestHandler):
-    SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ("OTHER",)  # type: ignore
+    SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ("OTHER",)
 
     def method(self):
         assert self.request.method is not None
         self.write(self.request.method)
 
-    get = head = post = put = delete = options = patch = other = method  # type: ignore
+    get = head = post = put = delete = options = patch = other = method
 
 
 class SetHeaderHandler(RequestHandler):
@@ -551,7 +551,7 @@ Transfer-Encoding: chunked
         # important thing is that they don't fall back to basic auth
         # on an unknown mode.
         with ExpectLog(gen_log, "uncaught exception", required=False):
-            with self.assertRaises((ValueError, HTTPError)):  # type: ignore
+            with self.assertRaises((ValueError, HTTPError)):
                 self.fetch(
                     "/auth",
                     auth_username="Aladdin",
@@ -883,7 +883,7 @@ X-XSS-Protection: 1;
         response = yield self.http_client.fetch(request)
         self.assertEqual(response.code, 200)
 
-        with self.assertRaises((ValueError, HTTPError)) as context:  # type: ignore
+        with self.assertRaises((ValueError, HTTPError)) as context:
             request = HTTPRequest(url, network_interface="not-interface-or-ip")
             yield self.http_client.fetch(request)
         self.assertTrue(
@@ -1029,7 +1029,7 @@ X-XSS-Protection: 1;
     def test_strip_headers_on_redirect(self):
         # Ensure that headers that should be stripped on cross-origin redirects
         # are stripped, even if the redirect is to a different port on localhost.
-        test_cases: list[tuple[str, dict, str]] = [
+        test_cases: list[tuple[str, dict[str, typing.Any], str]] = [
             ("manual auth header", dict(headers={"Authorization": "secret"}), ""),
             ("credentials in URL", dict(), "me:secret"),
             ("auth parameters", dict(auth_username="me", auth_password="secret"), ""),
@@ -1118,7 +1118,7 @@ class RequestProxyTest(TestCase):
 
 class HTTPResponseTestCase(TestCase):
     def test_str(self):
-        response = HTTPResponse(  # type: ignore
+        response = HTTPResponse(
             HTTPRequest("http://example.com"), 200, buffer=BytesIO()
         )
         s = str(response)
@@ -1226,7 +1226,7 @@ class HTTPRequestTestCase(TestCase):
 
     def test_headers_setter(self):
         request = HTTPRequest("http://example.com")
-        request.headers = {"bar": "baz"}  # type: ignore
+        request.headers = {"bar": "baz"}
         self.assertEqual(request.headers, {"bar": "baz"})
 
     def test_null_headers_setter(self):
@@ -1240,7 +1240,7 @@ class HTTPRequestTestCase(TestCase):
 
     def test_body_setter(self):
         request = HTTPRequest("http://example.com")
-        request.body = "foo"  # type: ignore
+        request.body = "foo"
         self.assertEqual(request.body, utf8("foo"))
 
     def test_if_modified_since(self):

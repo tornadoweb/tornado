@@ -332,8 +332,9 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         Default is 10MiB.
         """
-        return self.settings.get(
-            "websocket_max_message_size", _default_max_message_size
+        return cast(
+            int,
+            self.settings.get("websocket_max_message_size", _default_max_message_size),
         )
 
     def write_message(
@@ -662,7 +663,7 @@ class WebSocketProtocol(abc.ABC):
         self.server_terminated = False
 
     def _run_callback(
-        self, callback: Callable, *args: Any, **kwargs: Any
+        self, callback: Callable[..., Any], *args: Any, **kwargs: Any
     ) -> "Optional[Future[Any]]":
         """Runs the given callback with exception handling.
 
@@ -892,7 +893,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._pending_pong: bytes | None = None
         self.close_code: int | None = None
         self.close_reason: str | None = None
-        self._ping_coroutine: asyncio.Task | None = None
+        self._ping_coroutine: asyncio.Task[Any] | None = None
 
     # Use a property for this to satisfy the abc.
     @property
@@ -1544,7 +1545,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         """
         if self.protocol is not None:
             self.protocol.close(code, reason)
-            self.protocol = None  # type: ignore
+            self.protocol = None
 
     def on_connection_close(self) -> None:
         if not self.connect_future.done():

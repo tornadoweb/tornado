@@ -2,6 +2,7 @@ import datetime
 import os
 import shutil
 import tempfile
+import typing
 
 import tornado.locale
 from tornado.escape import to_unicode, utf8
@@ -19,7 +20,7 @@ class TranslationLoaderTest(TestCase):
         tornado.locale.Locale._cache = {}
 
     def setUp(self):
-        self.saved: dict = {}
+        self.saved: dict[str, typing.Any] = {}
         for var in TranslationLoaderTest.SAVE_VARS:
             self.saved[var] = getattr(tornado.locale, var)
         self.clear_locale_cache()
