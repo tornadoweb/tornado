@@ -210,8 +210,14 @@ class WSGIContainer:
         """
         hostport = request.host.split(":")
         if len(hostport) == 2:
-            host = hostport[0]
-            port = int(hostport[1])
+            try:
+                port = int(hostport[1])
+            except ValueError:
+                # Empty or non-numeric port. Do not raise out of the adapter.
+                host = request.host
+                port = 443 if request.protocol == "https" else 80
+            else:
+                host = hostport[0]
         else:
             host = request.host
             port = 443 if request.protocol == "https" else 80

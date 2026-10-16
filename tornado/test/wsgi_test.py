@@ -1,8 +1,10 @@
 import asyncio
 import concurrent.futures
 import threading
+import unittest
 from wsgiref.validate import validator
 
+from tornado import httputil
 from tornado.routing import RuleRouter
 from tornado.test.util import AsyncHTTPTestCase
 from tornado.testing import gen_test
@@ -114,3 +116,29 @@ class WSGIContainerThreadPoolTest(WSGIAppMixin, AsyncHTTPTestCase):
             self.http_client.fetch(self.get_url("/streaming_barrier")),
         )
         self.assertEqual([b"ok 0", b"ok 1"], sorted([resp.body for resp in resps]))
+
+
+class WSGIContainerEnvironHostTest(unittest.TestCase):
+    def environ_for(self, host, protocol="http"):
+        request = httputil.HTTPServerRequest(
+            start_line=httputil.RequestStartLine("GET", "/", "HTTP/1.1"),
+            headers=httputil.HTTPHeaders({"Host": host}),
+        )
+        request.protocol = protocol
+        return WSGIContainer(lambda environ, start_response: []).environ(request)
+
+    def test_non_numeric_port_uses_scheme_default(self):
+        environ = self.environ_for("localhost:abc")
+        self.assertEqual(environ["SERVER_NAME"], "localhost:abc")
+        self.assertEqual(environ["SERVER_PORT"], "80")
+
+    def test_empty_port_uses_https_default(self):
+        environ = self.environ_for("localhost:", protocol="https")
+        self.assertEqual(environ["SERVER_NAME"], "localhost:")
+        self.assertEqual(environ["SERVER_PORT"], "443")
+
+    def test_numeric_port_is_kept(self):
+        environ = self.environ_for("localhost:8080")
+        self.assertEqual(environ["SERVER_NAME"], "localhost")
+        self.assertEqual(environ["SERVER_PORT"], "8080")
+
