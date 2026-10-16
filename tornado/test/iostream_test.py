@@ -1263,7 +1263,9 @@ class TestIOStreamStartTLS(AsyncTestCase):
     def test_handshake_fail(self):
         server_future = self.server_start_tls(_server_ssl_options())
         # Certificates are verified with the default configuration.
-        with ExpectLog(gen_log, "SSL Error"):
+        # The client reports its error through the Future. Depending on the
+        # platform, the server may see a TLS alert or only a connection reset.
+        with ExpectLog(gen_log, "SSL Error", required=False):
             client_future = self.client_start_tls(server_hostname="localhost")
             with self.assertRaises(ssl.SSLError):
                 yield client_future
@@ -1274,7 +1276,9 @@ class TestIOStreamStartTLS(AsyncTestCase):
     def test_check_hostname(self):
         # Test that server_hostname parameter to start_tls is being used.
         server_future = self.server_start_tls(_server_ssl_options())
-        with ExpectLog(gen_log, "SSL Error"):
+        # The client reports its error through the Future. Depending on the
+        # platform, the server may see a TLS alert or only a connection reset.
+        with ExpectLog(gen_log, "SSL Error", required=False):
             client_future = self.client_start_tls(
                 ssl.create_default_context(), server_hostname="127.0.0.1"
             )
