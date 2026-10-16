@@ -205,6 +205,36 @@ jobs:
       - name: Run test suite
         run: python -m tornado.test
 
+  benchmark:
+    # Compares CPU cost per request, per byte, etc. with the PR's base
+    # branch (see maint/benchmark/compare_benchmarks.py) and fails on a
+    # regression of more than 20%. The table is shown on the run's summary
+    # page. This runs alongside the full tests, so it adds no wall time.
+    name: Compare benchmarks with base branch
+    needs: test_quick
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        name: Check out base branch
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+      - uses: actions/setup-python@v6
+        name: Install Python
+        with:
+          # [[[cog cog.outl(f"python-version: '3.{default_python_minor}'")]]]
+          python-version: '3.13'
+          # [[[end]]]
+      - name: Run benchmarks
+        run: >-
+          python maint/benchmark/compare_benchmarks.py --base base --head .
+          --markdown "$GITHUB_STEP_SUMMARY"
+
   zizmor:
     name: Analyze action configs with zizmor
     runs-on: ubuntu-24.04
