@@ -715,6 +715,30 @@ class XHeaderTest(HandlerBaseTestCase):
             self.fetch_json("/", headers=invalid_host)["remote_ip"], "127.0.0.1"
         )
 
+    def test_bracketed_ipv6_xheaders(self):
+        # Issue #3561: Fortigate and AWS wrap IPv6 in brackets.
+        bracketed = {"X-Forwarded-For": "[2620:0:d60:ac1a::10]"}
+        self.assertEqual(
+            self.fetch_json("/", headers=bracketed)["remote_ip"],
+            "2620:0:d60:ac1a::10",
+        )
+
+        real_ip = {"X-Real-IP": "[2620:0:1cfe:face:b00c::3]"}
+        self.assertEqual(
+            self.fetch_json("/", headers=real_ip)["remote_ip"],
+            "2620:0:1cfe:face:b00c::3",
+        )
+
+        trusted = {"X-Forwarded-For": "4.4.4.4, [5.5.5.5]"}
+        self.assertEqual(
+            self.fetch_json("/", headers=trusted)["remote_ip"], "4.4.4.4"
+        )
+
+        invalid = {"X-Forwarded-For": "[not-an-ip]"}
+        self.assertEqual(
+            self.fetch_json("/", headers=invalid)["remote_ip"], "127.0.0.1"
+        )
+
     def test_trusted_downstream(self):
         valid_ipv4_list = {"X-Forwarded-For": "127.0.0.1, 4.4.4.4, 5.5.5.5"}
         resp = self.fetch("/", headers=valid_ipv4_list)
