@@ -1446,21 +1446,84 @@ class TestIOStreamCheckHostname(AsyncTestCase):
             required=platform.system() != "Windows",
         ):
             with self.assertRaises(ssl.SSLCertVerificationError):
-                with ExpectLog(
-                    gen_log,
-                    ".*(certificate verify failed|CERTIFICATE_VERIFY_FAILED)"
-                    ": Hostname mismatch",
-                    level=logging.WARNING,
-                ):
-                    await stream.connect(
-                        ("127.0.0.1", self.port),
-                        server_hostname="bar.example.com",
-                    )
+                await stream.connect(
+                    ("127.0.0.1", self.port),
+                    server_hostname="bar.example.com",
+                )
             # The server logs a warning while cleaning up the failed connection.
             # Unfortunately there's no good hook to wait for this logging.
             # It doesn't seem to happen on windows; I'm not sure why.
             if platform.system() != "Windows":
                 await asyncio.sleep(0.1)
+
+    async def _check_client_handshake_logging(
+        self, ssl_context, hostname, start_tls=False
+    ):
+        # A client can handle handshake errors through the connect Future.
+        # It should not also receive a warning from the stream itself.
+        if start_tls:
+            stream = IOStream(socket.socket())
+            await stream.connect(("127.0.0.1", self.port))
+        else:
+            stream = SSLIOStream(socket.socket(), ssl_options=ssl_context)
+        assert stream.socket is not None
+        client_fd = stream.socket.fileno()
+        records = []
+
+        class RecordFilter(logging.Filter):
+            def filter(self, record):
+                records.append(record)
+                return True
+
+        record_filter = RecordFilter()
+        gen_log.addFilter(record_filter)
+        try:
+            # A TLS alert on the server side is independent of the client
+            # exception and may be logged while the failed socket is closed.
+            with ExpectLog(gen_log, "SSL Error", required=False):
+                with self.assertRaises(ssl.SSLCertVerificationError):
+                    if start_tls:
+                        await stream.start_tls(
+                            False, ssl_context, server_hostname=hostname
+                        )
+                    else:
+                        await stream.connect(
+                            ("127.0.0.1", self.port), server_hostname=hostname
+                        )
+                await asyncio.sleep(0.1)
+            if not start_tls:
+                self.assertTrue(stream.closed())
+            self.assertFalse(
+                [
+                    record
+                    for record in records
+                    if record.levelno >= logging.WARNING
+                    and record.args
+                    and record.args[0] == client_fd
+                ]
+            )
+        finally:
+            gen_log.removeFilter(record_filter)
+            if stream.socket is not None:
+                stream.close()
+
+    @gen_test
+    async def test_hostname_error_not_logged_by_client(self):
+        await self._check_client_handshake_logging(
+            self.client_ssl_ctx, "bar.example.com"
+        )
+
+    @gen_test
+    async def test_untrusted_certificate_not_logged_by_client(self):
+        await self._check_client_handshake_logging(
+            ssl.create_default_context(), "foo.example.com"
+        )
+
+    @gen_test
+    async def test_start_tls_error_not_logged_by_client(self):
+        await self._check_client_handshake_logging(
+            ssl.create_default_context(), "foo.example.com", start_tls=True
+        )
 
     @gen_test
     async def test_check_disabled(self):
