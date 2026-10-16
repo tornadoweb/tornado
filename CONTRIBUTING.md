@@ -49,6 +49,12 @@
   escaping, highly compressible data) and keep sizes small enough that the test takes a
   fraction of a second. A fix for a denial-of-service bug should come with such a test, and
   the test should fail on the code before the fix.
+* The "Compare benchmarks" CI job runs `maint/benchmark/ci_benchmark.py` against the PR and
+  its base branch and fails if anything is more than 20% slower, or if an adversarial input
+  exceeds its absolute budget (`BUDGETS` in that file). To run the comparison locally, check
+  out the base in another directory and run
+  `python maint/benchmark/compare_benchmarks.py --base ../base --head .`. When you add a
+  parser or a resource-budget test for one, add a benchmark of its worst-case input too.
 * Tests can also be run with the standard library's `unittest` package CLI. This is useful
   for integration with some editors. However, this mode skips a few checks, notably the
   requirement that tests do not generate any log output without corresponding ExpectLog
