@@ -10,6 +10,7 @@
 """
 
 import asyncio
+import contextlib
 import functools
 import inspect
 import logging
@@ -39,6 +40,8 @@ _ExcInfoTuple = tuple[
     type[BaseException] | None, BaseException | None, TracebackType | None
 ]
 
+
+_T = typing.TypeVar("_T")
 
 _NON_OWNED_IOLOOPS = AsyncIOMainLoop
 
@@ -218,8 +221,7 @@ class AsyncTestCase(unittest.TestCase):
         .. deprecated:: 6.3
            This method will be removed in Tornado 7.0.
         """
-        loop: IOLoop = IOLoop(make_current=False)
-        return loop
+        return IOLoop(make_current=False)
 
     def _handle_exception(
         self, typ: type[Exception], value: Exception, tb: TracebackType
@@ -443,11 +445,10 @@ class AsyncHTTPTestCase(AsyncTestCase):
             url = path
         else:
             url = self.get_url(path)
-        response: HTTPResponse = self.io_loop.run_sync(
+        return self.io_loop.run_sync(
             lambda: self.http_client.fetch(url, raise_error=raise_error, **kwargs),
             timeout=get_async_test_timeout(),
         )
-        return response
 
     def get_httpserver_options(self) -> dict[str, Any]:
         """May be overridden by subclasses to return additional
@@ -766,7 +767,9 @@ class ExpectLog(logging.Filter):
 
 
 # From https://nedbatchelder.com/blog/201508/using_context_managers_in_test_setup.html
-def setup_with_context_manager(testcase: unittest.TestCase, cm: Any) -> Any:
+def setup_with_context_manager(
+    testcase: unittest.TestCase, cm: contextlib.AbstractContextManager[_T]
+) -> _T:
     """Use a context manager to setUp a test case.
 
     Example::

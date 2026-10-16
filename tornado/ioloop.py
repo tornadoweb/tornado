@@ -453,7 +453,15 @@ class IOLoop(Configurable):
         """
         raise NotImplementedError()
 
-    def run_sync(self, func: Callable[..., Any], timeout: float | None = None) -> Any:
+    @typing.overload
+    def run_sync(
+        self, func: Callable[[], Awaitable[_T]], timeout: float | None = None
+    ) -> _T: ...
+
+    @typing.overload
+    def run_sync(self, func: Callable[[], _T], timeout: float | None = None) -> _T: ...
+
+    def run_sync(self, func: Callable[[], Any], timeout: float | None = None) -> Any:
         """Starts the `IOLoop`, runs the given function, and stops the loop.
 
         The function must return either an awaitable object or

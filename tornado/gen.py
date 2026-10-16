@@ -311,7 +311,7 @@ class Return(Exception):
         self.args = (value,)
 
 
-class WaitIterator:
+class WaitIterator(typing.Generic[_T]):
     """Provides an iterator to yield the results of awaitables as they finish.
 
     Yielding a set of awaitables like this:
@@ -366,15 +366,15 @@ class WaitIterator:
 
     """
 
-    _unfinished: dict[Future[Any], collections.deque[int | str]] = {}
+    _unfinished: dict[Future[_T], collections.deque[int | str]]
 
-    def __init__(self, *args: Future[Any], **kwargs: Future[Any]) -> None:
+    def __init__(self, *args: Future[_T], **kwargs: Future[_T]) -> None:
         if args and kwargs:
             raise ValueError("You must provide args or kwargs, not both")
 
         self._unfinished = {}
         if kwargs:
-            futures: Sequence[Future[Any]] = list(kwargs.values())
+            futures: Sequence[Future[_T]] = list(kwargs.values())
             for key, future in kwargs.items():
                 self._unfinished.setdefault(future, collections.deque()).append(key)
         else:
@@ -382,10 +382,10 @@ class WaitIterator:
             for index, future in enumerate(args):
                 self._unfinished.setdefault(future, collections.deque()).append(index)
 
-        self._finished: collections.deque[Future[Any]] = collections.deque()
+        self._finished: collections.deque[Future[_T]] = collections.deque()
         self.current_index: str | int | None = None
-        self.current_future: Future[Any] | None = None
-        self._running_future: Future[Any] | None = None
+        self.current_future: Future[_T] | None = None
+        self._running_future: Future[_T] | None = None
 
         for future in futures:
             future_add_done_callback(future, self._done_callback)
@@ -398,7 +398,7 @@ class WaitIterator:
         self.current_index = self.current_future = None
         return True
 
-    def next(self) -> Future[Any]:
+    def next(self) -> Future[_T]:
         """Returns a `.Future` that will yield the next available result.
 
         Note that this `.Future` will not be the same object as any of
@@ -411,13 +411,13 @@ class WaitIterator:
 
         return self._running_future
 
-    def _done_callback(self, done: Future[Any]) -> None:
+    def _done_callback(self, done: Future[_T]) -> None:
         if self._running_future and not self._running_future.done():
             self._return_result(done)
         else:
             self._finished.append(done)
 
-    def _return_result(self, done: Future[Any]) -> Future[Any]:
+    def _return_result(self, done: Future[_T]) -> Future[_T]:
         """Called set the returned future's state that of the future
         we yielded, and set the current future for the iterator.
         """
@@ -435,10 +435,10 @@ class WaitIterator:
 
         return res
 
-    def __aiter__(self) -> typing.AsyncIterator[Any]:
+    def __aiter__(self) -> "WaitIterator[_T]":
         return self
 
-    def __anext__(self) -> Future[Any]:
+    def __anext__(self) -> Future[_T]:
         if self.done():
             # Lookup by name to silence pyflakes on older versions.
             raise getattr(builtins, "StopAsyncIteration")()

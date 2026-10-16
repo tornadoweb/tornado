@@ -37,6 +37,7 @@ from typing import Any, Union
 from tornado.log import app_log
 
 _T = typing.TypeVar("_T")
+_P = typing.ParamSpec("_P")
 
 
 class ReturnValueIgnoredError(Exception):
@@ -71,7 +72,17 @@ class DummyExecutor(futures.Executor):
 dummy_executor = DummyExecutor()
 
 
-def run_on_executor(*args: Any, **kwargs: Any) -> Callable[..., Any]:
+@typing.overload
+def run_on_executor(fn: Callable[_P, _T], /) -> Callable[_P, Future[_T]]: ...
+
+
+@typing.overload
+def run_on_executor(
+    *, executor: str = ...
+) -> Callable[[Callable[_P, _T]], Callable[_P, Future[_T]]]: ...
+
+
+def run_on_executor(*args: Any, **kwargs: Any) -> Any:
     """Decorator to run a synchronous method asynchronously on an executor.
 
     Returns a future.
@@ -112,15 +123,16 @@ def run_on_executor(*args: Any, **kwargs: Any) -> Callable[..., Any]:
        The ``callback`` argument was removed.
     """
 
-    # Fully type-checking decorators is tricky, and this one is
-    # discouraged anyway so it doesn't have all the generic magic.
-    def run_on_executor_decorator(fn: Callable[..., Any]) -> Callable[..., Future[Any]]:
+    def run_on_executor_decorator(
+        fn: Callable[_P, _T],
+    ) -> Callable[_P, Future[_T]]:
         executor = kwargs.get("executor", "executor")
 
         @functools.wraps(fn)
-        def wrapper(self: Any, *args: Any, **kwargs: Any) -> Future[Any]:
-            async_future: Future[Any] = Future()
-            conc_future = getattr(self, executor).submit(fn, self, *args, **kwargs)
+        def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> Future[_T]:
+            # The first argument is self; the executor is one of its attributes.
+            async_future: Future[_T] = Future()
+            conc_future = getattr(args[0], executor).submit(fn, *args, **kwargs)
             chain_future(conc_future, async_future)
             return async_future
 
