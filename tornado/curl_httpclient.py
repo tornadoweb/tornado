@@ -709,15 +709,19 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             return
         headers.parse_line(header_line)
 
-    def _curl_debug(self, debug_type: int, debug_msg: str) -> None:
+    def _curl_debug(self, debug_type: int, debug_msg: bytes) -> None:
         debug_types = ("I", "<", ">", "<", ">")
-        if debug_type == 0:
-            debug_msg = native_str(debug_msg)
-            curl_log.debug("%s", debug_msg.strip())
-        elif debug_type in (1, 2):
-            debug_msg = native_str(debug_msg)
-            for line in debug_msg.splitlines():
-                curl_log.debug("%s %s", debug_types[debug_type], line)
+        if debug_type in (0, 1, 2):
+            try:
+                message = native_str(debug_msg)
+            except UnicodeDecodeError:
+                # libcurl's debug messages are not necessarily UTF-8.
+                message = repr(debug_msg)
+            if debug_type == 0:
+                curl_log.debug("%s", message.strip())
+            else:
+                for line in message.splitlines():
+                    curl_log.debug("%s %s", debug_types[debug_type], line)
         elif debug_type == 4:
             curl_log.debug("%s %r", debug_types[debug_type], debug_msg)
 
