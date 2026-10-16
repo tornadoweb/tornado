@@ -335,6 +335,25 @@ Foo
         ):
             _parse_header(header)
 
+    @skipNotCPython
+    def test_multipart_memory_budget(self):
+        # Many empty parts are the worst case for memory, since each part
+        # costs a fixed amount (about 5 bytes per input byte as of 2026-10
+        # with the default max_parts). Larger parts are close to 2: the
+        # body and one copy of each part's data.
+        part = (
+            b"--1234\r\n"
+            b'Content-Disposition: form-data; name="a"; filename="b"\r\n'
+            b"Content-Type: text/plain\r\n\r\n\r\n"
+        )
+        body = part * (ParseMultipartConfig().max_parts - 1) + b"--1234--\r\n"
+        args, files = form_data_args()
+        with assert_memory_budget(
+            len(body), max_ratio=10, msg="multipart parsing uses too much memory"
+        ):
+            parse_multipart_form_data(b"1234", body, args, files)
+        self.assertEqual(len(files["a"]), 99)
+
     def test_multipart_config(self):
         boundary = b"1234"
         body = b"""--1234
@@ -807,3 +826,14 @@ class ParseCookieTest(TestCase):
                     max_ratio=20,
                     msg="Cookie unquoting is not linear",
                 )
+
+    @skipNotCPython
+    def test_parse_memory_budget(self):
+        # Many short cookies with empty values are the worst case for memory
+        # (about 20 bytes per input byte as of 2026-10). Cookies arrive in a
+        # header, so the default max_header_size of 64KB bounds the input.
+        data = "".join(f"{i}=;" for i in range(10_000))
+        with assert_memory_budget(
+            len(data), max_ratio=30, msg="parse_cookie() uses too much memory"
+        ):
+            parse_cookie(data)
