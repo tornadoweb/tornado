@@ -46,7 +46,7 @@ import gettext
 import glob
 import os
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import Any
 
 from tornado import escape
@@ -454,7 +454,7 @@ class Locale:
                 "day": str(local_date.day),
             }
 
-    def list(self, parts: Any) -> str:
+    def list(self, parts: Sequence[str]) -> str:
         """Returns a comma-separated list for the given list of parts.
 
         The format is, e.g., "A, B and C", "A and B" or just "A" for lists
@@ -464,8 +464,7 @@ class Locale:
         if len(parts) == 0:
             return ""
         if len(parts) == 1:
-            part: str = parts[0]
-            return part
+            return parts[0]
         comma = " \u0648 " if self.code.startswith("fa") else ", "
         return _("%(commas)s and %(last)s") % {
             "commas": comma.join(parts[:-1]),

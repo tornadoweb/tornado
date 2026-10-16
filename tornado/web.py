@@ -643,7 +643,7 @@ class RequestHandler:
         name: str,
         value: str | bytes,
         domain: str | None = None,
-        expires: float | tuple[Any, ...] | datetime.datetime | None = None,
+        expires: float | tuple[int, ...] | datetime.datetime | None = None,
         path: str = "/",
         expires_days: float | None = None,
         # Keyword-only args start here for historical reasons.

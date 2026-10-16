@@ -99,7 +99,7 @@ tornado.gen.Runner.run: method(self)
 tornado.gen.Runner.running: attribute
 tornado.gen.TimeoutError: import of builtins.TimeoutError
 tornado.gen.UnknownKeyError: class(builtins.Exception)
-tornado.gen.WaitIterator: class()
+tornado.gen.WaitIterator: class(typing.Generic)
 tornado.gen.WaitIterator.__aiter__: method(self)
 tornado.gen.WaitIterator.__anext__: method(self)
 tornado.gen.WaitIterator.__init__: method(self, *args, **kwargs)

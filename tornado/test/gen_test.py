@@ -912,7 +912,7 @@ class WithTimeoutTest(AsyncTestCase):
 class WaitIteratorTest(AsyncTestCase):
     @gen_test
     def test_empty_iterator(self):
-        g = gen.WaitIterator()
+        g: gen.WaitIterator[None] = gen.WaitIterator()
         self.assertTrue(g.done(), "empty generator iterated")
 
         with self.assertRaises(ValueError):
@@ -979,7 +979,7 @@ class WaitIteratorTest(AsyncTestCase):
         future: Future[int] = Future()
         future.set_result(42)
 
-        cases: list[tuple[gen.WaitIterator, list[int | str]]] = [
+        cases: list[tuple[gen.WaitIterator[int], list[int | str]]] = [
             (gen.WaitIterator(future, future, future), [0, 1, 2]),
             (gen.WaitIterator(first=future, second=future), ["first", "second"]),
         ]

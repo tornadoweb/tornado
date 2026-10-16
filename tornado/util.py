@@ -32,7 +32,7 @@ if typing.TYPE_CHECKING:
     # This lets us make these imports lazy.
     import datetime
     import unittest
-    from types import TracebackType
+    from types import CodeType, TracebackType
 
 # Aliases for types that are spelled differently in different Python
 # versions. bytes_type is deprecated and no longer used in Tornado
@@ -233,7 +233,9 @@ def import_object(name: str) -> Any:
 
 
 def exec_in(
-    code: Any, glob: dict[str, Any], loc: Mapping[str, Any] | None | None = None
+    code: str | CodeType,
+    glob: dict[str, Any],
+    loc: Mapping[str, Any] | None = None,
 ) -> None:
     if isinstance(code, str):
         # exec(string) inherits the caller's future imports; compile
@@ -337,7 +339,7 @@ class Configurable:
     __impl_class: type[Configurable] | None = None
     __impl_kwargs: dict[str, Any] | None = None
 
-    def __new__(cls, *args: Any, **kwargs: Any) -> Any:
+    def __new__(cls, *args: Any, **kwargs: Any) -> typing.Self:
         base = cls.configurable_base()
         init_kwargs: dict[str, Any] = {}
         if cls is base:
@@ -349,8 +351,8 @@ class Configurable:
         init_kwargs.update(kwargs)
         if impl.configurable_base() is not base:
             # The impl class is itself configurable, so recurse.
-            return impl(*args, **init_kwargs)
-        instance = super().__new__(impl)
+            return typing.cast(typing.Self, impl(*args, **init_kwargs))
+        instance = typing.cast(typing.Self, super().__new__(impl))
         # initialize vs __init__ chosen for compatibility with AsyncHTTPClient
         # singleton magic.  If we get rid of that we can switch to __init__
         # here too.

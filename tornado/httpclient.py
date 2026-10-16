@@ -131,10 +131,9 @@ class HTTPClient:
         If an error occurs during the fetch, we raise an `HTTPError` unless
         the ``raise_error`` keyword argument is set to False.
         """
-        response: HTTPResponse = self._io_loop.run_sync(
+        return self._io_loop.run_sync(
             functools.partial(self._async_client.fetch, request, **kwargs)
         )
-        return response
 
 
 class AsyncHTTPClient(Configurable):
@@ -204,7 +203,7 @@ class AsyncHTTPClient(Configurable):
             instance_cache = cls._async_clients()
         if instance_cache is not None and io_loop in instance_cache:
             return instance_cache[io_loop]
-        instance: AsyncHTTPClient = super().__new__(cls, **kwargs)
+        instance = super().__new__(cls, **kwargs)
         # Make sure the instance knows which cache to remove itself from.
         # It can't simply call _async_clients() because we may be in
         # __new__(AsyncHTTPClient) but instance.__class__ may be

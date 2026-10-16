@@ -415,7 +415,7 @@ class ReversibleRuleRouter(ReversibleRouter, RuleRouter):
     """
 
     def __init__(self, rules: _RuleList | None = None) -> None:
-        self.named_rules: dict[str, Any] = {}
+        self.named_rules: dict[str, Rule] = {}
         super().__init__(rules)
 
     def process_rule(self, rule: "Rule") -> "Rule":
@@ -432,8 +432,7 @@ class ReversibleRuleRouter(ReversibleRouter, RuleRouter):
 
     def reverse_url(self, name: str, *args: Any) -> str | None:
         if name in self.named_rules:
-            url: str | None = self.named_rules[name].matcher.reverse(*args)
-            return url
+            return self.named_rules[name].matcher.reverse(*args)
 
         for rule in self.rules:
             if isinstance(rule.target, ReversibleRouter):

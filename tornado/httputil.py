@@ -340,7 +340,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
     def __len__(self) -> int:
         return len(self._as_list)
 
-    def __iter__(self) -> Iterator[typing.Any]:
+    def __iter__(self) -> Iterator[str]:
         return iter(self._as_list)
 
     def copy(self) -> HTTPHeaders:
@@ -607,7 +607,7 @@ class HTTPServerRequest:
 
     def get_ssl_certificate(
         self, binary_form: bool = False
-    ) -> None | dict[typing.Any, typing.Any] | bytes:
+    ) -> None | dict[str, typing.Any] | bytes:
         """Returns the client's SSL certificate, if any.
 
         To use client certificates, the HTTPServer's
@@ -1150,7 +1150,7 @@ def parse_multipart_form_data(
 
 
 def format_timestamp(
-    ts: int | float | tuple[typing.Any, ...] | time.struct_time | datetime.datetime,
+    ts: int | float | tuple[int, ...] | time.struct_time | datetime.datetime,
 ) -> str:
     """Formats a timestamp in the format used by HTTP.
 

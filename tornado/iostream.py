@@ -48,6 +48,9 @@ from tornado.log import gen_log
 from tornado.netutil import _client_ssl_defaults, _server_ssl_defaults, ssl_wrap_socket
 from tornado.util import errno_from_exception
 
+if typing.TYPE_CHECKING:
+    import unittest
+
 _IOStreamType = TypeVar("_IOStreamType", bound="IOStream")
 
 # These errnos indicate that a connection has been abruptly terminated.
@@ -1685,7 +1688,7 @@ class PipeIOStream(BaseIOStream):
             del buf
 
 
-def doctests() -> Any:
+def doctests() -> "unittest.TestSuite":
     import doctest
 
     return doctest.DocTestSuite()
