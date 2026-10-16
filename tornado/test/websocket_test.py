@@ -10,6 +10,7 @@ import unittest
 from tornado import gen
 from tornado.concurrent import Future
 from tornado.httpclient import HTTPError, HTTPRequest
+from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream
 from tornado.locks import Event
 from tornado.log import app_log, gen_log
@@ -1019,6 +1020,50 @@ class DefaultCompressionTest(CompressionTestMixin):
         self.assertLess(bytes_in, 3 * (len(self.MESSAGE) + 2))
         # Bytes out includes the 4 bytes mask key per message.
         self.assertEqual(bytes_out, bytes_in + 12)
+
+
+class InvalidCompressionOfferTest(WebSocketBaseTestCase):
+    def get_app(self):
+        return Application([("/echo", EchoHandler, dict(compression_options={}))])
+
+    async def handshake(self, extensions: str) -> HTTPHeaders:
+        stream = IOStream(socket.socket())
+        self.conns_to_close.append(stream)
+        await stream.connect(("127.0.0.1", self.get_http_port()))
+        stream.write(
+            b"GET /echo HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+            b"Upgrade: websocket\r\nConnection: Upgrade\r\n"
+            b"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+            b"Sec-WebSocket-Version: 13\r\n"
+            b"Sec-WebSocket-Extensions: " + extensions.encode() + b"\r\n\r\n"
+        )
+        data = await stream.read_until(b"\r\n\r\n")
+        start_line, _, headers = data.decode().partition("\r\n")
+        self.assertEqual(start_line, "HTTP/1.1 101 Switching Protocols")
+        return HTTPHeaders.parse(headers)
+
+    @gen_test
+    async def test_invalid_offers(self):
+        # The server declines offers it can't accept, as RFC 7692 requires,
+        # instead of failing the handshake.
+        for params in [
+            "server_max_window_bits=abc",
+            "server_max_window_bits=16",
+            "server_max_window_bits=8",  # newer zlibs can't compress with 8
+            "client_max_window_bits=7",
+            "server_max_window_bits=" + "1" * 5000,
+            "foo=1",
+        ]:
+            with self.subTest(params[:40]):
+                headers = await self.handshake("permessage-deflate; " + params)
+                self.assertNotIn("Sec-WebSocket-Extensions", headers)
+
+    @gen_test
+    async def test_second_offer_accepted(self):
+        headers = await self.handshake(
+            "permessage-deflate; server_max_window_bits=abc, permessage-deflate"
+        )
+        self.assertEqual(headers["Sec-WebSocket-Extensions"], "permessage-deflate")
 
 
 @abstract_base_test
