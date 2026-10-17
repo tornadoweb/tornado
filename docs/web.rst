@@ -30,8 +30,15 @@
    HTTP verb methods (keyword arguments if the group is named,
    positional arguments if it's unnamed).
 
-   To support a method not on this list, override the class variable
-   ``SUPPORTED_METHODS``::
+   To support a method not on this list, decorate the method that handles
+   it with `http_method`::
+
+     class SearchHandler(RequestHandler):
+         @http_method
+         def query(self):
+             pass
+
+   Overriding the class variable ``SUPPORTED_METHODS`` also works::
 
      class WebDAVHandler(RequestHandler):
          SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ('PROPFIND',)
@@ -339,6 +346,7 @@
    .. autofunction:: addslash
    .. autofunction:: removeslash
    .. autofunction:: stream_request_body
+   .. autofunction:: http_method
 
    Everything else
    ---------------

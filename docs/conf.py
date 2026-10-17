@@ -130,6 +130,7 @@ missing_references = {
     "tornado.options._Mockable",
     "tornado.web._ArgDefaultMarker",
     "tornado.web._HandlerDelegate",
+    "tornado.web._MethodType",
     "tornado.web._RequestHandlerType",
     "_RequestHandlerType",
     "traceback",
