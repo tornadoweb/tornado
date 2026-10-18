@@ -373,17 +373,17 @@ class WaitIterator(typing.Generic[_T]):
 
     _unfinished: dict[Future[_T], collections.deque[int | str]]
 
-    def __init__(self, *args: Awaitable, **kwargs: Awaitable) -> None:
+    def __init__(self, *args: Awaitable[_T], **kwargs: Awaitable[_T]) -> None:
         if args and kwargs:
             raise ValueError("You must provide args or kwargs, not both")
 
         self._unfinished = {}
-        items: Iterable[tuple[int | str, Awaitable]]
+        items: Iterable[tuple[int | str, Awaitable[_T]]]
         if kwargs:
             items = kwargs.items()
         else:
             items = enumerate(args)
-        futures: list[Future] = []
+        futures: list[Future[_T]] = []
         for key, awaitable in items:
             future = convert_yielded(awaitable)
             futures.append(future)
