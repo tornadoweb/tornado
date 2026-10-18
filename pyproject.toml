@@ -30,3 +30,11 @@ select = "*{riscv64,ppc64le,s390x}*"
 # TODO: It would be nice to run the full test suite on a single python version for
 # each architecture and only run the websocket tests for other versions on emulated archs.
 test-command = "python -m tornado.test tornado.test.websocket_test"
+
+[[tool.cibuildwheel.overrides]]
+select = "*-macosx_universal2"
+# Universal2 wheels are tested twice on the arm64 runner: natively on arm64 and on
+# x86_64 under Rosetta (cibuildwheel runs the test command under `arch -x86_64`).
+# cibuildwheel doesn't support per-arch test commands, so check the architecture
+# in the shell and treat x86_64 like the other emulated architectures.
+test-command = 'if [ "$(uname -m)" = "x86_64" ]; then python -m tornado.test tornado.test.websocket_test; else python -m tornado.test; fi'

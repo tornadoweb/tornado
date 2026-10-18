@@ -7,6 +7,7 @@ import sys
 import time
 import unittest
 import weakref
+import typing
 from concurrent import futures
 
 from tornado import gen
@@ -911,7 +912,7 @@ class WithTimeoutTest(AsyncTestCase):
 class WaitIteratorTest(AsyncTestCase):
     @gen_test
     def test_empty_iterator(self):
-        g = gen.WaitIterator()
+        g: gen.WaitIterator[None] = gen.WaitIterator()
         self.assertTrue(g.done(), "empty generator iterated")
 
         with self.assertRaises(ValueError):
@@ -978,7 +979,7 @@ class WaitIteratorTest(AsyncTestCase):
         future: Future[int] = Future()
         future.set_result(42)
 
-        cases: list[tuple[gen.WaitIterator, list[int | str]]] = [
+        cases: list[tuple[gen.WaitIterator[int], list[int | str]]] = [
             (gen.WaitIterator(future, future, future), [0, 1, 2]),
             (gen.WaitIterator(first=future, second=future), ["first", "second"]),
         ]
@@ -1104,7 +1105,7 @@ class RunnerGCTest(AsyncTestCase):
     def test_gc(self):
         # GitHub issue 1769: Runner objects can get GCed unexpectedly
         # while their future is alive.
-        weakref_scope: list[weakref.ReferenceType | None] = [None]
+        weakref_scope: list[weakref.ReferenceType[typing.Any] | None] = [None]
 
         def callback():
             gc.collect(2)

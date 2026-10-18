@@ -1,10 +1,12 @@
+import logging
 import socket
 
+from tornado import gen
 from tornado.http1connection import HTTP1Connection
 from tornado.httputil import HTTPMessageDelegate
 from tornado.iostream import IOStream
 from tornado.locks import Event
-from tornado.log import app_log
+from tornado.log import app_log, gen_log
 from tornado.netutil import add_accept_handler
 from tornado.test.util import AsyncTestCase
 from tornado.testing import ExpectLog, bind_unused_port, gen_test
@@ -135,3 +137,57 @@ class HTTP1ConnectionTest(AsyncTestCase):
     @gen_test
     def test_error_in_finish(self):
         yield from self.check_delegate_error("finish")
+
+    @gen_test
+    def test_chunked_body_tiny_chunks(self):
+        # A body made of many tiny chunks is coalesced into a few
+        # data_received calls, and reading it yields to the IOLoop
+        # periodically even though all of the data is already available.
+        conn = HTTP1Connection(self.client_stream, True)
+        num_chunks = 5000
+        yield self.server_stream.write(
+            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"
+            + b"1\r\nx\r\n" * num_chunks
+            + b"0\r\n\r\n"
+        )
+        self.server_stream.close()
+        # Give the data time to arrive so that the body can be read
+        # without waiting for the network.
+        yield gen.sleep(0.1)
+
+        body = []
+        ticks = [0]
+        done = [False]
+        io_loop = self.io_loop
+
+        # Count IOLoop iterations while the body is being read.
+        def tick():
+            if not done[0]:
+                ticks[0] += 1
+                io_loop.add_callback(tick)
+
+        class Delegate(HTTPMessageDelegate):
+            def headers_received(self, start_line, headers):
+                io_loop.add_callback(tick)
+
+            def data_received(self, data):
+                body.append(data)
+
+            def finish(self):
+                done[0] = True
+
+        yield conn.read_response(Delegate())
+        self.assertEqual(b"".join(body), b"x" * num_chunks)
+        self.assertLess(len(body), 10)
+        self.assertGreater(ticks[0], 10)
+
+    @gen_test
+    def test_chunked_body_bad_chunk_terminator(self):
+        conn = HTTP1Connection(self.client_stream, True)
+        self.server_stream.write(
+            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"
+            b"3\r\nfooXX0\r\n\r\n"
+        )
+        with ExpectLog(gen_log, ".*improperly terminated chunk", level=logging.INFO):
+            result = yield conn.read_response(HTTPMessageDelegate())
+        self.assertIs(result, False)

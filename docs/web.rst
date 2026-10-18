@@ -151,8 +151,8 @@
 
       The `Application` object serving this request
 
-   .. automethod:: RequestHandler.check_origin
    .. automethod:: RequestHandler.check_etag_header
+   .. automethod:: RequestHandler.check_trusted_origin
    .. automethod:: RequestHandler.check_xsrf_cookie
    .. automethod:: RequestHandler.compute_etag
    .. automethod:: RequestHandler.create_template_loader
@@ -257,8 +257,9 @@
          * ``trusted_origins``: A list of origins (as in the HTTP ``Origin``
            header, such as ``https://example.com``, without a trailing slash)
            from which to allow cross-origin requests. Used by the default
-           implementation of `RequestHandler.check_origin`, for both
-           ``cross_origin_protection`` and websockets. New in Tornado 6.6.
+           implementation of `RequestHandler.check_trusted_origin`, for both
+           ``cross_origin_protection`` and (via the default implementation of
+           `.WebSocketHandler.check_origin`) websockets. New in Tornado 6.6.
          * ``xsrf_cookies``: If ``True``, :ref:`xsrf-cookies` will be enabled.
          * ``xsrf_cookie_version``: Controls the version of new XSRF
            cookies produced by this server.  Should generally be left

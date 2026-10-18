@@ -98,6 +98,15 @@ class _WebSocketDelegate(Protocol):
 
 _default_max_message_size = 10 * 1024 * 1024
 
+# Reads of frames that have already arrived complete without returning
+# control to the IOLoop, so a peer that sends frames faster than we can
+# process them could otherwise monopolize the IOLoop. We yield to the IOLoop
+# after receiving this many bytes, with each frame also counting as
+# _FRAME_YIELD_COST bytes since the per-frame overhead dominates when the
+# frames are small.
+_YIELD_THRESHOLD = 256 * 1024
+_FRAME_YIELD_COST = 1024
+
 # log to "gen_log" but suppress duplicate log messages
 de_dupe_gen_log = functools.lru_cache(gen_log.log)
 
@@ -190,7 +199,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
     access from JavaScript.  This can be surprising and is a potential
     security hole, so since Tornado 4.0 `WebSocketHandler` requires
     applications that wish to receive cross-origin websockets to opt in
-    by overriding the `~.RequestHandler.check_origin` method (see that
+    by overriding the `~WebSocketHandler.check_origin` method (see that
     method's docs for details).  Failure to do so is the most likely
     cause of 403 errors when making a websocket connection.
 
@@ -252,6 +261,21 @@ class WebSocketHandler(tornado.web.RequestHandler):
             gen_log.debug(log_msg)
             return
 
+        # Browsers do not apply the same-origin policy to websockets, so
+        # cross-origin protection is always enabled for them, independent
+        # of the cross_origin_protection application setting. This happens
+        # here, after prepare(), instead of with the rest of cross-origin
+        # protection in RequestHandler._execute, because check_origin
+        # overrides may rely on things done in prepare() (such as
+        # authentication).
+        error = self._check_cross_origin(self.check_origin)
+        if error is not None:
+            self.set_status(403)
+            log_msg = "Cross origin websockets not allowed"
+            self.finish(log_msg)
+            gen_log.debug("%s: %s", log_msg, error)
+            return
+
         self.ws_connection = self.get_websocket_protocol()
         if self.ws_connection:
             await self.ws_connection.accept_connection(self)
@@ -308,8 +332,9 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         Default is 10MiB.
         """
-        return self.settings.get(
-            "websocket_max_message_size", _default_max_message_size
+        return cast(
+            int,
+            self.settings.get("websocket_max_message_size", _default_max_message_size),
         )
 
     def write_message(
@@ -491,6 +516,70 @@ class WebSocketHandler(tornado.web.RequestHandler):
             self.ws_connection.close(code, reason)
             self.ws_connection = None
 
+    def check_origin(self, origin: str) -> bool:
+        """Override to enable support for allowing alternate origins.
+
+        The ``origin`` argument is the value of the ``Origin`` HTTP header,
+        the url responsible for initiating this request. This method is
+        only called for requests that appear to be cross-origin: it is not
+        called when the ``Sec-Fetch-Site`` header indicates a same-origin
+        request, when (in the absence of ``Sec-Fetch-Site``) the ``Origin``
+        header matches the ``Host`` header, or for clients that do not send
+        an ``Origin`` header (because all browsers that implement WebSockets
+        support this header, and non-browser clients do not have the same
+        cross-site security concerns).
+
+        Should return ``True`` to accept the request or ``False`` to
+        reject it. By default, it calls `.RequestHandler.check_trusted_origin`,
+        which accepts origins listed in the ``trusted_origins`` application
+        setting.
+
+        This method is called after `~.RequestHandler.prepare`, so it may
+        rely on anything that ``prepare`` does (such as authentication).
+
+        This is a security protection against cross site scripting attacks on
+        browsers, since WebSockets are allowed to bypass the usual same-origin
+        policies and don't use CORS headers.
+
+        .. warning::
+
+           This is an important security measure; don't disable it
+           without understanding the security implications. In
+           particular, if your authentication is cookie-based, you
+           must either restrict the origins allowed by
+           ``check_origin()`` or implement your own XSRF-like
+           protection for websocket connections. See `these
+           <https://www.christian-schneider.net/CrossSiteWebSocketHijacking.html>`_
+           `articles
+           <https://devcenter.heroku.com/articles/websocket-security>`_
+           for more.
+
+        To accept all cross-origin traffic (which was the default prior to
+        Tornado 4.0), simply override this method to always return ``True``::
+
+            def check_origin(self, origin):
+                return True
+
+        To allow connections from any subdomain of your site, you might
+        do something like::
+
+            def check_origin(self, origin):
+                parsed_origin = urllib.parse.urlparse(origin)
+                return parsed_origin.netloc.endswith(".mydomain.com")
+
+        .. versionadded:: 4.0
+
+        .. versionchanged:: 6.6
+           This method is no longer called for requests that can be
+           determined to be same-origin (including via the ``Sec-Fetch-Site``
+           header). The default implementation now calls
+           `.RequestHandler.check_trusted_origin` (which uses the
+           ``trusted_origins`` application setting); the comparison of the
+           ``Origin`` and ``Host`` headers is performed before this method
+           is called.
+        """
+        return self.check_trusted_origin(origin)
+
     def set_nodelay(self, value: bool) -> None:
         """Set the no-delay flag for this stream.
 
@@ -574,7 +663,7 @@ class WebSocketProtocol(abc.ABC):
         self.server_terminated = False
 
     def _run_callback(
-        self, callback: Callable, *args: Any, **kwargs: Any
+        self, callback: Callable[..., Any], *args: Any, **kwargs: Any
     ) -> "Optional[Future[Any]]":
         """Runs the given callback with exception handling.
 
@@ -797,9 +886,14 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._wire_bytes_in = 0
         self._wire_bytes_out = 0
         self._received_pong: bool = False
+        # The Future for our most recent pong write, if it has not completed,
+        # and the payload of the most recent ping received while it was
+        # outstanding. See _send_pong.
+        self._pong_future: Future[None] | None = None
+        self._pending_pong: bytes | None = None
         self.close_code: int | None = None
         self.close_reason: str | None = None
-        self._ping_coroutine: asyncio.Task | None = None
+        self._ping_coroutine: asyncio.Task[Any] | None = None
 
     # Use a property for this to satisfy the abc.
     @property
@@ -1057,8 +1151,14 @@ class WebSocketProtocol13(WebSocketProtocol):
 
     async def _receive_frame_loop(self) -> None:
         try:
+            work = 0  # See _YIELD_THRESHOLD
             while not self.client_terminated:
+                start = self._wire_bytes_in
                 await self._receive_frame()
+                work += _FRAME_YIELD_COST + self._wire_bytes_in - start
+                if work >= _YIELD_THRESHOLD:
+                    work = 0
+                    await asyncio.sleep(0)
         except StreamClosedError:
             self._abort()
         finally:
@@ -1190,10 +1290,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             self.close(self.close_code)
         elif opcode == 0x9:
             # Ping
-            try:
-                self._write_frame(True, 0xA, data)
-            except StreamClosedError:
-                self._abort()
+            self._send_pong(data)
             self._run_callback(self.handler.on_ping, data)
         elif opcode == 0xA:
             # Pong
@@ -1202,6 +1299,40 @@ class WebSocketProtocol13(WebSocketProtocol):
         else:
             self._abort()
         return None
+
+    def _send_pong(self, data: bytes) -> None:
+        # If a peer sends pings faster than it reads our pongs, the pongs
+        # would accumulate in our write buffer without limit. RFC 6455
+        # section 5.5.3 allows us to respond only to the most recent ping
+        # when we have not yet sent the pongs for previous ones, so we have
+        # at most one pong outstanding and remember the latest ping to answer
+        # when it has been sent.
+        if self._pong_future is not None and not self._pong_future.done():
+            self._pending_pong = data
+            return
+        # This ping supersedes any that were waiting for an answer.
+        self._pending_pong = None
+        if self.server_terminated:
+            # No frames may be sent after a close frame.
+            return
+        try:
+            self._pong_future = self._write_frame(True, 0xA, data)
+        except StreamClosedError:
+            self._abort()
+            return
+        self._pong_future.add_done_callback(self._on_pong_sent)
+
+    def _on_pong_sent(self, future: "Future[None]") -> None:
+        if self._pong_future is future:
+            self._pong_future = None
+        if future.cancelled() or future.exception() is not None:
+            # The stream was closed.
+            self._pending_pong = None
+            return
+        if self._pending_pong is not None:
+            data = self._pending_pong
+            self._pending_pong = None
+            self._send_pong(data)
 
     def close(self, code: int | None = None, reason: str | None = None) -> None:
         """Closes the WebSocket connection."""
@@ -1414,7 +1545,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         """
         if self.protocol is not None:
             self.protocol.close(code, reason)
-            self.protocol = None  # type: ignore
+            self.protocol = None
 
     def on_connection_close(self) -> None:
         if not self.connect_future.done():

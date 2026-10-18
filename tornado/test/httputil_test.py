@@ -14,6 +14,7 @@ from tornado.httputil import (
     ParseMultipartConfig,
     RequestStartLine,
     _DEFAULT_PARSE_BODY_CONFIG,
+    _parse_header,
     format_timestamp,
     parse_body_arguments,
     parse_cookie,
@@ -26,8 +27,9 @@ from tornado.log import gen_log
 from tornado.test.util import (
     TestCase,
     assert_linear_scaling,
+    assert_memory_budget,
     ignore_deprecation,
-    skipIfEmulated,
+    skipNotCPython,
 )
 
 
@@ -323,6 +325,16 @@ Foo
             msg="Disposition param parsing is not linear",
         )
 
+    @skipNotCPython
+    def test_parse_header_memory_budget(self):
+        # Many tiny parameters are the worst case for memory in
+        # _parse_header (about 45 bytes per input byte as of 2026-10).
+        header = "form-data" + "; a=b" * 10_000
+        with assert_memory_budget(
+            len(header), max_ratio=60, msg="_parse_header uses too much memory"
+        ):
+            _parse_header(header)
+
     def test_multipart_config(self):
         boundary = b"1234"
         body = b"""--1234
@@ -357,48 +369,11 @@ Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 
 class HTTPHeadersTest(TestCase):
-    def test_multi_line(self):
-        # Lines beginning with whitespace are appended to the previous line
-        # with any leading whitespace replaced by a single space.
-        # Note that while multi-line headers are a part of the HTTP spec,
-        # their use is strongly discouraged.
-        data = """\
-Foo: bar
- baz
-Asdf: qwer
-\tzxcv
-Foo: even
-     more
-     lines
-""".replace("\n", "\r\n")
-        headers = HTTPHeaders.parse(data)
-        self.assertEqual(headers["asdf"], "qwer zxcv")
-        self.assertEqual(headers.get_list("asdf"), ["qwer zxcv"])
-        self.assertEqual(headers["Foo"], "bar baz,even more lines")
-        self.assertEqual(headers.get_list("foo"), ["bar baz", "even more lines"])
-        self.assertEqual(
-            sorted(list(headers.get_all())),
-            [("Asdf", "qwer zxcv"), ("Foo", "bar baz"), ("Foo", "even more lines")],
-        )
-        # Verify case insensitivity in-operator
-        self.assertTrue("asdf" in headers)
-        self.assertTrue("Asdf" in headers)
-
-    def test_continuation(self):
+    def test_folding_rejected(self):
         data = "Foo: bar\r\n\tasdf"
-        headers = HTTPHeaders.parse(data)
-        self.assertEqual(headers["Foo"], "bar asdf")
-
-        # If the first line starts with whitespace, it's a
-        # continuation line with nothing to continue, so reject it
-        # (with a proper error).
-        data = " Foo: bar"
-        self.assertRaises(HTTPInputError, HTTPHeaders.parse, data)
-
-        # \f (formfeed) is whitespace according to str.isspace, but
-        # not according to the HTTP spec.
-        data = "Foo: bar\r\n\fasdf"
-        self.assertRaises(HTTPInputError, HTTPHeaders.parse, data)
+        with self.assertRaises(HTTPInputError):
+            # Folded continuation lines are not supported.
+            HTTPHeaders.parse(data)
 
     def test_forbidden_ascii_characters(self):
         # Control characters and ASCII whitespace other than space, tab, and CRLF are not allowed in
@@ -524,6 +499,24 @@ Foo: even
         self.assertEqual(headers["quux"], "xyzzy")
         self.assertEqual(sorted(headers.get_all()), [("Foo", "bar"), ("Quux", "xyzzy")])
 
+    def test_delitem(self):
+        # Deleting a header must not depend on whether the combined-value
+        # cache happens to be populated for it. The cache is invalidated by
+        # add(), so a multi-valued header that was never read through
+        # __getitem__ has no cache entry.
+        headers = HTTPHeaders()
+        headers["foo"] = "bar"
+        del headers["foo"]
+        self.assertEqual(sorted(headers.get_all()), [])
+        with self.assertRaises(KeyError):
+            del headers["foo"]
+
+        headers = HTTPHeaders()
+        headers.add("Set-Cookie", "a=b")
+        headers.add("Set-Cookie", "c=d")
+        del headers["set-cookie"]
+        self.assertEqual(sorted(headers.get_all()), [])
+
     def test_string(self):
         headers = HTTPHeaders()
         headers.add("Foo", "1")
@@ -564,6 +557,33 @@ Foo: even
             max_ratio=20,
             msg="HTTPHeaders.add() does not scale linearly",
         )
+
+    def test_parse_repeated_linear_performance(self):
+        # Regression test for CVE-2025-67725, through the parsing path that
+        # HTTP1Connection uses rather than HTTPHeaders.add() directly. Before
+        # Tornado 6.5.3 this measured a ratio of about 30; the per-line
+        # parsing costs hide some of the quadratic part at these sizes.
+        def f(n):
+            HTTPHeaders.parse("X: a\r\n" * n)
+
+        assert_linear_scaling(
+            f,
+            10_000,
+            100_000,
+            max_ratio=20,
+            msg="HTTPHeaders.parse() of a repeated header is not linear",
+        )
+
+    @skipNotCPython
+    def test_parse_memory_budget(self):
+        # Many short, distinct headers are the worst case for memory (about
+        # 18 bytes per input byte as of 2026-10). The default max_header_size
+        # is 64KB, so this is about as large as a server will parse.
+        data = "".join(f"X{i}: b\r\n" for i in range(8_000))
+        with assert_memory_budget(
+            len(data), max_ratio=30, msg="HTTPHeaders.parse() uses too much memory"
+        ):
+            HTTPHeaders.parse(data)
 
 
 class FormatTimestampTest(TestCase):
@@ -760,24 +780,30 @@ class ParseCookieTest(TestCase):
                 c = parse_cookie(encoded)
                 self.assertEqual(c["a"], decoded)
 
-    @skipIfEmulated
     def test_unquote_large(self):
         # Adapted from
         # https://github.com/python/cpython/blob/dc7a2b6522ec7af41282bc34f405bee9b306d611/Lib/test/test_http_cookies.py#L87
         # Modified from that test because we handle semicolons differently from the stdlib.
-        #
-        # This is a performance regression test: prior to improvements in Tornado 6.4.2, this test
-        # would take over a minute with n= 100k. Now it runs in tens of milliseconds.
         n = 100000
         for encoded in r"\\", r"\134":
             with self.subTest(encoded):
-                start = time.time()
                 data = 'a="b=' + encoded * n + '"'
                 value = parse_cookie(data)["a"]
-                end = time.time()
                 self.assertEqual(value[:3], "b=\\")
                 self.assertEqual(value[-3:], "\\\\\\")
                 self.assertEqual(len(value), n + 2)
 
-                # Very loose performance check to avoid false positives
-                self.assertLess(end - start, 1, "Test took too long")
+    def test_unquote_linear_performance(self):
+        # Regression test for CVE-2024-7592: before Tornado 6.4.2, unquoting
+        # escape sequences in a cookie value was quadratic. (Only the r"\\"
+        # case reproduces it on 6.4.1; r"\134" is here for symmetry with
+        # test_unquote_large.)
+        for encoded in r"\\", r"\134":
+            with self.subTest(encoded):
+                assert_linear_scaling(
+                    lambda n: parse_cookie('a="b=' + encoded * n + '"'),
+                    1_000,
+                    10_000,
+                    max_ratio=20,
+                    msg="Cookie unquoting is not linear",
+                )

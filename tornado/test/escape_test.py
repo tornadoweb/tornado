@@ -298,13 +298,8 @@ class EscapeTestCase(TestCase):
         self.assertEqual(json_decode(utf8('"\u00e9"')), "\u00e9")
 
     def test_json_encode(self):
-        # json deals with strings, not bytes.  On python 2 byte strings will
-        # convert automatically if they are utf8; on python 3 byte strings
-        # are not allowed.
+        # json deals with strings, not bytes.
         self.assertEqual(json_decode(json_encode("\u00e9")), "\u00e9")
-        if bytes is str:
-            self.assertEqual(json_decode(json_encode(utf8("\u00e9"))), "\u00e9")
-            self.assertRaises(UnicodeDecodeError, json_encode, b"\xe9")
 
     def test_squeeze(self):
         self.assertEqual(

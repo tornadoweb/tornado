@@ -16,6 +16,7 @@ import array
 import asyncio
 import os
 import re
+import sys
 import typing
 import warnings
 import zlib
@@ -31,7 +32,7 @@ if typing.TYPE_CHECKING:
     # This lets us make these imports lazy.
     import datetime
     import unittest
-    from types import TracebackType
+    from types import CodeType, TracebackType
 
 # Aliases for types that are spelled differently in different Python
 # versions. bytes_type is deprecated and no longer used in Tornado
@@ -232,7 +233,9 @@ def import_object(name: str) -> Any:
 
 
 def exec_in(
-    code: Any, glob: dict[str, Any], loc: Mapping[str, Any] | None | None = None
+    code: str | CodeType,
+    glob: dict[str, Any],
+    loc: Mapping[str, Any] | None = None,
 ) -> None:
     if isinstance(code, str):
         # exec(string) inherits the caller's future imports; compile
@@ -266,9 +269,9 @@ def errno_from_exception(e: BaseException) -> int | None:
     """
 
     if hasattr(e, "errno"):
-        return e.errno  # type: ignore
+        return typing.cast(int | None, e.errno)
     elif e.args:
-        return e.args[0]
+        return typing.cast(int | None, e.args[0])
     else:
         return None
 
@@ -336,7 +339,7 @@ class Configurable:
     __impl_class: type[Configurable] | None = None
     __impl_kwargs: dict[str, Any] | None = None
 
-    def __new__(cls, *args: Any, **kwargs: Any) -> Any:
+    def __new__(cls, *args: Any, **kwargs: Any) -> typing.Self:
         base = cls.configurable_base()
         init_kwargs: dict[str, Any] = {}
         if cls is base:
@@ -348,8 +351,8 @@ class Configurable:
         init_kwargs.update(kwargs)
         if impl.configurable_base() is not base:
             # The impl class is itself configurable, so recurse.
-            return impl(*args, **init_kwargs)
-        instance = super().__new__(impl)
+            return typing.cast(typing.Self, impl(*args, **init_kwargs))
+        instance = typing.cast(typing.Self, super().__new__(impl))
         # initialize vs __init__ chosen for compatibility with AsyncHTTPClient
         # singleton magic.  If we get rid of that we can switch to __init__
         # here too.
@@ -439,7 +442,7 @@ class ArgReplacer:
     and similar wrappers.
     """
 
-    def __init__(self, func: Callable, name: str) -> None:
+    def __init__(self, func: Callable[..., Any], name: str) -> None:
         self.name = name
         try:
             self.arg_pos: int | None = self._getargnames(func).index(name)
@@ -447,7 +450,7 @@ class ArgReplacer:
             # Not a positional parameter
             self.arg_pos = None
 
-    def _getargnames(self, func: Callable) -> list[str]:
+    def _getargnames(self, func: Callable[..., Any]) -> list[str]:
         try:
             return getfullargspec(func).args
         except TypeError:
@@ -458,8 +461,8 @@ class ArgReplacer:
                 # getfullargspec that we need here. Note that for static
                 # functions the @cython.binding(True) decorator must
                 # be used (for methods it works out of the box).
-                code = func.func_code  # type: ignore
-                return code.co_varnames[: code.co_argcount]
+                code = func.func_code
+                return typing.cast(list[str], code.co_varnames[: code.co_argcount])
             raise
 
     def get_old_value(
@@ -503,15 +506,20 @@ def timedelta_to_seconds(td: datetime.timedelta) -> float:
     return td.total_seconds()
 
 
-def _websocket_mask_python(mask: bytes, data: bytes) -> bytes:
-    """Websocket masking function.
+def _websocket_mask_int(mask: bytes, data: bytes) -> bytes:
+    # Treat the data and the repeated mask as (very large) integers so the
+    # XOR happens in C instead of looping over each byte in Python. This is
+    # much faster on CPython, but slower than the simple loop on PyPy.
+    if len(mask) != 4:
+        raise ValueError("mask must be 4 bytes")
+    n = len(data)
+    q, r = divmod(n, 4)
+    full_mask = int.from_bytes(mask * q + mask[:r], "little")
+    return (int.from_bytes(data, "little") ^ full_mask).to_bytes(n, "little")
 
-    `mask` is a `bytes` object of length 4; `data` is a `bytes` object of any length.
-    Returns a `bytes` object of the same length as `data` with the mask applied
-    as specified in section 5.3 of RFC 6455.
 
-    This pure-python implementation may be replaced by an optimized version when available.
-    """
+def _websocket_mask_loop(mask: bytes, data: bytes) -> bytes:
+    # A simple byte-at-a-time loop, which PyPy's JIT handles well.
     if len(mask) != 4:
         raise ValueError("mask must be 4 bytes")
     mask_arr = array.array("B", mask)
@@ -519,6 +527,17 @@ def _websocket_mask_python(mask: bytes, data: bytes) -> bytes:
     for i in range(len(data)):
         unmasked_arr[i] = unmasked_arr[i] ^ mask_arr[i % 4]
     return unmasked_arr.tobytes()
+
+
+# _websocket_mask_python(mask, data) applies the websocket mask as specified
+# in section 5.3 of RFC 6455. `mask` is a `bytes` object of length 4; `data`
+# is a `bytes` object of any length. Returns a `bytes` object of the same
+# length as `data`. This pure-python implementation may be replaced by an
+# optimized version when available.
+if sys.implementation.name == "pypy":
+    _websocket_mask_python = _websocket_mask_loop
+else:
+    _websocket_mask_python = _websocket_mask_int
 
 
 if os.environ.get("TORNADO_NO_EXTENSION") or os.environ.get("TORNADO_EXTENSION") == "0":

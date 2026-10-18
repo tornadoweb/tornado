@@ -408,9 +408,7 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
             # cygwin returns EPERM instead of ECONNREFUSED here
             contains_errno = str(errno.ECONNREFUSED) in str(cm.exception)
             if not contains_errno and hasattr(errno, "WSAECONNREFUSED"):
-                contains_errno = str(errno.WSAECONNREFUSED) in str(  # type: ignore
-                    cm.exception
-                )
+                contains_errno = str(errno.WSAECONNREFUSED) in str(cm.exception)
             self.assertTrue(contains_errno, cm.exception)
             # This is usually "Connection refused".
             # On windows, strerror is broken and returns "Unknown error".
@@ -871,7 +869,7 @@ class HTTP204NoContentTestCase(AsyncHTTPTestCase):
                 self.fetch("/?error=1", raise_error=True)
                 if not self.http1:
                     self.skipTest("requires HTTP/1.x")
-                if self.http_client.configured_class != SimpleAsyncHTTPClient:
+                if not isinstance(self.http_client, SimpleAsyncHTTPClient):
                     self.skipTest("curl client accepts invalid headers")
 
 

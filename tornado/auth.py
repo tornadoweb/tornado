@@ -73,12 +73,10 @@ import base64
 import binascii
 import hashlib
 import hmac
-import re
 import time
 import urllib.parse
 import uuid
 import warnings
-from collections.abc import Iterable
 from typing import Any, cast
 
 from tornado import escape, httpclient
@@ -89,210 +87,6 @@ from tornado.web import RequestHandler
 
 class AuthError(Exception):
     pass
-
-
-class OpenIdMixin:
-    """Abstract implementation of OpenID and Attribute Exchange.
-
-    Class attributes:
-
-    * ``_OPENID_ENDPOINT``: the identity provider's URI.
-
-    .. deprecated:: 6.5.8
-        OpenID 2.0 is no longer widely supported by identity providers.
-        This class will be removed in Tornado 6.7.
-    """
-
-    def __init__(self) -> None:
-        warnings.warn(
-            "OpenIdMixin is deprecated and will be removed in Tornado 6.7",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
-    def authenticate_redirect(
-        self,
-        callback_uri: str | None = None,
-        ax_attrs: list[str] = ["name", "email", "language", "username"],
-    ) -> None:
-        """Redirects to the authentication URL for this service.
-
-        After authentication, the service will redirect back to the given
-        callback URI with additional parameters including ``openid.mode``.
-
-        We request the given attributes for the authenticated user by
-        default (name, email, language, and username). If you don't need
-        all those attributes for your app, you can request fewer with
-        the ax_attrs keyword argument.
-
-        .. versionchanged:: 6.0
-
-            The ``callback`` argument was removed and this method no
-            longer returns an awaitable object. It is now an ordinary
-            synchronous function.
-        """
-        handler = cast(RequestHandler, self)
-        callback_uri = callback_uri or handler.request.uri
-        assert callback_uri is not None
-        args = self._openid_args(callback_uri, ax_attrs=ax_attrs)
-        endpoint = self._OPENID_ENDPOINT  # type: ignore
-        handler.redirect(endpoint + "?" + urllib.parse.urlencode(args))
-
-    async def get_authenticated_user(
-        self, http_client: httpclient.AsyncHTTPClient | None = None
-    ) -> dict[str, Any]:
-        """Fetches the authenticated user data upon redirect.
-
-        This method should be called by the handler that receives the
-        redirect from the `authenticate_redirect()` method (which is
-        often the same as the one that calls it; in that case you would
-        call `get_authenticated_user` if the ``openid.mode`` parameter
-        is present and `authenticate_redirect` if it is not).
-
-        The result of this method will generally be used to set a cookie.
-
-        .. versionchanged:: 6.0
-
-            The ``callback`` argument was removed. Use the returned
-            awaitable object instead.
-        """
-        handler = cast(RequestHandler, self)
-        # Verify the OpenID response via direct request to the OP
-        args: dict[str, str | bytes] = {
-            k: v[-1] for k, v in handler.request.arguments.items()
-        }
-        args["openid.mode"] = "check_authentication"
-        url = self._OPENID_ENDPOINT  # type: ignore
-        if http_client is None:
-            http_client = self.get_auth_http_client()
-        resp = await http_client.fetch(
-            url, method="POST", body=urllib.parse.urlencode(args)
-        )
-        return self._on_authentication_verified(resp)
-
-    def _openid_args(
-        self,
-        callback_uri: str,
-        ax_attrs: Iterable[str] = [],
-        oauth_scope: str | None = None,
-    ) -> dict[str, str]:
-        handler = cast(RequestHandler, self)
-        url = urllib.parse.urljoin(handler.request.full_url(), callback_uri)
-        args = {
-            "openid.ns": "http://specs.openid.net/auth/2.0",
-            "openid.claimed_id": "http://specs.openid.net/auth/2.0/identifier_select",
-            "openid.identity": "http://specs.openid.net/auth/2.0/identifier_select",
-            "openid.return_to": url,
-            "openid.realm": urllib.parse.urljoin(url, "/"),
-            "openid.mode": "checkid_setup",
-        }
-        if ax_attrs:
-            args.update(
-                {
-                    "openid.ns.ax": "http://openid.net/srv/ax/1.0",
-                    "openid.ax.mode": "fetch_request",
-                }
-            )
-            ax_attrs = set(ax_attrs)
-            required: list[str] = []
-            if "name" in ax_attrs:
-                ax_attrs -= {"name", "firstname", "fullname", "lastname"}
-                required += ["firstname", "fullname", "lastname"]
-                args.update(
-                    {
-                        "openid.ax.type.firstname": "http://axschema.org/namePerson/first",
-                        "openid.ax.type.fullname": "http://axschema.org/namePerson",
-                        "openid.ax.type.lastname": "http://axschema.org/namePerson/last",
-                    }
-                )
-            known_attrs = {
-                "email": "http://axschema.org/contact/email",
-                "language": "http://axschema.org/pref/language",
-                "username": "http://axschema.org/namePerson/friendly",
-            }
-            for name in ax_attrs:
-                args["openid.ax.type." + name] = known_attrs[name]
-                required.append(name)
-            args["openid.ax.required"] = ",".join(required)
-        if oauth_scope:
-            args.update(
-                {
-                    "openid.ns.oauth": "http://specs.openid.net/extensions/oauth/1.0",
-                    "openid.oauth.consumer": handler.request.host.split(":")[0],
-                    "openid.oauth.scope": oauth_scope,
-                }
-            )
-        return args
-
-    def _on_authentication_verified(
-        self, response: httpclient.HTTPResponse
-    ) -> dict[str, Any]:
-        handler = cast(RequestHandler, self)
-        if re.search(rb"(?m)^is_valid:true$", response.body) is None:
-            raise AuthError("Invalid OpenID response: %r" % response.body)
-
-        # Make sure we got back at least an email from attribute exchange
-        ax_ns = None
-        for key in handler.request.arguments:
-            if (
-                key.startswith("openid.ns.")
-                and handler.get_argument(key) == "http://openid.net/srv/ax/1.0"
-            ):
-                ax_ns = key[10:]
-                break
-
-        def get_ax_arg(uri: str) -> str:
-            if not ax_ns:
-                return ""
-            prefix = "openid." + ax_ns + ".type."
-            ax_name = None
-            for name in handler.request.arguments.keys():
-                if handler.get_argument(name) == uri and name.startswith(prefix):
-                    part = name[len(prefix) :]
-                    ax_name = "openid." + ax_ns + ".value." + part
-                    break
-            if not ax_name:
-                return ""
-            return handler.get_argument(ax_name, "")
-
-        email = get_ax_arg("http://axschema.org/contact/email")
-        name = get_ax_arg("http://axschema.org/namePerson")
-        first_name = get_ax_arg("http://axschema.org/namePerson/first")
-        last_name = get_ax_arg("http://axschema.org/namePerson/last")
-        username = get_ax_arg("http://axschema.org/namePerson/friendly")
-        locale = get_ax_arg("http://axschema.org/pref/language").lower()
-        user = dict()
-        name_parts = []
-        if first_name:
-            user["first_name"] = first_name
-            name_parts.append(first_name)
-        if last_name:
-            user["last_name"] = last_name
-            name_parts.append(last_name)
-        if name:
-            user["name"] = name
-        elif name_parts:
-            user["name"] = " ".join(name_parts)
-        elif email:
-            user["name"] = email.split("@")[0]
-        if email:
-            user["email"] = email
-        if locale:
-            user["locale"] = locale
-        if username:
-            user["username"] = username
-        claimed_id = handler.get_argument("openid.claimed_id", None)
-        if claimed_id:
-            user["claimed_id"] = claimed_id
-        return user
-
-    def get_auth_http_client(self) -> httpclient.AsyncHTTPClient:
-        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
-
-        May be overridden by subclasses to use an HTTP client other than
-        the default.
-        """
-        return httpclient.AsyncHTTPClient()
 
 
 class OAuthMixin:
@@ -412,7 +206,7 @@ class OAuthMixin:
     ) -> str:
         handler = cast(RequestHandler, self)
         consumer_token = self._oauth_consumer_token()
-        url = self._OAUTH_REQUEST_TOKEN_URL  # type: ignore
+        url: str = self._OAUTH_REQUEST_TOKEN_URL  # type: ignore
         args = dict(
             oauth_consumer_key=escape.to_basestring(consumer_token["key"]),
             oauth_signature_method="HMAC-SHA1",
@@ -462,7 +256,7 @@ class OAuthMixin:
 
     def _oauth_access_token_url(self, request_token: dict[str, Any]) -> str:
         consumer_token = self._oauth_consumer_token()
-        url = self._OAUTH_ACCESS_TOKEN_URL  # type: ignore
+        url: str = self._OAUTH_ACCESS_TOKEN_URL  # type: ignore
         args = dict(
             oauth_consumer_key=escape.to_basestring(consumer_token["key"]),
             oauth_token=escape.to_basestring(request_token["key"]),
@@ -849,7 +643,7 @@ class TwitterMixin(OAuthMixin):
     async def _oauth_get_user_future(
         self, access_token: dict[str, Any]
     ) -> dict[str, Any]:
-        user = await self.twitter_request(
+        user: dict[str, Any] = await self.twitter_request(
             "/account/verify_credentials", access_token=access_token
         )
         if user:
@@ -901,7 +695,7 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
         override this method for custom provision.
         """
         handler = cast(RequestHandler, self)
-        return handler.settings[self._OAUTH_SETTINGS_KEY]
+        return cast(dict[str, str], handler.settings[self._OAUTH_SETTINGS_KEY])
 
     async def get_authenticated_user(
         self,
@@ -984,7 +778,7 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             body=body,
         )
-        return escape.json_decode(response.body)
+        return cast(dict[str, Any], escape.json_decode(response.body))
 
 
 class FacebookGraphMixin(OAuth2Mixin):

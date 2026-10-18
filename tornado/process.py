@@ -50,7 +50,7 @@ def cpu_count() -> int:
     except NotImplementedError:
         pass
     try:
-        return os.sysconf("SC_NPROCESSORS_CONF")  # type: ignore
+        return os.sysconf("SC_NPROCESSORS_CONF")
     except (AttributeError, ValueError):
         pass
     gen_log.error("Could not detect number of processors; assuming 1")
@@ -334,7 +334,7 @@ class Subprocess:
     @classmethod
     def _try_cleanup_process(cls, pid: int) -> None:
         try:
-            ret_pid, status = os.waitpid(pid, os.WNOHANG)  # type: ignore
+            ret_pid, status = os.waitpid(pid, os.WNOHANG)
         except ChildProcessError:
             return
         if ret_pid == 0:

@@ -43,6 +43,8 @@ from tornado.test.util import (
     AsyncTestCase,
     TestCase,
     abstract_base_test,
+    assert_memory_budget,
+    skipNotCPython,
 )
 from tornado.testing import ExpectLog, gen_test
 from tornado.web import Application, RequestHandler, stream_request_body
@@ -62,7 +64,7 @@ async def read_stream_body(stream):
             chunks.append(chunk)
 
         def finish(self):
-            conn.detach()  # type: ignore
+            conn.detach()
 
     conn = HTTP1Connection(stream, True)
     delegate = Delegate()
@@ -119,7 +121,7 @@ class SSLTest(AsyncHTTPSTestCase):
         # misbehaving.
         with ExpectLog(gen_log, "(SSL Error|uncaught exception)"):
             with ExpectLog(gen_log, "Uncaught exception", required=False):
-                with self.assertRaises((IOError, HTTPError)):  # type: ignore
+                with self.assertRaises((IOError, HTTPError)):
                     self.fetch(
                         self.get_url("/").replace("https:", "http:"),
                         request_timeout=3600,
@@ -130,7 +132,7 @@ class SSLTest(AsyncHTTPSTestCase):
     def test_error_logging(self):
         # No stack traces are logged for SSL errors.
         with ExpectLog(gen_log, "SSL Error") as expect_log:
-            with self.assertRaises((IOError, HTTPError)):  # type: ignore
+            with self.assertRaises((IOError, HTTPError)):
                 self.fetch(
                     self.get_url("/").replace("https:", "http:"), raise_error=True
                 )
@@ -1153,6 +1155,38 @@ class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
             self.post_gzip("x" * 101)
 
 
+@skipNotCPython
+class GzipMemoryTest(AsyncHTTPTestCase):
+    MAX_BODY_SIZE = 1024 * 1024
+
+    def get_app(self):
+        return Application([("/", EchoHandler)])
+
+    def get_httpserver_options(self):
+        return dict(decompress_request=True, max_body_size=self.MAX_BODY_SIZE)
+
+    def test_gzip_bomb(self):
+        # A small gzip body that decompresses to far more than max_body_size
+        # must be rejected without decompressing it all into memory. (Peak
+        # memory is about 1.5 times max_body_size as of 2026-10.)
+        body = gzip.compress(b"\0" * (16 * self.MAX_BODY_SIZE))
+        with assert_memory_budget(
+            self.MAX_BODY_SIZE,
+            max_ratio=3,
+            msg="Decompressing a request body is not bounded by max_body_size",
+        ):
+            with ExpectLog(
+                gen_log, ".*decompressed body too large", level=logging.INFO
+            ):
+                response = self.fetch(
+                    "/",
+                    method="POST",
+                    body=body,
+                    headers={"Content-Encoding": "gzip"},
+                )
+        self.assertEqual(response.code, 400)
+
+
 class GzipUnsupportedTest(GzipBaseTest, AsyncHTTPTestCase):
     def test_gzip_unsupported(self):
         # Gzip support is opt-in; without it the server fails to parse
@@ -1241,9 +1275,10 @@ class StreamingChunkSizeTest(AsyncHTTPTestCase):
             write(self.BODY[:20])
             write(self.BODY[20:])
 
-        chunks = self.fetch_chunk_sizes(body_producer=body_producer)
-        # HTTP chunk boundaries translate to application-visible breaks
-        self.assertEqual([16, 4, 16, 14], chunks)
+        # HTTP chunk boundaries are not preserved: small chunks may be
+        # coalesced, so the assertions in fetch_chunk_sizes are as specific
+        # as we can get.
+        self.fetch_chunk_sizes(body_producer=body_producer)
 
     def test_chunked_compressed(self):
         compressed = self.compress(self.BODY)

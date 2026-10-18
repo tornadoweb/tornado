@@ -98,7 +98,7 @@ class ConditionTest(AsyncTestCase):
         self.history.append("notify_all")
 
         # Callbacks execute in the order they were registered.
-        self.assertEqual(list(range(4)) + ["notify_all"], self.history)  # type: ignore
+        self.assertEqual(list(range(4)) + ["notify_all"], self.history)
 
     @gen_test
     def test_wait_timeout(self):

@@ -54,7 +54,9 @@ class QueueFull(Exception):
     pass
 
 
-def _set_timeout(future: Future, timeout: None | float | datetime.timedelta) -> None:
+def _set_timeout(
+    future: Future[Any], timeout: None | float | datetime.timedelta
+) -> None:
     if timeout is not None:
 
         def on_timeout() -> None:
@@ -314,7 +316,8 @@ class Queue(Generic[_T]):
         self._queue = collections.deque()
 
     def _get(self) -> _T:
-        return self._queue.popleft()
+        item: _T = self._queue.popleft()
+        return item
 
     def _put(self, item: _T) -> None:
         self._queue.append(item)
@@ -353,7 +356,7 @@ class Queue(Generic[_T]):
         return result
 
 
-class PriorityQueue(Queue):
+class PriorityQueue(Queue[_T]):
     """A `.Queue` that retrieves entries in priority order, lowest first.
 
     Entries are typically tuples like ``(priority number, data)``.
@@ -388,11 +391,12 @@ class PriorityQueue(Queue):
     def _put(self, item: _T) -> None:
         heapq.heappush(self._queue, item)
 
-    def _get(self) -> _T:  # type: ignore[type-var]
-        return heapq.heappop(self._queue)
+    def _get(self) -> _T:
+        item: _T = heapq.heappop(self._queue)
+        return item
 
 
-class LifoQueue(Queue):
+class LifoQueue(Queue[_T]):
     """A `.Queue` that retrieves the most recently put items first.
 
     .. testcode::
@@ -425,5 +429,6 @@ class LifoQueue(Queue):
     def _put(self, item: _T) -> None:
         self._queue.append(item)
 
-    def _get(self) -> _T:  # type: ignore[type-var]
-        return self._queue.pop()
+    def _get(self) -> _T:
+        item: _T = self._queue.pop()
+        return item

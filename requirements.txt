@@ -26,6 +26,8 @@ click==8.5.0
     #   pip-tools
 colorama==0.4.6
     # via tox
+coverage==7.16.2
+    # via -r requirements.in
 distlib==0.4.3
     # via virtualenv
 docutils==0.22.4
@@ -38,6 +40,8 @@ filelock==3.32.7
     #   tox
     #   virtualenv
 flake8==7.3.0
+    # via -r requirements.in
+hypothesis==6.169.2
     # via -r requirements.in
 idna==3.19
     # via requests
@@ -102,6 +106,8 @@ roman-numerals==4.1.0
     # via sphinx
 snowballstemmer==3.1.1
     # via sphinx
+sortedcontainers==2.4.0
+    # via hypothesis
 sphinx==9.0.4
     # via
     #   -r requirements.in
@@ -135,7 +141,7 @@ typing-extensions==4.16.0
     #   tox
 urllib3==2.8.0
     # via requests
-virtualenv==21.7.10
+virtualenv==21.7.13
     # via tox
 wheel==0.48.0
     # via pip-tools

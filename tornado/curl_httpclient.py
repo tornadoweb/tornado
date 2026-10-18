@@ -335,7 +335,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                     "callback": callback,
                     "queue_start_time": queue_start_time,
                     "curl_start_time": time.time(),
-                    "curl_start_ioloop_time": self.io_loop.current().time(),  # type: ignore
+                    "curl_start_ioloop_time": self.io_loop.current().time(),
                 }
                 try:
                     self._curl_setup_request(

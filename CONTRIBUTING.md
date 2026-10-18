@@ -28,6 +28,32 @@
 * The fastest way to run the tests is to bypass `tox` and run `python3 -m tornado.test`.
   To run a subset of tests, add a module, class, or method name to the command line:
   `python3 -m tornado.test.httputil_test`.
+* `tox -e coverage` measures test coverage across the `-full` configurations and writes an
+  HTML report to `.tox/coverage-data/html`. CI fails if total coverage drops below the floor
+  set in `tox.ini`; raise the floor when you raise coverage.
+* `tornado/test/property_test.py` holds property-based tests using `hypothesis`, which is
+  installed in the `-full` configurations (the tests are skipped without it). They are a good
+  place for invariants of parsers and encoders: round-trips, agreement with a simple model, and
+  "malformed input raises `HTTPInputError` and nothing else". When one fails, also add the
+  failing input as an example-based test so it stays covered.
+* `tornado/test/api_test.py` compares the public API (names and signatures) to the snapshot in
+  `tornado/test/api.txt`. When you change the API on purpose, run
+  `python -m tornado.test.api_test --update` from the repository root (with the `-full`
+  dependencies installed) and commit the updated snapshot. Imports are left out of the snapshot
+  unless they use the `import X as X` form that marks a re-export. `tox -e docs` checks that everything in the docs
+  is in the snapshot.
+* Code that parses untrusted input should have resource-budget tests. `assert_linear_scaling`
+  in `tornado/test/util.py` checks that time grows linearly with the input, and
+  `assert_memory_budget` checks peak memory per byte of input (or per byte of a configured
+  limit such as `max_body_size`). Look for the worst-case input (many tiny fields, deep
+  escaping, highly compressible data) and keep sizes small enough that the test takes a
+  fraction of a second. A fix for a denial-of-service bug should come with such a test, and
+  the test should fail on the code before the fix.
+* `tox -e lint` runs flake8, black and mypy. mypy runs in strict mode, relaxed for the tests
+  (see `setup.cfg`), and reports `# type: ignore` comments that are no longer needed. Names
+  that a module re-exports need the `import X as X` form. It also type-checks the client code
+  in `maint/test/mypy` against the installed package: add to `good.py` when you change
+  annotations that applications rely on.
 * Tests can also be run with the standard library's `unittest` package CLI. This is useful
   for integration with some editors. However, this mode skips a few checks, notably the
   requirement that tests do not generate any log output without corresponding ExpectLog
