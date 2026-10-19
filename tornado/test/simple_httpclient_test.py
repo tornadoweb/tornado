@@ -1084,6 +1084,32 @@ class MaxBufferSizeTest(AsyncHTTPTestCase):
         self.assertEqual(response.body, b"a" * 1024 * 100)
 
 
+class LongChunkSizeLineTest(AsyncHTTPTestCase):
+    def get_app(self):
+        class LongChunkSizeLine(RequestHandler):
+            def get(self):
+                stream = self.detach()
+                stream.write(
+                    b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"
+                    + b"1" * 100
+                    + b"\r\n"
+                )
+
+        return Application([("/", LongChunkSizeLine)])
+
+    def get_http_client(self):
+        return SimpleAsyncHTTPClient()
+
+    def test_long_chunk_size_line(self):
+        # A chunk size line too long to read fails the request right away
+        # (not when the request times out), and isn't logged as an
+        # uncaught exception. The server leaves the connection open, so
+        # before the fix the request failed only when it timed out.
+        with ExpectLog(gen_log, "Unsatisfiable read", level=logging.INFO):
+            with self.assertRaises(UnsatisfiableReadError):
+                self.fetch("/", raise_error=True, request_timeout=60)
+
+
 class ChunkedWithContentLengthTest(AsyncHTTPTestCase):
     def get_app(self):
         class ChunkedWithContentLength(RequestHandler):

@@ -577,11 +577,15 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
     def on_connection_close(self) -> None:
         if self.final_callback is not None:
-            message = "Connection closed"
             if self.stream.error:
-                raise self.stream.error
+                # This is called from the connection's read loop, which
+                # only logs exceptions, so the error must go to
+                # _handle_exception instead of being raised.
+                error = self.stream.error
+                self._handle_exception(type(error), error, error.__traceback__)
+                return
             try:
-                raise HTTPStreamClosedError(message)
+                raise HTTPStreamClosedError("Connection closed")
             except HTTPStreamClosedError:
                 self._handle_exception(*sys.exc_info())
 

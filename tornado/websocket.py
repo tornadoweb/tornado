@@ -1280,6 +1280,10 @@ class WebSocketProtocol13(WebSocketProtocol):
                 self.close(1009, "message too big after decompression")
                 self._abort()
                 return None
+            except zlib.error:
+                self.close(1007, "invalid compressed data")
+                self._abort()
+                return None
 
         if opcode == 0x1:
             # UTF-8 data

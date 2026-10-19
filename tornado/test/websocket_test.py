@@ -983,6 +983,21 @@ class CompressedMessageMemoryTest(WebSocketBaseTestCase):
         self.assertEqual(ws.close_code, 1009)
 
 
+class InvalidCompressedDataTest(WebSocketBaseTestCase):
+    def get_app(self):
+        return Application([("/", EchoHandler, dict(compression_options={}))])
+
+    @gen_test
+    def test_invalid_compressed_data(self):
+        # A compressed message that isn't valid deflate data closes the
+        # connection (and is not logged as an uncaught exception).
+        ws = yield self.ws_connect("/", compression_options={})
+        ws.protocol._write_frame(True, 0x1, b"\xff\xff\xff", flags=ws.protocol.RSV1)
+        response = yield ws.read_message()
+        self.assertIsNone(response)
+        self.assertEqual(ws.close_code, 1007)
+
+
 @abstract_base_test
 class UncompressedTestMixin(CompressionTestMixin):
     """Specialization of CompressionTestMixin when we expect no compression."""
