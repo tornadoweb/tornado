@@ -40,7 +40,9 @@ from tornado.test.util import (
     AsyncHTTPTestCase,
     AsyncTestCase,
     TestCase,
+    assert_memory_budget,
     ignore_deprecation,
+    skipNotCPython,
 )
 from tornado.testing import ExpectLog, gen_test
 from tornado.util import ObjectDict, unicode_type
@@ -3546,6 +3548,33 @@ class SignedValueTest(TestCase):
         self.assertIsNone(
             decode_signed_value(secret, name, cookie, clock=lambda: 1_500_000_000)
         )
+
+    @skipNotCPython
+    def test_decode_memory_budget(self):
+        # Signed values usually arrive in cookies, so their size is bounded
+        # by max_header_size (64KB). Decoding makes a few copies (about 4
+        # bytes per input byte as of 2026-10), whether or not the signature
+        # is valid.
+        payload = b"x" * 45_000
+        for version in (1, 2):
+            signed = create_signed_value(
+                self.SECRET, "key", payload, version=version, clock=self.present
+            )
+            for valid, value in ((True, signed), (False, signed[:-1] + b"0")):
+                with self.subTest(version=version, valid=valid):
+                    with ExpectLog(gen_log, "Invalid cookie signature", required=False):
+                        with assert_memory_budget(
+                            len(value),
+                            max_ratio=10,
+                            msg="decode_signed_value uses too much memory",
+                        ):
+                            decode_signed_value(
+                                self.SECRET,
+                                "key",
+                                value,
+                                min_version=1,
+                                clock=self.present,
+                            )
 
 
 class XSRFTest(SimpleHandlerTestCase):
