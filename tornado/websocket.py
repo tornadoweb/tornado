@@ -762,10 +762,13 @@ class _PerMessageDeflateCompressor:
     ) -> None:
         if max_wbits is None:
             max_wbits = zlib.MAX_WBITS
-        # There is no symbolic constant for the minimum wbits value.
-        if not (8 <= max_wbits <= zlib.MAX_WBITS):
+        # There is no symbolic constant for the minimum wbits value. RFC
+        # 7692 allows 8, but zlib can't compress with a 256-byte window:
+        # zlib 1.2.9 and later reject it, and earlier versions silently use
+        # 512 bytes, which a peer that asked for 8 may fail to decompress.
+        if not (9 <= max_wbits <= zlib.MAX_WBITS):
             raise ValueError(
-                "Invalid max_wbits value %r; allowed range 8-%d"
+                "Invalid max_wbits value %r; allowed range 9-%d"
                 % (max_wbits, zlib.MAX_WBITS)
             )
         self._max_wbits = max_wbits
@@ -965,7 +968,17 @@ class WebSocketProtocol13(WebSocketProtocol):
             if ext[0] == "permessage-deflate" and self._compression_options is not None:
                 # TODO: negotiate parameters if compression_options
                 # specifies limits.
-                self._create_compressors("server", ext[1], self._compression_options)
+                try:
+                    self._create_compressors(
+                        "server", ext[1], self._compression_options
+                    )
+                except ValueError:
+                    # Decline offers with parameters we can't accept, as
+                    # RFC 7692 section 5 requires.
+                    gen_log.debug(
+                        "Declining websocket extension %r", ext, exc_info=True
+                    )
+                    continue
                 if (
                     "client_max_window_bits" in ext[1]
                     and ext[1]["client_max_window_bits"] is None
@@ -1055,7 +1068,6 @@ class WebSocketProtocol13(WebSocketProtocol):
         agreed_parameters: dict[str, Any],
         compression_options: dict[str, Any] | None = None,
     ) -> None:
-        # TODO: handle invalid parameters gracefully
         allowed_keys = {
             "server_no_context_takeover",
             "client_no_context_takeover",
@@ -1066,7 +1078,9 @@ class WebSocketProtocol13(WebSocketProtocol):
             if key not in allowed_keys:
                 raise ValueError("unsupported compression parameter %r" % key)
         other_side = "client" if (side == "server") else "server"
-        self._compressor = _PerMessageDeflateCompressor(
+        # Create both before assigning either, so a ValueError leaves
+        # compression off.
+        compressor = _PerMessageDeflateCompressor(
             **self._get_compressor_options(side, agreed_parameters, compression_options)
         )
         self._decompressor = _PerMessageDeflateDecompressor(
@@ -1075,6 +1089,7 @@ class WebSocketProtocol13(WebSocketProtocol):
                 other_side, agreed_parameters, compression_options
             ),
         )
+        self._compressor = compressor
 
     def _write_frame(
         self, fin: bool, opcode: int, data: bytes, flags: int = 0

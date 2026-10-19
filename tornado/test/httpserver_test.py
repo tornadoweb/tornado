@@ -472,6 +472,19 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
             self.assertEqual(400, start_line.code)
             self.assertEqual("Bad Request", start_line.reason)
 
+    def test_invalid_host_header_with_huge_port(self):
+        # More digits than int() accepts by default (sys.get_int_max_str_digits).
+        with ExpectLog(
+            gen_log, ".*Malformed HTTP message.*Invalid Host header", level=logging.INFO
+        ):
+            self.stream.write(
+                b"GET / HTTP/1.0\r\nHost: foo:" + b"1" * 5000 + b"\r\n\r\n"
+            )
+            start_line, headers, response = self.io_loop.run_sync(
+                lambda: read_stream_body(self.stream)
+            )
+            self.assertEqual(400, start_line.code)
+
     def test_chunked_request_body(self):
         # Chunked requests are not widely supported and we don't have a way
         # to generate them in AsyncHTTPClient, but HTTPServer will read them.

@@ -548,7 +548,11 @@ class HTTPServerRequest:
             # be used to exploit differences between proxies when multiple headers
             # are supplied).
             raise HTTPInputError("Multiple host headers not allowed: %r" % self.host)
-        self.host_name = split_host_and_port(self.host.lower())[0]
+        try:
+            self.host_name = split_host_and_port(self.host.lower())[0]
+        except ValueError:
+            # The port has more digits than int() allows.
+            raise HTTPInputError("Invalid Host header: %r" % self.host)
         self.files = files or {}
         self.connection = connection
         self.server_connection = server_connection
