@@ -35,10 +35,17 @@ import typing
 from collections.abc import Callable
 
 from tornado.httpserver import HTTPServer
-from tornado.iostream import IOStream
+from tornado.httputil import HTTPHeaders
+from tornado.iostream import IOStream, StreamClosedError
 from tornado.testing import bind_unused_port, gen_test
 from tornado.test.util import AsyncTestCase, assert_linear_scaling
-from tornado.web import Application, RequestHandler, StaticFileHandler
+from tornado.web import (
+    Application,
+    RequestHandler,
+    StaticFileHandler,
+    create_signed_value,
+)
+from tornado.websocket import WebSocketHandler
 
 
 class Case(typing.NamedTuple):
@@ -82,6 +89,25 @@ PART = b'Content-Disposition: form-data; name="a"\r\n\r\nb'
 FILE_PART = b'Content-Disposition: form-data; name="f"; filename="%s"\r\n\r\nb'
 
 
+COOKIE_SECRET = "secret"
+# A signed cookie for the name "a", and the same bytes split so that the
+# start of the value moves into the name ("a" + 4 characters). Before 3.2.1
+# the signature covered the name and value without a delimiter, so both
+# were valid.
+_SIGNED = create_signed_value(COOKIE_SECRET, "a", "AAAABBBB").decode()
+FORGED_COOKIE = ("a" + _SIGNED[:4], _SIGNED[4:])
+
+
+def ws_handshake(headers: str) -> bytes:
+    return request(
+        "GET",
+        "/ws",
+        "Upgrade: websocket\r\nConnection: Upgrade\r\n"
+        "Sec-WebSocket-Version: 13\r\n"
+        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" + headers,
+    )
+
+
 def _static_dir_path() -> str:
     # The 6.3.2 open redirect needed the server-side path of the static
     # directory (without the drive letter on Windows).
@@ -91,6 +117,85 @@ def _static_dir_path() -> str:
 
 
 CASES: list[Case] = [
+    # 1.1.1: requests with X-Requested-With: XMLHttpRequest were exempt from
+    # the XSRF check.
+    Case(
+        "1.1.1",
+        "xsrf exemption for XMLHttpRequest",
+        request(
+            "POST",
+            "/xsrf",
+            "X-Requested-With: XMLHttpRequest\r\n"
+            "Content-Type: application/x-www-form-urlencoded\r\n",
+            b"a=b",
+        ),
+        403,
+        app="xsrf",
+    ),
+    # 2.2.1: set_header didn't reject CR and LF, allowing response
+    # splitting. (redirect() had its own check.)
+    Case(
+        "2.2.1",
+        "set_header injection",
+        request("GET", "/header?value=a%0D%0AX-Injection:%20injected"),
+        400,
+        forbidden=b"X-Injection",
+    ),
+    Case(
+        "2.2.1",
+        "redirect header injection",
+        request("GET", "/redirect?url=/a%0D%0AX-Injection:%20injected"),
+        400,
+        forbidden=b"X-Injection",
+    ),
+    # 3.2.1: signed cookies could be moved to a different cookie name (see
+    # FORGED_COOKIE).
+    Case(
+        "3.2.1",
+        "signed cookie moved to another name",
+        request(
+            "GET",
+            "/signed?name=" + FORGED_COOKIE[0],
+            "Cookie: %s=%s\r\n" % FORGED_COOKIE,
+        ),
+        403,
+        app="xsrf",
+    ),
+    # 4.0.0: websocket connections are refused from other origins by
+    # default, since browsers don't apply the same-origin policy to them.
+    Case(
+        "4.0.0",
+        "cross-origin websocket",
+        ws_handshake("Origin: http://evil.example.com\r\n"),
+        403,
+    ),
+    # 4.2.1: StaticFileHandler served files whose paths started with the
+    # static directory's path without being in it.
+    Case(
+        "4.2.1",
+        "static path prefix traversal",
+        request("GET", "/../static_foo.txt"),
+        403,
+        forbidden=b"should not be served",
+        app="static",
+    ),
+    # 4.4.2: the cookie parser treated characters such as "]" as
+    # separators, as browsers don't, so a cookie whose value an attacker
+    # could set (Google Analytics cookies, for example) could set _xsrf as
+    # well and defeat the XSRF check.
+    Case(
+        "4.4.2",
+        "cookie injected by another cookie's value",
+        request(
+            "POST",
+            "/xsrf",
+            "Cookie: a=b]_xsrf=injected\r\n"
+            "Content-Type: application/x-www-form-urlencoded\r\n",
+            b"_xsrf=injected",
+        ),
+        403,
+        app="xsrf",
+    ),
     # 6.3.2 (CVE-2023-28370): with static_url_prefix="/" and a
     # default_filename, a path starting with two slashes redirected to
     # another host.
@@ -383,6 +488,43 @@ class CookieHandler(RequestHandler):
             self.send_error(400)
 
 
+class HeaderHandler(RequestHandler):
+    def get(self) -> None:
+        try:
+            self.set_header("X-Test", self.get_argument("value"))
+        except ValueError:
+            self.send_error(400)
+
+
+class RedirectHandler(RequestHandler):
+    def get(self) -> None:
+        try:
+            self.redirect(self.get_argument("url"))
+        except ValueError:
+            self.send_error(400)
+
+
+class XSRFHandler(RequestHandler):
+    def get(self) -> None:
+        self.write(self.xsrf_token)
+
+    def post(self) -> None:
+        self.write("ok")
+
+
+class SignedCookieHandler(RequestHandler):
+    def get(self) -> None:
+        if self.get_signed_cookie(self.get_argument("name")) is None:
+            self.send_error(403)
+        else:
+            self.write("ok")
+
+
+class EchoWebSocket(WebSocketHandler):
+    def on_message(self, message: str | bytes) -> None:
+        self.write_message(message, binary=isinstance(message, bytes))
+
+
 class LogCapture(logging.Handler):
     """Collects the records of the ``tornado`` loggers, keeping them out of
     the test runner's output and its count of unexpected logs."""
@@ -417,9 +559,20 @@ class SecurityCorpusTest(AsyncTestCase):
             ("/echo", EchoHandler),
             ("/status", StatusHandler),
             ("/cookie", CookieHandler),
+            ("/header", HeaderHandler),
+            ("/redirect", RedirectHandler),
+            ("/ws", EchoWebSocket),
         ]
         apps = {
             "default": (Application(handlers), {}),
+            "xsrf": (
+                Application(
+                    [("/xsrf", XSRFHandler), ("/signed", SignedCookieHandler)],
+                    xsrf_cookies=True,
+                    cookie_secret=COOKIE_SECRET,
+                ),
+                {},
+            ),
             "large_headers": (Application(handlers), {"max_header_size": 1 << 20}),
             "static": (
                 Application(
@@ -451,7 +604,18 @@ class SecurityCorpusTest(AsyncTestCase):
         try:
             await stream.connect(("127.0.0.1", self.ports[app]))
             await stream.write(data)
-            return await stream.read_until_close()
+            # Most responses end with the connection, but some (such as a
+            # refused websocket handshake) keep it open.
+            head = await stream.read_until(b"\r\n\r\n")
+            headers = HTTPHeaders.parse(head.decode("latin1").partition("\r\n")[2])
+            if "Content-Length" in headers:
+                body = await stream.read_bytes(int(headers["Content-Length"]))
+            else:
+                body = await stream.read_until_close()
+            return head + body
+        except StreamClosedError:
+            # Closed without a response.
+            return b""
         finally:
             stream.close()
 
@@ -480,6 +644,23 @@ class SecurityCorpusTest(AsyncTestCase):
                 if case.forbidden is not None:
                     self.assertNotIn(case.forbidden, response)
                 self.check_logs(logs, case.max_logs)
+
+    @gen_test
+    async def test_xsrf_token_masked(self) -> None:
+        # 3.2.2: the XSRF token in a page is masked differently on each
+        # request, so that it can't be recovered from compressed responses
+        # (BREACH).
+        cookie = "_xsrf=0123456789abcdef0123456789abcdef"
+        tokens = []
+        for _ in range(2):
+            response = await self.send(
+                "xsrf", request("GET", "/xsrf", f"Cookie: {cookie}\r\n")
+            )
+            head, _, body = response.partition(b"\r\n\r\n")
+            self.assertTrue(head.startswith(b"HTTP/1.1 200 "), head)
+            self.assertNotIn(b"0123456789abcdef", body)
+            tokens.append(body)
+        self.assertNotEqual(tokens[0], tokens[1])
 
     def test_scaling(self) -> None:
         for case in SCALING:
