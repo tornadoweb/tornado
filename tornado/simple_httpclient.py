@@ -14,6 +14,7 @@ from types import TracebackType
 from typing import Any, Optional, Type
 
 from tornado import gen, httputil, version
+from tornado.concurrent import Future
 from tornado.escape import _unicode, utf8
 from tornado.http1connection import HTTP1Connection, HTTP1ConnectionParameters
 from tornado.httpclient import (
@@ -729,7 +730,25 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self._release()
             assert self.client is not None
             fut = self.client.fetch(new_request, raise_error=False)
-            fut.add_done_callback(lambda f: final_callback(f.result()))
+
+            def on_redirect_done(f: "Future[HTTPResponse]") -> None:
+                try:
+                    response = f.result()
+                except Exception as e:
+                    # Errors other than HTTP status codes (such as a
+                    # Location with an unsupported scheme) are raised even
+                    # with raise_error=False. Pass them on, or the original
+                    # fetch would never finish.
+                    response = HTTPResponse(
+                        new_request,
+                        599,
+                        error=e,
+                        request_time=self.io_loop.time() - self.start_time,
+                        start_time=self.start_wall_time,
+                    )
+                final_callback(response)
+
+            fut.add_done_callback(on_redirect_done)
             self._on_end_request()
             return
         if self.request.streaming_callback:
