@@ -27,3 +27,12 @@ A report of a denial-of-service vulnerability should demonstrate either an
 input that costs substantially more CPU per byte than this baseline, or one
 that blocks the event loop (stalling all other connections) for substantially
 longer than this.
+
+## Tests for security fixes
+
+A security fix should have the unit tests appropriate to the code it
+changes, and also a test in `tornado/test/security_corpus_test.py`. That
+file sends the trigger input of each past vulnerability to a real server
+(or explains where the tests are for fixes that can't be reached that
+way), and checks only what a client can see, so that its tests keep
+working when the code they cover is rewritten.
