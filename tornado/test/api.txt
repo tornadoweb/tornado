@@ -1,0 +1,1261 @@
+[tornado]
+tornado.version: data
+tornado.version_info: data
+
+[tornado.auth]
+tornado.auth.AuthError: class(builtins.Exception)
+tornado.auth.FacebookGraphMixin: class(tornado.auth.OAuth2Mixin)
+tornado.auth.FacebookGraphMixin.facebook_request: method(self, path, access_token=None, post_args=None, **args)
+tornado.auth.FacebookGraphMixin.get_authenticated_user: method(self, redirect_uri, client_id, client_secret, code, extra_fields=None)
+tornado.auth.GoogleOAuth2Mixin: class(tornado.auth.OAuth2Mixin)
+tornado.auth.GoogleOAuth2Mixin.get_authenticated_user: method(self, redirect_uri, code, client_id=None, client_secret=None)
+tornado.auth.GoogleOAuth2Mixin.get_google_oauth_settings: method(self)
+tornado.auth.OAuth2Mixin: class()
+tornado.auth.OAuth2Mixin.authorize_redirect: method(self, redirect_uri=None, client_id=None, client_secret=None, extra_params=None, scope=None, response_type='code')
+tornado.auth.OAuth2Mixin.get_auth_http_client: method(self)
+tornado.auth.OAuth2Mixin.oauth2_request: method(self, url, access_token=None, post_args=None, **args)
+tornado.auth.OAuthMixin: class()
+tornado.auth.OAuthMixin.authorize_redirect: method(self, callback_uri=None, extra_params=None, http_client=None)
+tornado.auth.OAuthMixin.get_auth_http_client: method(self)
+tornado.auth.OAuthMixin.get_authenticated_user: method(self, http_client=None)
+tornado.auth.OpenIdMixin: class()
+tornado.auth.OpenIdMixin.__init__: method(self)
+tornado.auth.OpenIdMixin.authenticate_redirect: method(self, callback_uri=None, ax_attrs=...)
+tornado.auth.OpenIdMixin.get_auth_http_client: method(self)
+tornado.auth.OpenIdMixin.get_authenticated_user: method(self, http_client=None)
+tornado.auth.TwitterMixin: class(tornado.auth.OAuthMixin)
+tornado.auth.TwitterMixin.authenticate_redirect: method(self, callback_uri=None)
+tornado.auth.TwitterMixin.twitter_request: method(self, path, access_token, post_args=None, **args)
+
+[tornado.autoreload]
+tornado.autoreload.add_reload_hook: function(fn)
+tornado.autoreload.main: function()
+tornado.autoreload.signal: data
+tornado.autoreload.start: function(check_time=500)
+tornado.autoreload.wait: function()
+tornado.autoreload.watch: function(filename)
+
+[tornado.concurrent]
+tornado.concurrent.DummyExecutor: class(concurrent.futures._base.Executor)
+tornado.concurrent.DummyExecutor.shutdown: method(self, wait=True, cancel_futures=False)
+tornado.concurrent.DummyExecutor.submit: method(self, fn, *args, **kwargs)
+tornado.concurrent.FUTURES: data
+tornado.concurrent.Future: alias of _asyncio.Future
+tornado.concurrent.ReturnValueIgnoredError: class(builtins.Exception)
+tornado.concurrent.chain_future: function(a, b)
+tornado.concurrent.dummy_executor: data
+tornado.concurrent.future_add_done_callback: function(future, callback)
+tornado.concurrent.future_set_exc_info: function(future, exc_info)
+tornado.concurrent.future_set_exception_unless_cancelled: function(future, exc)
+tornado.concurrent.future_set_result_unless_cancelled: function(future, value)
+tornado.concurrent.is_future: function(x)
+tornado.concurrent.run_on_executor: function(*args, **kwargs)
+
+[tornado.curl_httpclient]
+tornado.curl_httpclient.CR_OR_LF_RE: data
+tornado.curl_httpclient.CurlAsyncHTTPClient: class(tornado.httpclient.AsyncHTTPClient)
+tornado.curl_httpclient.CurlAsyncHTTPClient.close: method(self)
+tornado.curl_httpclient.CurlAsyncHTTPClient.fetch_impl: method(self, request, callback)
+tornado.curl_httpclient.CurlAsyncHTTPClient.handle_callback_exception: method(self, callback)
+tornado.curl_httpclient.CurlAsyncHTTPClient.initialize: method(self, max_clients=10, defaults=None, max_body_size=104857600)
+tornado.curl_httpclient.CurlAsyncHTTPClient.max_body_size: attribute
+tornado.curl_httpclient.CurlError: class(tornado.httpclient.HTTPClientError)
+tornado.curl_httpclient.CurlError.__init__: method(self, errno, message)
+tornado.curl_httpclient.CurlError.errno: attribute
+tornado.curl_httpclient.curl_log: data
+
+[tornado.escape]
+tornado.escape.json_decode: function(value)
+tornado.escape.json_encode: function(value)
+tornado.escape.linkify: function(text, shorten=False, extra_params='', require_protocol=False, permitted_protocols=...)
+tornado.escape.native_str: alias of tornado.escape.to_unicode
+tornado.escape.parse_qs_bytes: function(qs, keep_blank_values=False, strict_parsing=False, *, max_num_fields=None)
+tornado.escape.recursive_unicode: function(obj)
+tornado.escape.squeeze: function(value)
+tornado.escape.to_basestring: alias of tornado.escape.to_unicode
+tornado.escape.to_unicode: function(value)
+tornado.escape.url_escape: function(value, plus=True)
+tornado.escape.url_unescape: function(value, encoding='utf-8', plus=True)
+tornado.escape.utf8: function(value)
+tornado.escape.xhtml_escape: function(value)
+tornado.escape.xhtml_unescape: function(value)
+
+[tornado.gen]
+tornado.gen.BadYieldError: class(builtins.Exception)
+tornado.gen.KeyReuseError: class(builtins.Exception)
+tornado.gen.LeakedCallbackError: class(builtins.Exception)
+tornado.gen.Multi: alias of tornado.gen.multi
+tornado.gen.Return: class(builtins.Exception)
+tornado.gen.Return.__init__: method(self, value=None)
+tornado.gen.Return.args: attribute
+tornado.gen.Return.value: attribute
+tornado.gen.ReturnValueIgnoredError: class(builtins.Exception)
+tornado.gen.Runner: class()
+tornado.gen.Runner.__init__: method(self, ctx_run, gen, result_future, first_yielded)
+tornado.gen.Runner.ctx_run: attribute
+tornado.gen.Runner.finished: attribute
+tornado.gen.Runner.future: attribute
+tornado.gen.Runner.gen: attribute
+tornado.gen.Runner.handle_exception: method(self, typ, value, tb)
+tornado.gen.Runner.handle_yield: method(self, yielded)
+tornado.gen.Runner.io_loop: attribute
+tornado.gen.Runner.result_future: attribute
+tornado.gen.Runner.run: method(self)
+tornado.gen.Runner.running: attribute
+tornado.gen.TimeoutError: import of builtins.TimeoutError
+tornado.gen.UnknownKeyError: class(builtins.Exception)
+tornado.gen.WaitIterator: class()
+tornado.gen.WaitIterator.__aiter__: method(self)
+tornado.gen.WaitIterator.__anext__: method(self)
+tornado.gen.WaitIterator.__init__: method(self, *args, **kwargs)
+tornado.gen.WaitIterator.current_future: attribute
+tornado.gen.WaitIterator.current_index: attribute
+tornado.gen.WaitIterator.done: method(self)
+tornado.gen.WaitIterator.next: method(self)
+tornado.gen.convert_yielded: function(yielded)
+tornado.gen.coroutine: function(func)
+tornado.gen.is_coroutine_function: function(func)
+tornado.gen.maybe_future: function(x)
+tornado.gen.moment: data
+tornado.gen.multi: function(children, quiet_exceptions=...)
+tornado.gen.multi_future: function(children, quiet_exceptions=...)
+tornado.gen.sleep: function(duration)
+tornado.gen.with_timeout: function(timeout, future, quiet_exceptions=..., *, message=None)
+
+[tornado.http1connection]
+tornado.http1connection.CR_OR_LF_RE: data
+tornado.http1connection.DIGITS: data
+tornado.http1connection.HEXDIGITS: data
+tornado.http1connection.HTTP1Connection: class(tornado.httputil.HTTPConnection)
+tornado.http1connection.HTTP1Connection.__init__: method(self, stream, is_client, params=None, context=None)
+tornado.http1connection.HTTP1Connection.close: method(self)
+tornado.http1connection.HTTP1Connection.context: attribute
+tornado.http1connection.HTTP1Connection.detach: method(self)
+tornado.http1connection.HTTP1Connection.finish: method(self)
+tornado.http1connection.HTTP1Connection.is_client: attribute
+tornado.http1connection.HTTP1Connection.no_keep_alive: attribute
+tornado.http1connection.HTTP1Connection.params: attribute
+tornado.http1connection.HTTP1Connection.read_response: method(self, delegate)
+tornado.http1connection.HTTP1Connection.set_body_timeout: method(self, timeout)
+tornado.http1connection.HTTP1Connection.set_close_callback: method(self, callback)
+tornado.http1connection.HTTP1Connection.set_max_body_size: method(self, max_body_size)
+tornado.http1connection.HTTP1Connection.stream: attribute
+tornado.http1connection.HTTP1Connection.write: method(self, chunk)
+tornado.http1connection.HTTP1Connection.write_headers: method(self, start_line, headers, chunk=None)
+tornado.http1connection.HTTP1ConnectionParameters: class()
+tornado.http1connection.HTTP1ConnectionParameters.__init__: method(self, no_keep_alive=False, chunk_size=None, max_header_size=None, header_timeout=None, max_body_size=None, body_timeout=None, decompress=False)
+tornado.http1connection.HTTP1ConnectionParameters.body_timeout: attribute
+tornado.http1connection.HTTP1ConnectionParameters.chunk_size: attribute
+tornado.http1connection.HTTP1ConnectionParameters.decompress: attribute
+tornado.http1connection.HTTP1ConnectionParameters.header_timeout: attribute
+tornado.http1connection.HTTP1ConnectionParameters.max_body_size: attribute
+tornado.http1connection.HTTP1ConnectionParameters.max_header_size: attribute
+tornado.http1connection.HTTP1ConnectionParameters.no_keep_alive: attribute
+tornado.http1connection.HTTP1ServerConnection: class()
+tornado.http1connection.HTTP1ServerConnection.__init__: method(self, stream, params=None, context=None)
+tornado.http1connection.HTTP1ServerConnection.close: method(self)
+tornado.http1connection.HTTP1ServerConnection.context: attribute
+tornado.http1connection.HTTP1ServerConnection.params: attribute
+tornado.http1connection.HTTP1ServerConnection.start_serving: method(self, delegate)
+tornado.http1connection.HTTP1ServerConnection.stream: attribute
+tornado.http1connection.is_transfer_encoding_chunked: function(headers)
+tornado.http1connection.parse_hex_int: function(s)
+tornado.http1connection.parse_int: function(s)
+
+[tornado.httpclient]
+tornado.httpclient.AsyncHTTPClient: class(tornado.util.Configurable)
+tornado.httpclient.AsyncHTTPClient.__new__: staticmethod(cls, force_instance=False, **kwargs)
+tornado.httpclient.AsyncHTTPClient.close: method(self)
+tornado.httpclient.AsyncHTTPClient.configurable_base: classmethod(cls)
+tornado.httpclient.AsyncHTTPClient.configurable_default: classmethod(cls)
+tornado.httpclient.AsyncHTTPClient.configure: classmethod(cls, impl, **kwargs)
+tornado.httpclient.AsyncHTTPClient.defaults: attribute
+tornado.httpclient.AsyncHTTPClient.fetch: method(self, request, raise_error=True, **kwargs)
+tornado.httpclient.AsyncHTTPClient.fetch_impl: method(self, request, callback)
+tornado.httpclient.AsyncHTTPClient.initialize: method(self, defaults=None)
+tornado.httpclient.AsyncHTTPClient.io_loop: attribute
+tornado.httpclient.HTTPClient: class()
+tornado.httpclient.HTTPClient.__del__: method(self)
+tornado.httpclient.HTTPClient.__init__: method(self, async_client_class=None, **kwargs)
+tornado.httpclient.HTTPClient.close: method(self)
+tornado.httpclient.HTTPClient.fetch: method(self, request, **kwargs)
+tornado.httpclient.HTTPClientError: class(builtins.Exception)
+tornado.httpclient.HTTPClientError.__init__: method(self, code, message=None, response=None)
+tornado.httpclient.HTTPClientError.__repr__: method(self)
+tornado.httpclient.HTTPClientError.__str__: method(self)
+tornado.httpclient.HTTPClientError.code: attribute
+tornado.httpclient.HTTPClientError.message: attribute
+tornado.httpclient.HTTPClientError.response: attribute
+tornado.httpclient.HTTPError: alias of tornado.httpclient.HTTPClientError
+tornado.httpclient.HTTPRequest: class()
+tornado.httpclient.HTTPRequest.__init__: method(self, url, method='GET', headers=None, body=None, auth_username=None, auth_password=None, auth_mode=None, connect_timeout=None, request_timeout=None, if_modified_since=None, follow_redirects=None, max_redirects=None, user_agent=None, use_gzip=None, network_interface=None, streaming_callback=None, header_callback=None, prepare_curl_callback=None, proxy_host=None, proxy_port=None, proxy_username=None, proxy_password=None, proxy_auth_mode=None, allow_nonstandard_methods=None, validate_cert=None, ca_certs=None, allow_ipv6=None, client_key=None, client_cert=None, body_producer=None, expect_100_continue=False, decompress_response=None, ssl_options=None)
+tornado.httpclient.HTTPRequest.allow_ipv6: attribute
+tornado.httpclient.HTTPRequest.allow_nonstandard_methods: attribute
+tornado.httpclient.HTTPRequest.auth_mode: attribute
+tornado.httpclient.HTTPRequest.auth_password: attribute
+tornado.httpclient.HTTPRequest.auth_username: attribute
+tornado.httpclient.HTTPRequest.body: property
+tornado.httpclient.HTTPRequest.body_producer: attribute
+tornado.httpclient.HTTPRequest.ca_certs: attribute
+tornado.httpclient.HTTPRequest.client_cert: attribute
+tornado.httpclient.HTTPRequest.client_key: attribute
+tornado.httpclient.HTTPRequest.connect_timeout: attribute
+tornado.httpclient.HTTPRequest.decompress_response: attribute
+tornado.httpclient.HTTPRequest.expect_100_continue: attribute
+tornado.httpclient.HTTPRequest.follow_redirects: attribute
+tornado.httpclient.HTTPRequest.header_callback: attribute
+tornado.httpclient.HTTPRequest.headers: property
+tornado.httpclient.HTTPRequest.max_redirects: attribute
+tornado.httpclient.HTTPRequest.method: attribute
+tornado.httpclient.HTTPRequest.network_interface: attribute
+tornado.httpclient.HTTPRequest.prepare_curl_callback: attribute
+tornado.httpclient.HTTPRequest.proxy_auth_mode: attribute
+tornado.httpclient.HTTPRequest.proxy_host: attribute
+tornado.httpclient.HTTPRequest.proxy_password: attribute
+tornado.httpclient.HTTPRequest.proxy_port: attribute
+tornado.httpclient.HTTPRequest.proxy_username: attribute
+tornado.httpclient.HTTPRequest.request_timeout: attribute
+tornado.httpclient.HTTPRequest.ssl_options: attribute
+tornado.httpclient.HTTPRequest.start_time: attribute
+tornado.httpclient.HTTPRequest.streaming_callback: attribute
+tornado.httpclient.HTTPRequest.url: attribute
+tornado.httpclient.HTTPRequest.user_agent: attribute
+tornado.httpclient.HTTPRequest.validate_cert: attribute
+tornado.httpclient.HTTPResponse: class()
+tornado.httpclient.HTTPResponse.__init__: method(self, request, code, headers=None, buffer=None, effective_url=None, error=None, request_time=None, time_info=None, reason=None, start_time=None)
+tornado.httpclient.HTTPResponse.__repr__: method(self)
+tornado.httpclient.HTTPResponse.body: property
+tornado.httpclient.HTTPResponse.buffer: attribute
+tornado.httpclient.HTTPResponse.code: attribute
+tornado.httpclient.HTTPResponse.effective_url: attribute
+tornado.httpclient.HTTPResponse.error: attribute
+tornado.httpclient.HTTPResponse.headers: attribute
+tornado.httpclient.HTTPResponse.reason: attribute
+tornado.httpclient.HTTPResponse.request: attribute
+tornado.httpclient.HTTPResponse.request_time: attribute
+tornado.httpclient.HTTPResponse.rethrow: method(self)
+tornado.httpclient.HTTPResponse.start_time: attribute
+tornado.httpclient.HTTPResponse.time_info: attribute
+tornado.httpclient.main: function()
+
+[tornado.httpserver]
+tornado.httpserver.HTTPRequest: alias of tornado.httputil.HTTPServerRequest
+tornado.httpserver.HTTPServer: class(tornado.tcpserver.TCPServer, tornado.util.Configurable, tornado.httputil.HTTPServerConnectionDelegate)
+tornado.httpserver.HTTPServer.__init__: method(self, *args, **kwargs)
+tornado.httpserver.HTTPServer.close_all_connections: method(self)
+tornado.httpserver.HTTPServer.configurable_base: classmethod(cls)
+tornado.httpserver.HTTPServer.configurable_default: classmethod(cls)
+tornado.httpserver.HTTPServer.conn_params: attribute
+tornado.httpserver.HTTPServer.handle_stream: method(self, stream, address)
+tornado.httpserver.HTTPServer.initialize: method(self, request_callback, no_keep_alive=False, xheaders=False, ssl_options=None, protocol=None, decompress_request=False, chunk_size=None, max_header_size=None, idle_connection_timeout=None, body_timeout=None, max_body_size=None, max_buffer_size=None, trusted_downstream=None)
+tornado.httpserver.HTTPServer.on_close: method(self, server_conn)
+tornado.httpserver.HTTPServer.protocol: attribute
+tornado.httpserver.HTTPServer.request_callback: attribute
+tornado.httpserver.HTTPServer.start_request: method(self, server_conn, request_conn)
+tornado.httpserver.HTTPServer.trusted_downstream: attribute
+tornado.httpserver.HTTPServer.xheaders: attribute
+
+[tornado.httputil]
+tornado.httputil.HTTPConnection: class()
+tornado.httputil.HTTPConnection.finish: method(self)
+tornado.httputil.HTTPConnection.write: method(self, chunk)
+tornado.httputil.HTTPConnection.write_headers: method(self, start_line, headers, chunk=None)
+tornado.httputil.HTTPFile: class(tornado.util.ObjectDict)
+tornado.httputil.HTTPFile.body: attribute
+tornado.httputil.HTTPFile.content_type: attribute
+tornado.httputil.HTTPFile.filename: attribute
+tornado.httputil.HTTPHeaders: class(collections.abc.MutableMapping)
+tornado.httputil.HTTPHeaders.__contains__: method(self, name)
+tornado.httputil.HTTPHeaders.__copy__: method(self)
+tornado.httputil.HTTPHeaders.__delitem__: method(self, name)
+tornado.httputil.HTTPHeaders.__getitem__: method(self, name)
+tornado.httputil.HTTPHeaders.__init__: method(self, *args, **kwargs)
+tornado.httputil.HTTPHeaders.__iter__: method(self)
+tornado.httputil.HTTPHeaders.__len__: method(self)
+tornado.httputil.HTTPHeaders.__setitem__: method(self, name, value)
+tornado.httputil.HTTPHeaders.__str__: method(self)
+tornado.httputil.HTTPHeaders.__unicode__: method(self)
+tornado.httputil.HTTPHeaders.add: method(self, name, value, *, _chars_are_bytes=True)
+tornado.httputil.HTTPHeaders.copy: method(self)
+tornado.httputil.HTTPHeaders.get_all: method(self)
+tornado.httputil.HTTPHeaders.get_list: method(self, name)
+tornado.httputil.HTTPHeaders.parse: classmethod(cls, headers, *, _chars_are_bytes=True)
+tornado.httputil.HTTPHeaders.parse_line: method(self, line, *, _chars_are_bytes=True)
+tornado.httputil.HTTPInputError: class(builtins.Exception)
+tornado.httputil.HTTPMessageDelegate: class()
+tornado.httputil.HTTPMessageDelegate.data_received: method(self, chunk)
+tornado.httputil.HTTPMessageDelegate.finish: method(self)
+tornado.httputil.HTTPMessageDelegate.headers_received: method(self, start_line, headers)
+tornado.httputil.HTTPMessageDelegate.on_connection_close: method(self)
+tornado.httputil.HTTPOutputError: class(builtins.Exception)
+tornado.httputil.HTTPServerConnectionDelegate: class()
+tornado.httputil.HTTPServerConnectionDelegate.on_close: method(self, server_conn)
+tornado.httputil.HTTPServerConnectionDelegate.start_request: method(self, server_conn, request_conn)
+tornado.httputil.HTTPServerRequest: class()
+tornado.httputil.HTTPServerRequest.__init__: method(self, method=None, uri=None, version='HTTP/1.0', headers=None, body=None, host=None, files=None, connection=None, start_line=None, server_connection=None)
+tornado.httputil.HTTPServerRequest.__repr__: method(self)
+tornado.httputil.HTTPServerRequest.arguments: attribute
+tornado.httputil.HTTPServerRequest.body: attribute
+tornado.httputil.HTTPServerRequest.body_arguments: attribute
+tornado.httputil.HTTPServerRequest.connection: attribute
+tornado.httputil.HTTPServerRequest.cookies: property
+tornado.httputil.HTTPServerRequest.files: attribute
+tornado.httputil.HTTPServerRequest.full_url: method(self)
+tornado.httputil.HTTPServerRequest.get_ssl_certificate: method(self, binary_form=False)
+tornado.httputil.HTTPServerRequest.headers: attribute
+tornado.httputil.HTTPServerRequest.host: attribute
+tornado.httputil.HTTPServerRequest.host_name: attribute
+tornado.httputil.HTTPServerRequest.method: attribute
+tornado.httputil.HTTPServerRequest.path: attribute
+tornado.httputil.HTTPServerRequest.protocol: attribute
+tornado.httputil.HTTPServerRequest.query: attribute
+tornado.httputil.HTTPServerRequest.query_arguments: attribute
+tornado.httputil.HTTPServerRequest.remote_ip: attribute
+tornado.httputil.HTTPServerRequest.request_time: method(self)
+tornado.httputil.HTTPServerRequest.server_connection: attribute
+tornado.httputil.HTTPServerRequest.uri: attribute
+tornado.httputil.HTTPServerRequest.version: attribute
+tornado.httputil.HTTP_WHITESPACE: data
+tornado.httputil.ParseBodyConfig: class()
+tornado.httputil.ParseBodyConfig.__eq__: method(self, other)
+tornado.httputil.ParseBodyConfig.__init__: method(self, multipart=..., urlencoded=...)
+tornado.httputil.ParseBodyConfig.__repr__: method(self)
+tornado.httputil.ParseBodyConfig.multipart: attribute
+tornado.httputil.ParseBodyConfig.urlencoded: attribute
+tornado.httputil.ParseMultipartConfig: class()
+tornado.httputil.ParseMultipartConfig.__eq__: method(self, other)
+tornado.httputil.ParseMultipartConfig.__init__: method(self, enabled=True, max_parts=100, max_part_header_size=10240)
+tornado.httputil.ParseMultipartConfig.__repr__: method(self)
+tornado.httputil.ParseMultipartConfig.enabled: attribute
+tornado.httputil.ParseMultipartConfig.max_part_header_size: attribute
+tornado.httputil.ParseMultipartConfig.max_parts: attribute
+tornado.httputil.ParseUrlEncodedConfig: class()
+tornado.httputil.ParseUrlEncodedConfig.__eq__: method(self, other)
+tornado.httputil.ParseUrlEncodedConfig.__init__: method(self, max_arguments=1000)
+tornado.httputil.ParseUrlEncodedConfig.__repr__: method(self)
+tornado.httputil.ParseUrlEncodedConfig.max_arguments: attribute
+tornado.httputil.RequestStartLine: class(builtins.tuple)
+tornado.httputil.RequestStartLine.method: attribute
+tornado.httputil.RequestStartLine.path: attribute
+tornado.httputil.RequestStartLine.version: attribute
+tornado.httputil.ResponseStartLine: class(builtins.tuple)
+tornado.httputil.ResponseStartLine.code: attribute
+tornado.httputil.ResponseStartLine.reason: attribute
+tornado.httputil.ResponseStartLine.version: attribute
+tornado.httputil.doctests: function()
+tornado.httputil.encode_username_password: function(username, password)
+tornado.httputil.format_timestamp: function(ts)
+tornado.httputil.parse_body_arguments: function(content_type, body, arguments, files, headers=None, *, config=None)
+tornado.httputil.parse_cookie: function(cookie)
+tornado.httputil.parse_multipart_form_data: function(boundary, data, arguments, files, *, config=None)
+tornado.httputil.parse_request_start_line: function(line)
+tornado.httputil.parse_response_start_line: function(line)
+tornado.httputil.qs_to_qsl: function(qs)
+tornado.httputil.responses: data
+tornado.httputil.set_parse_body_config: function(config)
+tornado.httputil.split_host_and_port: function(netloc)
+tornado.httputil.url_concat: function(url, args)
+
+[tornado.ioloop]
+tornado.ioloop.Configurable: import of tornado.util.Configurable
+tornado.ioloop.IOLoop: class(tornado.util.Configurable)
+tornado.ioloop.IOLoop.ERROR: attribute
+tornado.ioloop.IOLoop.NONE: attribute
+tornado.ioloop.IOLoop.READ: attribute
+tornado.ioloop.IOLoop.WRITE: attribute
+tornado.ioloop.IOLoop.add_callback: method(self, callback, *args, **kwargs)
+tornado.ioloop.IOLoop.add_callback_from_signal: method(self, callback, *args, **kwargs)
+tornado.ioloop.IOLoop.add_future: method(self, future, callback)
+tornado.ioloop.IOLoop.add_handler: method(self, fd, handler, events)
+tornado.ioloop.IOLoop.add_timeout: method(self, deadline, callback, *args, **kwargs)
+tornado.ioloop.IOLoop.call_at: method(self, when, callback, *args, **kwargs)
+tornado.ioloop.IOLoop.call_later: method(self, delay, callback, *args, **kwargs)
+tornado.ioloop.IOLoop.clear_current: staticmethod()
+tornado.ioloop.IOLoop.clear_instance: staticmethod()
+tornado.ioloop.IOLoop.close: method(self, all_fds=False)
+tornado.ioloop.IOLoop.close_fd: method(self, fd)
+tornado.ioloop.IOLoop.configurable_base: classmethod(cls)
+tornado.ioloop.IOLoop.configurable_default: classmethod(cls)
+tornado.ioloop.IOLoop.configure: classmethod(cls, impl, **kwargs)
+tornado.ioloop.IOLoop.current: staticmethod(instance=True)
+tornado.ioloop.IOLoop.initialize: method(self, make_current=True)
+tornado.ioloop.IOLoop.install: method(self)
+tornado.ioloop.IOLoop.instance: staticmethod()
+tornado.ioloop.IOLoop.make_current: method(self)
+tornado.ioloop.IOLoop.remove_handler: method(self, fd)
+tornado.ioloop.IOLoop.remove_timeout: method(self, timeout)
+tornado.ioloop.IOLoop.run_in_executor: method(self, executor, func, *args)
+tornado.ioloop.IOLoop.run_sync: method(self, func, timeout=None)
+tornado.ioloop.IOLoop.set_default_executor: method(self, executor)
+tornado.ioloop.IOLoop.spawn_callback: method(self, callback, *args, **kwargs)
+tornado.ioloop.IOLoop.split_fd: method(self, fd)
+tornado.ioloop.IOLoop.start: method(self)
+tornado.ioloop.IOLoop.stop: method(self)
+tornado.ioloop.IOLoop.time: method(self)
+tornado.ioloop.IOLoop.update_handler: method(self, fd, events)
+tornado.ioloop.PeriodicCallback: class()
+tornado.ioloop.PeriodicCallback.__init__: method(self, callback, callback_time, jitter=0)
+tornado.ioloop.PeriodicCallback.callback: attribute
+tornado.ioloop.PeriodicCallback.callback_time: attribute
+tornado.ioloop.PeriodicCallback.io_loop: attribute
+tornado.ioloop.PeriodicCallback.is_running: method(self)
+tornado.ioloop.PeriodicCallback.jitter: attribute
+tornado.ioloop.PeriodicCallback.start: method(self)
+tornado.ioloop.PeriodicCallback.stop: method(self)
+tornado.ioloop.TimeoutError: import of builtins.TimeoutError
+tornado.ioloop.import_object: import of tornado.util.import_object
+
+[tornado.iostream]
+tornado.iostream.BaseIOStream: class()
+tornado.iostream.BaseIOStream.__init__: method(self, max_buffer_size=None, read_chunk_size=None, max_write_buffer_size=None)
+tornado.iostream.BaseIOStream.close: method(self, exc_info=False)
+tornado.iostream.BaseIOStream.close_fd: method(self)
+tornado.iostream.BaseIOStream.closed: method(self)
+tornado.iostream.BaseIOStream.error: attribute
+tornado.iostream.BaseIOStream.fileno: method(self)
+tornado.iostream.BaseIOStream.get_fd_error: method(self)
+tornado.iostream.BaseIOStream.io_loop: attribute
+tornado.iostream.BaseIOStream.max_buffer_size: attribute
+tornado.iostream.BaseIOStream.max_write_buffer_size: attribute
+tornado.iostream.BaseIOStream.read_bytes: method(self, num_bytes, partial=False)
+tornado.iostream.BaseIOStream.read_chunk_size: attribute
+tornado.iostream.BaseIOStream.read_from_fd: method(self, buf)
+tornado.iostream.BaseIOStream.read_into: method(self, buf, partial=False)
+tornado.iostream.BaseIOStream.read_until: method(self, delimiter, max_bytes=None)
+tornado.iostream.BaseIOStream.read_until_close: method(self)
+tornado.iostream.BaseIOStream.read_until_regex: method(self, regex, max_bytes=None)
+tornado.iostream.BaseIOStream.reading: method(self)
+tornado.iostream.BaseIOStream.set_close_callback: method(self, callback)
+tornado.iostream.BaseIOStream.set_nodelay: method(self, value)
+tornado.iostream.BaseIOStream.write: method(self, data)
+tornado.iostream.BaseIOStream.write_to_fd: method(self, data)
+tornado.iostream.BaseIOStream.writing: method(self)
+tornado.iostream.IOStream: class(tornado.iostream.BaseIOStream)
+tornado.iostream.IOStream.__init__: method(self, socket, *args, **kwargs)
+tornado.iostream.IOStream.close_fd: method(self)
+tornado.iostream.IOStream.connect: method(self, address, server_hostname=None)
+tornado.iostream.IOStream.error: attribute
+tornado.iostream.IOStream.fileno: method(self)
+tornado.iostream.IOStream.get_fd_error: method(self)
+tornado.iostream.IOStream.read_from_fd: method(self, buf)
+tornado.iostream.IOStream.set_nodelay: method(self, value)
+tornado.iostream.IOStream.socket: attribute
+tornado.iostream.IOStream.start_tls: method(self, server_side, ssl_options=None, server_hostname=None)
+tornado.iostream.IOStream.write_to_fd: method(self, data)
+tornado.iostream.PipeIOStream: class(tornado.iostream.BaseIOStream)
+tornado.iostream.PipeIOStream.__init__: method(self, fd, *args, **kwargs)
+tornado.iostream.PipeIOStream.close_fd: method(self)
+tornado.iostream.PipeIOStream.fd: attribute
+tornado.iostream.PipeIOStream.fileno: method(self)
+tornado.iostream.PipeIOStream.read_from_fd: method(self, buf)
+tornado.iostream.PipeIOStream.write_to_fd: method(self, data)
+tornado.iostream.SSLIOStream: class(tornado.iostream.IOStream)
+tornado.iostream.SSLIOStream.__init__: method(self, *args, **kwargs)
+tornado.iostream.SSLIOStream.connect: method(self, address, server_hostname=None)
+tornado.iostream.SSLIOStream.read_from_fd: method(self, buf)
+tornado.iostream.SSLIOStream.reading: method(self)
+tornado.iostream.SSLIOStream.socket: attribute
+tornado.iostream.SSLIOStream.wait_for_handshake: method(self)
+tornado.iostream.SSLIOStream.write_to_fd: method(self, data)
+tornado.iostream.SSLIOStream.writing: method(self)
+tornado.iostream.StreamBufferFullError: class(builtins.Exception)
+tornado.iostream.StreamClosedError: class(builtins.OSError)
+tornado.iostream.StreamClosedError.__init__: method(self, real_error=None)
+tornado.iostream.StreamClosedError.real_error: attribute
+tornado.iostream.UnsatisfiableReadError: class(builtins.Exception)
+tornado.iostream.doctests: function()
+
+[tornado.locale]
+tornado.locale.CONTEXT_SEPARATOR: data
+tornado.locale.CSVLocale: class(tornado.locale.Locale)
+tornado.locale.CSVLocale.__init__: method(self, code, translations)
+tornado.locale.CSVLocale.pgettext: method(self, context, message, plural_message=None, count=None)
+tornado.locale.CSVLocale.translate: method(self, message, plural_message=None, count=None)
+tornado.locale.CSVLocale.translations: attribute
+tornado.locale.GettextLocale: class(tornado.locale.Locale)
+tornado.locale.GettextLocale.__init__: method(self, code, translations)
+tornado.locale.GettextLocale.gettext: attribute
+tornado.locale.GettextLocale.ngettext: attribute
+tornado.locale.GettextLocale.pgettext: method(self, context, message, plural_message=None, count=None)
+tornado.locale.GettextLocale.translate: method(self, message, plural_message=None, count=None)
+tornado.locale.LOCALE_NAMES: data
+tornado.locale.Locale: class()
+tornado.locale.Locale.__init__: method(self, code)
+tornado.locale.Locale.code: attribute
+tornado.locale.Locale.format_date: method(self, date, gmt_offset=0, relative=True, shorter=False, full_format=False)
+tornado.locale.Locale.format_day: method(self, date, gmt_offset=0, dow=True)
+tornado.locale.Locale.friendly_number: method(self, value)
+tornado.locale.Locale.get: classmethod(cls, code)
+tornado.locale.Locale.get_closest: classmethod(cls, *locale_codes)
+tornado.locale.Locale.list: method(self, parts)
+tornado.locale.Locale.name: attribute
+tornado.locale.Locale.pgettext: method(self, context, message, plural_message=None, count=None)
+tornado.locale.Locale.rtl: attribute
+tornado.locale.Locale.translate: method(self, message, plural_message=None, count=None)
+tornado.locale.get: function(*locale_codes)
+tornado.locale.get_supported_locales: function()
+tornado.locale.load_gettext_translations: function(directory, domain)
+tornado.locale.load_translations: function(directory, encoding=None)
+tornado.locale.set_default_locale: function(code)
+
+[tornado.locks]
+tornado.locks.BoundedSemaphore: class(tornado.locks.Semaphore)
+tornado.locks.BoundedSemaphore.__init__: method(self, value=1)
+tornado.locks.BoundedSemaphore.release: method(self)
+tornado.locks.Condition: class(tornado.locks._TimeoutGarbageCollector)
+tornado.locks.Condition.__init__: method(self)
+tornado.locks.Condition.__repr__: method(self)
+tornado.locks.Condition.notify: method(self, n=1)
+tornado.locks.Condition.notify_all: method(self)
+tornado.locks.Condition.wait: method(self, timeout=None)
+tornado.locks.Event: class()
+tornado.locks.Event.__init__: method(self)
+tornado.locks.Event.__repr__: method(self)
+tornado.locks.Event.clear: method(self)
+tornado.locks.Event.is_set: method(self)
+tornado.locks.Event.set: method(self)
+tornado.locks.Event.wait: method(self, timeout=None)
+tornado.locks.Lock: class()
+tornado.locks.Lock.__aenter__: method(self)
+tornado.locks.Lock.__aexit__: method(self, typ, value, tb)
+tornado.locks.Lock.__enter__: method(self)
+tornado.locks.Lock.__exit__: method(self, typ, value, tb)
+tornado.locks.Lock.__init__: method(self)
+tornado.locks.Lock.__repr__: method(self)
+tornado.locks.Lock.acquire: method(self, timeout=None)
+tornado.locks.Lock.release: method(self)
+tornado.locks.Semaphore: class(tornado.locks._TimeoutGarbageCollector)
+tornado.locks.Semaphore.__aenter__: method(self)
+tornado.locks.Semaphore.__aexit__: method(self, typ, value, tb)
+tornado.locks.Semaphore.__enter__: method(self)
+tornado.locks.Semaphore.__exit__: method(self, typ, value, traceback)
+tornado.locks.Semaphore.__init__: method(self, value=1)
+tornado.locks.Semaphore.__repr__: method(self)
+tornado.locks.Semaphore.acquire: method(self, timeout=None)
+tornado.locks.Semaphore.release: method(self)
+
+[tornado.log]
+tornado.log.LogFormatter: class(logging.Formatter)
+tornado.log.LogFormatter.DEFAULT_COLORS: attribute
+tornado.log.LogFormatter.DEFAULT_DATE_FORMAT: attribute
+tornado.log.LogFormatter.DEFAULT_FORMAT: attribute
+tornado.log.LogFormatter.__init__: method(self, fmt=..., datefmt='%y%m%d %H:%M:%S', style='%', color=True, colors=...)
+tornado.log.LogFormatter.format: method(self, record)
+tornado.log.access_log: data
+tornado.log.app_log: data
+tornado.log.colorama: data
+tornado.log.curses: data
+tornado.log.define_logging_options: function(options=None)
+tornado.log.enable_pretty_logging: function(options=None, logger=None)
+tornado.log.gen_log: data
+
+[tornado.netutil]
+tornado.netutil.BlockingResolver: class(tornado.netutil.ExecutorResolver)
+tornado.netutil.BlockingResolver.initialize: method(self)
+tornado.netutil.DefaultExecutorResolver: class(tornado.netutil.Resolver)
+tornado.netutil.DefaultExecutorResolver.resolve: method(self, host, port, family=<AddressFamily.AF_UNSPEC: 0>)
+tornado.netutil.DefaultLoopResolver: class(tornado.netutil.Resolver)
+tornado.netutil.DefaultLoopResolver.resolve: method(self, host, port, family=<AddressFamily.AF_UNSPEC: 0>)
+tornado.netutil.ExecutorResolver: class(tornado.netutil.Resolver)
+tornado.netutil.ExecutorResolver.close: method(self)
+tornado.netutil.ExecutorResolver.close_executor: attribute
+tornado.netutil.ExecutorResolver.executor: attribute
+tornado.netutil.ExecutorResolver.initialize: method(self, executor=None, close_executor=True)
+tornado.netutil.ExecutorResolver.resolve: method(self, host, port, family=<AddressFamily.AF_UNSPEC: 0>)
+tornado.netutil.OverrideResolver: class(tornado.netutil.Resolver)
+tornado.netutil.OverrideResolver.close: method(self)
+tornado.netutil.OverrideResolver.initialize: method(self, resolver, mapping)
+tornado.netutil.OverrideResolver.mapping: attribute
+tornado.netutil.OverrideResolver.resolve: method(self, host, port, family=<AddressFamily.AF_UNSPEC: 0>)
+tornado.netutil.OverrideResolver.resolver: attribute
+tornado.netutil.Resolver: class(tornado.util.Configurable)
+tornado.netutil.Resolver.close: method(self)
+tornado.netutil.Resolver.configurable_base: classmethod(cls)
+tornado.netutil.Resolver.configurable_default: classmethod(cls)
+tornado.netutil.Resolver.resolve: method(self, host, port, family=<AddressFamily.AF_UNSPEC: 0>)
+tornado.netutil.ThreadedResolver: class(tornado.netutil.ExecutorResolver)
+tornado.netutil.ThreadedResolver.initialize: method(self, num_threads=10)
+tornado.netutil.add_accept_handler: function(sock, callback)
+tornado.netutil.bind_sockets: function(port, address=None, family=<AddressFamily.AF_UNSPEC: 0>, backlog=128, flags=None, reuse_port=False)
+tornado.netutil.bind_unix_socket: function(file, mode=384, backlog=128)
+tornado.netutil.is_valid_ip: function(ip)
+tornado.netutil.ssl_options_to_context: function(ssl_options, server_side=None)
+tornado.netutil.ssl_wrap_socket: function(socket, ssl_options, server_hostname=None, server_side=None, **kwargs)
+
+[tornado.options]
+tornado.options.Error: class(builtins.Exception)
+tornado.options.OptionParser: class()
+tornado.options.OptionParser.__contains__: method(self, name)
+tornado.options.OptionParser.__getattr__: method(self, name)
+tornado.options.OptionParser.__getitem__: method(self, name)
+tornado.options.OptionParser.__init__: method(self)
+tornado.options.OptionParser.__iter__: method(self)
+tornado.options.OptionParser.__setattr__: method(self, name, value)
+tornado.options.OptionParser.__setitem__: method(self, name, value)
+tornado.options.OptionParser.add_parse_callback: method(self, callback)
+tornado.options.OptionParser.as_dict: method(self)
+tornado.options.OptionParser.define: method(self, name, default=None, type=None, help=None, metavar=None, multiple=False, group=None, callback=None)
+tornado.options.OptionParser.group_dict: method(self, group)
+tornado.options.OptionParser.groups: method(self)
+tornado.options.OptionParser.items: method(self)
+tornado.options.OptionParser.mockable: method(self)
+tornado.options.OptionParser.parse_command_line: method(self, args=None, final=True)
+tornado.options.OptionParser.parse_config_file: method(self, path, final=True)
+tornado.options.OptionParser.print_help: method(self, file=None)
+tornado.options.OptionParser.run_parse_callbacks: method(self)
+tornado.options.add_parse_callback: function(callback)
+tornado.options.define: function(name, default=None, type=None, help=None, metavar=None, multiple=False, group=None, callback=None)
+tornado.options.options: data
+tornado.options.parse_command_line: function(args=None, final=True)
+tornado.options.parse_config_file: function(path, final=True)
+tornado.options.print_help: function(file=None)
+
+[tornado.platform]
+
+[tornado.platform.asyncio]
+tornado.platform.asyncio.AnyThreadEventLoopPolicy: lazy attribute
+tornado.platform.asyncio.AddThreadSelectorEventLoop: class(asyncio.events.AbstractEventLoop)
+tornado.platform.asyncio.AddThreadSelectorEventLoop.MY_ATTRIBUTES: attribute
+tornado.platform.asyncio.AddThreadSelectorEventLoop.__getattribute__: method(self, name)
+tornado.platform.asyncio.AddThreadSelectorEventLoop.__init__: method(self, real_loop)
+tornado.platform.asyncio.AddThreadSelectorEventLoop.add_reader: method(self, fd, callback, *args)
+tornado.platform.asyncio.AddThreadSelectorEventLoop.add_writer: method(self, fd, callback, *args)
+tornado.platform.asyncio.AddThreadSelectorEventLoop.close: method(self)
+tornado.platform.asyncio.AddThreadSelectorEventLoop.remove_reader: method(self, fd)
+tornado.platform.asyncio.AddThreadSelectorEventLoop.remove_writer: method(self, fd)
+tornado.platform.asyncio.AsyncIOLoop: class(tornado.platform.asyncio.BaseAsyncIOLoop)
+tornado.platform.asyncio.AsyncIOLoop.close: method(self, all_fds=False)
+tornado.platform.asyncio.AsyncIOLoop.initialize: method(self, **kwargs)
+tornado.platform.asyncio.AsyncIOLoop.is_current: attribute
+tornado.platform.asyncio.AsyncIOLoop.old_asyncio: attribute
+tornado.platform.asyncio.AsyncIOMainLoop: class(tornado.platform.asyncio.BaseAsyncIOLoop)
+tornado.platform.asyncio.AsyncIOMainLoop.initialize: method(self, **kwargs)
+tornado.platform.asyncio.BaseAsyncIOLoop: class(tornado.ioloop.IOLoop)
+tornado.platform.asyncio.BaseAsyncIOLoop.add_callback: method(self, callback, *args, **kwargs)
+tornado.platform.asyncio.BaseAsyncIOLoop.add_callback_from_signal: method(self, callback, *args, **kwargs)
+tornado.platform.asyncio.BaseAsyncIOLoop.add_handler: method(self, fd, handler, events)
+tornado.platform.asyncio.BaseAsyncIOLoop.asyncio_loop: attribute
+tornado.platform.asyncio.BaseAsyncIOLoop.call_at: method(self, when, callback, *args, **kwargs)
+tornado.platform.asyncio.BaseAsyncIOLoop.close: method(self, all_fds=False)
+tornado.platform.asyncio.BaseAsyncIOLoop.closing: attribute
+tornado.platform.asyncio.BaseAsyncIOLoop.handlers: attribute
+tornado.platform.asyncio.BaseAsyncIOLoop.initialize: method(self, asyncio_loop, **kwargs)
+tornado.platform.asyncio.BaseAsyncIOLoop.readers: attribute
+tornado.platform.asyncio.BaseAsyncIOLoop.remove_handler: method(self, fd)
+tornado.platform.asyncio.BaseAsyncIOLoop.remove_timeout: method(self, timeout)
+tornado.platform.asyncio.BaseAsyncIOLoop.run_in_executor: method(self, executor, func, *args)
+tornado.platform.asyncio.BaseAsyncIOLoop.selector_loop: attribute
+tornado.platform.asyncio.BaseAsyncIOLoop.set_default_executor: method(self, executor)
+tornado.platform.asyncio.BaseAsyncIOLoop.start: method(self)
+tornado.platform.asyncio.BaseAsyncIOLoop.stop: method(self)
+tornado.platform.asyncio.BaseAsyncIOLoop.update_handler: method(self, fd, events)
+tornado.platform.asyncio.BaseAsyncIOLoop.writers: attribute
+tornado.platform.asyncio.SelectorThread: class()
+tornado.platform.asyncio.SelectorThread.__init__: method(self, real_loop)
+tornado.platform.asyncio.SelectorThread.add_reader: method(self, fd, callback, *args)
+tornado.platform.asyncio.SelectorThread.add_writer: method(self, fd, callback, *args)
+tornado.platform.asyncio.SelectorThread.close: method(self)
+tornado.platform.asyncio.SelectorThread.remove_reader: method(self, fd)
+tornado.platform.asyncio.SelectorThread.remove_writer: method(self, fd)
+tornado.platform.asyncio.to_asyncio_future: function(tornado_future)
+tornado.platform.asyncio.to_tornado_future: function(asyncio_future)
+
+[tornado.platform.caresresolver]
+tornado.platform.caresresolver.CaresResolver: class(tornado.netutil.Resolver)
+tornado.platform.caresresolver.CaresResolver.channel: attribute
+tornado.platform.caresresolver.CaresResolver.fds: attribute
+tornado.platform.caresresolver.CaresResolver.initialize: method(self)
+tornado.platform.caresresolver.CaresResolver.io_loop: attribute
+tornado.platform.caresresolver.CaresResolver.resolve: method(self, host, port, family=0)
+
+[tornado.platform.twisted]
+tornado.platform.twisted.install: function()
+
+[tornado.process]
+tornado.process.CalledProcessError: alias of subprocess.CalledProcessError
+tornado.process.Subprocess: class()
+tornado.process.Subprocess.STREAM: attribute
+tornado.process.Subprocess.__init__: method(self, *args, **kwargs)
+tornado.process.Subprocess.initialize: classmethod(cls)
+tornado.process.Subprocess.io_loop: attribute
+tornado.process.Subprocess.pid: attribute
+tornado.process.Subprocess.proc: attribute
+tornado.process.Subprocess.returncode: attribute
+tornado.process.Subprocess.set_exit_callback: method(self, callback)
+tornado.process.Subprocess.stderr: attribute
+tornado.process.Subprocess.stdin: attribute
+tornado.process.Subprocess.stdout: attribute
+tornado.process.Subprocess.uninitialize: classmethod(cls)
+tornado.process.Subprocess.wait_for_exit: method(self, raise_error=True)
+tornado.process.cpu_count: function()
+tornado.process.fork_processes: function(num_processes, max_restarts=None)
+tornado.process.task_id: function()
+
+[tornado.queues]
+tornado.queues.LifoQueue: class(tornado.queues.Queue)
+tornado.queues.PriorityQueue: class(tornado.queues.Queue)
+tornado.queues.Queue: class(typing.Generic)
+tornado.queues.Queue.__aiter__: method(self)
+tornado.queues.Queue.__init__: method(self, maxsize=0)
+tornado.queues.Queue.__repr__: method(self)
+tornado.queues.Queue.__str__: method(self)
+tornado.queues.Queue.empty: method(self)
+tornado.queues.Queue.full: method(self)
+tornado.queues.Queue.get: method(self, timeout=None)
+tornado.queues.Queue.get_nowait: method(self)
+tornado.queues.Queue.join: method(self, timeout=None)
+tornado.queues.Queue.maxsize: property
+tornado.queues.Queue.put: method(self, item, timeout=None)
+tornado.queues.Queue.put_nowait: method(self, item)
+tornado.queues.Queue.qsize: method(self)
+tornado.queues.Queue.task_done: method(self)
+tornado.queues.QueueEmpty: class(builtins.Exception)
+tornado.queues.QueueFull: class(builtins.Exception)
+
+[tornado.routing]
+tornado.routing.AnyMatches: class(tornado.routing.Matcher)
+tornado.routing.AnyMatches.match: method(self, request)
+tornado.routing.DefaultHostMatches: class(tornado.routing.Matcher)
+tornado.routing.DefaultHostMatches.__init__: method(self, application, host_pattern)
+tornado.routing.DefaultHostMatches.application: attribute
+tornado.routing.DefaultHostMatches.host_pattern: attribute
+tornado.routing.DefaultHostMatches.match: method(self, request)
+tornado.routing.HostMatches: class(tornado.routing.Matcher)
+tornado.routing.HostMatches.__init__: method(self, host_pattern)
+tornado.routing.HostMatches.host_pattern: attribute
+tornado.routing.HostMatches.match: method(self, request)
+tornado.routing.Matcher: class()
+tornado.routing.Matcher.match: method(self, request)
+tornado.routing.Matcher.reverse: method(self, *args)
+tornado.routing.PathMatches: class(tornado.routing.Matcher)
+tornado.routing.PathMatches.__init__: method(self, path_pattern)
+tornado.routing.PathMatches.match: method(self, request)
+tornado.routing.PathMatches.regex: attribute
+tornado.routing.PathMatches.reverse: method(self, *args)
+tornado.routing.ReversibleRouter: class(tornado.routing.Router)
+tornado.routing.ReversibleRouter.reverse_url: method(self, name, *args)
+tornado.routing.ReversibleRuleRouter: class(tornado.routing.ReversibleRouter, tornado.routing.RuleRouter)
+tornado.routing.ReversibleRuleRouter.__init__: method(self, rules=None)
+tornado.routing.ReversibleRuleRouter.named_rules: attribute
+tornado.routing.ReversibleRuleRouter.process_rule: method(self, rule)
+tornado.routing.ReversibleRuleRouter.reverse_url: method(self, name, *args)
+tornado.routing.Router: class(tornado.httputil.HTTPServerConnectionDelegate)
+tornado.routing.Router.find_handler: method(self, request, **kwargs)
+tornado.routing.Router.start_request: method(self, server_conn, request_conn)
+tornado.routing.Rule: class()
+tornado.routing.Rule.__init__: method(self, matcher, target, target_kwargs=None, name=None)
+tornado.routing.Rule.__repr__: method(self)
+tornado.routing.Rule.matcher: attribute
+tornado.routing.Rule.name: attribute
+tornado.routing.Rule.reverse: method(self, *args)
+tornado.routing.Rule.target: attribute
+tornado.routing.Rule.target_kwargs: attribute
+tornado.routing.RuleRouter: class(tornado.routing.Router)
+tornado.routing.RuleRouter.__init__: method(self, rules=None)
+tornado.routing.RuleRouter.add_rules: method(self, rules)
+tornado.routing.RuleRouter.find_handler: method(self, request, **kwargs)
+tornado.routing.RuleRouter.get_target_delegate: method(self, target, request, **target_params)
+tornado.routing.RuleRouter.process_rule: method(self, rule)
+tornado.routing.RuleRouter.rules: attribute
+tornado.routing.URLSpec: class(tornado.routing.Rule)
+tornado.routing.URLSpec.__init__: method(self, pattern, handler, kwargs=None, name=None)
+tornado.routing.URLSpec.__repr__: method(self)
+tornado.routing.URLSpec.handler_class: attribute
+tornado.routing.URLSpec.kwargs: attribute
+tornado.routing.URLSpec.regex: attribute
+
+[tornado.simple_httpclient]
+tornado.simple_httpclient.HTTPStreamClosedError: class(tornado.httpclient.HTTPClientError)
+tornado.simple_httpclient.HTTPStreamClosedError.__init__: method(self, message)
+tornado.simple_httpclient.HTTPStreamClosedError.__str__: method(self)
+tornado.simple_httpclient.HTTPTimeoutError: class(tornado.httpclient.HTTPClientError)
+tornado.simple_httpclient.HTTPTimeoutError.__init__: method(self, message)
+tornado.simple_httpclient.HTTPTimeoutError.__str__: method(self)
+tornado.simple_httpclient.SimpleAsyncHTTPClient: class(tornado.httpclient.AsyncHTTPClient)
+tornado.simple_httpclient.SimpleAsyncHTTPClient.active: attribute
+tornado.simple_httpclient.SimpleAsyncHTTPClient.close: method(self)
+tornado.simple_httpclient.SimpleAsyncHTTPClient.fetch_impl: method(self, request, callback)
+tornado.simple_httpclient.SimpleAsyncHTTPClient.initialize: method(self, max_clients=10, hostname_mapping=None, max_buffer_size=104857600, resolver=None, defaults=None, max_header_size=None, max_body_size=None)
+tornado.simple_httpclient.SimpleAsyncHTTPClient.max_body_size: attribute
+tornado.simple_httpclient.SimpleAsyncHTTPClient.max_buffer_size: attribute
+tornado.simple_httpclient.SimpleAsyncHTTPClient.max_clients: attribute
+tornado.simple_httpclient.SimpleAsyncHTTPClient.max_header_size: attribute
+tornado.simple_httpclient.SimpleAsyncHTTPClient.own_resolver: attribute
+tornado.simple_httpclient.SimpleAsyncHTTPClient.queue: attribute
+tornado.simple_httpclient.SimpleAsyncHTTPClient.resolver: attribute
+tornado.simple_httpclient.SimpleAsyncHTTPClient.tcp_client: attribute
+tornado.simple_httpclient.SimpleAsyncHTTPClient.waiting: attribute
+
+[tornado.tcpclient]
+tornado.tcpclient.TCPClient: class()
+tornado.tcpclient.TCPClient.__init__: method(self, resolver=None)
+tornado.tcpclient.TCPClient.close: method(self)
+tornado.tcpclient.TCPClient.connect: method(self, host, port, af=<AddressFamily.AF_UNSPEC: 0>, ssl_options=None, max_buffer_size=None, source_ip=None, source_port=None, timeout=None)
+tornado.tcpclient.TCPClient.resolver: attribute
+
+[tornado.tcpserver]
+tornado.tcpserver.TCPServer: class()
+tornado.tcpserver.TCPServer.__init__: method(self, ssl_options=None, max_buffer_size=None, read_chunk_size=None)
+tornado.tcpserver.TCPServer.add_socket: method(self, socket)
+tornado.tcpserver.TCPServer.add_sockets: method(self, sockets)
+tornado.tcpserver.TCPServer.bind: method(self, port, address=None, family=<AddressFamily.AF_UNSPEC: 0>, backlog=128, flags=None, reuse_port=False)
+tornado.tcpserver.TCPServer.handle_stream: method(self, stream, address)
+tornado.tcpserver.TCPServer.listen: method(self, port, address=None, family=<AddressFamily.AF_UNSPEC: 0>, backlog=128, flags=None, reuse_port=False)
+tornado.tcpserver.TCPServer.max_buffer_size: attribute
+tornado.tcpserver.TCPServer.read_chunk_size: attribute
+tornado.tcpserver.TCPServer.ssl_options: attribute
+tornado.tcpserver.TCPServer.start: method(self, num_processes=1, max_restarts=None)
+tornado.tcpserver.TCPServer.stop: method(self)
+
+[tornado.template]
+tornado.template.BaseLoader: class()
+tornado.template.BaseLoader.__init__: method(self, autoescape='xhtml_escape', namespace=None, whitespace=None)
+tornado.template.BaseLoader.autoescape: attribute
+tornado.template.BaseLoader.load: method(self, name, parent_path=None)
+tornado.template.BaseLoader.lock: attribute
+tornado.template.BaseLoader.namespace: attribute
+tornado.template.BaseLoader.reset: method(self)
+tornado.template.BaseLoader.resolve_path: method(self, name, parent_path=None)
+tornado.template.BaseLoader.templates: attribute
+tornado.template.BaseLoader.whitespace: attribute
+tornado.template.DictLoader: class(tornado.template.BaseLoader)
+tornado.template.DictLoader.__init__: method(self, dict, **kwargs)
+tornado.template.DictLoader.dict: attribute
+tornado.template.DictLoader.resolve_path: method(self, name, parent_path=None)
+tornado.template.Loader: class(tornado.template.BaseLoader)
+tornado.template.Loader.__init__: method(self, root_directory, **kwargs)
+tornado.template.Loader.resolve_path: method(self, name, parent_path=None)
+tornado.template.Loader.root: attribute
+tornado.template.ParseError: class(builtins.Exception)
+tornado.template.ParseError.__init__: method(self, message, filename=None, lineno=0)
+tornado.template.ParseError.__str__: method(self)
+tornado.template.ParseError.filename: attribute
+tornado.template.ParseError.lineno: attribute
+tornado.template.ParseError.message: attribute
+tornado.template.Template: class()
+tornado.template.Template.__init__: method(self, template_string, name='<string>', loader=None, compress_whitespace=..., autoescape=..., whitespace=None)
+tornado.template.Template.autoescape: attribute
+tornado.template.Template.code: attribute
+tornado.template.Template.compiled: attribute
+tornado.template.Template.file: attribute
+tornado.template.Template.generate: method(self, **kwargs)
+tornado.template.Template.loader: attribute
+tornado.template.Template.name: attribute
+tornado.template.Template.namespace: attribute
+tornado.template.filter_whitespace: function(mode, text)
+
+[tornado.testing]
+tornado.testing.AsyncHTTPSTestCase: class(tornado.testing.AsyncHTTPTestCase)
+tornado.testing.AsyncHTTPSTestCase.default_ssl_options: staticmethod()
+tornado.testing.AsyncHTTPSTestCase.get_http_client: method(self)
+tornado.testing.AsyncHTTPSTestCase.get_httpserver_options: method(self)
+tornado.testing.AsyncHTTPSTestCase.get_protocol: method(self)
+tornado.testing.AsyncHTTPSTestCase.get_ssl_options: method(self)
+tornado.testing.AsyncHTTPTestCase: class(tornado.testing.AsyncTestCase)
+tornado.testing.AsyncHTTPTestCase.fetch: method(self, path, raise_error=False, **kwargs)
+tornado.testing.AsyncHTTPTestCase.get_app: method(self)
+tornado.testing.AsyncHTTPTestCase.get_http_client: method(self)
+tornado.testing.AsyncHTTPTestCase.get_http_port: method(self)
+tornado.testing.AsyncHTTPTestCase.get_http_server: method(self)
+tornado.testing.AsyncHTTPTestCase.get_httpserver_options: method(self)
+tornado.testing.AsyncHTTPTestCase.get_protocol: method(self)
+tornado.testing.AsyncHTTPTestCase.get_url: method(self, path)
+tornado.testing.AsyncHTTPTestCase.http_client: attribute
+tornado.testing.AsyncHTTPTestCase.http_server: attribute
+tornado.testing.AsyncHTTPTestCase.setUp: method(self)
+tornado.testing.AsyncHTTPTestCase.tearDown: method(self)
+tornado.testing.AsyncTestCase: class(unittest.case.TestCase)
+tornado.testing.AsyncTestCase.__init__: method(self, methodName='runTest')
+tornado.testing.AsyncTestCase.get_new_ioloop: method(self)
+tornado.testing.AsyncTestCase.io_loop: attribute
+tornado.testing.AsyncTestCase.run: method(self, result=None)
+tornado.testing.AsyncTestCase.setUp: method(self)
+tornado.testing.AsyncTestCase.stop: method(self, _arg=None, **kwargs)
+tornado.testing.AsyncTestCase.tearDown: method(self)
+tornado.testing.AsyncTestCase.wait: method(self, condition=None, timeout=None)
+tornado.testing.ExpectLog: class(logging.Filter)
+tornado.testing.ExpectLog.__enter__: method(self)
+tornado.testing.ExpectLog.__exit__: method(self, typ, value, tb)
+tornado.testing.ExpectLog.__init__: method(self, logger, regex, required=True, level=None)
+tornado.testing.ExpectLog.deprecated_level_matched: attribute
+tornado.testing.ExpectLog.filter: method(self, record)
+tornado.testing.ExpectLog.level: attribute
+tornado.testing.ExpectLog.logged_stack: attribute
+tornado.testing.ExpectLog.logger: attribute
+tornado.testing.ExpectLog.matched: attribute
+tornado.testing.ExpectLog.orig_level: attribute
+tornado.testing.ExpectLog.regex: attribute
+tornado.testing.ExpectLog.required: attribute
+tornado.testing.bind_unused_port: function(reuse_port=False, address='127.0.0.1')
+tornado.testing.gen_test: function(func=None, timeout=None)
+tornado.testing.get_async_test_timeout: function()
+tornado.testing.main: function(**kwargs)
+tornado.testing.setup_with_context_manager: function(testcase, cm)
+
+[tornado.util]
+tornado.util.ArgReplacer: class()
+tornado.util.ArgReplacer.__init__: method(self, func, name)
+tornado.util.ArgReplacer.arg_pos: attribute
+tornado.util.ArgReplacer.get_old_value: method(self, args, kwargs, default=None)
+tornado.util.ArgReplacer.name: attribute
+tornado.util.ArgReplacer.replace: method(self, new_value, args, kwargs)
+tornado.util.Configurable: class()
+tornado.util.Configurable.__new__: staticmethod(cls, *args, **kwargs)
+tornado.util.Configurable.configurable_base: classmethod(cls)
+tornado.util.Configurable.configurable_default: classmethod(cls)
+tornado.util.Configurable.configure: classmethod(cls, impl, **kwargs)
+tornado.util.Configurable.configured_class: classmethod(cls)
+tornado.util.Configurable.initialize: method(self)
+tornado.util.GzipDecompressor: class()
+tornado.util.GzipDecompressor.__init__: method(self)
+tornado.util.GzipDecompressor.decompress: method(self, value, max_length=0)
+tornado.util.GzipDecompressor.flush: method(self)
+tornado.util.GzipDecompressor.unconsumed_tail: property
+tornado.util.ObjectDict: class(builtins.dict)
+tornado.util.ObjectDict.__getattr__: method(self, name)
+tornado.util.ObjectDict.__setattr__: method(self, name, value)
+tornado.util.TimeoutError: alias of builtins.TimeoutError
+tornado.util.basestring_type: alias of builtins.str
+tornado.util.bytes_type: alias of builtins.bytes
+tornado.util.doctests: function()
+tornado.util.errno_from_exception: function(e)
+tornado.util.exec_in: function(code, glob, loc=None)
+tornado.util.import_object: function(name)
+tornado.util.raise_exc_info: function(exc_info)
+tornado.util.re_unescape: function(s)
+tornado.util.timedelta_to_seconds: function(td)
+tornado.util.unicode_type: alias of builtins.str
+
+[tornado.web]
+tornado.web.Application: class(tornado.routing.ReversibleRouter)
+tornado.web.Application.__call__: method(self, request)
+tornado.web.Application.__init__: method(self, handlers=None, default_host=None, transforms=None, **settings)
+tornado.web.Application.add_handlers: method(self, host_pattern, host_handlers)
+tornado.web.Application.add_transform: method(self, transform_class)
+tornado.web.Application.default_host: attribute
+tornado.web.Application.default_router: attribute
+tornado.web.Application.find_handler: method(self, request, **kwargs)
+tornado.web.Application.get_handler_delegate: method(self, request, target_class, target_kwargs=None, path_args=None, path_kwargs=None)
+tornado.web.Application.listen: method(self, port, address=None, *, family=<AddressFamily.AF_UNSPEC: 0>, backlog=128, flags=None, reuse_port=False, **kwargs)
+tornado.web.Application.log_request: method(self, handler)
+tornado.web.Application.reverse_url: method(self, name, *args)
+tornado.web.Application.settings: attribute
+tornado.web.Application.transforms: attribute
+tornado.web.Application.ui_methods: attribute
+tornado.web.Application.ui_modules: attribute
+tornado.web.Application.wildcard_router: attribute
+tornado.web.DEFAULT_SIGNED_VALUE_MIN_VERSION: data
+tornado.web.DEFAULT_SIGNED_VALUE_VERSION: data
+tornado.web.ErrorHandler: class(tornado.web.RequestHandler)
+tornado.web.ErrorHandler.check_trusted_origin: method(self, origin)
+tornado.web.ErrorHandler.check_xsrf_cookie: method(self)
+tornado.web.ErrorHandler.initialize: method(self, status_code)
+tornado.web.ErrorHandler.prepare: method(self)
+tornado.web.FallbackHandler: class(tornado.web.RequestHandler)
+tornado.web.FallbackHandler.fallback: attribute
+tornado.web.FallbackHandler.initialize: method(self, fallback)
+tornado.web.FallbackHandler.prepare: method(self)
+tornado.web.Finish: class(builtins.Exception)
+tornado.web.GZipContentEncoding: class(tornado.web.OutputTransform)
+tornado.web.GZipContentEncoding.CONTENT_TYPES: attribute
+tornado.web.GZipContentEncoding.GZIP_LEVEL: attribute
+tornado.web.GZipContentEncoding.MIN_LENGTH: attribute
+tornado.web.GZipContentEncoding.__init__: method(self, request)
+tornado.web.GZipContentEncoding.transform_chunk: method(self, chunk, finishing)
+tornado.web.GZipContentEncoding.transform_first_chunk: method(self, status_code, headers, chunk, finishing)
+tornado.web.HTTPError: class(builtins.Exception)
+tornado.web.HTTPError.__init__: method(self, status_code=500, log_message=None, *args, **kwargs)
+tornado.web.HTTPError.__str__: method(self)
+tornado.web.HTTPError.args: attribute
+tornado.web.HTTPError.get_message: method(self)
+tornado.web.HTTPError.log_message: property
+tornado.web.HTTPError.reason: attribute
+tornado.web.HTTPError.status_code: attribute
+tornado.web.MAX_SUPPORTED_SIGNED_VALUE_VERSION: data
+tornado.web.MIN_SUPPORTED_SIGNED_VALUE_VERSION: data
+tornado.web.MissingArgumentError: class(tornado.web.HTTPError)
+tornado.web.MissingArgumentError.__init__: method(self, arg_name)
+tornado.web.MissingArgumentError.arg_name: attribute
+tornado.web.OutputTransform: class()
+tornado.web.OutputTransform.__init__: method(self, request)
+tornado.web.OutputTransform.transform_chunk: method(self, chunk, finishing)
+tornado.web.OutputTransform.transform_first_chunk: method(self, status_code, headers, chunk, finishing)
+tornado.web.RedirectHandler: class(tornado.web.RequestHandler)
+tornado.web.RedirectHandler.get: method(self, *args, **kwargs)
+tornado.web.RedirectHandler.initialize: method(self, url, permanent=True)
+tornado.web.RequestHandler: class()
+tornado.web.RequestHandler.SUPPORTED_METHODS: attribute
+tornado.web.RequestHandler.__init__: method(self, application, request, **kwargs)
+tornado.web.RequestHandler.add_header: method(self, name, value)
+tornado.web.RequestHandler.application: attribute
+tornado.web.RequestHandler.check_etag_header: method(self)
+tornado.web.RequestHandler.check_trusted_origin: method(self, origin)
+tornado.web.RequestHandler.check_xsrf_cookie: method(self)
+tornado.web.RequestHandler.clear: method(self)
+tornado.web.RequestHandler.clear_all_cookies: method(self, **kwargs)
+tornado.web.RequestHandler.clear_cookie: method(self, name, **kwargs)
+tornado.web.RequestHandler.clear_header: method(self, name)
+tornado.web.RequestHandler.compute_etag: method(self)
+tornado.web.RequestHandler.cookies: property
+tornado.web.RequestHandler.create_signed_value: method(self, name, value, version=None)
+tornado.web.RequestHandler.create_template_loader: method(self, template_path)
+tornado.web.RequestHandler.current_user: property
+tornado.web.RequestHandler.data_received: method(self, chunk)
+tornado.web.RequestHandler.decode_argument: method(self, value, name=None)
+tornado.web.RequestHandler.delete: method(self, *args, **kwargs)
+tornado.web.RequestHandler.detach: method(self)
+tornado.web.RequestHandler.finish: method(self, chunk=None)
+tornado.web.RequestHandler.flush: method(self, include_footers=False)
+tornado.web.RequestHandler.get: method(self, *args, **kwargs)
+tornado.web.RequestHandler.get_argument: method(self, name, default=..., strip=True)
+tornado.web.RequestHandler.get_arguments: method(self, name, strip=True)
+tornado.web.RequestHandler.get_body_argument: method(self, name, default=..., strip=True)
+tornado.web.RequestHandler.get_body_arguments: method(self, name, strip=True)
+tornado.web.RequestHandler.get_browser_locale: method(self, default='en_US')
+tornado.web.RequestHandler.get_cookie: method(self, name, default=None)
+tornado.web.RequestHandler.get_current_user: method(self)
+tornado.web.RequestHandler.get_login_url: method(self)
+tornado.web.RequestHandler.get_query_argument: method(self, name, default=..., strip=True)
+tornado.web.RequestHandler.get_query_arguments: method(self, name, strip=True)
+tornado.web.RequestHandler.get_secure_cookie: method(self, name, value=None, max_age_days=31, min_version=None)
+tornado.web.RequestHandler.get_secure_cookie_key_version: method(self, name, value=None)
+tornado.web.RequestHandler.get_signed_cookie: method(self, name, value=None, max_age_days=31, min_version=None)
+tornado.web.RequestHandler.get_signed_cookie_key_version: method(self, name, value=None)
+tornado.web.RequestHandler.get_status: method(self)
+tornado.web.RequestHandler.get_template_namespace: method(self)
+tornado.web.RequestHandler.get_template_path: method(self)
+tornado.web.RequestHandler.get_user_locale: method(self)
+tornado.web.RequestHandler.head: method(self, *args, **kwargs)
+tornado.web.RequestHandler.initialize: method(self)
+tornado.web.RequestHandler.locale: property
+tornado.web.RequestHandler.log_exception: method(self, typ, value, tb)
+tornado.web.RequestHandler.on_connection_close: method(self)
+tornado.web.RequestHandler.on_finish: method(self)
+tornado.web.RequestHandler.options: method(self, *args, **kwargs)
+tornado.web.RequestHandler.patch: method(self, *args, **kwargs)
+tornado.web.RequestHandler.path_args: attribute
+tornado.web.RequestHandler.path_kwargs: attribute
+tornado.web.RequestHandler.post: method(self, *args, **kwargs)
+tornado.web.RequestHandler.prepare: method(self)
+tornado.web.RequestHandler.put: method(self, *args, **kwargs)
+tornado.web.RequestHandler.redirect: method(self, url, permanent=False, status=None)
+tornado.web.RequestHandler.render: method(self, template_name, **kwargs)
+tornado.web.RequestHandler.render_embed_css: method(self, css_embed)
+tornado.web.RequestHandler.render_embed_js: method(self, js_embed)
+tornado.web.RequestHandler.render_linked_css: method(self, css_files)
+tornado.web.RequestHandler.render_linked_js: method(self, js_files)
+tornado.web.RequestHandler.render_string: method(self, template_name, **kwargs)
+tornado.web.RequestHandler.request: attribute
+tornado.web.RequestHandler.require_setting: method(self, name, feature='this feature')
+tornado.web.RequestHandler.reverse_url: method(self, name, *args)
+tornado.web.RequestHandler.send_error: method(self, status_code=500, **kwargs)
+tornado.web.RequestHandler.set_cookie: method(self, name, value, domain=None, expires=None, path='/', expires_days=None, *, max_age=None, httponly=False, secure=False, samesite=None, **kwargs)
+tornado.web.RequestHandler.set_default_headers: method(self)
+tornado.web.RequestHandler.set_etag_header: method(self)
+tornado.web.RequestHandler.set_header: method(self, name, value)
+tornado.web.RequestHandler.set_secure_cookie: method(self, name, value, expires_days=30, version=None, **kwargs)
+tornado.web.RequestHandler.set_signed_cookie: method(self, name, value, expires_days=30, version=None, **kwargs)
+tornado.web.RequestHandler.set_status: method(self, status_code, reason=None)
+tornado.web.RequestHandler.settings: property
+tornado.web.RequestHandler.static_url: method(self, path, include_host=None, **kwargs)
+tornado.web.RequestHandler.ui: attribute
+tornado.web.RequestHandler.write: method(self, chunk)
+tornado.web.RequestHandler.write_error: method(self, status_code, **kwargs)
+tornado.web.RequestHandler.xsrf_form_html: method(self)
+tornado.web.RequestHandler.xsrf_token: property
+tornado.web.StaticFileHandler: class(tornado.web.RequestHandler)
+tornado.web.StaticFileHandler.CACHE_MAX_AGE: attribute
+tornado.web.StaticFileHandler.MAX_CACHED_VERSIONS: attribute
+tornado.web.StaticFileHandler.MAX_VERSION_CONTENT_SIZE: attribute
+tornado.web.StaticFileHandler.absolute_path: attribute
+tornado.web.StaticFileHandler.allowed_symlink_directory: attribute
+tornado.web.StaticFileHandler.compute_etag: method(self)
+tornado.web.StaticFileHandler.default_filename: attribute
+tornado.web.StaticFileHandler.get: method(self, path, include_body=True)
+tornado.web.StaticFileHandler.get_absolute_path: classmethod(cls, root, path)
+tornado.web.StaticFileHandler.get_cache_time: method(self, path, modified, mime_type)
+tornado.web.StaticFileHandler.get_content: classmethod(cls, abspath, start=None, end=None)
+tornado.web.StaticFileHandler.get_content_size: method(self)
+tornado.web.StaticFileHandler.get_content_type: method(self)
+tornado.web.StaticFileHandler.get_content_version: classmethod(cls, abspath)
+tornado.web.StaticFileHandler.get_modified_time: method(self)
+tornado.web.StaticFileHandler.get_version: classmethod(cls, settings, path)
+tornado.web.StaticFileHandler.head: method(self, path)
+tornado.web.StaticFileHandler.initialize: method(self, path, default_filename=None, allowed_symlink_directory=None)
+tornado.web.StaticFileHandler.make_static_url: classmethod(cls, settings, path, include_version=True)
+tornado.web.StaticFileHandler.modified: attribute
+tornado.web.StaticFileHandler.parse_url_path: method(self, url_path)
+tornado.web.StaticFileHandler.path: attribute
+tornado.web.StaticFileHandler.reset: classmethod(cls)
+tornado.web.StaticFileHandler.root: attribute
+tornado.web.StaticFileHandler.set_extra_headers: method(self, path)
+tornado.web.StaticFileHandler.set_headers: method(self)
+tornado.web.StaticFileHandler.should_return_304: method(self)
+tornado.web.StaticFileHandler.validate_absolute_path: method(self, root, absolute_path)
+tornado.web.TemplateModule: class(tornado.web.UIModule)
+tornado.web.TemplateModule.__init__: method(self, handler)
+tornado.web.TemplateModule.css_files: method(self)
+tornado.web.TemplateModule.embedded_css: method(self)
+tornado.web.TemplateModule.embedded_javascript: method(self)
+tornado.web.TemplateModule.html_body: method(self)
+tornado.web.TemplateModule.html_head: method(self)
+tornado.web.TemplateModule.javascript_files: method(self)
+tornado.web.TemplateModule.render: method(self, path, **kwargs)
+tornado.web.UIModule: class()
+tornado.web.UIModule.__init__: method(self, handler)
+tornado.web.UIModule.css_files: method(self)
+tornado.web.UIModule.current_user: property
+tornado.web.UIModule.embedded_css: method(self)
+tornado.web.UIModule.embedded_javascript: method(self)
+tornado.web.UIModule.handler: attribute
+tornado.web.UIModule.html_body: method(self)
+tornado.web.UIModule.html_head: method(self)
+tornado.web.UIModule.javascript_files: method(self)
+tornado.web.UIModule.locale: attribute
+tornado.web.UIModule.render: method(self, *args, **kwargs)
+tornado.web.UIModule.render_string: method(self, path, **kwargs)
+tornado.web.UIModule.request: attribute
+tornado.web.UIModule.ui: attribute
+tornado.web.URLSpec: import of tornado.routing.URLSpec
+tornado.web.addslash: function(method)
+tornado.web.authenticated: function(method)
+tornado.web.create_signed_value: function(secret, name, value, version=None, clock=None, key_version=None)
+tornado.web.decode_signed_value: function(secret, name, value, max_age_days=31, clock=None, min_version=None)
+tornado.web.get_signature_key_version: function(value)
+tornado.web.is_absolute: function(path)
+tornado.web.removeslash: function(method)
+tornado.web.stream_request_body: function(cls)
+tornado.web.url: alias of tornado.routing.URLSpec
+
+[tornado.websocket]
+tornado.websocket.WebSocketClientConnection: class(tornado.simple_httpclient._HTTPConnection)
+tornado.websocket.WebSocketClientConnection.__del__: method(self)
+tornado.websocket.WebSocketClientConnection.__init__: method(self, request, on_message_callback=None, compression_options=None, ping_interval=None, ping_timeout=None, max_message_size=10485760, subprotocols=None, resolver=None)
+tornado.websocket.WebSocketClientConnection.chunks: attribute
+tornado.websocket.WebSocketClientConnection.client: attribute
+tornado.websocket.WebSocketClientConnection.close: method(self, code=None, reason=None)
+tornado.websocket.WebSocketClientConnection.close_code: attribute
+tornado.websocket.WebSocketClientConnection.close_reason: attribute
+tornado.websocket.WebSocketClientConnection.code: attribute
+tornado.websocket.WebSocketClientConnection.connect_future: attribute
+tornado.websocket.WebSocketClientConnection.connection: attribute
+tornado.websocket.WebSocketClientConnection.data_received: method(self, chunk)
+tornado.websocket.WebSocketClientConnection.final_callback: attribute
+tornado.websocket.WebSocketClientConnection.finish: method(self)
+tornado.websocket.WebSocketClientConnection.get_websocket_protocol: method(self)
+tornado.websocket.WebSocketClientConnection.headers: attribute
+tornado.websocket.WebSocketClientConnection.headers_received: method(self, start_line, headers)
+tornado.websocket.WebSocketClientConnection.io_loop: attribute
+tornado.websocket.WebSocketClientConnection.key: attribute
+tornado.websocket.WebSocketClientConnection.log_exception: method(self, typ, value, tb)
+tornado.websocket.WebSocketClientConnection.max_body_size: attribute
+tornado.websocket.WebSocketClientConnection.max_buffer_size: attribute
+tornado.websocket.WebSocketClientConnection.max_header_size: attribute
+tornado.websocket.WebSocketClientConnection.on_connection_close: method(self)
+tornado.websocket.WebSocketClientConnection.on_message: method(self, message)
+tornado.websocket.WebSocketClientConnection.on_ping: method(self, data)
+tornado.websocket.WebSocketClientConnection.on_pong: method(self, data)
+tornado.websocket.WebSocketClientConnection.on_ws_connection_close: method(self, close_code=None, close_reason=None)
+tornado.websocket.WebSocketClientConnection.params: attribute
+tornado.websocket.WebSocketClientConnection.parsed: attribute
+tornado.websocket.WebSocketClientConnection.parsed_hostname: attribute
+tornado.websocket.WebSocketClientConnection.ping: method(self, data=b'')
+tornado.websocket.WebSocketClientConnection.protocol: attribute
+tornado.websocket.WebSocketClientConnection.read_message: method(self, callback=None)
+tornado.websocket.WebSocketClientConnection.read_queue: attribute
+tornado.websocket.WebSocketClientConnection.reason: attribute
+tornado.websocket.WebSocketClientConnection.release_callback: attribute
+tornado.websocket.WebSocketClientConnection.request: attribute
+tornado.websocket.WebSocketClientConnection.run: method(self)
+tornado.websocket.WebSocketClientConnection.selected_subprotocol: property
+tornado.websocket.WebSocketClientConnection.start_time: attribute
+tornado.websocket.WebSocketClientConnection.start_wall_time: attribute
+tornado.websocket.WebSocketClientConnection.stream: attribute
+tornado.websocket.WebSocketClientConnection.tcp_client: attribute
+tornado.websocket.WebSocketClientConnection.write_message: method(self, message, binary=False)
+tornado.websocket.WebSocketClosedError: class(tornado.websocket.WebSocketError)
+tornado.websocket.WebSocketError: class(builtins.Exception)
+tornado.websocket.WebSocketHandler: class(tornado.web.RequestHandler)
+tornado.websocket.WebSocketHandler.__init__: method(self, application, request, **kwargs)
+tornado.websocket.WebSocketHandler.check_origin: method(self, origin)
+tornado.websocket.WebSocketHandler.close: method(self, code=None, reason=None)
+tornado.websocket.WebSocketHandler.close_code: attribute
+tornado.websocket.WebSocketHandler.close_reason: attribute
+tornado.websocket.WebSocketHandler.get: method(self, *args, **kwargs)
+tornado.websocket.WebSocketHandler.get_compression_options: method(self)
+tornado.websocket.WebSocketHandler.get_websocket_protocol: method(self)
+tornado.websocket.WebSocketHandler.max_message_size: property
+tornado.websocket.WebSocketHandler.on_close: method(self)
+tornado.websocket.WebSocketHandler.on_connection_close: method(self)
+tornado.websocket.WebSocketHandler.on_message: method(self, message)
+tornado.websocket.WebSocketHandler.on_ping: method(self, data)
+tornado.websocket.WebSocketHandler.on_pong: method(self, data)
+tornado.websocket.WebSocketHandler.on_ws_connection_close: method(self, close_code=None, close_reason=None)
+tornado.websocket.WebSocketHandler.open: method(self, *args, **kwargs)
+tornado.websocket.WebSocketHandler.open_args: attribute
+tornado.websocket.WebSocketHandler.open_kwargs: attribute
+tornado.websocket.WebSocketHandler.ping: method(self, data=b'')
+tornado.websocket.WebSocketHandler.ping_interval: property
+tornado.websocket.WebSocketHandler.ping_timeout: property
+tornado.websocket.WebSocketHandler.select_subprotocol: method(self, subprotocols)
+tornado.websocket.WebSocketHandler.selected_subprotocol: property
+tornado.websocket.WebSocketHandler.set_nodelay: method(self, value)
+tornado.websocket.WebSocketHandler.write_message: method(self, message, binary=False)
+tornado.websocket.WebSocketHandler.ws_connection: attribute
+tornado.websocket.WebSocketProtocol: class(abc.ABC)
+tornado.websocket.WebSocketProtocol.__init__: method(self, handler)
+tornado.websocket.WebSocketProtocol.accept_connection: method(self, handler)
+tornado.websocket.WebSocketProtocol.client_terminated: attribute
+tornado.websocket.WebSocketProtocol.close: method(self, code=None, reason=None)
+tornado.websocket.WebSocketProtocol.handler: attribute
+tornado.websocket.WebSocketProtocol.is_closing: method(self)
+tornado.websocket.WebSocketProtocol.on_connection_close: method(self)
+tornado.websocket.WebSocketProtocol.selected_subprotocol: property
+tornado.websocket.WebSocketProtocol.server_terminated: attribute
+tornado.websocket.WebSocketProtocol.set_nodelay: method(self, x)
+tornado.websocket.WebSocketProtocol.start_pinging: method(self)
+tornado.websocket.WebSocketProtocol.stream: attribute
+tornado.websocket.WebSocketProtocol.write_message: method(self, message, binary=False)
+tornado.websocket.WebSocketProtocol.write_ping: method(self, data)
+tornado.websocket.WebSocketProtocol13: class(tornado.websocket.WebSocketProtocol)
+tornado.websocket.WebSocketProtocol13.FIN: attribute
+tornado.websocket.WebSocketProtocol13.OPCODE_MASK: attribute
+tornado.websocket.WebSocketProtocol13.RSV1: attribute
+tornado.websocket.WebSocketProtocol13.RSV2: attribute
+tornado.websocket.WebSocketProtocol13.RSV3: attribute
+tornado.websocket.WebSocketProtocol13.RSV_MASK: attribute
+tornado.websocket.WebSocketProtocol13.__init__: method(self, handler, mask_outgoing, params)
+tornado.websocket.WebSocketProtocol13.accept_connection: method(self, handler)
+tornado.websocket.WebSocketProtocol13.client_terminated: attribute
+tornado.websocket.WebSocketProtocol13.close: method(self, code=None, reason=None)
+tornado.websocket.WebSocketProtocol13.close_code: attribute
+tornado.websocket.WebSocketProtocol13.close_reason: attribute
+tornado.websocket.WebSocketProtocol13.compute_accept_value: staticmethod(key)
+tornado.websocket.WebSocketProtocol13.is_closing: method(self)
+tornado.websocket.WebSocketProtocol13.mask_outgoing: attribute
+tornado.websocket.WebSocketProtocol13.params: attribute
+tornado.websocket.WebSocketProtocol13.periodic_ping: method(self)
+tornado.websocket.WebSocketProtocol13.ping_interval: property
+tornado.websocket.WebSocketProtocol13.ping_sleep_time: staticmethod(*, last_ping_time, interval, now)
+tornado.websocket.WebSocketProtocol13.ping_timeout: property
+tornado.websocket.WebSocketProtocol13.selected_subprotocol: property
+tornado.websocket.WebSocketProtocol13.server_terminated: attribute
+tornado.websocket.WebSocketProtocol13.set_nodelay: method(self, x)
+tornado.websocket.WebSocketProtocol13.start_pinging: method(self)
+tornado.websocket.WebSocketProtocol13.stream: attribute
+tornado.websocket.WebSocketProtocol13.write_message: method(self, message, binary=False)
+tornado.websocket.WebSocketProtocol13.write_ping: method(self, data)
+tornado.websocket.de_dupe_gen_log: data
+tornado.websocket.websocket_connect: function(url, callback=None, connect_timeout=None, on_message_callback=None, compression_options=None, ping_interval=None, ping_timeout=None, max_message_size=10485760, subprotocols=None, resolver=None)
+
+[tornado.wsgi]
+tornado.wsgi.HTTPRequest: alias of tornado.httputil.HTTPServerRequest
+tornado.wsgi.WSGIContainer: class()
+tornado.wsgi.WSGIContainer.__call__: method(self, request)
+tornado.wsgi.WSGIContainer.__init__: method(self, wsgi_application, executor=None)
+tornado.wsgi.WSGIContainer.environ: method(self, request)
+tornado.wsgi.WSGIContainer.executor: attribute
+tornado.wsgi.WSGIContainer.handle_request: method(self, request)
+tornado.wsgi.WSGIContainer.wsgi_application: attribute
+tornado.wsgi.to_wsgi_str: function(s)
+

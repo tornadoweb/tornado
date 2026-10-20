@@ -43,6 +43,8 @@ from tornado.test.util import (
     AsyncTestCase,
     TestCase,
     abstract_base_test,
+    assert_memory_budget,
+    skipNotCPython,
 )
 from tornado.testing import ExpectLog, gen_test
 from tornado.web import Application, RequestHandler, stream_request_body
@@ -1151,6 +1153,38 @@ class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
     def test_size_limit(self):
         with ExpectLog(gen_log, ".*decompressed body too large", level=logging.INFO):
             self.post_gzip("x" * 101)
+
+
+@skipNotCPython
+class GzipMemoryTest(AsyncHTTPTestCase):
+    MAX_BODY_SIZE = 1024 * 1024
+
+    def get_app(self):
+        return Application([("/", EchoHandler)])
+
+    def get_httpserver_options(self):
+        return dict(decompress_request=True, max_body_size=self.MAX_BODY_SIZE)
+
+    def test_gzip_bomb(self):
+        # A small gzip body that decompresses to far more than max_body_size
+        # must be rejected without decompressing it all into memory. (Peak
+        # memory is about 1.5 times max_body_size as of 2026-10.)
+        body = gzip.compress(b"\0" * (16 * self.MAX_BODY_SIZE))
+        with assert_memory_budget(
+            self.MAX_BODY_SIZE,
+            max_ratio=3,
+            msg="Decompressing a request body is not bounded by max_body_size",
+        ):
+            with ExpectLog(
+                gen_log, ".*decompressed body too large", level=logging.INFO
+            ):
+                response = self.fetch(
+                    "/",
+                    method="POST",
+                    body=body,
+                    headers={"Content-Encoding": "gzip"},
+                )
+        self.assertEqual(response.code, 400)
 
 
 class GzipUnsupportedTest(GzipBaseTest, AsyncHTTPTestCase):
