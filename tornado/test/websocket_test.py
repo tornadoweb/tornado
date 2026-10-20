@@ -771,6 +771,11 @@ class WebSocketOriginTest(WebSocketBaseTestCase):
             xsrf_cookies=True,
         )
 
+    def get_http_client(self):
+        # Some tests here send handshakes with self.fetch, and the websocket
+        # handshake requires HTTP/1; force the use of SimpleAsyncHTTPClient.
+        return SimpleAsyncHTTPClient()
+
     @gen.coroutine
     def connect_with_headers(self, path, headers):
         url = "ws://127.0.0.1:%d%s" % (self.get_http_port(), path)
