@@ -9,7 +9,11 @@ name: Test
 
 on: pull_request
 
-permissions: {}
+permissions:
+  # Read permission is redundant for the public repo, but specifying it
+  # explicitly allows us to run CI on private copies of the repo for
+  # embargoed security fixes.
+  contents: read
 
 jobs:
   # Before starting the full build matrix, run one test configuration
