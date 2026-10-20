@@ -2153,13 +2153,13 @@ class PrefixRoutedStaticFileHandler(StaticFileHandler):
         self.default_filename = None
 
     @classmethod
-    def get_absolute_path(cls, roots, path):  # type: ignore[override]
+    def get_absolute_path(cls, roots, path):
         name, _, rest = path.partition(os.path.sep)
         if name not in roots:
             raise HTTPError(404)
         return super().get_absolute_path(roots[name], rest)
 
-    def validate_absolute_path(self, roots, absolute_path):  # type: ignore[override]
+    def validate_absolute_path(self, roots, absolute_path):
         for root in roots.values():
             if (absolute_path + os.path.sep).startswith(
                 os.path.abspath(root) + os.path.sep
@@ -2246,7 +2246,7 @@ class PerRequestSymlinkDirectoryHandler(MultiRootStaticFileHandler):
     directory below that root (but never because of a symlinked file).
     """
 
-    def validate_absolute_path(self, root, absolute_path):  # type: ignore[override]
+    def validate_absolute_path(self, root, absolute_path):
         for candidate in self.root:
             if (absolute_path + os.path.sep).startswith(candidate):
                 root = candidate
