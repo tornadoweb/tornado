@@ -36,6 +36,12 @@
   place for invariants of parsers and encoders: round-trips, agreement with a simple model, and
   "malformed input raises `HTTPInputError` and nothing else". When one fails, also add the
   failing input as an example-based test so it stays covered.
+* `tornado/test/api_test.py` compares the public API (names and signatures) to the snapshot in
+  `tornado/test/api.txt`. When you change the API on purpose, run
+  `python -m tornado.test.api_test --update` from the repository root (with the `-full`
+  dependencies installed) and commit the updated snapshot. Imports are left out of the snapshot
+  unless they have a `# re-exported` comment. `tox -e docs` checks that everything in the docs
+  is in the snapshot.
 * Tests can also be run with the standard library's `unittest` package CLI. This is useful
   for integration with some editors. However, this mode skips a few checks, notably the
   requirement that tests do not generate any log output without corresponding ExpectLog
