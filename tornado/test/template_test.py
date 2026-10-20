@@ -7,7 +7,10 @@ from tornado.template import DictLoader, Loader, ParseError, Template
 from tornado.util import ObjectDict
 
 
-class TemplateTest(unittest.TestCase):
+from tornado.test.util import TestCase
+
+
+class TemplateTest(TestCase):
     def test_simple(self):
         template = Template("Hello {{ name }}!")
         self.assertEqual(template.generate(name="Ben"), b"Hello Ben!")
@@ -182,7 +185,7 @@ try{% set y = 1/x %}
         self.assertEqual(loader.load("t\u00e9st.html").generate(), b"hello")
 
 
-class StackTraceTest(unittest.TestCase):
+class StackTraceTest(TestCase):
     def test_error_line_number_expression(self):
         loader = DictLoader({"test.html": """one
 two{{1/0}}
@@ -278,7 +281,7 @@ three{%end%}
             self.assertIn("# c.html:1 (via b.html:1, a.html:1)", traceback.format_exc())
 
 
-class ParseErrorDetailTest(unittest.TestCase):
+class ParseErrorDetailTest(TestCase):
     def test_details(self):
         loader = DictLoader({"foo.html": "\n\n{{"})
         with self.assertRaises(ParseError) as cm:
@@ -293,7 +296,7 @@ class ParseErrorDetailTest(unittest.TestCase):
         self.assertEqual("asdf at None:0", str(ParseError("asdf")))
 
 
-class AutoEscapeTest(unittest.TestCase):
+class AutoEscapeTest(TestCase):
     def setUp(self):
         self.templates = {
             "escaped.html": "{% autoescape xhtml_escape %}{{ name }}",
@@ -492,7 +495,7 @@ raw: {% raw name %}""",
         )
 
 
-class TemplateLoaderTest(unittest.TestCase):
+class TemplateLoaderTest(TestCase):
     def setUp(self):
         self.loader = Loader(os.path.join(os.path.dirname(__file__), "templates"))
 

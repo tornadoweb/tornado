@@ -14,10 +14,11 @@ import asyncio
 import unittest
 from datetime import timedelta
 from random import random
+import typing
 
 from tornado import gen, queues
-from tornado.gen import TimeoutError
-from tornado.testing import AsyncTestCase, gen_test
+from tornado.test.util import AsyncTestCase
+from tornado.testing import gen_test
 
 
 class QueueBasicTest(AsyncTestCase):
@@ -319,12 +320,12 @@ class QueueJoinTest(AsyncTestCase):
     queue_class = queues.Queue
 
     def test_task_done_underflow(self):
-        q: queues.Queue = self.queue_class()
+        q: queues.Queue[typing.Any] = self.queue_class()
         self.assertRaises(ValueError, q.task_done)
 
     @gen_test
     def test_task_done(self):
-        q: queues.Queue = self.queue_class()
+        q: queues.Queue[typing.Any] = self.queue_class()
         for i in range(100):
             q.put_nowait(i)
 
@@ -347,7 +348,7 @@ class QueueJoinTest(AsyncTestCase):
     @gen_test
     def test_task_done_delay(self):
         # Verify it is task_done(), not get(), that unblocks join().
-        q: queues.Queue = self.queue_class()
+        q: queues.Queue[typing.Any] = self.queue_class()
         q.put_nowait(0)
         join = asyncio.ensure_future(q.join())
         self.assertFalse(join.done())
@@ -360,13 +361,13 @@ class QueueJoinTest(AsyncTestCase):
 
     @gen_test
     def test_join_empty_queue(self):
-        q: queues.Queue = self.queue_class()
+        q: queues.Queue[typing.Any] = self.queue_class()
         yield q.join()
         yield q.join()
 
     @gen_test
     def test_join_timeout(self):
-        q: queues.Queue = self.queue_class()
+        q: queues.Queue[typing.Any] = self.queue_class()
         q.put(0)
         with self.assertRaises(TimeoutError):
             yield q.join(timeout=timedelta(seconds=0.01))
@@ -377,7 +378,7 @@ class PriorityQueueJoinTest(QueueJoinTest):
 
     @gen_test
     def test_order(self):
-        q = self.queue_class(maxsize=2)
+        q: queues.PriorityQueue[tuple[int, str]] = self.queue_class(maxsize=2)
         q.put_nowait((1, "a"))
         q.put_nowait((0, "b"))
         self.assertTrue(q.full())
@@ -395,7 +396,7 @@ class LifoQueueJoinTest(QueueJoinTest):
 
     @gen_test
     def test_order(self):
-        q = self.queue_class(maxsize=2)
+        q: queues.LifoQueue[int] = self.queue_class(maxsize=2)
         q.put_nowait(1)
         q.put_nowait(0)
         self.assertTrue(q.full())

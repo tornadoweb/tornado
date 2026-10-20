@@ -37,14 +37,16 @@ from tornado.iostream import IOStream
 from tornado.locks import Event
 from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.test.util import abstract_base_test
-from tornado.testing import (
+from tornado.test.util import (
     AsyncHTTPSTestCase,
     AsyncHTTPTestCase,
     AsyncTestCase,
-    ExpectLog,
-    gen_test,
+    TestCase,
+    abstract_base_test,
+    assert_memory_budget,
+    skipNotCPython,
 )
+from tornado.testing import ExpectLog, gen_test
 from tornado.web import Application, RequestHandler, stream_request_body
 
 
@@ -62,7 +64,7 @@ async def read_stream_body(stream):
             chunks.append(chunk)
 
         def finish(self):
-            conn.detach()  # type: ignore
+            conn.detach()
 
     conn = HTTP1Connection(stream, True)
     delegate = Delegate()
@@ -119,7 +121,7 @@ class SSLTest(AsyncHTTPSTestCase):
         # misbehaving.
         with ExpectLog(gen_log, "(SSL Error|uncaught exception)"):
             with ExpectLog(gen_log, "Uncaught exception", required=False):
-                with self.assertRaises((IOError, HTTPError)):  # type: ignore
+                with self.assertRaises((IOError, HTTPError)):
                     self.fetch(
                         self.get_url("/").replace("https:", "http:"),
                         request_timeout=3600,
@@ -130,14 +132,14 @@ class SSLTest(AsyncHTTPSTestCase):
     def test_error_logging(self):
         # No stack traces are logged for SSL errors.
         with ExpectLog(gen_log, "SSL Error") as expect_log:
-            with self.assertRaises((IOError, HTTPError)):  # type: ignore
+            with self.assertRaises((IOError, HTTPError)):
                 self.fetch(
                     self.get_url("/").replace("https:", "http:"), raise_error=True
                 )
         self.assertFalse(expect_log.logged_stack)
 
 
-class BadSSLOptionsTest(unittest.TestCase):
+class BadSSLOptionsTest(TestCase):
     def test_missing_arguments(self):
         application = Application()
         self.assertRaises(
@@ -469,6 +471,19 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
             self.assertEqual("HTTP/1.1", start_line.version)
             self.assertEqual(400, start_line.code)
             self.assertEqual("Bad Request", start_line.reason)
+
+    def test_invalid_host_header_with_huge_port(self):
+        # More digits than int() accepts by default (sys.get_int_max_str_digits).
+        with ExpectLog(
+            gen_log, ".*Malformed HTTP message.*Invalid Host header", level=logging.INFO
+        ):
+            self.stream.write(
+                b"GET / HTTP/1.0\r\nHost: foo:" + b"1" * 5000 + b"\r\n\r\n"
+            )
+            start_line, headers, response = self.io_loop.run_sync(
+                lambda: read_stream_body(self.stream)
+            )
+            self.assertEqual(400, start_line.code)
 
     def test_chunked_request_body(self):
         # Chunked requests are not widely supported and we don't have a way
@@ -1126,9 +1141,63 @@ class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
         )
         self.assertEqual(json_decode(response.body), {"foo": ["bar"]})
 
+    def test_gzip_concatenated(self):
+        response = self.fetch(
+            "/",
+            method="POST",
+            body=gzip.compress(b"foo=") + gzip.compress(b"bar"),
+            headers={"Content-Encoding": "gzip"},
+        )
+        self.assertEqual(json_decode(response.body), {"foo": ["bar"]})
+
+    def test_gzip_invalid(self):
+        body = gzip.compress(b"foo=bar")
+        for invalid in [body + b"\0", body[:-1]]:
+            with self.subTest(invalid=invalid):
+                with ExpectLog(gen_log, ".*invalid gzip data", level=logging.INFO):
+                    response = self.fetch(
+                        "/",
+                        method="POST",
+                        body=invalid,
+                        headers={"Content-Encoding": "gzip"},
+                    )
+                self.assertEqual(response.code, 400)
+
     def test_size_limit(self):
         with ExpectLog(gen_log, ".*decompressed body too large", level=logging.INFO):
             self.post_gzip("x" * 101)
+
+
+@skipNotCPython
+class GzipMemoryTest(AsyncHTTPTestCase):
+    MAX_BODY_SIZE = 1024 * 1024
+
+    def get_app(self):
+        return Application([("/", EchoHandler)])
+
+    def get_httpserver_options(self):
+        return dict(decompress_request=True, max_body_size=self.MAX_BODY_SIZE)
+
+    def test_gzip_bomb(self):
+        # A small gzip body that decompresses to far more than max_body_size
+        # must be rejected without decompressing it all into memory. (Peak
+        # memory is about 1.5 times max_body_size as of 2026-10.)
+        body = gzip.compress(b"\0" * (16 * self.MAX_BODY_SIZE))
+        with assert_memory_budget(
+            self.MAX_BODY_SIZE,
+            max_ratio=3,
+            msg="Decompressing a request body is not bounded by max_body_size",
+        ):
+            with ExpectLog(
+                gen_log, ".*decompressed body too large", level=logging.INFO
+            ):
+                response = self.fetch(
+                    "/",
+                    method="POST",
+                    body=body,
+                    headers={"Content-Encoding": "gzip"},
+                )
+        self.assertEqual(response.code, 400)
 
 
 class GzipUnsupportedTest(GzipBaseTest, AsyncHTTPTestCase):
@@ -1219,9 +1288,10 @@ class StreamingChunkSizeTest(AsyncHTTPTestCase):
             write(self.BODY[:20])
             write(self.BODY[20:])
 
-        chunks = self.fetch_chunk_sizes(body_producer=body_producer)
-        # HTTP chunk boundaries translate to application-visible breaks
-        self.assertEqual([16, 4, 16, 14], chunks)
+        # HTTP chunk boundaries are not preserved: small chunks may be
+        # coalesced, so the assertions in fetch_chunk_sizes are as specific
+        # as we can get.
+        self.fetch_chunk_sizes(body_producer=body_producer)
 
     def test_chunked_compressed(self):
         compressed = self.compress(self.BODY)

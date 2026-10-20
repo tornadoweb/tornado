@@ -32,11 +32,14 @@ from typing import (
     Union,
     cast,
 )
-from urllib.parse import urlparse
 
 import tornado
 from tornado import gen, httpclient, httputil, simple_httpclient
-from tornado.concurrent import Future, future_set_result_unless_cancelled
+from tornado.concurrent import (
+    Future,
+    future_add_done_callback,
+    future_set_result_unless_cancelled,
+)
 from tornado.escape import native_str, to_unicode, utf8
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, StreamClosedError
@@ -94,6 +97,15 @@ class _WebSocketDelegate(Protocol):
 
 
 _default_max_message_size = 10 * 1024 * 1024
+
+# Reads of frames that have already arrived complete without returning
+# control to the IOLoop, so a peer that sends frames faster than we can
+# process them could otherwise monopolize the IOLoop. We yield to the IOLoop
+# after receiving this many bytes, with each frame also counting as
+# _FRAME_YIELD_COST bytes since the per-frame overhead dominates when the
+# frames are small.
+_YIELD_THRESHOLD = 256 * 1024
+_FRAME_YIELD_COST = 1024
 
 # log to "gen_log" but suppress duplicate log messages
 de_dupe_gen_log = functools.lru_cache(gen_log.log)
@@ -249,23 +261,19 @@ class WebSocketHandler(tornado.web.RequestHandler):
             gen_log.debug(log_msg)
             return
 
-        # Handle WebSocket Origin naming convention differences
-        # The difference between version 8 and 13 is that in 8 the
-        # client sends a "Sec-Websocket-Origin" header and in 13 it's
-        # simply "Origin".
-        if "Origin" in self.request.headers:
-            origin = self.request.headers.get("Origin")
-        else:
-            origin = self.request.headers.get("Sec-Websocket-Origin", None)
-
-        # If there was an origin header, check to make sure it matches
-        # according to check_origin. When the origin is None, we assume it
-        # did not come from a browser and that it can be passed on.
-        if origin is not None and not self.check_origin(origin):
+        # Browsers do not apply the same-origin policy to websockets, so
+        # cross-origin protection is always enabled for them, independent
+        # of the cross_origin_protection application setting. This happens
+        # here, after prepare(), instead of with the rest of cross-origin
+        # protection in RequestHandler._execute, because check_origin
+        # overrides may rely on things done in prepare() (such as
+        # authentication).
+        error = self._check_cross_origin(self.check_origin)
+        if error is not None:
             self.set_status(403)
             log_msg = "Cross origin websockets not allowed"
             self.finish(log_msg)
-            gen_log.debug(log_msg)
+            gen_log.debug("%s: %s", log_msg, error)
             return
 
         self.ws_connection = self.get_websocket_protocol()
@@ -273,7 +281,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
             await self.ws_connection.accept_connection(self)
         else:
             self.set_status(426, "Upgrade Required")
-            self.set_header("Sec-WebSocket-Version", "7, 8, 13")
+            self.set_header("Sec-WebSocket-Version", "13")
 
     @property
     def ping_interval(self) -> float | None:
@@ -324,8 +332,9 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         Default is 10MiB.
         """
-        return self.settings.get(
-            "websocket_max_message_size", _default_max_message_size
+        return cast(
+            int,
+            self.settings.get("websocket_max_message_size", _default_max_message_size),
         )
 
     def write_message(
@@ -510,16 +519,23 @@ class WebSocketHandler(tornado.web.RequestHandler):
     def check_origin(self, origin: str) -> bool:
         """Override to enable support for allowing alternate origins.
 
-        The ``origin`` argument is the value of the ``Origin`` HTTP
-        header, the url responsible for initiating this request.  This
-        method is not called for clients that do not send this header;
-        such requests are always allowed (because all browsers that
-        implement WebSockets support this header, and non-browser
-        clients do not have the same cross-site security concerns).
+        The ``origin`` argument is the value of the ``Origin`` HTTP header,
+        the url responsible for initiating this request. This method is
+        only called for requests that appear to be cross-origin: it is not
+        called when the ``Sec-Fetch-Site`` header indicates a same-origin
+        request, when (in the absence of ``Sec-Fetch-Site``) the ``Origin``
+        header matches the ``Host`` header, or for clients that do not send
+        an ``Origin`` header (because all browsers that implement WebSockets
+        support this header, and non-browser clients do not have the same
+        cross-site security concerns).
 
         Should return ``True`` to accept the request or ``False`` to
-        reject it. By default, rejects all requests with an origin on
-        a host other than this one.
+        reject it. By default, it calls `.RequestHandler.check_trusted_origin`,
+        which accepts origins listed in the ``trusted_origins`` application
+        setting.
+
+        This method is called after `~.RequestHandler.prepare`, so it may
+        rely on anything that ``prepare`` does (such as authentication).
 
         This is a security protection against cross site scripting attacks on
         browsers, since WebSockets are allowed to bypass the usual same-origin
@@ -553,15 +569,16 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         .. versionadded:: 4.0
 
+        .. versionchanged:: 6.6
+           This method is no longer called for requests that can be
+           determined to be same-origin (including via the ``Sec-Fetch-Site``
+           header). The default implementation now calls
+           `.RequestHandler.check_trusted_origin` (which uses the
+           ``trusted_origins`` application setting); the comparison of the
+           ``Origin`` and ``Host`` headers is performed before this method
+           is called.
         """
-        parsed_origin = urlparse(origin)
-        origin = parsed_origin.netloc
-        origin = origin.lower()
-
-        host = self.request.headers.get("Host")
-
-        # Check to see that origin matches host directly, including ports
-        return origin == host
+        return self.check_trusted_origin(origin)
 
     def set_nodelay(self, value: bool) -> None:
         """Set the no-delay flag for this stream.
@@ -607,7 +624,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
     def get_websocket_protocol(self) -> Optional["WebSocketProtocol"]:
         websocket_version = self.request.headers.get("Sec-WebSocket-Version")
-        if websocket_version in ("7", "8", "13"):
+        if websocket_version == "13":
             params = _WebSocketParams(
                 ping_interval=self.ping_interval,
                 ping_timeout=self.ping_timeout,
@@ -646,25 +663,34 @@ class WebSocketProtocol(abc.ABC):
         self.server_terminated = False
 
     def _run_callback(
-        self, callback: Callable, *args: Any, **kwargs: Any
+        self, callback: Callable[..., Any], *args: Any, **kwargs: Any
     ) -> "Optional[Future[Any]]":
         """Runs the given callback with exception handling.
 
-        If the callback is a coroutine, returns its Future. On error, aborts the
-        websocket connection and returns None.
+        If the callback is a coroutine, returns a Future that resolves when it
+        completes. On error (including cancellation), logs the exception and
+        aborts the websocket connection. The returned Future never raises.
         """
         try:
             result = callback(*args, **kwargs)
-        except Exception:
+        except (Exception, asyncio.CancelledError):
             self.handler.log_exception(*sys.exc_info())
             self._abort()
             return None
-        else:
-            if result is not None:
-                result = gen.convert_yielded(result)
-                assert self.stream is not None
-                self.stream.io_loop.add_future(result, lambda f: f.result())
-            return result
+        if result is None:
+            return None
+        done_future: Future[None] = Future()
+
+        def on_done(f: Future[Any]) -> None:
+            try:
+                f.result()
+            except (Exception, asyncio.CancelledError):
+                self.handler.log_exception(*sys.exc_info())
+                self._abort()
+            future_set_result_unless_cancelled(done_future, None)
+
+        future_add_done_callback(gen.convert_yielded(result), on_done)
+        return done_future
 
     def on_connection_close(self) -> None:
         self._abort()
@@ -736,12 +762,14 @@ class _PerMessageDeflateCompressor:
     ) -> None:
         if max_wbits is None:
             max_wbits = zlib.MAX_WBITS
-        # There is no symbolic constant for the minimum wbits value.
-        if not (8 <= max_wbits <= zlib.MAX_WBITS):
+        # There is no symbolic constant for the minimum wbits value. RFC
+        # 7692 allows 8, but zlib can't compress with a 256-byte window:
+        # zlib 1.2.9 and later reject it, and earlier versions silently use
+        # 512 bytes, which a peer that asked for 8 may fail to decompress.
+        if not (9 <= max_wbits <= zlib.MAX_WBITS):
             raise ValueError(
-                "Invalid max_wbits value %r; allowed range 8-%d",
-                max_wbits,
-                zlib.MAX_WBITS,
+                "Invalid max_wbits value %r; allowed range 9-%d"
+                % (max_wbits, zlib.MAX_WBITS)
             )
         self._max_wbits = max_wbits
 
@@ -788,9 +816,8 @@ class _PerMessageDeflateDecompressor:
             max_wbits = zlib.MAX_WBITS
         if not (8 <= max_wbits <= zlib.MAX_WBITS):
             raise ValueError(
-                "Invalid max_wbits value %r; allowed range 8-%d",
-                max_wbits,
-                zlib.MAX_WBITS,
+                "Invalid max_wbits value %r; allowed range 8-%d"
+                % (max_wbits, zlib.MAX_WBITS)
             )
         self._max_wbits = max_wbits
         if persistent:
@@ -814,8 +841,11 @@ class _PerMessageDeflateDecompressor:
 class WebSocketProtocol13(WebSocketProtocol):
     """Implementation of the WebSocket protocol from RFC 6455.
 
-    This class supports versions 7 and 8 of the protocol in addition to the
-    final version 13.
+    This class supports protocol version 13.
+
+    .. versionchanged:: 6.6
+       Previously, this class supported versions 7 and 8 of the WebSocket protocol in addition to
+       version 13.
     """
 
     # Bit masks for the first byte of a frame.
@@ -859,9 +889,14 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._wire_bytes_in = 0
         self._wire_bytes_out = 0
         self._received_pong: bool = False
+        # The Future for our most recent pong write, if it has not completed,
+        # and the payload of the most recent ping received while it was
+        # outstanding. See _send_pong.
+        self._pong_future: Future[None] | None = None
+        self._pending_pong: bytes | None = None
         self.close_code: int | None = None
         self.close_reason: str | None = None
-        self._ping_coroutine: asyncio.Task | None = None
+        self._ping_coroutine: asyncio.Task[Any] | None = None
 
     # Use a property for this to satisfy the abc.
     @property
@@ -933,7 +968,17 @@ class WebSocketProtocol13(WebSocketProtocol):
             if ext[0] == "permessage-deflate" and self._compression_options is not None:
                 # TODO: negotiate parameters if compression_options
                 # specifies limits.
-                self._create_compressors("server", ext[1], self._compression_options)
+                try:
+                    self._create_compressors(
+                        "server", ext[1], self._compression_options
+                    )
+                except ValueError:
+                    # Decline offers with parameters we can't accept, as
+                    # RFC 7692 section 5 requires.
+                    gen_log.debug(
+                        "Declining websocket extension %r", ext, exc_info=True
+                    )
+                    continue
                 if (
                     "client_max_window_bits" in ext[1]
                     and ext[1]["client_max_window_bits"] is None
@@ -993,7 +1038,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             if ext[0] == "permessage-deflate" and self._compression_options is not None:
                 self._create_compressors("client", ext[1])
             else:
-                raise ValueError("unsupported extension %r", ext)
+                raise ValueError("unsupported extension %r" % (ext,))
 
         self.selected_subprotocol = headers.get("Sec-WebSocket-Protocol", None)
 
@@ -1023,7 +1068,6 @@ class WebSocketProtocol13(WebSocketProtocol):
         agreed_parameters: dict[str, Any],
         compression_options: dict[str, Any] | None = None,
     ) -> None:
-        # TODO: handle invalid parameters gracefully
         allowed_keys = {
             "server_no_context_takeover",
             "client_no_context_takeover",
@@ -1034,7 +1078,9 @@ class WebSocketProtocol13(WebSocketProtocol):
             if key not in allowed_keys:
                 raise ValueError("unsupported compression parameter %r" % key)
         other_side = "client" if (side == "server") else "server"
-        self._compressor = _PerMessageDeflateCompressor(
+        # Create both before assigning either, so a ValueError leaves
+        # compression off.
+        compressor = _PerMessageDeflateCompressor(
             **self._get_compressor_options(side, agreed_parameters, compression_options)
         )
         self._decompressor = _PerMessageDeflateDecompressor(
@@ -1043,6 +1089,7 @@ class WebSocketProtocol13(WebSocketProtocol):
                 other_side, agreed_parameters, compression_options
             ),
         )
+        self._compressor = compressor
 
     def _write_frame(
         self, fin: bool, opcode: int, data: bytes, flags: int = 0
@@ -1119,11 +1166,18 @@ class WebSocketProtocol13(WebSocketProtocol):
 
     async def _receive_frame_loop(self) -> None:
         try:
+            work = 0  # See _YIELD_THRESHOLD
             while not self.client_terminated:
+                start = self._wire_bytes_in
                 await self._receive_frame()
+                work += _FRAME_YIELD_COST + self._wire_bytes_in - start
+                if work >= _YIELD_THRESHOLD:
+                    work = 0
+                    await asyncio.sleep(0)
         except StreamClosedError:
             self._abort()
-        self.handler.on_ws_connection_close(self.close_code, self.close_reason)
+        finally:
+            self.handler.on_ws_connection_close(self.close_code, self.close_reason)
 
     async def _read_bytes(self, n: int) -> bytes:
         data = await self.stream.read_bytes(n)
@@ -1226,6 +1280,10 @@ class WebSocketProtocol13(WebSocketProtocol):
                 self.close(1009, "message too big after decompression")
                 self._abort()
                 return None
+            except zlib.error:
+                self.close(1007, "invalid compressed data")
+                self._abort()
+                return None
 
         if opcode == 0x1:
             # UTF-8 data
@@ -1251,10 +1309,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             self.close(self.close_code)
         elif opcode == 0x9:
             # Ping
-            try:
-                self._write_frame(True, 0xA, data)
-            except StreamClosedError:
-                self._abort()
+            self._send_pong(data)
             self._run_callback(self.handler.on_ping, data)
         elif opcode == 0xA:
             # Pong
@@ -1263,6 +1318,40 @@ class WebSocketProtocol13(WebSocketProtocol):
         else:
             self._abort()
         return None
+
+    def _send_pong(self, data: bytes) -> None:
+        # If a peer sends pings faster than it reads our pongs, the pongs
+        # would accumulate in our write buffer without limit. RFC 6455
+        # section 5.5.3 allows us to respond only to the most recent ping
+        # when we have not yet sent the pongs for previous ones, so we have
+        # at most one pong outstanding and remember the latest ping to answer
+        # when it has been sent.
+        if self._pong_future is not None and not self._pong_future.done():
+            self._pending_pong = data
+            return
+        # This ping supersedes any that were waiting for an answer.
+        self._pending_pong = None
+        if self.server_terminated:
+            # No frames may be sent after a close frame.
+            return
+        try:
+            self._pong_future = self._write_frame(True, 0xA, data)
+        except StreamClosedError:
+            self._abort()
+            return
+        self._pong_future.add_done_callback(self._on_pong_sent)
+
+    def _on_pong_sent(self, future: "Future[None]") -> None:
+        if self._pong_future is future:
+            self._pong_future = None
+        if future.cancelled() or future.exception() is not None:
+            # The stream was closed.
+            self._pending_pong = None
+            return
+        if self._pending_pong is not None:
+            data = self._pending_pong
+            self._pending_pong = None
+            self._send_pong(data)
 
     def close(self, code: int | None = None, reason: str | None = None) -> None:
         """Closes the WebSocket connection."""
@@ -1475,7 +1564,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         """
         if self.protocol is not None:
             self.protocol.close(code, reason)
-            self.protocol = None  # type: ignore
+            self.protocol = None
 
     def on_connection_close(self) -> None:
         if not self.connect_future.done():

@@ -12,21 +12,27 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+import asyncio
 import getpass
 import socket
+import ssl
 import typing
-import unittest
 from contextlib import closing
 
 from tornado.concurrent import Future
-from tornado.gen import TimeoutError
 from tornado.iostream import IOStream
 from tornado.netutil import Resolver, bind_sockets
 from tornado.queues import Queue
-from tornado.tcpclient import TCPClient, _Connector
+from tornado.tcpclient import TCPClient, _Connector, _format_addr
 from tornado.tcpserver import TCPServer
-from tornado.test.util import refusing_port, skipIfNoIPv6, skipIfNonUnix
-from tornado.testing import AsyncTestCase, gen_test
+from tornado.test.util import (
+    AsyncTestCase,
+    TestCase,
+    refusing_port,
+    skipIfNoIPv6,
+    skipIfNonUnix,
+)
+from tornado.testing import gen_test
 
 # Fake address families for testing.  Used in place of AF_INET
 # and AF_INET6 because some installations do not have AF_INET6.
@@ -131,6 +137,60 @@ class TCPClientTest(AsyncTestCase):
         with self.assertRaises(IOError):
             yield self.client.connect("127.0.0.1", port)
 
+    def tls_context(self):
+        context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        return context
+
+    # In the following tests the server accepts the connection but never
+    # responds to the TLS handshake. The client's socket must be closed when
+    # the connection attempt is abandoned (#3614). The server's
+    # read_until_close only completes once the client has closed it.
+
+    @gen_test
+    def test_connect_tls_timeout_closes_stream(self):
+        port = self.start_server(socket.AF_INET)
+        # The timeout must be long enough for the TCP connection to be
+        # established (which can be slow on windows), so that it expires
+        # during the TLS handshake.
+        with self.assertRaises(TimeoutError) as cm:
+            yield self.client.connect(
+                "127.0.0.1", port, ssl_options=self.tls_context(), timeout=0.5
+            )
+        self.assertEqual(
+            str(cm.exception), "Timeout during TLS handshake with 127.0.0.1:%d" % port
+        )
+        assert self.server is not None
+        server_stream = yield self.server.queue.get()
+        yield server_stream.read_until_close()
+
+    async def do_test_connect_tls_cancel(self, timeout):
+        port = self.start_server(socket.AF_INET)
+        connect_future = asyncio.ensure_future(
+            self.client.connect(
+                "127.0.0.1", port, ssl_options=self.tls_context(), timeout=timeout
+            )
+        )
+        assert self.server is not None
+        server_stream = await self.server.queue.get()
+        # Wait for the start of the handshake so we know the client is past
+        # the TCP connection phase before cancelling.
+        await server_stream.read_bytes(1, partial=True)
+        connect_future.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await connect_future
+        await server_stream.read_until_close()
+
+    @gen_test
+    async def test_connect_tls_cancel_closes_stream(self):
+        await self.do_test_connect_tls_cancel(timeout=None)
+
+    @gen_test
+    async def test_connect_tls_cancel_with_timeout_closes_stream(self):
+        # A timeout is set but the caller cancels first.
+        await self.do_test_connect_tls_cancel(timeout=3600)
+
     def test_source_ip_fail(self):
         """Fail when trying to use the source IP Address '8.8.8.8'."""
         self.assertRaises(
@@ -140,6 +200,27 @@ class TCPClientTest(AsyncTestCase):
             "127.0.0.1",
             source_ip="8.8.8.8",
         )
+
+    @gen_test
+    def test_source_ip_mixed_families(self):
+        # Binding an IPv4 source_ip on an IPv6 socket fails (as does creating
+        # the socket, if IPv6 is unsupported); fall back to the IPv4 address.
+        port = self.start_server(socket.AF_INET)
+
+        class MixedResolver(Resolver):
+            async def resolve(self, host, port, family=socket.AF_UNSPEC):
+                return [
+                    (socket.AF_INET6, ("::1", port, 0, 0)),
+                    (socket.AF_INET, ("127.0.0.1", port)),
+                ]
+
+        client = TCPClient(resolver=MixedResolver())
+        try:
+            stream = yield client.connect("localhost", port, source_ip="127.0.0.1")
+            with closing(stream):
+                self.assertEqual(stream.socket.family, socket.AF_INET)
+        finally:
+            client.close()
 
     def test_source_ip_success(self):
         """Success when trying to use the source IP Address '127.0.0.1'."""
@@ -168,13 +249,52 @@ class TCPClientTest(AsyncTestCase):
             def resolve(self, *args, **kwargs):
                 return Future()  # never completes
 
-        with self.assertRaises(TimeoutError):
+        with self.assertRaises(TimeoutError) as cm:
             yield TCPClient(resolver=TimeoutResolver()).connect(
-                "1.2.3.4", 12345, timeout=timeout
+                "example.com", 12345, timeout=timeout
             )
+        self.assertEqual(str(cm.exception), "Timeout while resolving example.com")
+
+    @gen_test
+    def test_connect_timeout_during_tcp_connect(self):
+        class FakeResolver(Resolver):
+            async def resolve(self, host, port, family=socket.AF_UNSPEC):
+                return [
+                    (socket.AF_INET6, ("2001:db8::1", port, 0, 0)),
+                    (socket.AF_INET, ("192.0.2.1", port)),
+                ]
+
+        class HangingTCPClient(TCPClient):
+            # Connection attempts that never complete.
+            def _create_stream(
+                self, max_buffer_size, af, addr, source_ip=None, source_port=None
+            ):
+                return IOStream(socket.socket(socket.AF_INET)), Future()
+
+        # The timeout is longer than _INITIAL_CONNECT_TIMEOUT so that
+        # both address families are tried.
+        with self.assertRaises(TimeoutError) as cm:
+            yield HangingTCPClient(resolver=FakeResolver()).connect(
+                "example.com", 443, timeout=0.5
+            )
+        self.assertEqual(
+            str(cm.exception),
+            "Timeout while connecting to 192.0.2.1:443, [2001:db8::1]:443",
+        )
 
 
-class TestConnectorSplit(unittest.TestCase):
+class TestFormatAddr(TestCase):
+    def test_ipv4(self):
+        self.assertEqual(_format_addr(("1.2.3.4", 443)), "1.2.3.4:443")
+
+    def test_ipv6(self):
+        self.assertEqual(_format_addr(("::1", 443, 0, 0)), "[::1]:443")
+
+    def test_other(self):
+        self.assertEqual(_format_addr("/tmp/sock"), "/tmp/sock")
+
+
+class TestConnectorSplit(TestCase):
     def test_one_family(self):
         # These addresses aren't in the right format, but split doesn't care.
         primary, secondary = _Connector.split([(AF1, "a"), (AF1, "b")])
@@ -204,6 +324,8 @@ class ConnectorTest(AsyncTestCase):
         ] = {}
         self.streams: dict[typing.Any, ConnectorTest.FakeStream] = {}
         self.addrinfo = [(AF1, "a"), (AF1, "b"), (AF2, "c"), (AF2, "d")]
+        # Addresses for which create_stream raises synchronously.
+        self.sync_failures: set[typing.Any] = set()
 
     def tearDown(self):
         # Unless explicitly checked (and popped) in the test, we shouldn't
@@ -213,6 +335,8 @@ class ConnectorTest(AsyncTestCase):
         super().tearDown()
 
     def create_stream(self, af, addr):
+        if addr in self.sync_failures:
+            raise OSError("sync failure for %s" % addr)
         stream = ConnectorTest.FakeStream()
         self.streams[addr] = stream
         future: Future[ConnectorTest.FakeStream] = Future()
@@ -331,6 +455,83 @@ class ConnectorTest(AsyncTestCase):
         self.resolve_connect(AF1, "b", False)
         self.assertRaises(IOError, future.result)
 
+    def test_sync_failure_first_address(self):
+        # A synchronous failure is treated like an immediate asynchronous
+        # one: move on to the next address and start the secondary family
+        # without waiting for the timeout.
+        self.sync_failures.add("a")
+        conn, future = self.start_connect(self.addrinfo)
+        self.assert_pending((AF1, "b"), (AF2, "c"))
+        self.resolve_connect(AF1, "b", True)
+        self.assertEqual(future.result(), (AF1, "b", self.streams["b"]))
+        self.resolve_connect(AF2, "c", True)
+        self.assertTrue(self.streams.pop("c").closed)
+
+    def test_sync_failure_whole_family(self):
+        # e.g. AF_INET6 sockets are not supported on this system.
+        self.sync_failures.update(["a", "b"])
+        conn, future = self.start_connect(self.addrinfo)
+        self.assert_pending((AF2, "c"))
+        self.resolve_connect(AF2, "c", True)
+        self.assertEqual(future.result(), (AF2, "c", self.streams["c"]))
+
+    def test_sync_failure_in_callback(self):
+        # Synchronous failures while starting the next attempt from a
+        # callback must not leave the connector hanging.
+        self.sync_failures.update(["b", "c", "d"])
+        conn, future = self.start_connect(self.addrinfo)
+        self.assert_pending((AF1, "a"))
+        self.resolve_connect(AF1, "a", False)
+        self.assert_pending()
+        with self.assertRaisesRegex(OSError, "sync failure"):
+            future.result()
+
+    def test_sync_failure_all(self):
+        self.sync_failures.update(["a", "b", "c", "d"])
+        conn, future = self.start_connect(self.addrinfo)
+        self.assert_pending()
+        with self.assertRaisesRegex(OSError, "sync failure"):
+            future.result()
+
+    def cancel_connect(self, af, addr):
+        self.connect_futures.pop((af, addr)).cancel()
+        self.io_loop.add_callback(self.stop)
+        self.wait()
+
+    def test_attempt_cancelled(self):
+        # A cancelled connection attempt is treated as a failure.
+        conn, future = self.start_connect([(AF1, "a"), (AF1, "b")])
+        self.assert_pending((AF1, "a"))
+        self.cancel_connect(AF1, "a")
+        self.assert_pending((AF1, "b"))
+        self.resolve_connect(AF1, "b", True)
+        self.assertEqual(future.result(), (AF1, "b", self.streams["b"]))
+        # The stream from the cancelled attempt is closed.
+        self.assertTrue(self.streams.pop("a").closed)
+
+    def test_all_attempts_cancelled(self):
+        # If every attempt is cancelled, connect fails with an ordinary
+        # error rather than CancelledError, and all streams are closed.
+        conn, future = self.start_connect([(AF1, "a"), (AF2, "c")])
+        conn.on_timeout()
+        self.assert_pending((AF1, "a"), (AF2, "c"))
+        self.cancel_connect(AF1, "a")
+        self.cancel_connect(AF2, "c")
+        self.assertIsInstance(future.exception(), IOError)
+        self.assertTrue(self.streams.pop("a").closed)
+        self.assertTrue(self.streams.pop("c").closed)
+
+    def test_cancel(self):
+        conn, future = self.start_connect(self.addrinfo)
+        conn.on_timeout()
+        self.assert_pending((AF1, "a"), (AF2, "c"))
+        future.cancel()
+        # Run the loop to allow callbacks to be run.
+        self.io_loop.add_callback(self.stop)
+        self.wait()
+        self.assertTrue(self.streams.pop("a").closed)
+        self.assertTrue(self.streams.pop("c").closed)
+
     def test_one_family_timeout_after_connect_timeout(self):
         conn, future = self.start_connect([(AF1, "a"), (AF1, "b")])
         self.assert_pending((AF1, "a"))
@@ -371,7 +572,10 @@ class ConnectorTest(AsyncTestCase):
         self.assert_pending()
         self.assertEqual(len(conn.streams), 2)
         self.assert_connector_streams_closed(conn)
-        self.assertRaises(TimeoutError, future.result)
+        with self.assertRaises(TimeoutError) as cm:
+            future.result()
+        # The failed attempt on "a" is not part of the timeout message.
+        self.assertEqual(str(cm.exception), "Timeout while connecting to b")
 
     def test_one_family_second_try_failure_before_connect_timeout(self):
         conn, future = self.start_connect([(AF1, "a"), (AF1, "b")])
@@ -398,7 +602,9 @@ class ConnectorTest(AsyncTestCase):
         self.assert_pending()
         self.assertEqual(len(conn.streams), 2)
         self.assert_connector_streams_closed(conn)
-        self.assertRaises(TimeoutError, future.result)
+        with self.assertRaises(TimeoutError) as cm:
+            future.result()
+        self.assertEqual(str(cm.exception), "Timeout while connecting to a, c")
 
     def test_two_family_success_after_timeout(self):
         conn, future = self.start_connect(self.addrinfo)

@@ -28,6 +28,7 @@ jobs:
   build_sdist:
     name: Build sdist
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
         with:
@@ -52,6 +53,7 @@ jobs:
   build_wheels:
     name: Build wheels on ${{ matrix.os }}${{ matrix.name_suffix || '' }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -82,21 +84,16 @@ jobs:
 
       - name: Set up QEMU
         if: matrix.emulated
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
         with:
           platforms: ${{ matrix.arch }}
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v3.4.0
+        uses: pypa/cibuildwheel@v4.2.1
         env:
           CIBW_ARCHS: ${{ matrix.emulated && matrix.arch || '' }}
           # Increase timeouts for emulated archs
           CIBW_ENVIRONMENT: ${{ matrix.emulated && 'ASYNC_TEST_TIMEOUT=30 EMULATION=1' || '' }}
-
-      - name: Audit ABI3 compliance
-        # This may be moved into cibuildwheel itself in the future. See
-        # https://github.com/pypa/cibuildwheel/issues/1342
-        run: python -m pip install abi3audit && abi3audit --verbose --summary ./wheelhouse/*abi3*.whl
 
       - uses: actions/upload-artifact@v7
         with:
@@ -107,10 +104,14 @@ jobs:
     name: Upload to PyPI (test)
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     if: github.repository == 'tornadoweb/tornado' && github.event_name == 'workflow_dispatch'
     permissions:
       # This permission is required for pypi's "trusted publisher" feature
       id-token: write
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/tornado/
     steps:
       - uses: actions/download-artifact@v7
         with:
@@ -127,10 +128,16 @@ jobs:
     name: Upload to PyPI (prod)
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     if: github.repository == 'tornadoweb/tornado' && github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
     permissions:
       # This permission is required for pypi's "trusted publisher" feature
       id-token: write
+    environment:
+      # The pypi environment is configured to require approval before a job starts, so
+      # the build will stop here until the final release is approved by a maintainer.
+      name: pypi
+      url: https://pypi.org/project/tornado/
     steps:
       - uses: actions/download-artifact@v7
         with:

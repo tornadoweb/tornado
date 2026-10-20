@@ -42,7 +42,7 @@ from typing import (
     Union,
 )
 
-from tornado.gen import convert_yielded
+from tornado.gen import convert_yielded, _Yieldable
 from tornado.ioloop import IOLoop, _Selectable
 
 if typing.TYPE_CHECKING:
@@ -66,20 +66,17 @@ _selector_loops: set["SelectorThread"] = set()
 
 
 def _atexit_callback() -> None:
-    for loop in _selector_loops:
-        with loop._select_cond:
-            loop._closing_selector = True
-            loop._select_cond.notify()
-        try:
-            loop._waker_w.send(b"a")
-        except BlockingIOError:
-            pass
-        if loop._thread is not None:
-            # If we don't join our (daemon) thread here, we may get a deadlock
-            # during interpreter shutdown. I don't really understand why. This
-            # deadlock happens every time in CI (both travis and appveyor) but
-            # I've never been able to reproduce locally.
-            loop._thread.join()
+    # Iterate over a copy: closing a selector removes it from _selector_loops.
+    for loop in list(_selector_loops):
+        # SelectorThread.close joins our (daemon) thread. If we don't join it
+        # here, we may get a deadlock during interpreter shutdown. I don't
+        # really understand why. This deadlock happens every time in CI (both
+        # travis and appveyor) but I've never been able to reproduce locally.
+        #
+        # It also closes the waker socketpair. Shutting the thread down without
+        # closing those leaks them until the interpreter finalizes them, which
+        # reports every one as an unclosed socket.
+        loop.close()
     _selector_loops.clear()
 
 
@@ -104,7 +101,7 @@ class BaseAsyncIOLoop(IOLoop):
             # doesn't understand dynamic proxies.
             self.selector_loop = AddThreadSelectorEventLoop(asyncio_loop)  # type: ignore
         # Maps fd to (fileobj, handler function) pair (as in IOLoop.add_handler)
-        self.handlers: dict[int, tuple[int | _Selectable, Callable]] = {}
+        self.handlers: dict[int, tuple[int | _Selectable, Callable[..., Any]]] = {}
         # Set of fds listening for reads/writes
         self.readers: set[int] = set()
         self.writers: set[int] = set()
@@ -209,7 +206,7 @@ class BaseAsyncIOLoop(IOLoop):
         self.asyncio_loop.stop()
 
     def call_at(
-        self, when: float, callback: Callable, *args: Any, **kwargs: Any
+        self, when: float, callback: Callable[..., Any], *args: Any, **kwargs: Any
     ) -> object:
         # asyncio.call_at supports *args but not **kwargs, so bind them here.
         # We do not synchronize self.time and asyncio_loop.time, so
@@ -223,7 +220,9 @@ class BaseAsyncIOLoop(IOLoop):
     def remove_timeout(self, timeout: object) -> None:
         timeout.cancel()  # type: ignore
 
-    def add_callback(self, callback: Callable, *args: Any, **kwargs: Any) -> None:
+    def add_callback(
+        self, callback: Callable[..., Any], *args: Any, **kwargs: Any
+    ) -> None:
         try:
             if asyncio.get_running_loop() is self.asyncio_loop:
                 call_soon = self.asyncio_loop.call_soon
@@ -248,7 +247,7 @@ class BaseAsyncIOLoop(IOLoop):
             pass
 
     def add_callback_from_signal(
-        self, callback: Callable, *args: Any, **kwargs: Any
+        self, callback: Callable[..., Any], *args: Any, **kwargs: Any
     ) -> None:
         warnings.warn("add_callback_from_signal is deprecated", DeprecationWarning)
         try:
@@ -354,7 +353,7 @@ class AsyncIOLoop(BaseAsyncIOLoop):
             self.is_current = False
 
 
-def to_tornado_future(asyncio_future: asyncio.Future) -> asyncio.Future:
+def to_tornado_future(asyncio_future: asyncio.Future[Any]) -> asyncio.Future[Any]:
     """Convert an `asyncio.Future` to a `tornado.concurrent.Future`.
 
     .. versionadded:: 4.1
@@ -366,7 +365,7 @@ def to_tornado_future(asyncio_future: asyncio.Future) -> asyncio.Future:
     return asyncio_future
 
 
-def to_asyncio_future(tornado_future: asyncio.Future) -> asyncio.Future:
+def to_asyncio_future(tornado_future: _Yieldable) -> asyncio.Future[Any]:
     """Convert a Tornado yieldable object to an `asyncio.Future`.
 
     .. versionadded:: 4.1
@@ -442,10 +441,11 @@ def __getattr__(name: str) -> typing.Any:
 
             def get_event_loop(self) -> asyncio.AbstractEventLoop:
                 try:
-                    return super().get_event_loop()
+                    current: asyncio.AbstractEventLoop = super().get_event_loop()
+                    return current
                 except RuntimeError:
                     # "There is no current event loop in thread %r"
-                    loop = self.new_event_loop()
+                    loop: asyncio.AbstractEventLoop = self.new_event_loop()
                     self.set_event_loop(loop)
                     return loop
 
@@ -478,6 +478,7 @@ class SelectorThread:
         ) = None
         self._closing_selector = False
         self._thread: threading.Thread | None = None
+        self._thread_manager_task: asyncio.Task[Any] | None = None
         self._thread_manager_handle = self._thread_manager()
 
         async def thread_manager_anext() -> None:
@@ -485,16 +486,24 @@ class SelectorThread:
             # this generator one step.
             await self._thread_manager_handle.__anext__()
 
+        def start_thread_manager() -> None:
+            # Keep a reference to the task: asyncio only holds a weak one, and a
+            # task that is garbage collected before it runs reports itself as
+            # having been destroyed while pending.
+            self._thread_manager_task = self._real_loop.create_task(
+                thread_manager_anext()
+            )
+
         # When the loop starts, start the thread. Not too soon because we can't
         # clean up if we get to this point but the event loop is closed without
         # starting.
         self._real_loop.call_soon(
-            lambda: self._real_loop.create_task(thread_manager_anext()),
+            start_thread_manager,
             context=self._main_thread_ctx,
         )
 
-        self._readers: dict[_FileDescriptorLike, Callable] = {}
-        self._writers: dict[_FileDescriptorLike, Callable] = {}
+        self._readers: dict[_FileDescriptorLike, Callable[..., Any]] = {}
+        self._writers: dict[_FileDescriptorLike, Callable[..., Any]] = {}
 
         # Writing to _waker_w will wake up the selector thread, which
         # watches for _waker_r to be readable.
@@ -513,6 +522,28 @@ class SelectorThread:
         self._wake_selector()
         if self._thread is not None:
             self._thread.join()
+        if self._thread_manager_task is not None:
+            if not self._thread_manager_task.done():
+                # The event loop stopped before the task got a chance to run its
+                # first step (once it runs, it finishes as soon as the async
+                # generator reaches its yield, so a task that is not done here
+                # never started at all).
+                #
+                # Cancelling is not enough to get it out of the PENDING state --
+                # that would require running the loop again, which we cannot do
+                # here -- so also tell it not to report itself as destroyed
+                # while pending, and close the coroutine it never entered.
+                # Otherwise closing such a loop logs an asyncio error and emits
+                # a "coroutine was never awaited" warning when the task is
+                # garbage collected, at an unpredictable later point.
+                self._thread_manager_task._log_destroy_pending = False  # type: ignore[attr-defined]
+                self._thread_manager_task.cancel()
+                # get_coro returns None for a task whose coroutine has already
+                # been cleared, which cannot happen for a task that never ran.
+                coro = self._thread_manager_task.get_coro()
+                if coro is not None:
+                    coro.close()
+            self._thread_manager_task = None
         _selector_loops.discard(self)
         self.remove_reader(self._waker_r)
         self._waker_r.close()
@@ -645,7 +676,7 @@ class SelectorThread:
     def _handle_event(
         self,
         fd: _FileDescriptorLike,
-        cb_map: dict[_FileDescriptorLike, Callable],
+        cb_map: dict[_FileDescriptorLike, Callable[..., Any]],
     ) -> None:
         try:
             callback = cb_map[fd]

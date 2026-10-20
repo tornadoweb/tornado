@@ -18,6 +18,7 @@
 import asyncio
 import concurrent.futures
 import errno
+import functools
 import os
 import socket
 import ssl
@@ -30,14 +31,32 @@ from tornado.concurrent import dummy_executor, run_on_executor
 from tornado.ioloop import IOLoop
 from tornado.util import Configurable, errno_from_exception
 
+
 # Note that the naming of ssl.Purpose is confusing; the purpose
 # of a context is to authenticate the opposite side of the connection.
-_client_ssl_defaults = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-_server_ssl_defaults = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-if hasattr(ssl, "OP_NO_COMPRESSION"):
-    # See netutil.ssl_options_to_context
-    _client_ssl_defaults.options |= ssl.OP_NO_COMPRESSION
-    _server_ssl_defaults.options |= ssl.OP_NO_COMPRESSION
+#
+# These are created lazily (rather than at import time) because
+# ssl.create_default_context() loads the platform's default certificate
+# store, which on some platforms (e.g. macOS) may start background
+# threads. Creating these contexts eagerly at import time could leave
+# such threads running at a call to os.fork() (e.g. in
+# tornado.process.fork_processes), which is unsafe.
+@functools.lru_cache(maxsize=1)
+def _client_ssl_defaults() -> ssl.SSLContext:
+    ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+    if hasattr(ssl, "OP_NO_COMPRESSION"):
+        # See netutil.ssl_options_to_context
+        ctx.options |= ssl.OP_NO_COMPRESSION
+    return ctx
+
+
+@functools.lru_cache(maxsize=1)
+def _server_ssl_defaults() -> ssl.SSLContext:
+    ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    if hasattr(ssl, "OP_NO_COMPRESSION"):
+        ctx.options |= ssl.OP_NO_COMPRESSION
+    return ctx
+
 
 # ThreadedResolver runs getaddrinfo on a thread. If the hostname is unicode,
 # getaddrinfo attempts to import encodings.idna. If this is done at
@@ -100,7 +119,7 @@ def bind_sockets(
     if flags is None:
         flags = socket.AI_PASSIVE
     bound_port = None
-    unique_addresses: set = set()
+    unique_addresses: set[Any] = set()
     for res in sorted(
         socket.getaddrinfo(address, port, family, socket.SOCK_STREAM, 0, flags),
         key=lambda x: x[0],
@@ -115,7 +134,7 @@ def bind_sockets(
             sys.platform == "darwin"
             and address == "localhost"
             and af == socket.AF_INET6
-            and sockaddr[3] != 0  # type: ignore
+            and sockaddr[3] != 0
         ):
             # Mac OS X includes a link-local address fe80::1%lo0 in the
             # getaddrinfo results for 'localhost'.  However, the firewall
@@ -221,7 +240,7 @@ if hasattr(socket, "AF_UNIX"):
                 if stat.S_ISSOCK(st.st_mode):
                     os.remove(file)
                 else:
-                    raise ValueError("File %s exists and is not a socket", file)
+                    raise ValueError("File %s exists and is not a socket" % file)
             sock.bind(file)
             os.chmod(file, mode)
         else:
@@ -560,7 +579,7 @@ class OverrideResolver(Resolver):
        Added support for host-port-family triplets.
     """
 
-    def initialize(self, resolver: Resolver, mapping: dict) -> None:
+    def initialize(self, resolver: Resolver, mapping: dict[Any, Any]) -> None:
         self.resolver = resolver
         self.mapping = mapping
 

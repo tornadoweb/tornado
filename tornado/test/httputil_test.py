@@ -3,7 +3,6 @@ import datetime
 import logging
 import pickle
 import time
-import unittest
 import urllib.parse
 
 from tornado.escape import native_str, utf8
@@ -14,7 +13,10 @@ from tornado.httputil import (
     HTTPServerRequest,
     ParseMultipartConfig,
     RequestStartLine,
+    _DEFAULT_PARSE_BODY_CONFIG,
+    _parse_header,
     format_timestamp,
+    parse_body_arguments,
     parse_cookie,
     parse_multipart_form_data,
     parse_request_start_line,
@@ -22,7 +24,13 @@ from tornado.httputil import (
     url_concat,
 )
 from tornado.log import gen_log
-from tornado.test.util import ignore_deprecation, skipIfEmulated
+from tornado.test.util import (
+    TestCase,
+    assert_linear_scaling,
+    assert_memory_budget,
+    ignore_deprecation,
+    skipNotCPython,
+)
 
 
 def form_data_args() -> tuple[dict[str, list[bytes]], dict[str, list[HTTPFile]]]:
@@ -34,7 +42,7 @@ def form_data_args() -> tuple[dict[str, list[bytes]], dict[str, list[HTTPFile]]]
     return {}, {}
 
 
-class TestUrlConcat(unittest.TestCase):
+class TestUrlConcat(TestCase):
     def test_url_concat_no_query_params(self):
         url = url_concat("https://localhost/path", [("y", "y"), ("z", "z")])
         self.assertEqual(url, "https://localhost/path?y=y&z=z")
@@ -84,7 +92,7 @@ class TestUrlConcat(unittest.TestCase):
         self.assertEqual(url, "https://localhost/path?y=y")
 
 
-class QsParseTest(unittest.TestCase):
+class QsParseTest(TestCase):
     def test_parsing(self):
         qsstring = "a=1&b=2&a=3"
         qs = urllib.parse.parse_qs(qsstring)
@@ -94,7 +102,24 @@ class QsParseTest(unittest.TestCase):
         self.assertIn(("b", "2"), qsl)
 
 
-class MultipartFormDataTest(unittest.TestCase):
+class UrlEncodedDataTest(TestCase):
+    def test_urlencoded_data(self):
+        data = b"a=1&b=2&a=3"
+        args, files = form_data_args()
+        parse_body_arguments("application/x-www-form-urlencoded", data, args, files)
+        self.assertEqual(args["a"], [b"1", b"3"])
+        self.assertEqual(args["b"], [b"2"])
+        self.assertEqual(files, {})
+
+    def test_max_arguments(self):
+        data = b"".join(b"a=1&" for _ in range(1001))
+        args, files = form_data_args()
+        with self.assertRaises(HTTPInputError) as cm:
+            parse_body_arguments("application/x-www-form-urlencoded", data, args, files)
+        self.assertIn("Max number of fields exceeded", str(cm.exception))
+
+
+class MultipartFormDataTest(TestCase):
     def test_file_upload(self):
         data = b"""\
 --1234
@@ -279,7 +304,6 @@ Foo
         # to the content-disposition header, specifically for semicolons within
         # quoted strings.
         def f(n):
-            start = time.perf_counter()
             message = (
                 b"--1234\r\nContent-Disposition: form-data; "
                 + b'x="'
@@ -290,13 +314,45 @@ Foo
             args: dict[str, list[bytes]] = {}
             files: dict[str, list[HTTPFile]] = {}
             parse_multipart_form_data(b"1234", message, args, files)
-            return time.perf_counter() - start
 
-        d1 = f(1_000)
-        # Note that headers larger than this are blocked by the default configuration.
-        d2 = f(10_000)
-        if d2 / d1 > 20:
-            self.fail(f"Disposition param parsing is not linear: {d1=} vs {d2=}")
+        # Note that headers larger than 10_000 are blocked by the default
+        # configuration.
+        assert_linear_scaling(
+            f,
+            1_000,
+            10_000,
+            max_ratio=20,
+            msg="Disposition param parsing is not linear",
+        )
+
+    @skipNotCPython
+    def test_parse_header_memory_budget(self):
+        # Many tiny parameters are the worst case for memory in
+        # _parse_header (about 45 bytes per input byte as of 2026-10).
+        header = "form-data" + "; a=b" * 10_000
+        with assert_memory_budget(
+            len(header), max_ratio=60, msg="_parse_header uses too much memory"
+        ):
+            _parse_header(header)
+
+    @skipNotCPython
+    def test_multipart_memory_budget(self):
+        # Many empty parts are the worst case for memory, since each part
+        # costs a fixed amount (about 5 bytes per input byte as of 2026-10
+        # with the default max_parts). Larger parts are close to 2: the
+        # body and one copy of each part's data.
+        part = (
+            b"--1234\r\n"
+            b'Content-Disposition: form-data; name="a"; filename="b"\r\n'
+            b"Content-Type: text/plain\r\n\r\n\r\n"
+        )
+        body = part * (ParseMultipartConfig().max_parts - 1) + b"--1234--\r\n"
+        args, files = form_data_args()
+        with assert_memory_budget(
+            len(body), max_ratio=10, msg="multipart parsing uses too much memory"
+        ):
+            parse_multipart_form_data(b"1234", body, args, files)
+        self.assertEqual(len(files["a"]), 99)
 
     def test_multipart_config(self):
         boundary = b"1234"
@@ -331,49 +387,12 @@ Content-Disposition: form-data; name="files"; filename="ab.txt"
         self.assertIn("multipart/form-data parsing is disabled", str(cm.exception))
 
 
-class HTTPHeadersTest(unittest.TestCase):
-    def test_multi_line(self):
-        # Lines beginning with whitespace are appended to the previous line
-        # with any leading whitespace replaced by a single space.
-        # Note that while multi-line headers are a part of the HTTP spec,
-        # their use is strongly discouraged.
-        data = """\
-Foo: bar
- baz
-Asdf: qwer
-\tzxcv
-Foo: even
-     more
-     lines
-""".replace("\n", "\r\n")
-        headers = HTTPHeaders.parse(data)
-        self.assertEqual(headers["asdf"], "qwer zxcv")
-        self.assertEqual(headers.get_list("asdf"), ["qwer zxcv"])
-        self.assertEqual(headers["Foo"], "bar baz,even more lines")
-        self.assertEqual(headers.get_list("foo"), ["bar baz", "even more lines"])
-        self.assertEqual(
-            sorted(list(headers.get_all())),
-            [("Asdf", "qwer zxcv"), ("Foo", "bar baz"), ("Foo", "even more lines")],
-        )
-        # Verify case insensitivity in-operator
-        self.assertTrue("asdf" in headers)
-        self.assertTrue("Asdf" in headers)
-
-    def test_continuation(self):
+class HTTPHeadersTest(TestCase):
+    def test_folding_rejected(self):
         data = "Foo: bar\r\n\tasdf"
-        headers = HTTPHeaders.parse(data)
-        self.assertEqual(headers["Foo"], "bar asdf")
-
-        # If the first line starts with whitespace, it's a
-        # continuation line with nothing to continue, so reject it
-        # (with a proper error).
-        data = " Foo: bar"
-        self.assertRaises(HTTPInputError, HTTPHeaders.parse, data)
-
-        # \f (formfeed) is whitespace according to str.isspace, but
-        # not according to the HTTP spec.
-        data = "Foo: bar\r\n\fasdf"
-        self.assertRaises(HTTPInputError, HTTPHeaders.parse, data)
+        with self.assertRaises(HTTPInputError):
+            # Folded continuation lines are not supported.
+            HTTPHeaders.parse(data)
 
     def test_forbidden_ascii_characters(self):
         # Control characters and ASCII whitespace other than space, tab, and CRLF are not allowed in
@@ -499,6 +518,24 @@ Foo: even
         self.assertEqual(headers["quux"], "xyzzy")
         self.assertEqual(sorted(headers.get_all()), [("Foo", "bar"), ("Quux", "xyzzy")])
 
+    def test_delitem(self):
+        # Deleting a header must not depend on whether the combined-value
+        # cache happens to be populated for it. The cache is invalidated by
+        # add(), so a multi-valued header that was never read through
+        # __getitem__ has no cache entry.
+        headers = HTTPHeaders()
+        headers["foo"] = "bar"
+        del headers["foo"]
+        self.assertEqual(sorted(headers.get_all()), [])
+        with self.assertRaises(KeyError):
+            del headers["foo"]
+
+        headers = HTTPHeaders()
+        headers.add("Set-Cookie", "a=b")
+        headers.add("Set-Cookie", "c=d")
+        del headers["set-cookie"]
+        self.assertEqual(sorted(headers.get_all()), [])
+
     def test_string(self):
         headers = HTTPHeaders()
         headers.add("Foo", "1")
@@ -525,21 +562,50 @@ Foo: even
 
     def test_linear_performance(self):
         def f(n):
-            start = time.perf_counter()
             headers = HTTPHeaders()
             for i in range(n):
                 headers.add("X-Foo", "bar")
-            return time.perf_counter() - start
 
-        # This runs under 50ms on my laptop as of 2025-12-09.
-        d1 = f(10_000)
-        d2 = f(100_000)
-        if d2 / d1 > 20:
-            # d2 should be about 10x d1 but allow a wide margin for variability.
-            self.fail(f"HTTPHeaders.add() does not scale linearly: {d1=} vs {d2=}")
+        # This runs under 50ms on my laptop as of 2025-12-09. The ratio
+        # between the two sizes should be about 10x, but allow a wide margin
+        # for variability.
+        assert_linear_scaling(
+            f,
+            10_000,
+            100_000,
+            max_ratio=20,
+            msg="HTTPHeaders.add() does not scale linearly",
+        )
+
+    def test_parse_repeated_linear_performance(self):
+        # Regression test for CVE-2025-67725, through the parsing path that
+        # HTTP1Connection uses rather than HTTPHeaders.add() directly. Before
+        # Tornado 6.5.3 this measured a ratio of about 30; the per-line
+        # parsing costs hide some of the quadratic part at these sizes.
+        def f(n):
+            HTTPHeaders.parse("X: a\r\n" * n)
+
+        assert_linear_scaling(
+            f,
+            10_000,
+            100_000,
+            max_ratio=20,
+            msg="HTTPHeaders.parse() of a repeated header is not linear",
+        )
+
+    @skipNotCPython
+    def test_parse_memory_budget(self):
+        # Many short, distinct headers are the worst case for memory (about
+        # 18 bytes per input byte as of 2026-10). The default max_header_size
+        # is 64KB, so this is about as large as a server will parse.
+        data = "".join(f"X{i}: b\r\n" for i in range(8_000))
+        with assert_memory_budget(
+            len(data), max_ratio=30, msg="HTTPHeaders.parse() uses too much memory"
+        ):
+            HTTPHeaders.parse(data)
 
 
-class FormatTimestampTest(unittest.TestCase):
+class FormatTimestampTest(TestCase):
     # Make sure that all the input types are supported.
     TIMESTAMP = 1359312200.503611
     EXPECTED = "Sun, 27 Jan 2013 18:43:20 GMT"
@@ -563,9 +629,9 @@ class FormatTimestampTest(unittest.TestCase):
 
     def test_utc_naive_datetime(self):
         self.check(
-            datetime.datetime.fromtimestamp(
-                self.TIMESTAMP, datetime.timezone.utc
-            ).replace(tzinfo=None)
+            datetime.datetime.fromtimestamp(self.TIMESTAMP, datetime.UTC).replace(
+                tzinfo=None
+            )
         )
 
     def test_utc_naive_datetime_deprecated(self):
@@ -573,9 +639,7 @@ class FormatTimestampTest(unittest.TestCase):
             self.check(datetime.datetime.utcfromtimestamp(self.TIMESTAMP))
 
     def test_utc_aware_datetime(self):
-        self.check(
-            datetime.datetime.fromtimestamp(self.TIMESTAMP, datetime.timezone.utc)
-        )
+        self.check(datetime.datetime.fromtimestamp(self.TIMESTAMP, datetime.UTC))
 
     def test_other_aware_datetime(self):
         # Other timezones are ignored; the timezone is always printed as GMT
@@ -588,7 +652,7 @@ class FormatTimestampTest(unittest.TestCase):
 
 # HTTPServerRequest is mainly tested incidentally to the server itself,
 # but this tests the parts of the class that can be tested in isolation.
-class HTTPServerRequestTest(unittest.TestCase):
+class HTTPServerRequestTest(TestCase):
     def test_default_constructor(self):
         # All parameters are formally optional, but uri is required
         # (and has been for some time).  This test ensures that no
@@ -609,8 +673,24 @@ class HTTPServerRequestTest(unittest.TestCase):
         )
         self.assertNotIn("Canary", repr(request))
 
+    def test_query_arguments_within_limit(self):
+        n = _DEFAULT_PARSE_BODY_CONFIG.urlencoded.max_arguments
+        uri = "/?" + "&".join("a=%d" % i for i in range(n))
+        request = HTTPServerRequest(start_line=RequestStartLine("GET", uri, "HTTP/1.0"))
+        self.assertEqual(len(request.arguments["a"]), n)
 
-class ParseRequestStartLineTest(unittest.TestCase):
+    def test_max_query_arguments(self):
+        # The query string is subject to the same limit on the number of
+        # arguments as a urlencoded body: parsing is superlinear enough in
+        # the number of fields to be worth bounding.
+        n = _DEFAULT_PARSE_BODY_CONFIG.urlencoded.max_arguments + 1
+        uri = "/?" + "&".join("a=%d" % i for i in range(n))
+        with self.assertRaises(HTTPInputError) as cm:
+            HTTPServerRequest(start_line=RequestStartLine("GET", uri, "HTTP/1.0"))
+        self.assertIn("Max number of fields exceeded", str(cm.exception))
+
+
+class ParseRequestStartLineTest(TestCase):
     METHOD = "GET"
     PATH = "/foo"
     VERSION = "HTTP/1.1"
@@ -623,7 +703,7 @@ class ParseRequestStartLineTest(unittest.TestCase):
         self.assertEqual(parsed_start_line.version, self.VERSION)
 
 
-class ParseCookieTest(unittest.TestCase):
+class ParseCookieTest(TestCase):
     # These tests copied from Django:
     # https://github.com/django/django/pull/6277/commits/da810901ada1cae9fc1f018f879f11a7fb467b28
     def test_python_cookies(self):
@@ -719,24 +799,41 @@ class ParseCookieTest(unittest.TestCase):
                 c = parse_cookie(encoded)
                 self.assertEqual(c["a"], decoded)
 
-    @skipIfEmulated
     def test_unquote_large(self):
         # Adapted from
         # https://github.com/python/cpython/blob/dc7a2b6522ec7af41282bc34f405bee9b306d611/Lib/test/test_http_cookies.py#L87
         # Modified from that test because we handle semicolons differently from the stdlib.
-        #
-        # This is a performance regression test: prior to improvements in Tornado 6.4.2, this test
-        # would take over a minute with n= 100k. Now it runs in tens of milliseconds.
         n = 100000
         for encoded in r"\\", r"\134":
             with self.subTest(encoded):
-                start = time.time()
                 data = 'a="b=' + encoded * n + '"'
                 value = parse_cookie(data)["a"]
-                end = time.time()
                 self.assertEqual(value[:3], "b=\\")
                 self.assertEqual(value[-3:], "\\\\\\")
                 self.assertEqual(len(value), n + 2)
 
-                # Very loose performance check to avoid false positives
-                self.assertLess(end - start, 1, "Test took too long")
+    def test_unquote_linear_performance(self):
+        # Regression test for CVE-2024-7592: before Tornado 6.4.2, unquoting
+        # escape sequences in a cookie value was quadratic. (Only the r"\\"
+        # case reproduces it on 6.4.1; r"\134" is here for symmetry with
+        # test_unquote_large.)
+        for encoded in r"\\", r"\134":
+            with self.subTest(encoded):
+                assert_linear_scaling(
+                    lambda n: parse_cookie('a="b=' + encoded * n + '"'),
+                    1_000,
+                    10_000,
+                    max_ratio=20,
+                    msg="Cookie unquoting is not linear",
+                )
+
+    @skipNotCPython
+    def test_parse_memory_budget(self):
+        # Many short cookies with empty values are the worst case for memory
+        # (about 20 bytes per input byte as of 2026-10). Cookies arrive in a
+        # header, so the default max_header_size of 64KB bounds the input.
+        data = "".join(f"{i}=;" for i in range(10_000))
+        with assert_memory_budget(
+            len(data), max_ratio=30, msg="parse_cookie() uses too much memory"
+        ):
+            parse_cookie(data)

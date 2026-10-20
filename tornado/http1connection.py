@@ -22,6 +22,7 @@ import asyncio
 import logging
 import re
 import types
+import zlib
 from collections.abc import Awaitable, Callable
 from typing import Optional, Type, cast
 
@@ -36,6 +37,29 @@ from tornado.log import app_log, gen_log
 from tornado.util import GzipDecompressor
 
 CR_OR_LF_RE = re.compile(b"\r|\n")
+
+
+# The maximum number of informational (1xx) responses to accept before the
+# real response. Each one is processed with a recursive call to
+# _read_message, so an unbounded number of them would exhaust the stack.
+# There is no legitimate use for more than a handful.
+_MAX_1XX_RESPONSES = 10
+
+# Reads that can be satisfied from data that has already arrived complete
+# without returning control to the IOLoop, so a peer that sends a body
+# faster than we can process it could otherwise monopolize the IOLoop for
+# the duration of the body. While reading a body, we yield to the IOLoop
+# after processing this many bytes. Each chunk of a chunked body also counts
+# as _CHUNK_YIELD_COST bytes, since the per-chunk overhead dominates when
+# the chunks are small.
+_YIELD_THRESHOLD = 256 * 1024
+_CHUNK_YIELD_COST = 1024
+
+
+def _is_done(future: Awaitable[object]) -> bool:
+    # IOStream's read methods are declared to return Awaitables, but they
+    # are actually Futures which may already be resolved.
+    return isinstance(future, Future) and future.done()
 
 
 class _QuietException(Exception):
@@ -185,6 +209,18 @@ class HTTP1Connection(httputil.HTTPConnection):
         return self._read_message(delegate)
 
     async def _read_message(self, delegate: httputil.HTTPMessageDelegate) -> bool:
+        try:
+            return await self._read_message_inner(delegate)
+        except _QuietException:
+            # The delegate raised an exception, which has already been logged,
+            # and the delegate has been told that the connection is closed.
+            # Close it, instead of letting _QuietException escape to our caller.
+            self.close()
+            return False
+
+    async def _read_message_inner(
+        self, delegate: httputil.HTTPMessageDelegate, num_1xx: int = 0
+    ) -> bool:
         need_delegate_close = False
         try:
             header_future = self.stream.read_until_regex(
@@ -199,7 +235,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                         header_future,
                         quiet_exceptions=iostream.StreamClosedError,
                     )
-                except gen.TimeoutError:
+                except TimeoutError:
                     self.close()
                     return False
             start_line_str, headers = self._parse_headers(header_data)
@@ -249,9 +285,19 @@ class HTTP1Connection(httputil.HTTPConnection):
                         raise httputil.HTTPInputError(
                             "Response code %d cannot have body" % code
                         )
+                    if num_1xx >= _MAX_1XX_RESPONSES:
+                        raise httputil.HTTPInputError("Too many 1xx responses")
                     # TODO: client delegates will get headers_received twice
                     # in the case of a 100-continue.  Document or change?
-                    await self._read_message(delegate)
+                    #
+                    # The recursive call reads the real response and owns
+                    # the delegate from here on, so there is nothing left
+                    # for this frame to do. Clear need_delegate_close so
+                    # that the finally block does not call
+                    # on_connection_close() on an already-finished
+                    # delegate.
+                    need_delegate_close = False
+                    return await self._read_message_inner(delegate, num_1xx + 1)
             else:
                 if headers.get("Expect") == "100-continue" and not self._write_finished:
                     self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
@@ -269,15 +315,17 @@ class HTTP1Connection(httputil.HTTPConnection):
                                 body_future,
                                 quiet_exceptions=iostream.StreamClosedError,
                             )
-                        except gen.TimeoutError:
+                        except TimeoutError:
                             gen_log.info("Timeout reading body from %s", self.context)
                             self.stream.close()
                             return False
             self._read_finished = True
             if not self._write_finished or self.is_client:
-                need_delegate_close = False
                 with _ExceptionLoggingContext(app_log):
                     delegate.finish()
+                # If finish() raised, the delegate is told that the connection
+                # is closed, as when any of its other methods raise.
+                need_delegate_close = False
             # If we're waiting for the application to produce an asynchronous
             # response, and we're not detached, register a close callback
             # on the stream (we didn't need one while we were reading)
@@ -296,6 +344,11 @@ class HTTP1Connection(httputil.HTTPConnection):
             gen_log.info("Malformed HTTP message from %s: %s", self.context, e)
             if not self.is_client:
                 await self.stream.write(b"HTTP/1.1 400 Bad Request\r\n\r\n")
+            elif not need_delegate_close:
+                # The error came before headers_received, so the delegate
+                # doesn't know about this message yet. Tell it the
+                # connection is closed so a client request doesn't hang.
+                need_delegate_close = True
             self.close()
             return False
         finally:
@@ -642,63 +695,127 @@ class HTTP1Connection(httputil.HTTPConnection):
             return self._read_body_until_close(delegate)
         return None
 
+    async def _deliver_body(
+        self, delegate: httputil.HTTPMessageDelegate, data: bytes
+    ) -> None:
+        if not self._write_finished or self.is_client:
+            with _ExceptionLoggingContext(app_log):
+                ret = delegate.data_received(data)
+                if ret is not None:
+                    await ret
+
     async def _read_fixed_body(
         self, content_length: int, delegate: httputil.HTTPMessageDelegate
     ) -> None:
+        work = 0  # See _YIELD_THRESHOLD
         while content_length > 0:
             body = await self.stream.read_bytes(
                 min(self.params.chunk_size, content_length), partial=True
             )
             content_length -= len(body)
-            if not self._write_finished or self.is_client:
-                with _ExceptionLoggingContext(app_log):
-                    ret = delegate.data_received(body)
-                    if ret is not None:
-                        await ret
+            await self._deliver_body(delegate, body)
+            work += len(body)
+            if work >= _YIELD_THRESHOLD:
+                work = 0
+                await asyncio.sleep(0)
 
     async def _read_chunked_body(self, delegate: httputil.HTTPMessageDelegate) -> None:
         # TODO: "chunk extensions" http://tools.ietf.org/html/rfc2616#section-3.6.1
         total_size = 0
+        # Chunk boundaries are not meaningful (and may be changed by
+        # intermediaries), so the contents of consecutive small chunks are
+        # coalesced before being passed to the delegate. This bounds the
+        # number of data_received calls (and the overhead of delegates that
+        # buffer each piece they receive) regardless of how small the chunks
+        # are. Pending data is delivered whenever we would have to wait for
+        # the network, so this does not add latency for streaming delegates.
+        pending = bytearray()
+        work = 0  # See _YIELD_THRESHOLD
+
+        def read(future: Awaitable[bytes]) -> Awaitable[bytes]:
+            if pending and not _is_done(future):
+                return flush_and_read(future)
+            return future
+
+        async def flush_and_read(future: Awaitable[bytes]) -> bytes:
+            data = bytes(pending)
+            pending.clear()
+            await self._deliver_body(delegate, data)
+            return await future
+
         while True:
-            chunk_len_str = await self.stream.read_until(b"\r\n", max_bytes=64)
+            work += _CHUNK_YIELD_COST
+            if work >= _YIELD_THRESHOLD:
+                work = 0
+                await asyncio.sleep(0)
+            chunk_len_str = await read(self.stream.read_until(b"\r\n", max_bytes=64))
             try:
                 chunk_len = parse_hex_int(native_str(chunk_len_str[:-2]))
             except ValueError:
                 raise httputil.HTTPInputError("invalid chunk size")
             if chunk_len == 0:
-                crlf = await self.stream.read_bytes(2)
+                crlf = await read(self.stream.read_bytes(2))
                 if crlf != b"\r\n":
                     raise httputil.HTTPInputError(
                         "improperly terminated chunked request"
                     )
+                if pending:
+                    await self._deliver_body(delegate, bytes(pending))
                 return
             total_size += chunk_len
             if total_size > self._max_body_size:
                 raise httputil.HTTPInputError("chunked body too large")
             bytes_to_read = chunk_len
             while bytes_to_read:
-                chunk = await self.stream.read_bytes(
-                    min(bytes_to_read, self.params.chunk_size), partial=True
+                chunk = await read(
+                    self.stream.read_bytes(
+                        min(bytes_to_read, self.params.chunk_size), partial=True
+                    )
                 )
                 bytes_to_read -= len(chunk)
-                if not self._write_finished or self.is_client:
-                    with _ExceptionLoggingContext(app_log):
-                        ret = delegate.data_received(chunk)
-                        if ret is not None:
-                            await ret
+                if not pending and len(chunk) == self.params.chunk_size:
+                    # Full-sized reads are passed through without copying.
+                    await self._deliver_body(delegate, chunk)
+                else:
+                    pending += chunk
+                    if len(pending) >= self.params.chunk_size:
+                        data = bytes(pending[: self.params.chunk_size])
+                        del pending[: self.params.chunk_size]
+                        await self._deliver_body(delegate, data)
+                work += len(chunk)
+                if work >= _YIELD_THRESHOLD:
+                    work = 0
+                    await asyncio.sleep(0)
             # chunk ends with \r\n
-            crlf = await self.stream.read_bytes(2)
-            assert crlf == b"\r\n"
+            crlf = await read(self.stream.read_bytes(2))
+            if crlf != b"\r\n":
+                raise httputil.HTTPInputError("improperly terminated chunk")
 
     async def _read_body_until_close(
         self, delegate: httputil.HTTPMessageDelegate
     ) -> None:
-        body = await self.stream.read_until_close()
-        if not self._write_finished or self.is_client:
-            with _ExceptionLoggingContext(app_log):
-                ret = delegate.data_received(body)
-                if ret is not None:
-                    await ret
+        # The body is terminated by the connection closing, so there is no
+        # length known in advance. Read incrementally so that max_body_size
+        # is enforced before an over-large body has been buffered, and so
+        # that the body is not limited by the stream's read buffer size.
+        total_size = 0
+        work = 0  # See _YIELD_THRESHOLD
+        while True:
+            try:
+                body = await self.stream.read_bytes(
+                    self.params.chunk_size, partial=True
+                )
+            except iostream.StreamClosedError:
+                # The connection closing is the normal end of this body.
+                return
+            total_size += len(body)
+            if total_size > self._max_body_size:
+                raise httputil.HTTPInputError("Body too long")
+            await self._deliver_body(delegate, body)
+            work += len(body)
+            if work >= _YIELD_THRESHOLD:
+                work = 0
+                await asyncio.sleep(0)
 
 
 class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
@@ -734,9 +851,12 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
         if self._decompressor:
             compressed_data = chunk
             while compressed_data:
-                decompressed = self._decompressor.decompress(
-                    compressed_data, self._chunk_size
-                )
+                try:
+                    decompressed = self._decompressor.decompress(
+                        compressed_data, self._chunk_size
+                    )
+                except zlib.error as e:
+                    raise httputil.HTTPInputError("invalid gzip data: %s" % e)
                 if decompressed:
                     self._decompressed_body_size += len(decompressed)
                     if self._decompressed_body_size > self._max_body_size:
@@ -744,11 +864,14 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
                     ret = self._delegate.data_received(decompressed)
                     if ret is not None:
                         await ret
-                compressed_data = self._decompressor.unconsumed_tail
-                if compressed_data and not decompressed:
+                tail = self._decompressor.unconsumed_tail
+                # A call that finishes a gzip member may return no output,
+                # but it must consume some input.
+                if not decompressed and len(tail) >= len(compressed_data):
                     raise httputil.HTTPInputError(
                         "encountered unconsumed gzip data without making progress"
                     )
+                compressed_data = tail
         else:
             ret = self._delegate.data_received(chunk)
             if ret is not None:
@@ -756,17 +879,17 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
 
     def finish(self) -> None:
         if self._decompressor is not None:
-            tail = self._decompressor.flush()
-            if tail:
-                # The tail should always be empty: decompress returned
-                # all that it can in data_received and the only
-                # purpose of the flush call is to detect errors such
-                # as truncated input. If we did legitimately get a new
-                # chunk at this point we'd need to change the
-                # interface to make finish() a coroutine.
-                raise ValueError(
-                    "decompressor.flush returned data; possible truncated input"
-                )
+            try:
+                # data_received has passed all the data to decompress, so
+                # this returns nothing; it checks for truncated input.
+                self._decompressor.flush()
+            except zlib.error as e:
+                # The wrapped delegate will never see finish(), and since this
+                # delegate has been finished, HTTP1Connection will not call
+                # our on_connection_close either. Close the wrapped delegate
+                # here so it gets exactly one of the two.
+                self._delegate.on_connection_close()
+                raise httputil.HTTPInputError("invalid gzip data: %s" % e)
         return self._delegate.finish()
 
     def on_connection_close(self) -> None:
@@ -834,10 +957,6 @@ class HTTP1ServerConnection:
                     iostream.UnsatisfiableReadError,
                     asyncio.CancelledError,
                 ):
-                    return
-                except _QuietException:
-                    # This exception was already logged.
-                    conn.close()
                     return
                 except Exception:
                     gen_log.error("Uncaught exception", exc_info=True)

@@ -32,17 +32,13 @@ import re
 import time
 import unicodedata
 from functools import lru_cache
-from http.client import responses
+from http.client import responses as responses  # noqa: F401
 from ssl import SSLError
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 import warnings
 
 from tornado.escape import native_str, parse_qs_bytes, to_unicode, utf8
 from tornado.util import ObjectDict, unicode_type
-
-# responses is unused in this file, but we re-export it to other files.
-# Reference it so pyflakes doesn't complain.
-responses
 
 import typing
 from collections.abc import Awaitable, Generator, Iterable, Iterator, Mapping
@@ -184,7 +180,6 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
         # on demand (and cleared whenever the list is modified).
         self._as_list: dict[str, list[str]] = {}
         self._combined_cache: dict[str, str] = {}
-        self._last_key: str | None = None
         if len(args) == 1 and len(kwargs) == 0 and isinstance(args[0], HTTPHeaders):
             # Copy constructor
             for k, v in args[0].get_all():
@@ -208,7 +203,6 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
             if _FORBIDDEN_HEADER_CHARS_RE.search(value):
                 raise HTTPInputError("Invalid header value %r" % value)
         norm_name = _normalize_header(name)
-        self._last_key = norm_name
         if norm_name in self:
             self._combined_cache.pop(norm_name, None)
             self._as_list[norm_name].append(value)
@@ -249,6 +243,11 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
            In Tornado 7.0, certain deprecated features of HTTP will become errors.
            Specifically, line folding and the use of LF (with CR) as a line separator
            will be removed.
+
+        .. versionchanged:: 6.6
+           Support for line folding was removed due to security/DoS concerns. This removal
+           was ahead of the original removal schedule announced for Tornado 7.0.
+           Support for LF without CR remains until Tornado 7.0.
         """
         if m := re.search(r"\r?\n$", line):
             # RFC 9112 section 2.2: a recipient MAY recognize a single LF as a line
@@ -259,27 +258,14 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
             # Empty line, or the final CRLF of a header block.
             return
         if line[0] in HTTP_WHITESPACE:
-            # continuation of a multi-line header
-            # TODO(7.0): Remove support for line folding.
-            if self._last_key is None:
-                raise HTTPInputError("first header line cannot start with whitespace")
-            new_part = " " + line.strip(HTTP_WHITESPACE)
-            if _chars_are_bytes:
-                if not _ABNF.field_value.fullmatch(new_part[1:]):
-                    raise HTTPInputError("Invalid header continuation %r" % new_part)
-            else:
-                if _FORBIDDEN_HEADER_CHARS_RE.search(new_part):
-                    raise HTTPInputError("Invalid header value %r" % new_part)
-            self._as_list[self._last_key][-1] += new_part
-            self._combined_cache.pop(self._last_key, None)
-        else:
-            try:
-                name, value = line.split(":", 1)
-            except ValueError:
-                raise HTTPInputError("no colon in header line")
-            self.add(
-                name, value.strip(HTTP_WHITESPACE), _chars_are_bytes=_chars_are_bytes
+            raise HTTPInputError(
+                "header line cannot start with whitespace, folding not supported"
             )
+        try:
+            name, value = line.split(":", 1)
+        except ValueError:
+            raise HTTPInputError("no colon in header line")
+        self.add(name, value.strip(HTTP_WHITESPACE), _chars_are_bytes=_chars_are_bytes)
 
     @classmethod
     def parse(cls, headers: str, *, _chars_are_bytes: bool = True) -> HTTPHeaders:
@@ -345,13 +331,16 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
 
     def __delitem__(self, name: str) -> None:
         norm_name = _normalize_header(name)
-        del self._combined_cache[norm_name]
+        # _combined_cache is populated lazily by __getitem__ and invalidated
+        # by add(), so the name may be absent from it even when the header is
+        # present. Only _as_list determines whether the key exists.
+        self._combined_cache.pop(norm_name, None)
         del self._as_list[norm_name]
 
     def __len__(self) -> int:
         return len(self._as_list)
 
-    def __iter__(self) -> Iterator[typing.Any]:
+    def __iter__(self) -> Iterator[str]:
         return iter(self._as_list)
 
     def copy(self) -> HTTPHeaders:
@@ -467,10 +456,10 @@ class HTTPServerRequest:
     .. deprecated:: 6.5.2
        The ``host`` argument to the ``HTTPServerRequest`` constructor is deprecated. Use
        ``headers["Host"]`` instead. This argument was mistakenly removed in Tornado 6.5.0 and
-       temporarily restored in 6.5.2.
+       temporarily restored in 6.5.2. It will be removed in Tornado 6.7.
 
     .. deprecated:: 6.6
-       Creating a ``HTTPServerRequest`` with out a ``start_line`` argument is deprecated.
+       Creating an ``HTTPServerRequest`` without a ``start_line`` argument is deprecated.
        This argument will require a non-None value in Tornado 6.7. The ``method``, ``uri``,
        and ``version`` arguments are deprecated and will be removed in Tornado 6.7, along
        with the previously-deprecated ``host`` argument. At this time all remaining arguments
@@ -559,21 +548,37 @@ class HTTPServerRequest:
             # be used to exploit differences between proxies when multiple headers
             # are supplied).
             raise HTTPInputError("Multiple host headers not allowed: %r" % self.host)
-        self.host_name = split_host_and_port(self.host.lower())[0]
+        try:
+            self.host_name = split_host_and_port(self.host.lower())[0]
+        except ValueError:
+            # The port has more digits than int() allows.
+            raise HTTPInputError("Invalid Host header: %r" % self.host)
         self.files = files or {}
         self.connection = connection
         self.server_connection = server_connection
         self._start_time = time.time()
-        self._finish_time = None
+        self._finish_time: float | None = None
 
         if self.uri is not None:
             self.path, sep, self.query = self.uri.partition("?")
-        self.arguments = parse_qs_bytes(self.query, keep_blank_values=True)
+        try:
+            self.arguments = parse_qs_bytes(
+                self.query,
+                keep_blank_values=True,
+                # The query string is bounded by max_header_size, but parsing
+                # is expensive enough per field to be worth limiting. Use the
+                # same limit as a urlencoded body. This reads the global
+                # config because HTTPServerRequest has no access to the
+                # per-connection configuration; see set_parse_body_config.
+                max_num_fields=_DEFAULT_PARSE_BODY_CONFIG.urlencoded.max_arguments,
+            )
+        except Exception as e:
+            raise HTTPInputError("Invalid query string: %s" % e) from e
         self.query_arguments = copy.deepcopy(self.arguments)
         self.body_arguments: dict[str, list[bytes]] = {}
 
     @property
-    def cookies(self) -> dict[str, http.cookies.Morsel]:
+    def cookies(self) -> dict[str, http.cookies.Morsel[typing.Any]]:
         """A dictionary of ``http.cookies.Morsel`` objects."""
         if not hasattr(self, "_cookies"):
             self._cookies: http.cookies.SimpleCookie = http.cookies.SimpleCookie()
@@ -595,7 +600,7 @@ class HTTPServerRequest:
 
     def full_url(self) -> str:
         """Reconstructs the full URL for this request."""
-        return self.protocol + "://" + self.host + self.uri  # type: ignore[operator]
+        return self.protocol + "://" + self.host + self.uri
 
     def request_time(self) -> float:
         """Returns the amount of time it took for this request to execute."""
@@ -604,7 +609,9 @@ class HTTPServerRequest:
         else:
             return self._finish_time - self._start_time
 
-    def get_ssl_certificate(self, binary_form: bool = False) -> None | dict | bytes:
+    def get_ssl_certificate(
+        self, binary_form: bool = False
+    ) -> None | dict[str, typing.Any] | bytes:
         """Returns the client's SSL certificate, if any.
 
         To use client certificates, the HTTPServer's
@@ -960,6 +967,23 @@ class ParseMultipartConfig:
 
 
 @dataclasses.dataclass
+class ParseUrlEncodedConfig:
+    """This class configures the parsing of ``application/x-www-form-urlencoded`` request bodies.
+
+    Its primary purpose is to place limits on the size and complexity of request messages
+    to avoid potential denial-of-service attacks.
+
+    .. versionadded:: 6.5.8
+    """
+
+    max_arguments: int = 1000
+    """The maximum number of arguments accepted in a urlencoded request.
+
+    Each ``<input>`` element in an HTML form corresponds to at least one argument.
+    """
+
+
+@dataclasses.dataclass
 class ParseBodyConfig:
     """This class configures the parsing of request bodies.
 
@@ -968,6 +992,9 @@ class ParseBodyConfig:
 
     multipart: ParseMultipartConfig = dataclasses.field(
         default_factory=ParseMultipartConfig
+    )
+    urlencoded: ParseUrlEncodedConfig = dataclasses.field(
+        default_factory=ParseUrlEncodedConfig
     )
     """Configuration for ``multipart/form-data`` request bodies."""
 
@@ -1027,7 +1054,11 @@ def parse_body_arguments(
             )
         try:
             # real charset decoding will happen in RequestHandler.decode_argument()
-            uri_arguments = parse_qs_bytes(body, keep_blank_values=True)
+            uri_arguments = parse_qs_bytes(
+                body,
+                keep_blank_values=True,
+                max_num_fields=config.urlencoded.max_arguments,
+            )
         except Exception as e:
             raise HTTPInputError("Invalid x-www-form-urlencoded body: %s" % e) from e
         for name, values in uri_arguments.items():
@@ -1089,7 +1120,9 @@ def parse_multipart_form_data(
     final_boundary_index = data.rfind(b"--" + boundary + b"--")
     if final_boundary_index == -1:
         raise HTTPInputError("Invalid multipart/form-data: no final boundary found")
-    parts = data[:final_boundary_index].split(b"--" + boundary + b"\r\n")
+    parts = data[:final_boundary_index].split(
+        b"--" + boundary + b"\r\n", config.max_parts + 1
+    )
     if len(parts) > config.max_parts:
         raise HTTPInputError("multipart/form-data has too many parts")
     for part in parts:
@@ -1121,7 +1154,7 @@ def parse_multipart_form_data(
 
 
 def format_timestamp(
-    ts: int | float | tuple | time.struct_time | datetime.datetime,
+    ts: int | float | tuple[int, ...] | time.struct_time | datetime.datetime,
 ) -> str:
     """Formats a timestamp in the format used by HTTP.
 
@@ -1340,7 +1373,7 @@ def qs_to_qsl(qs: dict[str, list[AnyStr]]) -> Iterable[tuple[str, AnyStr]]:
 _unquote_sub = re.compile(r"\\(?:([0-3][0-7][0-7])|(.))").sub
 
 
-def _unquote_replace(m: re.Match) -> str:
+def _unquote_replace(m: re.Match[str]) -> str:
     if m[1]:
         return chr(int(m[1], 8))
     else:

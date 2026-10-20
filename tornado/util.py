@@ -16,7 +16,9 @@ import array
 import asyncio
 import os
 import re
+import sys
 import typing
+import warnings
 import zlib
 from collections.abc import Callable, Mapping, Sequence
 from inspect import getfullargspec
@@ -30,7 +32,7 @@ if typing.TYPE_CHECKING:
     # This lets us make these imports lazy.
     import datetime
     import unittest
-    from types import TracebackType
+    from types import CodeType, TracebackType
 
 # Aliases for types that are spelled differently in different Python
 # versions. bytes_type is deprecated and no longer used in Tornado
@@ -41,7 +43,9 @@ basestring_type = str
 
 
 # versionchanged:: 6.2
-# no longer our own TimeoutError, use standard asyncio class
+# no longer our own TimeoutError, use standard asyncio class (which is the
+# builtin TimeoutError since Python 3.11). Kept as an alias for compatibility;
+# new code should use the builtin TimeoutError.
 TimeoutError = asyncio.TimeoutError
 
 
@@ -63,39 +67,140 @@ class GzipDecompressor:
 
     The interface is like that of `zlib.decompressobj` (without some of the
     optional arguments, but it understands gzip headers and checksums.
+
+    .. versionchanged:: 6.6
+
+       Streams containing multiple gzip members (as defined in :rfc:`1952`
+       section 2.2) are now decompressed in full; previously everything
+       after the first member was ignored. Any data after the last member
+       that is not the start of another member is now an error, as is a
+       stream that ends partway through a member.
     """
 
     def __init__(self) -> None:
+        # The decompressor for the member currently being read. It is None
+        # before the first member and between members, which are the only
+        # places the stream may validly end. (We can't create one up front
+        # and check its eof attribute instead, because a new decompressobj
+        # is not at eof, and an empty stream, such as the body of a
+        # response to a HEAD request, is valid, as it is for
+        # `gzip.decompress`.)
+        self._decompressobj: zlib._Decompress | None = None
+        # Input that has not been passed to ``_decompressobj``, because
+        # ``max_length`` cut a call short. This is what `unconsumed_tail`
+        # reports; callers must pass it back to `decompress`.
+        self._unconsumed_tail = b""
+
+    @staticmethod
+    def _new_decompressobj() -> "zlib._Decompress":
         # Magic parameter makes zlib module understand gzip header
         # http://stackoverflow.com/questions/1838699/how-can-i-decompress-a-gzip-stream-with-zlib
         # This works on cpython and pypy, but not jython.
-        self.decompressobj = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        return zlib.decompressobj(16 + zlib.MAX_WBITS)
 
     def decompress(self, value: bytes, max_length: int = 0) -> bytes:
         """Decompress a chunk, returning newly-available data.
 
-        Some data may be buffered for later processing; `flush` must
-        be called when there is no more input data to ensure that
-        all data was processed.
+        When there is no more input, call `flush` to check that the stream
+        was complete.
 
         If ``max_length`` is given, some input data may be left over
         in ``unconsumed_tail``; you must retrieve this value and pass
         it back to a future call to `decompress` if it is not empty.
+        A call may return less than ``max_length``, or nothing at all,
+        even though ``unconsumed_tail`` is not empty (for example, at the
+        end of one gzip member and the start of the next), so keep
+        calling `decompress` until ``unconsumed_tail`` is empty.
+
+        Raises `zlib.error` if the input is not valid gzip data.
+
+        .. deprecated:: 6.6
+
+           Calling this method without ``max_length`` (or with
+           ``max_length=0``) is deprecated, because a small input can
+           decompress to an arbitrarily large output. In Tornado 7.0,
+           ``max_length`` will be required.
         """
-        return self.decompressobj.decompress(value, max_length)
+        if not max_length:
+            warnings.warn(
+                "GzipDecompressor.decompress without max_length is deprecated",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        result = self._decompress(value, max_length)
+        if not max_length:
+            # Without a limit, callers expect all the output at once, so we
+            # can't leave the start of the next member in unconsumed_tail.
+            while self._unconsumed_tail:
+                result += self._decompress(self._unconsumed_tail, 0)
+        return result
+
+    def _decompress(self, value: bytes, max_length: int) -> bytes:
+        # Each call makes one call to zlib; the caller loops over
+        # unconsumed_tail. This follows `gzip.decompress`, except that the
+        # header, CRC and length are checked by zlib itself.
+        if not value:
+            # Don't start a member (or report it as truncated) without data.
+            self._unconsumed_tail = b""
+            return b""
+        if self._decompressobj is None:
+            # This is the start of a member. zlib would reject anything
+            # else too, but with a less helpful message. value may be a
+            # single byte, in which case zlib checks the second one when it
+            # arrives.
+            if not b"\x1f\x8b".startswith(value[:2]):
+                raise zlib.error("expected a gzip member, got %r" % value[:2])
+            self._decompressobj = self._new_decompressobj()
+        result = self._decompressobj.decompress(value, max_length)
+        if self._decompressobj.eof:
+            # The rest of the input is the next member (or an error), so
+            # the caller must pass it back just like input that max_length
+            # held back. It is in unused_data; unconsumed_tail may hold a
+            # stale copy of it (a CPython bug), so don't look at that.
+            self._unconsumed_tail = self._decompressobj.unused_data
+            self._decompressobj = None
+        else:
+            self._unconsumed_tail = self._decompressobj.unconsumed_tail
+        return result
 
     @property
     def unconsumed_tail(self) -> bytes:
         """Returns the unconsumed portion left over"""
-        return self.decompressobj.unconsumed_tail
+        return self._unconsumed_tail
 
     def flush(self) -> bytes:
-        """Return any remaining buffered data not yet returned by decompress.
+        """Signals the end of the input.
 
-        Also checks for errors such as truncated input.
+        Call this once, after the last call to `decompress`, to check that
+        the stream was complete. Raises `zlib.error` if the input ended
+        partway through a gzip member. Raises `ValueError` if
+        `unconsumed_tail` is not empty; it must be passed back to
+        `decompress` first.
+
+        Always returns an empty byte string, because `decompress` returns
+        all of the output. The return value is kept for compatibility with
+        `zlib.Decompress.flush`, whose interface this follows.
+
         No other methods may be called on this object after `flush`.
+
+        .. versionchanged:: 6.6
+
+           Previously, this decompressed any remaining ``unconsumed_tail``
+           with no limit on the size of the output, and it did not detect
+           truncated input.
         """
-        return self.decompressobj.flush()
+        if self._unconsumed_tail:
+            raise ValueError(
+                "unconsumed_tail must be passed to decompress before flush"
+            )
+        if self._decompressobj is not None:
+            # A member has started but not ended. zlib is not holding back
+            # output that flushing it would return: when max_length cuts it
+            # off, the rest of the member, which includes at least its
+            # 8-byte trailer, is left in unconsumed_tail, which is empty. So
+            # zlib stopped because it ran out of input.
+            raise zlib.error("incomplete or truncated gzip stream")
+        return b""
 
 
 def import_object(name: str) -> Any:
@@ -128,7 +233,9 @@ def import_object(name: str) -> Any:
 
 
 def exec_in(
-    code: Any, glob: dict[str, Any], loc: Mapping[str, Any] | None | None = None
+    code: str | CodeType,
+    glob: dict[str, Any],
+    loc: Mapping[str, Any] | None = None,
 ) -> None:
     if isinstance(code, str):
         # exec(string) inherits the caller's future imports; compile
@@ -162,9 +269,9 @@ def errno_from_exception(e: BaseException) -> int | None:
     """
 
     if hasattr(e, "errno"):
-        return e.errno  # type: ignore
+        return typing.cast(int | None, e.errno)
     elif e.args:
-        return e.args[0]
+        return typing.cast(int | None, e.args[0])
     else:
         return None
 
@@ -232,7 +339,7 @@ class Configurable:
     __impl_class: type[Configurable] | None = None
     __impl_kwargs: dict[str, Any] | None = None
 
-    def __new__(cls, *args: Any, **kwargs: Any) -> Any:
+    def __new__(cls, *args: Any, **kwargs: Any) -> typing.Self:
         base = cls.configurable_base()
         init_kwargs: dict[str, Any] = {}
         if cls is base:
@@ -244,8 +351,8 @@ class Configurable:
         init_kwargs.update(kwargs)
         if impl.configurable_base() is not base:
             # The impl class is itself configurable, so recurse.
-            return impl(*args, **init_kwargs)
-        instance = super().__new__(impl)
+            return typing.cast(typing.Self, impl(*args, **init_kwargs))
+        instance = typing.cast(typing.Self, super().__new__(impl))
         # initialize vs __init__ chosen for compatibility with AsyncHTTPClient
         # singleton magic.  If we get rid of that we can switch to __init__
         # here too.
@@ -335,7 +442,7 @@ class ArgReplacer:
     and similar wrappers.
     """
 
-    def __init__(self, func: Callable, name: str) -> None:
+    def __init__(self, func: Callable[..., Any], name: str) -> None:
         self.name = name
         try:
             self.arg_pos: int | None = self._getargnames(func).index(name)
@@ -343,7 +450,7 @@ class ArgReplacer:
             # Not a positional parameter
             self.arg_pos = None
 
-    def _getargnames(self, func: Callable) -> list[str]:
+    def _getargnames(self, func: Callable[..., Any]) -> list[str]:
         try:
             return getfullargspec(func).args
         except TypeError:
@@ -354,8 +461,8 @@ class ArgReplacer:
                 # getfullargspec that we need here. Note that for static
                 # functions the @cython.binding(True) decorator must
                 # be used (for methods it works out of the box).
-                code = func.func_code  # type: ignore
-                return code.co_varnames[: code.co_argcount]
+                code = func.func_code
+                return typing.cast(list[str], code.co_varnames[: code.co_argcount])
             raise
 
     def get_old_value(
@@ -399,15 +506,20 @@ def timedelta_to_seconds(td: datetime.timedelta) -> float:
     return td.total_seconds()
 
 
-def _websocket_mask_python(mask: bytes, data: bytes) -> bytes:
-    """Websocket masking function.
+def _websocket_mask_int(mask: bytes, data: bytes) -> bytes:
+    # Treat the data and the repeated mask as (very large) integers so the
+    # XOR happens in C instead of looping over each byte in Python. This is
+    # much faster on CPython, but slower than the simple loop on PyPy.
+    if len(mask) != 4:
+        raise ValueError("mask must be 4 bytes")
+    n = len(data)
+    q, r = divmod(n, 4)
+    full_mask = int.from_bytes(mask * q + mask[:r], "little")
+    return (int.from_bytes(data, "little") ^ full_mask).to_bytes(n, "little")
 
-    `mask` is a `bytes` object of length 4; `data` is a `bytes` object of any length.
-    Returns a `bytes` object of the same length as `data` with the mask applied
-    as specified in section 5.3 of RFC 6455.
 
-    This pure-python implementation may be replaced by an optimized version when available.
-    """
+def _websocket_mask_loop(mask: bytes, data: bytes) -> bytes:
+    # A simple byte-at-a-time loop, which PyPy's JIT handles well.
     if len(mask) != 4:
         raise ValueError("mask must be 4 bytes")
     mask_arr = array.array("B", mask)
@@ -415,6 +527,17 @@ def _websocket_mask_python(mask: bytes, data: bytes) -> bytes:
     for i in range(len(data)):
         unmasked_arr[i] = unmasked_arr[i] ^ mask_arr[i % 4]
     return unmasked_arr.tobytes()
+
+
+# _websocket_mask_python(mask, data) applies the websocket mask as specified
+# in section 5.3 of RFC 6455. `mask` is a `bytes` object of length 4; `data`
+# is a `bytes` object of any length. Returns a `bytes` object of the same
+# length as `data`. This pure-python implementation may be replaced by an
+# optimized version when available.
+if sys.implementation.name == "pypy":
+    _websocket_mask_python = _websocket_mask_loop
+else:
+    _websocket_mask_python = _websocket_mask_int
 
 
 if os.environ.get("TORNADO_NO_EXTENSION") or os.environ.get("TORNADO_EXTENSION") == "0":
