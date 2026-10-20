@@ -482,6 +482,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         # test case in which chunks spread read-callback processing
         # over several ioloop iterations, but the connection is already closed.
         sock, port = bind_unused_port()
+        not_http1: list[bool] = []
         with closing(sock):
 
             @gen.coroutine
@@ -491,7 +492,11 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
                 stream = IOStream(conn)
                 request_data = yield stream.read_until(b"\r\n\r\n")
                 if b"HTTP/1." not in request_data:
-                    self.skipTest("requires HTTP/1.x")
+                    # skipTest can't be called from this callback, so close
+                    # the connection and skip from the test body instead.
+                    not_http1.append(True)
+                    stream.close()
+                    return
                 yield stream.write(b"""\
 HTTP/1.1 200 OK
 Transfer-Encoding: chunked
@@ -506,10 +511,19 @@ Transfer-Encoding: chunked
                 stream.close()
 
             netutil.add_accept_handler(sock, accept_callback)  # type: ignore
-            resp = self.fetch("http://127.0.0.1:%d/" % port)
-            resp.rethrow()
-            self.assertEqual(resp.body, b"12")
-            self.io_loop.remove_handler(sock.fileno())
+            try:
+                try:
+                    resp = self.fetch("http://127.0.0.1:%d/" % port)
+                except HTTPError:
+                    if not_http1:
+                        self.skipTest("requires HTTP/1.x")
+                    raise
+                if not_http1:
+                    self.skipTest("requires HTTP/1.x")
+                resp.rethrow()
+                self.assertEqual(resp.body, b"12")
+            finally:
+                self.io_loop.remove_handler(sock.fileno())
 
     def test_basic_auth(self):
         # This test data appears in section 2 of RFC 7617.
@@ -730,7 +744,8 @@ Transfer-Encoding: chunked
             streaming_callback=streaming_callback,
         )
         self.assertEqual(len(first_line), 1, first_line)
-        self.assertRegex(first_line[0], "HTTP/[0-9]\\.[0-9] 200.*\r\n")
+        # HTTP/2 status lines have no minor version (e.g. "HTTP/2 200").
+        self.assertRegex(first_line[0], "HTTP/[0-9](\\.[0-9])? 200.*\r\n")
         self.assertEqual(chunks, [b"asdf", b"qwer"])
 
     def test_header_callback_to_parse_line(self):
@@ -787,6 +802,7 @@ Transfer-Encoding: chunked
         # outcome is acceptable here; what matters is that the client doesn't hang
         # and doesn't misparse the header.
         sock, port = bind_unused_port()
+        not_http1: list[bool] = []
         with closing(sock):
 
             @gen.coroutine
@@ -794,7 +810,11 @@ Transfer-Encoding: chunked
                 stream = IOStream(conn)
                 request_data = yield stream.read_until(b"\r\n\r\n")
                 if b"HTTP/1." not in request_data:
-                    self.skipTest("requires HTTP/1.x")
+                    # skipTest can't be called from this callback, so close
+                    # the connection and skip from the test body instead.
+                    not_http1.append(True)
+                    stream.close()
+                    return
                 yield stream.write(b"""\
 HTTP/1.1 200 OK
 X-XSS-Protection: 1;
@@ -814,8 +834,12 @@ X-XSS-Protection: 1;
                     try:
                         resp = self.fetch("http://127.0.0.1:%d/" % port)
                     except HTTPError as e:
+                        if not_http1:
+                            self.skipTest("requires HTTP/1.x")
                         self.assertEqual(e.code, 599)
                     else:
+                        if not_http1:
+                            self.skipTest("requires HTTP/1.x")
                         resp.rethrow()
                         self.assertEqual(
                             resp.headers["X-XSS-Protection"], "1; mode=block"
