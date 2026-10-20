@@ -689,6 +689,119 @@ class TestReadWriteMixin(AsyncTestCase):
             rs.close()
 
     @gen_test
+    def test_read_into_buffer_resizable(self):
+        # The caller must be able to resize their buffer once the read is
+        # complete, which requires that we don't leave any memoryviews of
+        # it alive (on PyPy, views are not freed until garbage collection).
+        rs, ws = yield self.make_iostream_pair()
+        try:
+            # Read directly from the socket into the buffer.
+            buf = bytearray(5)
+            fut = rs.read_into(buf)
+            yield gen.sleep(0.01)
+            ws.write(b"hello")
+            yield fut
+            self.assertEqual(bytes(buf), b"hello")
+            del buf[:]
+
+            # Read from the existing buffer.
+            ws.write(b"worldworld")
+            yield rs.read_bytes(1)
+            buf = bytearray(4)
+            yield rs.read_into(buf)
+            self.assertEqual(bytes(buf), b"orld")
+            del buf[:]
+            buf = bytearray(10)
+            yield rs.read_into(buf, partial=True)
+            self.assertEqual(bytes(buf[:5]), b"world")
+            del buf[:]
+        finally:
+            ws.close()
+            rs.close()
+
+    @gen_test
+    def test_write_bytearray_resizable(self):
+        # Like test_read_into_buffer_resizable, for large writes (which
+        # are buffered without copying).
+        rs, ws = yield self.make_iostream_pair()
+        try:
+            data = bytearray(b"x" * 10000)
+            fut = rs.read_bytes(len(data))
+            yield ws.write(data)
+            self.assertEqual((yield fut), bytes(data))
+            del data[:]
+        finally:
+            ws.close()
+            rs.close()
+
+    @gen_test
+    def test_write_bytearray_resizable_after_close_while_writing(self):
+        # If the stream is closed while a large write is in progress, the
+        # views of the caller's data must be released too.
+        # (TestIOStreamMixin.test_write_bytearray_resizable_after_close
+        # covers a close before the stream has connected.)
+        rs, ws = yield self.make_iostream_pair()
+        try:
+            # Write more than the OS buffers can hold (nobody is reading)
+            # so that the write is still pending when we close.
+            data = bytearray(b"x" * (10 * 1024 * 1024))
+            fut = ws.write(data)
+            self.assertTrue(ws.writing())
+            # Hold a reference to the write buffer so the test doesn't depend
+            # on when it is freed (at once on CPython, at GC on PyPy).
+            write_buffer = ws._write_buffer  # noqa: F841
+            ws.close()
+            with self.assertRaises(StreamClosedError):
+                yield fut
+            del data[:]
+        finally:
+            ws.close()
+            rs.close()
+
+    @gen_test
+    def test_write_bytearray_resizable_after_error(self):
+        # Like test_write_bytearray_resizable_after_close, but the stream
+        # is closed because of a write error (the peer has gone away).
+        rs, ws = yield self.make_iostream_pair()
+        try:
+            rs.close()
+            data = bytearray(b"x" * (10 * 1024 * 1024))
+            write_buffer = ws._write_buffer  # noqa: F841
+            with self.assertRaises(StreamClosedError):
+                # Depending on timing this may fail synchronously or
+                # asynchronously; either way the write must not complete.
+                yield ws.write(data)
+            self.assertTrue(ws.closed())
+            del data[:]
+        finally:
+            ws.close()
+            rs.close()
+
+    @gen_test
+    def test_read_into_resizable_after_close(self):
+        # If the stream is closed while a read_into is pending, the
+        # caller's buffer must be resizable once the read has failed.
+        rs, ws = yield self.make_iostream_pair()
+        try:
+            # Put some data in the stream's own buffer first so both the
+            # copy from the read buffer and the read directly into the
+            # caller's buffer are exercised.
+            ws.write(b"ab")
+            yield rs.read_bytes(1)
+            buf = bytearray(10)
+            fut = rs.read_into(buf)
+            self.assertEqual(bytes(buf[:1]), b"b")
+            ws.write(b"cd")
+            yield gen.sleep(0.01)
+            ws.close()
+            with self.assertRaises(StreamClosedError):
+                yield fut
+            del buf[:]
+        finally:
+            ws.close()
+            rs.close()
+
+    @gen_test
     def test_read_into_zero_bytes(self):
         rs, ws = yield self.make_iostream_pair()
         try:
@@ -862,7 +975,7 @@ class TestIOStreamMixin(TestReadWriteMixin):
                     raise ConnectionResetError(errno.ECONNRESET, "Connection reset")
                 return result
 
-            rs.read_from_fd = read_from_fd  # type: ignore[method-assign]
+            rs.read_from_fd = read_from_fd
             ws.write(b"1234")
             data = yield rs.read_bytes(1)
             self.assertEqual(data, b"1")
@@ -979,6 +1092,26 @@ class TestIOStreamMixin(TestReadWriteMixin):
         finally:
             server.close()
             client.close()
+
+    @gen_test
+    def test_write_bytearray_resizable_after_close(self):
+        # Like test_write_bytearray_resizable, but the stream is closed
+        # while the data is still in the write buffer (here because the
+        # stream is still connecting).
+        listener, port = bind_unused_port()
+        self.addCleanup(listener.close)
+        stream = self._make_client_iostream(socket.socket())
+        connect_fut = stream.connect(("127.0.0.1", port))
+        data = bytearray(b"x" * 10000)
+        write_fut = stream.write(data)
+        # Hold a reference to the write buffer so the test doesn't depend on
+        # when it is freed (at once on CPython, at garbage collection on PyPy).
+        write_buffer = stream._write_buffer  # noqa: F841
+        stream.close()
+        for fut in [connect_fut, write_fut]:
+            with self.assertRaises(StreamClosedError):
+                yield fut
+        del data[:]
 
 
 class TestIOStreamWebHTTP(AsyncHTTPTestCase, TestIOStreamWebMixin):
@@ -1153,6 +1286,17 @@ class TestIOStreamStartTLS(AsyncTestCase):
                 yield server_future
 
     @gen_test
+    def test_start_tls_cancellation(self):
+        # The server never responds to the handshake. Cancelling the client's
+        # start_tls future must close the underlying socket (#3614).
+        client_future = self.client_start_tls(dict(cert_reqs=ssl.CERT_NONE))
+        client_future.cancel()
+        self.assertTrue(client_future.cancelled())
+        # read_until_close only completes if the client's socket was closed.
+        assert self.server_stream is not None
+        yield self.server_stream.read_until_close()
+
+    @gen_test
     def test_typed_memoryview(self):
         # Test support of memoryviews with an item size greater than 1 byte.
         buf = memoryview(bytes(80)).cast("L")
@@ -1292,16 +1436,20 @@ class TestIOStreamCheckHostname(AsyncTestCase):
     @gen_test
     async def test_no_match(self):
         stream = SSLIOStream(socket.socket(), ssl_options=self.client_ssl_ctx)
+        # The exact error strings depend on the TLS implementation: OpenSSL
+        # spells them out in prose while AWS-LC (and BoringSSL) use the
+        # uppercase name of the error reason.
         with ExpectLog(
             gen_log,
-            ".*alert bad certificate",
+            ".*(alert bad certificate|SSLV3_ALERT_BAD_CERTIFICATE)",
             level=logging.WARNING,
             required=platform.system() != "Windows",
         ):
             with self.assertRaises(ssl.SSLCertVerificationError):
                 with ExpectLog(
                     gen_log,
-                    ".*(certificate verify failed: Hostname mismatch)",
+                    ".*(certificate verify failed|CERTIFICATE_VERIFY_FAILED)"
+                    ": Hostname mismatch",
                     level=logging.WARNING,
                 ):
                     await stream.connect(
@@ -1395,7 +1543,10 @@ class TestStreamBuffer(TestCase):
     def check_peek(self, buf, expected):
         size = 1
         while size < 2 * len(expected):
-            got = self.to_bytes(buf.peek(size))
+            # peek's contract requires the view to be released before the
+            # buffer is modified.
+            with buf.peek(size) as view:
+                got = self.to_bytes(view)
             self.assertTrue(got)  # Not empty
             self.assertLessEqual(len(got), size)
             self.assertTrue(expected.startswith(got), (expected, got))
@@ -1481,3 +1632,88 @@ class TestStreamBuffer(TestCase):
         buf.advance(2)
         self.assertEqual(len(buf._buffers), 0)
         self.assertEqual(len(buf), 0)
+
+    def assert_resizable(self, data):
+        # Raises BufferError if any view of ``data`` is still alive.
+        data += b"!"
+        del data[-1:]
+
+    def assert_not_resizable(self, data):
+        with self.assertRaises(BufferError):
+            data += b"!"
+
+    def test_release_large_views(self):
+        # Large bytearrays are buffered by reference. The views must be
+        # released explicitly once they are consumed so the caller can
+        # resize them (on PyPy, views are not freed until garbage
+        # collection).
+        buf = self.make_streambuffer(10)
+        a = bytearray(b"a" * 20)
+        b = bytearray(b"b" * 20)
+        buf.append(a)
+        buf.append(b)
+        self.assert_not_resizable(a)
+        buf.advance(15)
+        self.assert_not_resizable(a)
+        self.check_peek(buf, b"a" * 5 + b"b" * 20)
+        buf.advance(10)
+        self.assert_resizable(a)
+        self.assert_not_resizable(b)
+        buf.advance(15)
+        self.assert_resizable(b)
+        self.assertEqual(len(buf), 0)
+
+    def test_clear(self):
+        buf = self.make_streambuffer(10)
+        large = bytearray(b"x" * 20)
+        buf.append(b"12345")
+        buf.append(large)
+        buf.append(b"67")
+        buf.advance(3)
+        self.assert_not_resizable(large)
+        buf.clear()
+        self.assert_resizable(large)
+        self.assertEqual(len(buf), 0)
+        self.assertEqual(len(buf._buffers), 0)
+        with buf.peek(10) as view:
+            self.assertEqual(len(view), 0)
+        # The buffer is still usable after being cleared.
+        buf.append(b"abc")
+        self.check_peek(buf, b"abc")
+        buf.advance(3)
+        self.assertEqual(len(buf), 0)
+
+    def test_interleaved_random(self):
+        # Interleave appends and advances of random sizes and types
+        # (instead of appending everything up front like the tests above)
+        # and compare against a simple model. Afterwards, none of the
+        # caller's buffers may still be referenced by a view.
+        for threshold in [1, 10, 100]:
+            buf = self.make_streambuffer(threshold)
+            expected = b""
+            inputs = []
+            for i in range(500):
+                if expected and self.random.random() < 0.5:
+                    n = self.random.randrange(1, len(expected) + 1)
+                    buf.advance(n)
+                    expected = expected[n:]
+                else:
+                    data = os.urandom(self.random.randrange(0, 3 * threshold))
+                    typ = self.random.choice([bytes, bytearray, memoryview])
+                    obj = typ(data)
+                    inputs.append(obj)
+                    buf.append(obj)
+                    expected += data
+                self.assertEqual(len(buf), len(expected))
+                if expected:
+                    size = self.random.randrange(1, 2 * len(expected) + 1)
+                    with buf.peek(size) as view:
+                        got = view.tobytes()
+                    self.assertTrue(got)
+                    self.assertTrue(expected.startswith(got))
+            if expected:
+                buf.advance(len(expected))
+            self.assertEqual(len(buf), 0)
+            for obj in inputs:
+                if isinstance(obj, bytearray):
+                    self.assert_resizable(obj)

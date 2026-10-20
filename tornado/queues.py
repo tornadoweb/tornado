@@ -33,7 +33,7 @@ import heapq
 from collections.abc import Awaitable
 from typing import Any, Generic, TypeVar
 
-from tornado import gen, ioloop
+from tornado import ioloop
 from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado.locks import Event
 
@@ -54,12 +54,14 @@ class QueueFull(Exception):
     pass
 
 
-def _set_timeout(future: Future, timeout: None | float | datetime.timedelta) -> None:
+def _set_timeout(
+    future: Future[Any], timeout: None | float | datetime.timedelta
+) -> None:
     if timeout is not None:
 
         def on_timeout() -> None:
             if not future.done():
-                future.set_exception(gen.TimeoutError())
+                future.set_exception(TimeoutError())
 
         io_loop = ioloop.IOLoop.current()
         timeout_handle = io_loop.add_timeout(timeout, on_timeout)
@@ -186,7 +188,7 @@ class Queue(Generic[_T]):
     ) -> Future[None]:
         """Put an item into the queue, perhaps waiting until there is room.
 
-        Returns a Future, which raises `tornado.util.TimeoutError` after a
+        Returns a Future, which raises `TimeoutError` after a
         timeout.
 
         ``timeout`` may be a number denoting a time (on the same
@@ -228,7 +230,7 @@ class Queue(Generic[_T]):
         """Remove and return an item from the queue.
 
         Returns an awaitable which resolves once an item is available, or raises
-        `tornado.util.TimeoutError` after a timeout.
+        `TimeoutError` after a timeout.
 
         ``timeout`` may be a number denoting a time (on the same
         scale as `tornado.ioloop.IOLoop.time`, normally `time.time`), or a
@@ -297,7 +299,7 @@ class Queue(Generic[_T]):
     ) -> Awaitable[None]:
         """Block until all items in the queue are processed.
 
-        Returns an awaitable, which raises `tornado.util.TimeoutError` after a
+        Returns an awaitable, which raises `TimeoutError` after a
         timeout.
 
         .. versionchanged:: 6.6
@@ -314,7 +316,8 @@ class Queue(Generic[_T]):
         self._queue = collections.deque()
 
     def _get(self) -> _T:
-        return self._queue.popleft()
+        item: _T = self._queue.popleft()
+        return item
 
     def _put(self, item: _T) -> None:
         self._queue.append(item)
@@ -353,7 +356,7 @@ class Queue(Generic[_T]):
         return result
 
 
-class PriorityQueue(Queue):
+class PriorityQueue(Queue[_T]):
     """A `.Queue` that retrieves entries in priority order, lowest first.
 
     Entries are typically tuples like ``(priority number, data)``.
@@ -388,11 +391,12 @@ class PriorityQueue(Queue):
     def _put(self, item: _T) -> None:
         heapq.heappush(self._queue, item)
 
-    def _get(self) -> _T:  # type: ignore[type-var]
-        return heapq.heappop(self._queue)
+    def _get(self) -> _T:
+        item: _T = heapq.heappop(self._queue)
+        return item
 
 
-class LifoQueue(Queue):
+class LifoQueue(Queue[_T]):
     """A `.Queue` that retrieves the most recently put items first.
 
     .. testcode::
@@ -425,5 +429,6 @@ class LifoQueue(Queue):
     def _put(self, item: _T) -> None:
         self._queue.append(item)
 
-    def _get(self) -> _T:  # type: ignore[type-var]
-        return self._queue.pop()
+    def _get(self) -> _T:
+        item: _T = self._queue.pop()
+        return item

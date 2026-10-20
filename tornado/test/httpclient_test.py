@@ -1,3 +1,14 @@
+# Test cases for Tornado HTTPClients.
+#
+# Most tests in this file are methods on HTTPClientCommonTestCase. Tests in this class run more
+# than once: once with each HTTP client implementation, plus one more time with the default
+# HTTP client (which is normally redundant, unless this feature is being used to inject a
+# third-party HTTP implementation, as in the tornado_http2 package). Most tests should be
+# added as methods on HTTPClientCommonTestCase. Tests that are not a part of that class
+# will not be automatically run on all client implementations.
+#
+# Test cases that are for specific implementation details of one of the client implementations
+# should go into the respective test file (simple_httpclient_test.py, curl_httpclient_test.py).
 import base64
 import binascii
 import contextlib
@@ -10,7 +21,7 @@ import subprocess
 import sys
 import threading
 import time
-import typing  # noqa: F401
+import typing
 import unicodedata
 import unittest
 import zlib
@@ -19,6 +30,7 @@ from io import BytesIO
 
 from tornado.escape import utf8, native_str, to_unicode, json_encode, json_decode
 from tornado import gen, netutil
+from tornado.locks import Event
 from tornado.httpclient import (
     HTTPClient,
     HTTPError,
@@ -88,12 +100,18 @@ class RedirectWithoutLocationHandler(RequestHandler):
 
 
 class ChunkHandler(RequestHandler):
+    def initialize(self, first_chunk_received: Event | None = None) -> None:
+        self.first_chunk_received = first_chunk_received
+
     @gen.coroutine
     def get(self):
         self.write("asdf")
         self.flush()
-        # Wait a bit to ensure the chunks are sent and received separately.
-        yield gen.sleep(0.01)
+        if self.first_chunk_received is not None and self.get_argument("wait", None):
+            # Don't send the second chunk until the client has received the
+            # first, so they can't be coalesced and the test can verify that
+            # chunks are delivered as they arrive.
+            yield self.first_chunk_received.wait()
         self.write("qwer")
 
 
@@ -139,13 +157,13 @@ class PatchHandler(RequestHandler):
 
 
 class AllMethodsHandler(RequestHandler):
-    SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ("OTHER",)  # type: ignore
+    SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ("OTHER",)
 
     def method(self):
         assert self.request.method is not None
         self.write(self.request.method)
 
-    get = head = post = put = delete = options = patch = other = method  # type: ignore
+    get = head = post = put = delete = options = patch = other = method
 
 
 class SetHeaderHandler(RequestHandler):
@@ -282,6 +300,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
     decompresses_brotli = False
 
     def get_app(self):
+        self.first_chunk_received = Event()
         return Application(
             [
                 url("/hello", HelloWorldHandler),
@@ -289,7 +308,11 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
                 url("/put", PutHandler),
                 url("/redirect", RedirectHandler),
                 url("/redirect_without_location", RedirectWithoutLocationHandler),
-                url("/chunk", ChunkHandler),
+                url(
+                    "/chunk",
+                    ChunkHandler,
+                    dict(first_chunk_received=self.first_chunk_received),
+                ),
                 url("/auth", AuthHandler),
                 url("/countdown/([0-9]+)", CountdownHandler, name="countdown"),
                 url("/echopost", EchoPostHandler),
@@ -446,7 +469,12 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         self.assertEqual(response.body, b"asdfqwer")
 
         chunks: list[bytes] = []
-        response = self.fetch("/chunk", streaming_callback=chunks.append)
+
+        def streaming_callback(chunk):
+            chunks.append(chunk)
+            self.first_chunk_received.set()
+
+        response = self.fetch("/chunk?wait=1", streaming_callback=streaming_callback)
         self.assertEqual(chunks, [b"asdf", b"qwer"])
         self.assertFalse(response.body)
 
@@ -454,6 +482,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         # test case in which chunks spread read-callback processing
         # over several ioloop iterations, but the connection is already closed.
         sock, port = bind_unused_port()
+        not_http1: list[bool] = []
         with closing(sock):
 
             @gen.coroutine
@@ -463,7 +492,11 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
                 stream = IOStream(conn)
                 request_data = yield stream.read_until(b"\r\n\r\n")
                 if b"HTTP/1." not in request_data:
-                    self.skipTest("requires HTTP/1.x")
+                    # skipTest can't be called from this callback, so close
+                    # the connection and skip from the test body instead.
+                    not_http1.append(True)
+                    stream.close()
+                    return
                 yield stream.write(b"""\
 HTTP/1.1 200 OK
 Transfer-Encoding: chunked
@@ -478,10 +511,19 @@ Transfer-Encoding: chunked
                 stream.close()
 
             netutil.add_accept_handler(sock, accept_callback)  # type: ignore
-            resp = self.fetch("http://127.0.0.1:%d/" % port)
-            resp.rethrow()
-            self.assertEqual(resp.body, b"12")
-            self.io_loop.remove_handler(sock.fileno())
+            try:
+                try:
+                    resp = self.fetch("http://127.0.0.1:%d/" % port)
+                except HTTPError:
+                    if not_http1:
+                        self.skipTest("requires HTTP/1.x")
+                    raise
+                if not_http1:
+                    self.skipTest("requires HTTP/1.x")
+                resp.rethrow()
+                self.assertEqual(resp.body, b"12")
+            finally:
+                self.io_loop.remove_handler(sock.fileno())
 
     def test_basic_auth(self):
         # This test data appears in section 2 of RFC 7617.
@@ -523,7 +565,7 @@ Transfer-Encoding: chunked
         # important thing is that they don't fall back to basic auth
         # on an unknown mode.
         with ExpectLog(gen_log, "uncaught exception", required=False):
-            with self.assertRaises((ValueError, HTTPError)):  # type: ignore
+            with self.assertRaises((ValueError, HTTPError)):
                 self.fetch(
                     "/auth",
                     auth_username="Aladdin",
@@ -664,7 +706,7 @@ Transfer-Encoding: chunked
         # test if client hangs on tricky invalid gzip
         # curl/simple httpclient have different behavior (exception, logging)
         with ExpectLog(
-            gen_log, ".*Malformed HTTP message.*unconsumed gzip data", required=False
+            gen_log, ".*Malformed HTTP message.*invalid gzip data", required=False
         ):
             try:
                 response = self.fetch("/invalid_gzip")
@@ -694,14 +736,16 @@ Transfer-Encoding: chunked
             # comes in.
             self.assertEqual(headers["content-type"], "text/html; charset=UTF-8")
             chunks.append(chunk)
+            self.first_chunk_received.set()
 
         self.fetch(
-            "/chunk",
+            "/chunk?wait=1",
             header_callback=header_callback,
             streaming_callback=streaming_callback,
         )
         self.assertEqual(len(first_line), 1, first_line)
-        self.assertRegex(first_line[0], "HTTP/[0-9]\\.[0-9] 200.*\r\n")
+        # HTTP/2 status lines have no minor version (e.g. "HTTP/2 200").
+        self.assertRegex(first_line[0], "HTTP/[0-9](\\.[0-9])? 200.*\r\n")
         self.assertEqual(chunks, [b"asdf", b"qwer"])
 
     def test_header_callback_to_parse_line(self):
@@ -750,9 +794,15 @@ Transfer-Encoding: chunked
                 )
 
     def test_multi_line_headers(self):
-        # Multi-line http headers are rare but rfc-allowed
-        # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.2
+        # Line folding is an obsolete way of representing headers split across multiple lines.
+        # https://www.rfc-editor.org/info/rfc9112/#section-5.2
+        #
+        # The spec requires user agents to unfold them, but simple_httpclient
+        # rejects them as of Tornado 6.6 while libcurl still accepts them. Either
+        # outcome is acceptable here; what matters is that the client doesn't hang
+        # and doesn't misparse the header.
         sock, port = bind_unused_port()
+        not_http1: list[bool] = []
         with closing(sock):
 
             @gen.coroutine
@@ -760,7 +810,11 @@ Transfer-Encoding: chunked
                 stream = IOStream(conn)
                 request_data = yield stream.read_until(b"\r\n\r\n")
                 if b"HTTP/1." not in request_data:
-                    self.skipTest("requires HTTP/1.x")
+                    # skipTest can't be called from this callback, so close
+                    # the connection and skip from the test body instead.
+                    not_http1.append(True)
+                    stream.close()
+                    return
                 yield stream.write(b"""\
 HTTP/1.1 200 OK
 X-XSS-Protection: 1;
@@ -771,9 +825,25 @@ X-XSS-Protection: 1;
 
             netutil.add_accept_handler(sock, accept_callback)  # type: ignore
             try:
-                resp = self.fetch("http://127.0.0.1:%d/" % port)
-                resp.rethrow()
-                self.assertEqual(resp.headers["X-XSS-Protection"], "1; mode=block")
+                with ExpectLog(
+                    gen_log,
+                    "Malformed HTTP message.*folding",
+                    level=logging.INFO,
+                    required=False,
+                ):
+                    try:
+                        resp = self.fetch("http://127.0.0.1:%d/" % port)
+                    except HTTPError as e:
+                        if not_http1:
+                            self.skipTest("requires HTTP/1.x")
+                        self.assertEqual(e.code, 599)
+                    else:
+                        if not_http1:
+                            self.skipTest("requires HTTP/1.x")
+                        resp.rethrow()
+                        self.assertEqual(
+                            resp.headers["X-XSS-Protection"], "1; mode=block"
+                        )
             finally:
                 self.io_loop.remove_handler(sock.fileno())
 
@@ -837,7 +907,7 @@ X-XSS-Protection: 1;
         response = yield self.http_client.fetch(request)
         self.assertEqual(response.code, 200)
 
-        with self.assertRaises((ValueError, HTTPError)) as context:  # type: ignore
+        with self.assertRaises((ValueError, HTTPError)) as context:
             request = HTTPRequest(url, network_interface="not-interface-or-ip")
             yield self.http_client.fetch(request)
         self.assertTrue(
@@ -983,7 +1053,7 @@ X-XSS-Protection: 1;
     def test_strip_headers_on_redirect(self):
         # Ensure that headers that should be stripped on cross-origin redirects
         # are stripped, even if the redirect is to a different port on localhost.
-        test_cases: list[tuple[str, dict, str]] = [
+        test_cases: list[tuple[str, dict[str, typing.Any], str]] = [
             ("manual auth header", dict(headers={"Authorization": "secret"}), ""),
             ("credentials in URL", dict(), "me:secret"),
             ("auth parameters", dict(auth_username="me", auth_password="secret"), ""),
@@ -1072,7 +1142,7 @@ class RequestProxyTest(TestCase):
 
 class HTTPResponseTestCase(TestCase):
     def test_str(self):
-        response = HTTPResponse(  # type: ignore
+        response = HTTPResponse(
             HTTPRequest("http://example.com"), 200, buffer=BytesIO()
         )
         s = str(response)
@@ -1180,7 +1250,7 @@ class HTTPRequestTestCase(TestCase):
 
     def test_headers_setter(self):
         request = HTTPRequest("http://example.com")
-        request.headers = {"bar": "baz"}  # type: ignore
+        request.headers = {"bar": "baz"}
         self.assertEqual(request.headers, {"bar": "baz"})
 
     def test_null_headers_setter(self):
@@ -1194,7 +1264,7 @@ class HTTPRequestTestCase(TestCase):
 
     def test_body_setter(self):
         request = HTTPRequest("http://example.com")
-        request.body = "foo"  # type: ignore
+        request.body = "foo"
         self.assertEqual(request.body, utf8("foo"))
 
     def test_if_modified_since(self):

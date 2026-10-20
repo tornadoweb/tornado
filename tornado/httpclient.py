@@ -131,10 +131,9 @@ class HTTPClient:
         If an error occurs during the fetch, we raise an `HTTPError` unless
         the ``raise_error`` keyword argument is set to False.
         """
-        response = self._io_loop.run_sync(
+        return self._io_loop.run_sync(
             functools.partial(self._async_client.fetch, request, **kwargs)
         )
-        return response
 
 
 class AsyncHTTPClient(Configurable):
@@ -176,7 +175,7 @@ class AsyncHTTPClient(Configurable):
 
     """
 
-    _instance_cache: dict[IOLoop, "AsyncHTTPClient"]
+    _instance_cache: dict[IOLoop, "AsyncHTTPClient"] | None
 
     @classmethod
     def configurable_base(cls) -> type[Configurable]:
@@ -193,17 +192,18 @@ class AsyncHTTPClient(Configurable):
         attr_name = "_async_client_dict_" + cls.__name__
         if not hasattr(cls, attr_name):
             setattr(cls, attr_name, weakref.WeakKeyDictionary())
-        return getattr(cls, attr_name)
+        return cast(dict[IOLoop, AsyncHTTPClient], getattr(cls, attr_name))
 
     def __new__(cls, force_instance: bool = False, **kwargs: Any) -> "AsyncHTTPClient":
         io_loop = IOLoop.current()
+        instance_cache: dict[IOLoop, AsyncHTTPClient] | None
         if force_instance:
             instance_cache = None
         else:
             instance_cache = cls._async_clients()
         if instance_cache is not None and io_loop in instance_cache:
             return instance_cache[io_loop]
-        instance = super().__new__(cls, **kwargs)  # type: ignore
+        instance = super().__new__(cls, **kwargs)
         # Make sure the instance knows which cache to remove itself from.
         # It can't simply call _async_clients() because we may be in
         # __new__(AsyncHTTPClient) but instance.__class__ may be
@@ -505,6 +505,11 @@ class HTTPRequest:
 
         .. versionadded:: 4.5
            The ``proxy_auth_mode`` argument.
+
+        .. versionchanged:: 6.6
+           With ``simple_httpclient``, ``streaming_callback`` may be a
+           coroutine; the next chunk is not read until it completes. This
+           is not supported by ``curl_httpclient``.
         """
         # Note that some of these attributes go through property setters
         # defined below.
@@ -560,7 +565,7 @@ class HTTPRequest:
         if value is None:
             self._headers = httputil.HTTPHeaders()
         else:
-            self._headers = value  # type: ignore
+            self._headers = value
 
     @property
     def body(self) -> bytes:

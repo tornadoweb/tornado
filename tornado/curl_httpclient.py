@@ -268,7 +268,8 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             try:
                 ret, num_handles = self._multi.socket_action(fd, action)
             except pycurl.error as e:
-                ret = e.args[0]
+                if isinstance(e.args[0], int):
+                    ret = e.args[0]
             if ret != pycurl.E_CALL_MULTI_PERFORM:
                 break
         self._finish_pending_requests()
@@ -280,7 +281,8 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             try:
                 ret, num_handles = self._multi.socket_action(pycurl.SOCKET_TIMEOUT, 0)
             except pycurl.error as e:
-                ret = e.args[0]
+                if isinstance(e.args[0], int):
+                    ret = e.args[0]
             if ret != pycurl.E_CALL_MULTI_PERFORM:
                 break
         self._finish_pending_requests()
@@ -333,7 +335,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                     "callback": callback,
                     "queue_start_time": queue_start_time,
                     "curl_start_time": time.time(),
-                    "curl_start_ioloop_time": self.io_loop.current().time(),  # type: ignore
+                    "curl_start_ioloop_time": self.io_loop.current().time(),
                 }
                 try:
                     self._curl_setup_request(

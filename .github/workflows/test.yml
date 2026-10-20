@@ -18,6 +18,7 @@ jobs:
   test_quick:
     name: Run quick tests
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
         with:
@@ -40,6 +41,7 @@ jobs:
     name: Run full tests
     needs: test_quick
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     strategy:
       matrix:
         include:
@@ -66,7 +68,16 @@ jobs:
           #    configs.append(("3.11.0", "py311-full"))
           #    # Pypy is a lot slower due to jit warmup costs, so don't run the
           #    # "full" test config there.
-          #    configs.append(("pypy-3.11", "pypy3"))
+          #    # PyPy releases are versioned independently of the python
+          #    # language version they implement. Let the PyPy version float
+          #    # within a major version (like we do with CPython patch
+          #    # releases), but upgrade to new major versions deliberately
+          #    # since they can introduce behavior changes (e.g. 8.0 began
+          #    # enforcing the rule against resizing a bytearray with live
+          #    # memoryviews).
+          #    pypy_major = 8
+          #    for pypy_python in ["3.11", "3.12"]:
+          #      configs.append((f"pypy-{pypy_python}-v{pypy_major}.x", "pypy3"))
           #    # Docs python version must be synced with tox.ini
           #    configs.append((f"3.{default_python_minor}", "docs"))
           #    for version, tox_env in configs:
@@ -89,7 +100,9 @@ jobs:
             tox_env: py315t
           - python: '3.11.0'
             tox_env: py311-full
-          - python: 'pypy-3.11'
+          - python: 'pypy-3.11-v8.x'
+            tox_env: pypy3
+          - python: 'pypy-3.12-v8.x'
             tox_env: pypy3
           - python: '3.13'
             tox_env: docs
@@ -111,15 +124,53 @@ jobs:
       - name: Run test suite
         run: python -m tox -e ${{ matrix.tox_env }}
 
+  test_coverage:
+    # Measure test coverage (including the alternate http client and
+    # resolver configurations) and fail if it drops below the floor set in
+    # tox.ini. The report is shown on the run's summary page and the HTML
+    # version is uploaded as an artifact.
+    name: Measure test coverage
+    needs: test_quick
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        name: Install Python
+        with:
+          # [[[cog cog.outl(f"python-version: '3.{default_python_minor}'")]]]
+          python-version: '3.13'
+          # [[[end]]]
+      - name: Install apt packages
+        run: sudo apt-get update && sudo apt-get install libcurl4-openssl-dev
+      - name: Install tox
+        run: python -m pip install tox -c requirements.txt
+
+      - name: Run test suite with coverage
+        run: python -m tox -e coverage
+
+      - name: Write coverage summary
+        if: ${{ !cancelled() }}
+        run: >-
+          .tox/coverage/bin/python -m coverage report --format=markdown
+          --data-file=.tox/coverage-data/.coverage >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload HTML coverage report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-html
+          path: .tox/coverage-data/html
+
   test_win:
     # Windows tests are fairly slow, so only run one configuration here.
-    # We test on windows but not mac because even though mac is a more
-    # fully-supported platform, it's similar enough to linux that we
-    # don't generally need to test it separately. Windows is different
-    # enough that we'll break it if we don't test it in CI.
+    # Windows is different enough from linux and mac that we'll break it
+    # if we don't test it in CI.
     name: Run windows tests
     needs: test_quick
     runs-on: windows-2025
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
         with:
@@ -133,9 +184,61 @@ jobs:
       - name: Run test suite
         run: py -m tornado.test
 
+  test_mac:
+    # Mac is similar to linux, but uses kqueue instead of epoll and has
+    # other platform differences that we only exercise here. One
+    # configuration is enough.
+    name: Run mac tests
+    needs: test_quick
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        name: Install Python
+        with:
+          # [[[cog cog.outl(f"python-version: '3.{default_python_minor}'")]]]
+          python-version: '3.13'
+          # [[[end]]]
+      - name: Run test suite
+        run: python -m tornado.test
+
+  benchmark:
+    # Compares CPU cost per request, per byte, etc. with the PR's base
+    # branch (see maint/benchmark/compare_benchmarks.py) and fails on a
+    # regression of more than 20%. The table is shown on the run's summary
+    # page. This runs alongside the full tests, so it adds no wall time.
+    name: Compare benchmarks with base branch
+    needs: test_quick
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        name: Check out base branch
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+      - uses: actions/setup-python@v6
+        name: Install Python
+        with:
+          # [[[cog cog.outl(f"python-version: '3.{default_python_minor}'")]]]
+          python-version: '3.13'
+          # [[[end]]]
+      - name: Run benchmarks
+        run: >-
+          python maint/benchmark/compare_benchmarks.py --base base --head .
+          --markdown "$GITHUB_STEP_SUMMARY"
+
   zizmor:
     name: Analyze action configs with zizmor
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     needs: test_quick
     steps:
       - uses: actions/checkout@v6
@@ -157,6 +260,7 @@ jobs:
     # test coverage.
     name: Test with cibuildwheel
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     needs: test_quick
     steps:
       - uses: actions/checkout@v6
@@ -177,6 +281,7 @@ jobs:
     # edited manually.
     name: Test cog generation
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     needs: test_quick
     steps:
       - uses: actions/checkout@v6

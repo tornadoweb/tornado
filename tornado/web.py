@@ -56,6 +56,7 @@ the executor do not refer to Tornado objects.
 
 """
 
+import asyncio
 import base64
 import binascii
 import datetime
@@ -95,9 +96,9 @@ from tornado.routing import (
     ReversibleRouter,
     ReversibleRuleRouter,
     Rule,
-    URLSpec,
     _RuleList,
 )
+from tornado.routing import URLSpec as URLSpec  # re-exported for compatibility
 from tornado.util import ObjectDict, _websocket_mask, unicode_type
 
 url = URLSpec
@@ -224,7 +225,7 @@ class RequestHandler:
         self.request.connection.set_close_callback(  # type: ignore
             self.on_connection_close
         )
-        self.initialize(**kwargs)  # type: ignore
+        self.initialize(**kwargs)
 
     def _initialize(self) -> None:
         pass
@@ -423,7 +424,7 @@ class RequestHandler:
         # If \n is allowed into the header, it is possible to inject
         # additional headers or split the request.
         if RequestHandler._VALID_HEADER_CHARS.fullmatch(retval) is None:
-            raise ValueError("Unsafe header value %r", retval)
+            raise ValueError("Unsafe header value %r" % retval)
         return retval
 
     @overload
@@ -611,7 +612,7 @@ class RequestHandler:
             )
 
     @property
-    def cookies(self) -> dict[str, http.cookies.Morsel]:
+    def cookies(self) -> dict[str, http.cookies.Morsel[Any]]:
         """An alias for
         `self.request.cookies <.httputil.HTTPServerRequest.cookies>`."""
         return self.request.cookies
@@ -642,7 +643,7 @@ class RequestHandler:
         name: str,
         value: str | bytes,
         domain: str | None = None,
-        expires: float | tuple | datetime.datetime | None = None,
+        expires: float | tuple[int, ...] | datetime.datetime | None = None,
         path: str = "/",
         expires_days: float | None = None,
         # Keyword-only args start here for historical reasons.
@@ -725,7 +726,10 @@ class RequestHandler:
             morsel["path"] = path
         if max_age:
             # Note change from _ to -.
-            morsel["max-age"] = str(max_age)
+            # Normalize through int() so that a non-int max_age (which could
+            # smuggle extra cookie attributes past the attribute allowlist)
+            # is rejected instead of being written to the header verbatim.
+            morsel["max-age"] = str(int(max_age))
         if httponly:
             # Note that SimpleCookie ignores the value here. The presence of an
             # httponly (or secure) key is treated as true.
@@ -961,7 +965,7 @@ class RequestHandler:
         self.set_header("Location", utf8(url))
         self.finish()
 
-    def write(self, chunk: str | bytes | dict) -> None:
+    def write(self, chunk: str | bytes | dict[Any, Any]) -> None:
         """Writes the given chunk to the output buffer.
 
         To write the output to the network, use the `flush()` method below.
@@ -1193,7 +1197,7 @@ class RequestHandler:
         """
         settings = self.application.settings
         if "template_loader" in settings:
-            return settings["template_loader"]
+            return cast(template.BaseLoader, settings["template_loader"])
         kwargs = {}
         if "autoescape" in settings:
             # autoescape=None means "no escaping", so we have to be sure
@@ -1253,7 +1257,13 @@ class RequestHandler:
                 future.set_result(None)
                 return future
 
-    def finish(self, chunk: str | bytes | dict | None = None) -> "Future[None]":
+    def _should_not_send_content(self, status_code: int) -> bool:
+        """Check if we should not send body content for given `status_code`"""
+        return status_code in (204, 304) or (100 <= status_code < 200)
+
+    def finish(
+        self, chunk: str | bytes | dict[Any, Any] | None = None
+    ) -> "Future[None]":
         """Finishes this response, ending the HTTP request.
 
         Passing a ``chunk`` to ``finish()`` is equivalent to passing that
@@ -1286,10 +1296,11 @@ class RequestHandler:
                 if self.check_etag_header():
                     self._write_buffer = []
                     self.set_status(304)
-            if self._status_code in (204, 304) or (100 <= self._status_code < 200):
-                assert not self._write_buffer, (
-                    "Cannot send body with %s" % self._status_code
-                )
+            if self._should_not_send_content(self._status_code):
+                if self._write_buffer:
+                    raise RuntimeError(
+                        f"Cannot send body with status code HTTP{self._status_code}"
+                    )
                 self._clear_representation_headers()
             elif "Content-Length" not in self._headers:
                 content_length = sum(len(part) for part in self._write_buffer)
@@ -1381,7 +1392,9 @@ class RequestHandler:
         the "current" exception for purposes of methods like
         ``sys.exc_info()`` or ``traceback.format_exc``.
         """
-        if self.settings.get("serve_traceback") and "exc_info" in kwargs:
+        if self._should_not_send_content(status_code):
+            self.finish()
+        elif self.settings.get("serve_traceback") and "exc_info" in kwargs:
             # in debug mode, try to send a traceback
             self.set_header("Content-Type", "text/plain")
             for line in traceback.format_exception(*kwargs["exc_info"]):
@@ -1509,7 +1522,7 @@ class RequestHandler:
         By default, we use the ``login_url`` application setting.
         """
         self.require_setting("login_url", "@tornado.web.authenticated")
-        return self.application.settings["login_url"]
+        return cast(str, self.application.settings["login_url"])
 
     def get_template_path(self) -> str | None:
         """Override to customize template path for each handler.
@@ -1569,7 +1582,7 @@ class RequestHandler:
                     ]
                 )
             else:
-                raise ValueError("unknown xsrf cookie version %d", output_version)
+                raise ValueError("unknown xsrf cookie version %d" % output_version)
             if version is None:
                 if self.current_user and "expires_days" not in cookie_kwargs:
                     cookie_kwargs["expires_days"] = 30
@@ -1697,6 +1710,122 @@ class RequestHandler:
             + '"/>'
         )
 
+    def _cross_origin_protection(self) -> None:
+        # Safe methods are not checked. WebSocket connections (which begin
+        # with a GET) are checked separately in WebSocketHandler.get, after
+        # prepare().
+        if self.request.method in ("HEAD", "OPTIONS", "GET"):
+            return
+
+        if self.application.settings.get("xsrf_cookies"):
+            self.check_xsrf_cookie()
+        if self.application.settings.get("cross_origin_protection"):
+            error = self._check_cross_origin(self.check_trusted_origin)
+            if error is not None:
+                raise HTTPError(403, error)
+
+    def _check_cross_origin(self, check: Callable[[str], bool]) -> str | None:
+        """Implements the cross-origin protection algorithm.
+
+        ``check`` is called with the ``Origin`` header for requests that
+        appear to be cross-origin. Returns None if the request is allowed,
+        or a message describing why it is not.
+        """
+        match sfs := self.request.headers.get("sec-fetch-site"):
+            case "same-origin" | "none":
+                # Same origin or direct navigation
+                return None
+            case None:
+                # No sec-fetch-site: Old browser, non-HTTPS, or non-browser client.
+                # Browsers should send Origin.
+                origin = self.request.headers.get("origin")
+                if origin is None:
+                    return None  # probably non-browser client
+                if self._origin_matches_host(origin) or check(origin):
+                    return None
+                return "Origin %r not allowed" % origin
+            case _:  # cross-site, same-site
+                origin = self.request.headers.get("origin")
+                if origin and check(origin):
+                    return None
+                return "Sec-Fetch-Site %s & origin %r not allowed" % (sfs, origin)
+
+    def _origin_matches_host(self, origin: str) -> bool:
+        origin = urllib.parse.urlsplit(origin).netloc.lower()
+        host = self.request.headers.get("Host", "").lower()
+
+        # Check to see that origin matches host directly, including ports.
+        # Note that ideally we'd also match the scheme, but that would make it a
+        # requirement to configure x-forwarded-scheme headers correctly and
+        # introduce additional configuration risk. Since this method comes into
+        # play on a fallback path (mainly non-HTTPS), this is acceptable.
+        return origin == host
+
+    def check_trusted_origin(self, origin: str) -> bool:
+        """Check if a cross-origin request should be allowed based on its origin.
+
+        This method is part of :ref:`cross_origin_protection`. It is called
+        only when the ``cross_origin_protection`` application setting is
+        enabled, for state-modifying requests (POST, PUT, DELETE, etc.) that
+        appear to be cross-origin, with the value of the ``Origin`` HTTP
+        header (e.g. ``https://example.com``). It is not called for requests
+        that are known to be same-origin, or for requests without an
+        ``Origin`` header (which do not come from a browser).
+
+        This method is called before `prepare`, so it must not rely on
+        anything that `prepare` does (such as authentication). It should
+        decide based only on the origin (and other attributes of the request
+        itself).
+
+        Return True to allow the request, or False to reject it with a 403
+        error. By default, it checks if the origin is found in the
+        application setting ``trusted_origins``.
+
+        Overriding this method to always return True excludes this handler from
+        cross-origin protection, and may be appropriate for endpoints designed
+        to be invoked from any origin::
+
+            def check_trusted_origin(self, origin):
+                return True
+
+        .. warning::
+
+           This is an important security measure; don't disable it
+           without understanding the security implications. Endpoints that
+           accept requests from any origin must not rely on cookies for
+           authentication (or must use some other form of XSRF protection,
+           such as ``xsrf_cookies``).
+
+        Applications that support both cookies and non-cookie credentials
+        (such as a token in the URL or an ``Authorization`` header) may
+        override this method to allow cross-origin requests that carry
+        such a credential. In this case, the override must verify the
+        credential, not merely check that one is present, unless the
+        application's authentication rejects any request with an invalid
+        credential. Otherwise an attacker could add an invalid token to a
+        cross-site request, which would pass this check and then be
+        authenticated by the victim's cookies. Applications whose
+        credentials cannot be verified here (for example, because
+        verification is asynchronous) should disable
+        ``cross_origin_protection`` and perform their own checks after
+        authentication.
+
+        Applications that wish to allow cross-origin but same-site requests may
+        do so by overriding this method to parse the origin and see if it is a
+        subdomain of a trusted domain::
+
+            def check_trusted_origin(self, origin):
+                parsed_origin = urllib.parse.urlsplit(origin)
+                return parsed_origin.netloc.endswith(".mydomain.com")
+
+        This method is also the default implementation of
+        `.WebSocketHandler.check_origin`, so overriding it affects websocket
+        connections as well (unless ``check_origin`` is also overridden).
+
+        .. versionadded:: 6.6
+        """
+        return origin in self.application.settings.get("trusted_origins", [])
+
     def static_url(
         self, path: str, include_host: bool | None = None, **kwargs: Any
     ) -> str:
@@ -1719,6 +1848,22 @@ class RequestHandler:
         that value will be used as the default for all `static_url`
         calls that do not pass ``include_host`` as a keyword argument.
 
+        ``path`` should name one of the application's known static files,
+        typically as a literal in a template. It should not be derived from
+        untrusted input such as request arguments: computing the version
+        reads the file, and each distinct path occupies an entry in a cache
+        of versions. Map untrusted input to a known set of files before
+        calling this method.
+
+        In the default implementation, a ``path`` that leads outside of
+        ``static_path`` (e.g. with ``../``) raises `HTTPError` (403).
+        Symlinks inside ``static_path`` are followed when computing the
+        version, even if they point outside of it; see `StaticFileHandler`.
+
+        .. versionchanged:: 6.6
+           Paths outside of ``static_path`` now raise `HTTPError`, and
+           files that are not regular files (or are larger than
+           `StaticFileHandler.MAX_VERSION_CONTENT_SIZE`) get no version.
         """
         self.require_setting("static_path", "static_url")
         get_url = self.settings.get(
@@ -1733,7 +1878,7 @@ class RequestHandler:
         else:
             base = ""
 
-        return base + get_url(self.settings, path, **kwargs)
+        return base + cast(str, get_url(self.settings, path, **kwargs))
 
     def require_setting(self, name: str, feature: str = "this feature") -> None:
         """Raises an exception if the given app setting is not defined."""
@@ -1831,14 +1976,8 @@ class RequestHandler:
             self.path_kwargs = {
                 k: self.decode_argument(v, name=k) for (k, v) in kwargs.items()
             }
-            # If XSRF cookies are turned on, reject form submissions without
-            # the proper cookie
-            if self.request.method not in (
-                "GET",
-                "HEAD",
-                "OPTIONS",
-            ) and self.application.settings.get("xsrf_cookies"):
-                self.check_xsrf_cookie()
+            # XSRF checks (if enabled): cookie-based and/or cross-origin protection.
+            self._cross_origin_protection()
 
             result = self.prepare()
             if result is not None:
@@ -1866,7 +2005,25 @@ class RequestHandler:
                 result = await result
             if self._auto_finish and not self._finished:
                 self.finish()
-        except Exception as e:
+        except (Exception, asyncio.CancelledError) as e:
+            task = asyncio.current_task()
+            if (
+                isinstance(e, asyncio.CancelledError)
+                and task is not None
+                and task.cancelling()
+            ):
+                # This handler's own task was cancelled (as opposed to the
+                # handler awaiting something else that was cancelled). This is
+                # not an error to be logged, but send a response so the
+                # connection is not left hanging, then let the cancellation
+                # propagate.
+                result = None
+                if not self._finished:
+                    try:
+                        self.send_error(500)
+                    except Exception:
+                        app_log.error("Exception in exception handler", exc_info=True)
+                raise
             try:
                 self._handle_request_exception(e)
             except Exception:
@@ -1874,10 +2031,10 @@ class RequestHandler:
             finally:
                 # Unset result to avoid circular references
                 result = None
+        finally:
             if self._prepared_future is not None and not self._prepared_future.done():
                 # In case we failed before setting _prepared_future, do it
-                # now (to unblock the HTTP server).  Note that this is not
-                # in a finally block to avoid GC issues prior to Python 3.4.
+                # now (to unblock the HTTP server).
                 self._prepared_future.set_result(None)
 
     def data_received(self, chunk: bytes) -> Awaitable[None] | None:
@@ -2006,14 +2163,14 @@ def stream_request_body(cls: type[_RequestHandlerType]) -> type[_RequestHandlerT
     for example usage.
     """  # noqa: E501
     if not issubclass(cls, RequestHandler):
-        raise TypeError("expected subclass of RequestHandler, got %r", cls)
+        raise TypeError("expected subclass of RequestHandler, got %r" % cls)
     cls._stream_request_body = True
     return cls
 
 
 def _has_stream_request_body(cls: type[RequestHandler]) -> bool:
     if not issubclass(cls, RequestHandler):
-        raise TypeError("expected subclass of RequestHandler, got %r", cls)
+        raise TypeError("expected subclass of RequestHandler, got %r" % cls)
     return cls._stream_request_body
 
 
@@ -2095,9 +2252,7 @@ class _ApplicationRouter(ReversibleRuleRouter):
         rule = super().process_rule(rule)
 
         if isinstance(rule.target, (list, tuple)):
-            rule.target = _ApplicationRouter(
-                self.application, rule.target  # type: ignore
-            )
+            rule.target = _ApplicationRouter(self.application, rule.target)
 
         return rule
 
@@ -2445,7 +2600,7 @@ class _HandlerDelegate(httputil.HTTPMessageDelegate):
         self.handler_kwargs = handler_kwargs or {}
         self.path_args = path_args or []
         self.path_kwargs = path_kwargs or {}
-        self.chunks: list[bytes] = []
+        self.chunks = bytearray()
         self.stream_request_body = _has_stream_request_body(self.handler_class)
 
     def headers_received(
@@ -2462,7 +2617,7 @@ class _HandlerDelegate(httputil.HTTPMessageDelegate):
         if self.stream_request_body:
             return self.handler.data_received(data)
         else:
-            self.chunks.append(data)
+            self.chunks += data
             return None
 
     def finish(self) -> None:
@@ -2471,7 +2626,7 @@ class _HandlerDelegate(httputil.HTTPMessageDelegate):
         else:
             # Note that the body gets parsed in RequestHandler._execute so it can be in
             # the right exception handler scope.
-            self.request.body = b"".join(self.chunks)
+            self.request.body = bytes(self.chunks)
             self.execute()
 
     def on_connection_close(self) -> None:
@@ -2511,7 +2666,7 @@ class _HandlerDelegate(httputil.HTTPMessageDelegate):
         fut = gen.convert_yielded(
             self.handler._execute(transforms, *self.path_args, **self.path_kwargs)
         )
-        fut.add_done_callback(lambda f: f.result())
+        fut.add_done_callback(lambda f: f.cancelled() or f.result())
         # If we are streaming the request body, then execute() is finished
         # when the handler has prepared to receive the body.  If not,
         # it doesn't matter when execute() finishes (so we return None)
@@ -2638,6 +2793,12 @@ class ErrorHandler(RequestHandler):
         # to the wrong url to return a 404 instead of 403.
         pass
 
+    def check_trusted_origin(self, origin: str) -> bool:
+        # POSTs to an ErrorHandler don't actually have side effects,
+        # so we can treat any origin as trusted.  This allows POSTs
+        # to the wrong url to return a 404 instead of 403.
+        return True
+
 
 class RedirectHandler(RequestHandler):
     """Redirects the client to the given URL for all GET requests.
@@ -2670,6 +2831,14 @@ class RedirectHandler(RequestHandler):
     .. versionchanged:: 5.0
        If any query arguments are present, they will be copied to the
        destination URL.
+
+    .. versionchanged:: 6.6
+       Substituted values may no longer change the scheme or netloc (user
+       info, host, and port) of the destination URL. For example, with a
+       ``url`` of ``"/{0}/b"``, a request that would redirect to
+       ``//example.com/b`` (a protocol-relative URL pointing to another host)
+       now fails with a 400 error. As a consequence, substitutions cannot be
+       used in the scheme or netloc part of the ``url``.
     """
 
     def initialize(self, url: str, permanent: bool = True) -> None:
@@ -2678,6 +2847,18 @@ class RedirectHandler(RequestHandler):
 
     def get(self, *args: Any, **kwargs: Any) -> None:
         to_url = self._url.format(*args, **kwargs)
+        # The scheme and netloc of the redirect must come from the template, not
+        # from the request. Find out what they are by formatting the template
+        # with a placeholder that cannot extend a scheme or netloc.
+        expected_url = self._url.format(
+            *("/" for _ in args), **{k: "/" for k in kwargs}
+        )
+        try:
+            unchanged = _scheme_and_netloc(to_url) == _scheme_and_netloc(expected_url)
+        except ValueError:
+            unchanged = False
+        if not unchanged:
+            raise HTTPError(400, "Redirect URL cannot change the scheme or netloc")
         if self.request.query_arguments:
             # TODO: figure out typing for the next line.
             to_url = httputil.url_concat(
@@ -2720,6 +2901,15 @@ class StaticFileHandler(RequestHandler):
     pointing elsewhere can set the ``allowed_symlink_directory`` initializer
     argument to a directory containing all of the intended targets, or to a
     list of such directories. It defaults to the ``path`` argument.
+
+    This symlink check applies only when serving files. `make_static_url`
+    (and therefore `RequestHandler.static_url`) runs without a handler
+    instance, so it cannot see ``allowed_symlink_directory``, and it will
+    compute a version hash for any regular file that a symlink inside the
+    static directory points to, wherever that file is. The file's contents
+    are never served this way, but its hash (and whether it exists) is
+    revealed in the URL. Symlinks in the static directory should therefore
+    only be created by people trusted with the files they point to.
 
     To maximize the effectiveness of browser caching, this class supports
     versioned urls (by default using the argument ``?v=``).  If a version
@@ -2771,6 +2961,25 @@ class StaticFileHandler(RequestHandler):
 
     CACHE_MAX_AGE = 86400 * 365 * 10  # 10 years
 
+    #: The largest content (in bytes) that `get_content_version` will hash.
+    #: Hashing is synchronous, so this bounds how long
+    #: `~RequestHandler.static_url` can block the event loop. Larger files
+    #: get no version. Subclasses may change it.
+    #:
+    #: .. versionadded:: 6.6
+    MAX_VERSION_CONTENT_SIZE = 64 * 1024 * 1024
+
+    #: The maximum number of versions that `get_version` keeps cached. When
+    #: the cache is full, the least recently used entry is discarded (and its
+    #: file will be read again if it is needed). This is far more than most
+    #: applications have static files; it exists to bound memory usage if
+    #: `~RequestHandler.static_url` is called with many distinct paths.
+    #: Subclasses may change it.
+    #:
+    #: .. versionadded:: 6.6
+    MAX_CACHED_VERSIONS = 10000
+
+    # Ordered from least to most recently used.
     _static_hashes: dict[str, str | None] = {}
     _lock = threading.Lock()  # protects _static_hashes
 
@@ -2961,9 +3170,19 @@ class StaticFileHandler(RequestHandler):
         as long as they are unique and understood by the subclass's
         overridden `get_content`.
 
+        Raises `HTTPError` (403) if ``path`` leads outside of ``root`` (as
+        written, e.g. with ``../``; symlinks are checked later by
+        `validate_absolute_path`). This check is also what keeps
+        `get_version` (and therefore `~RequestHandler.static_url`) from
+        reading files outside of the static directory.
+
         .. versionadded:: 3.1
+
+        .. versionchanged:: 6.6
+           Paths outside of ``root`` now raise `HTTPError`.
         """
         abspath = os.path.abspath(os.path.join(root, path))
+        cls._check_in_root(root, abspath, path)
         return abspath
 
     def validate_absolute_path(self, root: str, absolute_path: str) -> str | None:
@@ -2986,22 +3205,7 @@ class StaticFileHandler(RequestHandler):
 
         .. versionadded:: 3.1
         """
-        # os.path.abspath strips a trailing /.
-        # We must add it back to `root` so that we only match files
-        # in a directory named `root` instead of files starting with
-        # that prefix.
-        root = os.path.abspath(root)
-        if not root.endswith(os.path.sep):
-            # abspath always removes a trailing slash, except when
-            # root is '/'. This is an unusual case, but several projects
-            # have independently discovered this technique to disable
-            # Tornado's path validation and (hopefully) do their own,
-            # so we need to support it.
-            root += os.path.sep
-        # The trailing slash also needs to be temporarily added back
-        # the requested path so a request to root/ will match.
-        if not (absolute_path + os.path.sep).startswith(root):
-            raise HTTPError(403, "%s is not in root static directory", self.path)
+        root = self._check_in_root(root, absolute_path, self.path)
         # Symlinks may point anywhere inside allowed_symlink_directory, which
         # defaults to the directory being served. Resolve that default here,
         # against the same root the checks above used, and normalize the one
@@ -3027,7 +3231,7 @@ class StaticFileHandler(RequestHandler):
             # but there is some prefix to the path that was already
             # trimmed by the routing
             if not self.request.path.endswith("/"):
-                if self.request.path.startswith("//"):
+                if _is_protocol_relative(self.request.path):
                     # A redirect with two initial slashes is a "protocol-relative" URL.
                     # This means the next path segment is treated as a hostname instead
                     # of a part of the path, making this effectively an open redirect.
@@ -3054,6 +3258,20 @@ class StaticFileHandler(RequestHandler):
         # generation each resolve the path again. Every one of those is a
         # separate trip through the filesystem that could observe a
         # different file from the one validated here.
+        self._stat_result = self._stat_regular_file(absolute_path, self.path)
+        return absolute_path
+
+    @staticmethod
+    def _stat_regular_file(absolute_path: str, path_message: str) -> os.stat_result:
+        """Stats ``absolute_path`` and checks that it is a regular file.
+
+        Raises `HTTPError` (404) if the path cannot be stat'ed, or (403) if
+        it is anything other than a regular file. Directories, devices (such
+        as ``/dev/zero``, or ``CON`` and ``NUL``, which exist in every
+        directory on Windows), FIFOs and sockets must never be read: some of
+        them never end, and opening a FIFO blocks until there is a writer.
+        ``path_message`` is used only to build the error message.
+        """
         try:
             stat_result = os.stat(absolute_path)
         except OSError:
@@ -3061,9 +3279,34 @@ class StaticFileHandler(RequestHandler):
             # false when the path cannot be stat'ed at all.
             raise HTTPError(404)
         if not stat.S_ISREG(stat_result.st_mode):
-            raise HTTPError(403, "%s is not a file", self.path)
-        self._stat_result = stat_result
-        return absolute_path
+            raise HTTPError(403, "%s is not a file", path_message)
+        return stat_result
+
+    @staticmethod
+    def _check_in_root(root: str, absolute_path: str, path_message: str) -> str:
+        """Checks that ``absolute_path`` (as written) is inside ``root``.
+
+        Returns the normalized root, with a trailing separator. Raises
+        `HTTPError` (403) if the path is outside of it. ``path_message``
+        is used only to build the error message.
+        """
+        # os.path.abspath strips a trailing /.
+        # We must add it back to `root` so that we only match files
+        # in a directory named `root` instead of files starting with
+        # that prefix.
+        root = os.path.abspath(root)
+        if not root.endswith(os.path.sep):
+            # abspath always removes a trailing slash, except when
+            # root is '/'. This is an unusual case, but several projects
+            # have independently discovered this technique to disable
+            # Tornado's path validation and (hopefully) do their own,
+            # so we need to support it.
+            root += os.path.sep
+        # The trailing slash also needs to be temporarily added back
+        # the requested path so a request to root/ will match.
+        if not (absolute_path + os.path.sep).startswith(root):
+            raise HTTPError(403, "%s is not in root static directory", path_message)
+        return root
 
     @staticmethod
     def _resolve_symlink_target(
@@ -3139,7 +3382,14 @@ class StaticFileHandler(RequestHandler):
         as it helps reduce memory fragmentation.
 
         .. versionadded:: 3.1
+
+        .. versionchanged:: 6.6
+           Raises `HTTPError` if ``abspath`` is not a regular file.
         """
+        # validate_absolute_path has already checked this when serving a
+        # request, but get_content_version (for static_url) reaches this
+        # method with nothing but get_absolute_path in between.
+        cls._stat_regular_file(abspath, abspath)
         with open(abspath, "rb") as file:
             if start is not None:
                 file.seek(start)
@@ -3168,15 +3418,34 @@ class StaticFileHandler(RequestHandler):
         This class method may be overridden by subclasses.  The
         default implementation is a SHA-512 hash of the file's contents.
 
+        The hash is computed synchronously, so content larger than
+        `MAX_VERSION_CONTENT_SIZE` is not hashed (and gets no version)
+        rather than blocking the event loop for a long time.
+
         .. versionadded:: 3.1
+
+        .. versionchanged:: 6.6
+           Content larger than `MAX_VERSION_CONTENT_SIZE` raises `ValueError`.
         """
         data = cls.get_content(abspath)
+        chunks = [data] if isinstance(data, bytes) else data
         hasher = hashlib.sha512()
-        if isinstance(data, bytes):
-            hasher.update(data)
-        else:
-            for chunk in data:
+        size = 0
+        try:
+            for chunk in chunks:
+                size += len(chunk)
+                if size > cls.MAX_VERSION_CONTENT_SIZE:
+                    raise ValueError(
+                        "content is larger than MAX_VERSION_CONTENT_SIZE (%d bytes)"
+                        % cls.MAX_VERSION_CONTENT_SIZE
+                    )
                 hasher.update(chunk)
+        finally:
+            # Close the file now, rather than when the generator is collected,
+            # if we stopped early.
+            close = getattr(chunks, "close", None)
+            if close is not None:
+                close()
         return hasher.hexdigest()
 
     def _stat(self) -> os.stat_result:
@@ -3291,7 +3560,7 @@ class StaticFileHandler(RequestHandler):
         file corresponding to the given ``path``.
 
         """
-        url = settings.get("static_url_prefix", "/static/") + path
+        url: str = settings.get("static_url_prefix", "/static/") + path
         if not include_version:
             return url
 
@@ -3323,6 +3592,11 @@ class StaticFileHandler(RequestHandler):
         The returned value should be a string, or ``None`` if no version
         could be determined.
 
+        As with `~RequestHandler.static_url`, ``path`` should name a known
+        static file and should not be derived from untrusted input. Versions
+        are cached (up to `MAX_CACHED_VERSIONS` entries) until ``reset`` is
+        called.
+
         .. versionchanged:: 3.1
            This method was previously recommended for subclasses to override;
            `get_content_version` is now preferred as it allows the base
@@ -3335,16 +3609,19 @@ class StaticFileHandler(RequestHandler):
     def _get_cached_version(cls, abs_path: str) -> str | None:
         with cls._lock:
             hashes = cls._static_hashes
-            if abs_path not in hashes:
+            if abs_path in hashes:
+                # Move the entry to the end to mark it as most recently used.
+                hsh = hashes[abs_path] = hashes.pop(abs_path)
+            else:
                 try:
-                    hashes[abs_path] = cls.get_content_version(abs_path)
-                except Exception:
-                    gen_log.error("Could not open static file %r", abs_path)
-                    hashes[abs_path] = None
-            hsh = hashes.get(abs_path)
-            if hsh:
-                return hsh
-        return None
+                    hsh = cls.get_content_version(abs_path)
+                except Exception as e:
+                    gen_log.error("Could not open static file %r: %s", abs_path, e)
+                    hsh = None
+                while hashes and len(hashes) >= cls.MAX_CACHED_VERSIONS:
+                    del hashes[next(iter(hashes))]
+                hashes[abs_path] = hsh
+            return hsh or None
 
 
 class FallbackHandler(RequestHandler):
@@ -3526,7 +3803,7 @@ def authenticated(
 
 
 class UIModule:
-    """A re-usable, modular UI unit on a page.
+    """A reusable, modular UI unit on a page.
 
     UI modules often execute additional queries, and they can include
     additional CSS and JavaScript that will be included in the output
@@ -3827,7 +4104,10 @@ def _decode_signed_value_v1(
     if not hmac.compare_digest(parts[2], signature):
         gen_log.warning("Invalid cookie signature %r", value)
         return None
-    timestamp = int(parts[1])
+    try:
+        timestamp = int(parts[1])
+    except ValueError:
+        return None
     if timestamp < clock() - max_age_days * 86400:
         gen_log.warning("Expired cookie %r", value)
         return None
@@ -3898,7 +4178,10 @@ def _decode_signed_value_v2(
         return None
     if name_field != utf8(name):
         return None
-    timestamp = int(timestamp_bytes)
+    try:
+        timestamp = int(timestamp_bytes)
+    except ValueError:
+        return None
     if timestamp < clock() - max_age_days * 86400:
         # The signature has expired.
         return None
@@ -3936,3 +4219,37 @@ def _create_signature_v2(secret: str | bytes, s: bytes) -> bytes:
 
 def is_absolute(path: str) -> bool:
     return any(path.startswith(x) for x in ["/", "http:", "https:"])
+
+
+def _normalize_url_like_browser(url: str) -> str:
+    """Approximates how a browser cleans up a URL before parsing it.
+
+    Browsers follow the WHATWG URL spec, which strips leading and trailing
+    control characters and spaces, removes tabs and newlines anywhere in the
+    URL, and (for http and https) treats backslashes like forward slashes. Checks
+    on redirect URLs built from untrusted input must account for this.
+    """
+    url = url.strip("".join(chr(i) for i in range(0x21)))
+    url = url.replace("\t", "").replace("\n", "").replace("\r", "")
+    return url.replace("\\", "/")
+
+
+def _is_protocol_relative(url: str) -> bool:
+    """Returns True if a browser would treat ``url`` as a protocol-relative URL.
+
+    A protocol-relative URL (``//example.com/path``) names a host, so redirecting
+    to one that was built from untrusted input is an open redirect.
+    """
+    return _normalize_url_like_browser(url).startswith("//")
+
+
+def _scheme_and_netloc(url: str) -> tuple[str, str]:
+    """Returns the scheme and netloc a browser would see in ``url``.
+
+    The netloc includes the user info and port as well as the host.
+
+    Both are empty for a relative URL. Raises `ValueError` for some malformed
+    URLs.
+    """
+    parts = urllib.parse.urlsplit(_normalize_url_like_browser(url))
+    return parts.scheme.lower(), parts.netloc.lower()
