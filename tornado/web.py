@@ -184,6 +184,9 @@ class RequestHandler:
         "OPTIONS",
     )
 
+    # HTTP method -> name of the attribute marked with `http_method`, through the MRO.
+    _http_methods: dict[str, str] = {}
+
     _template_loaders: dict[str, template.BaseLoader] = {}
     _template_loader_lock = threading.Lock()
     _remove_control_chars_regex = re.compile(r"[\x00-\x08\x0e-\x1f]")
@@ -255,8 +258,28 @@ class RequestHandler:
         """An alias for `self.application.settings <Application.settings>`."""
         return self.application.settings
 
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        http_methods: dict[str, str] = {}
+        for klass in reversed(cls.__mro__):
+            for name, value in vars(klass).items():
+                method = getattr(value, _HTTP_METHOD_ATTR, None)
+                if method is not None:
+                    http_methods[method] = name
+        cls._http_methods = http_methods
+
     def _unimplemented_method(self, *args: str, **kwargs: str) -> None:
         raise HTTPError(405)
+
+    def _allowed_methods(self) -> list[str]:
+        allowed = [
+            method
+            for method in self.SUPPORTED_METHODS
+            if getattr(type(self), method.lower(), RequestHandler._unimplemented_method)
+            is not RequestHandler._unimplemented_method
+        ]
+        allowed.extend(m for m in self._http_methods if m not in allowed)
+        return allowed
 
     head: Callable[..., Awaitable[None] | None] = _unimplemented_method
     get: Callable[..., Awaitable[None] | None] = _unimplemented_method
@@ -1372,6 +1395,9 @@ class RequestHandler:
             if isinstance(exception, HTTPError) and exception.reason:
                 reason = exception.reason
         self.set_status(status_code, reason=reason)
+        if status_code == 405:
+            # RFC 9110 section 15.5.6: a 405 response must list the allowed methods.
+            self.set_header("Allow", ", ".join(self._allowed_methods()))
         try:
             if status_code != 304:
                 self.write_error(status_code, **kwargs)
@@ -1822,7 +1848,7 @@ class RequestHandler:
         `.WebSocketHandler.check_origin`, so overriding it affects websocket
         connections as well (unless ``check_origin`` is also overridden).
 
-        .. versionadded:: 6.6
+        .. versionadded:: 6.7
         """
         return origin in self.application.settings.get("trusted_origins", [])
 
@@ -1962,8 +1988,12 @@ class RequestHandler:
         """Executes this request with the given output transforms."""
         self._transforms = transforms
         try:
-            if self.request.method not in self.SUPPORTED_METHODS:
-                raise HTTPError(405)
+            assert self.request.method is not None
+            method_name = self._http_methods.get(self.request.method)
+            if method_name is None:
+                if self.request.method not in self.SUPPORTED_METHODS:
+                    raise HTTPError(405)
+                method_name = self.request.method.lower()
 
             # If we're not in stream_request_body mode, this is the place where we parse the body.
             if not _has_stream_request_body(self.__class__):
@@ -1999,7 +2029,7 @@ class RequestHandler:
                 except iostream.StreamClosedError:
                     return
 
-            method = getattr(self, self.request.method.lower())
+            method = getattr(self, method_name)
             result = method(*self.path_args, **self.path_kwargs)
             if result is not None:
                 result = await result
@@ -2139,6 +2169,52 @@ class RequestHandler:
 
 
 _RequestHandlerType = TypeVar("_RequestHandlerType", bound=RequestHandler)
+
+
+_HTTP_METHOD_ATTR = "_tornado_http_method"
+
+_MethodType = TypeVar("_MethodType", bound=Callable[..., Any])
+
+
+@overload
+def http_method(func: _MethodType) -> _MethodType: ...
+
+
+@overload
+def http_method(
+    *, method: str | None = None
+) -> Callable[[_MethodType], _MethodType]: ...
+
+
+def http_method(
+    func: _MethodType | None = None, *, method: str | None = None
+) -> _MethodType | Callable[[_MethodType], _MethodType]:
+    """Expose a `RequestHandler` method as the handler for an HTTP method.
+
+    Applied without arguments, the HTTP method is the upper-cased name of the
+    decorated method, so ``@http_method`` on ``def query(self)`` handles
+    ``QUERY`` requests. ``@http_method(method="QUERY")`` handles ``QUERY`` with
+    a method of any name.
+
+    Methods named after the members of ``RequestHandler.SUPPORTED_METHODS``
+    (``get``, ``post``, etc.) are exposed without this decorator. Any other
+    method is only reachable when decorated, so that an existing method such
+    as ``query`` does not become web-accessible by accident. Decorated
+    methods are listed in the ``Allow`` header of ``405 Method Not Allowed``
+    responses, along with the implemented ``SUPPORTED_METHODS``.
+
+    .. versionadded:: 6.7
+    """
+
+    def decorator(f: _MethodType) -> _MethodType:
+        setattr(
+            f, _HTTP_METHOD_ATTR, method if method is not None else f.__name__.upper()
+        )
+        return f
+
+    if func is not None:
+        return decorator(func)
+    return decorator
 
 
 def stream_request_body(cls: type[_RequestHandlerType]) -> type[_RequestHandlerType]:
