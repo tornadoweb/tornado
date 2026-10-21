@@ -623,6 +623,24 @@ class SimpleHTTPSClientTestCase(AsyncHTTPSTestCase, SimpleHTTPClientTestMixin):
             force_instance=True, defaults=dict(validate_cert=False), **kwargs
         )
 
+    def wait_for_server_connections(self) -> None:
+        """Wait for the server to close all of its connections.
+
+        When the client rejects the server's certificate, its fetch fails
+        as soon as it sends its alert, but the server only logs the
+        failure once it reads that alert (or the close that follows it).
+        Without this wait the server's "SSL Error" log can land after the
+        test's ``ExpectLog`` block has exited, where the test's log check
+        reports it as unexpected. Every connection closes this way (the
+        handshake never completes), so this ends promptly.
+        """
+
+        async def wait() -> None:
+            while self.http_server._connections:
+                await gen.sleep(0.01)
+
+        self.io_loop.run_sync(wait)
+
     def test_ssl_options(self):
         resp = self.fetch("/hello", ssl_options={"cert_reqs": ssl.CERT_NONE})
         self.assertEqual(resp.body, b"Hello world!")
@@ -642,6 +660,7 @@ class SimpleHTTPSClientTestCase(AsyncHTTPSTestCase, SimpleHTTPClientTestMixin):
                     ssl_options=dict(cert_reqs=ssl.CERT_REQUIRED),
                     raise_error=True,
                 )
+            self.wait_for_server_connections()
 
     def test_ssl_context_handshake_fail(self):
         with ExpectLog(gen_log, "SSL Error|Uncaught exception"):
@@ -649,6 +668,7 @@ class SimpleHTTPSClientTestCase(AsyncHTTPSTestCase, SimpleHTTPClientTestMixin):
             ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
             with self.assertRaises(ssl.SSLError):
                 self.fetch("/hello", ssl_options=ctx, raise_error=True)
+            self.wait_for_server_connections()
 
     def test_error_logging(self):
         # No stack traces are logged for SSL errors (in this case,
@@ -657,6 +677,7 @@ class SimpleHTTPSClientTestCase(AsyncHTTPSTestCase, SimpleHTTPClientTestMixin):
         with ExpectLog(gen_log, ".*") as expect_log:
             with self.assertRaises(ssl.SSLError):
                 self.fetch("/", validate_cert=True, raise_error=True)
+            self.wait_for_server_connections()
         self.assertFalse(expect_log.logged_stack)
 
 
