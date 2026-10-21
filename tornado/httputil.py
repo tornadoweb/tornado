@@ -1139,15 +1139,14 @@ def parse_multipart_form_data(
         if disposition != "form-data" or not part.endswith(b"\r\n"):
             raise HTTPInputError("Invalid multipart/form-data")
         value = part[eoh + 4 : -2]
-        if not disp_params.get("name"):
+        name = disp_params.get("name")
+        if not name:
             raise HTTPInputError("multipart/form-data missing name")
-        name = disp_params["name"]
-        if disp_params.get("filename"):
+        filename = disp_params.get("filename")
+        if filename:
             ctype = headers.get("Content-Type", "application/unknown")
             files.setdefault(name, []).append(
-                HTTPFile(
-                    filename=disp_params["filename"], body=value, content_type=ctype
-                )
+                HTTPFile(filename=filename, body=value, content_type=ctype)
             )
         else:
             arguments.setdefault(name, []).append(value)
@@ -1265,10 +1264,11 @@ def _parseparam(s: str) -> Generator[str]:
         start = end
 
 
-def _parse_header(line: str) -> tuple[str, dict[str, str]]:
+def _parse_header(line: str) -> tuple[str, dict[str, str | None]]:
     r"""Parse a Content-type like header.
 
-    Return the main content-type and a dictionary of options.
+    Return the main content-type and a dictionary of options. Parameters
+    without a value (as used in websocket extension negotiation) map to None.
 
     >>> d = "form-data; foo=\"b\\\\a\\\"r\"; file*=utf-8''T%C3%A4st"
     >>> ct, d = _parse_header(d)
@@ -1278,29 +1278,37 @@ def _parse_header(line: str) -> tuple[str, dict[str, str]]:
     True
     >>> d['foo']
     'b\\a"r'
+    >>> _parse_header('permessage-deflate; client_no_context_takeover')
+    ('permessage-deflate', {'client_no_context_takeover': None})
     """
     parts = _parseparam(";" + line)
     key = next(parts)
     # decode_params treats first argument special, but we already stripped key
     params = [("Dummy", "value")]
+    valueless = []
     for p in parts:
         i = p.find("=")
         if i >= 0:
             name = p[:i].strip().lower()
             value = p[i + 1 :].strip()
             params.append((name, native_str(value)))
+        elif p:
+            valueless.append(p.lower())
     decoded_params = email.utils.decode_params(params)
     decoded_params.pop(0)  # get rid of the dummy again
-    pdict = {}
+    pdict: dict[str, str | None] = {}
     for name, decoded_value in decoded_params:
         value = email.utils.collapse_rfc2231_value(decoded_value)
         if len(value) >= 2 and value[0] == '"' and value[-1] == '"':
             value = value[1:-1]
         pdict[name] = value
+    for name in valueless:
+        # A parameter given with a value takes precedence.
+        pdict.setdefault(name, None)
     return key, pdict
 
 
-def _encode_header(key: str, pdict: dict[str, str]) -> str:
+def _encode_header(key: str, pdict: dict[str, str | None]) -> str:
     """Inverse of _parse_header.
 
     >>> _encode_header('permessage-deflate',

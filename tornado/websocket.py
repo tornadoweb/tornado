@@ -1015,7 +1015,7 @@ class WebSocketProtocol13(WebSocketProtocol):
 
     def _parse_extensions_header(
         self, headers: httputil.HTTPHeaders
-    ) -> list[tuple[str, dict[str, str]]]:
+    ) -> list[tuple[str, dict[str, str | None]]]:
         extensions = headers.get("Sec-WebSocket-Extensions", "")
         if extensions:
             return [httputil._parse_header(e.strip()) for e in extensions.split(",")]
