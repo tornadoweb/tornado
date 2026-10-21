@@ -1085,6 +1085,46 @@ class InvalidCompressionOfferTest(WebSocketBaseTestCase):
         )
         self.assertEqual(headers["Sec-WebSocket-Extensions"], "permessage-deflate")
 
+    @gen_test
+    async def test_no_context_takeover_accepted(self):
+        # Valueless parameters are accepted and echoed back.
+        headers = await self.handshake(
+            "permessage-deflate; server_no_context_takeover; client_no_context_takeover"
+        )
+        self.assertEqual(
+            headers["Sec-WebSocket-Extensions"],
+            "permessage-deflate; client_no_context_takeover; server_no_context_takeover",
+        )
+
+
+class ClientNoContextTakeoverTest(WebSocketBaseTestCase):
+    MESSAGE = "Hello world. Testing 123 123"
+
+    def get_app(self):
+        class Handler(EchoHandler):
+            def set_header(self, name, value):
+                # Our client doesn't offer client_no_context_takeover, but
+                # a server may require it anyway.
+                if name == "Sec-WebSocket-Extensions":
+                    value += "; client_no_context_takeover"
+                super().set_header(name, value)
+
+        return Application([("/", Handler, dict(compression_options={}))])
+
+    @gen_test
+    def test_client_no_context_takeover(self):
+        ws = yield self.ws_connect("/", compression_options={})
+        self.assertIsNotNone(ws.protocol._compressor)
+        sizes = []
+        for i in range(3):
+            before = ws.protocol._wire_bytes_out
+            ws.write_message(self.MESSAGE)
+            response = yield ws.read_message()
+            self.assertEqual(response, self.MESSAGE)
+            sizes.append(ws.protocol._wire_bytes_out - before)
+        # Without context takeover, repeated messages don't get smaller.
+        self.assertEqual(sizes, [sizes[0]] * 3)
+
 
 @abstract_base_test
 class MaskFunctionMixin(TestCase):
