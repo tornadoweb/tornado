@@ -33,7 +33,7 @@ from tornado.httputil import (
     HTTPServerConnectionDelegate,
     ResponseStartLine,
 )
-from tornado.iostream import IOStream
+from tornado.iostream import IOStream, StreamClosedError
 from tornado.locks import Event
 from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
@@ -129,13 +129,29 @@ class SSLTest(AsyncHTTPSTestCase):
                         raise_error=True,
                     )
 
-    def test_error_logging(self):
+    @gen_test
+    async def test_error_logging(self):
         # No stack traces are logged for SSL errors.
+        #
+        # Send plaintext over a raw stream and wait for the server to close
+        # the connection. The server logs the error before it closes, so the
+        # close guarantees the message has been logged. This test used to use
+        # self.fetch, but the client's error is not a reliable signal that the
+        # server has handled the bad handshake: in particular, fetch's own
+        # timeout raises TimeoutError, which is an IOError, so a slow exchange
+        # passed the assertRaises and then failed in ExpectLog with no
+        # indication of what had happened.
         with ExpectLog(gen_log, "SSL Error") as expect_log:
-            with self.assertRaises((IOError, HTTPError)):
-                self.fetch(
-                    self.get_url("/").replace("https:", "http:"), raise_error=True
-                )
+            stream = IOStream(socket.socket())
+            with closing(stream):
+                await stream.connect(("127.0.0.1", self.get_http_port()))
+                await stream.write(b"GET / HTTP/1.0\r\n\r\n")
+                try:
+                    await stream.read_until_close()
+                except StreamClosedError:
+                    # The server may reset the connection instead of closing
+                    # it cleanly, since it does not read the whole request.
+                    pass
         self.assertFalse(expect_log.logged_stack)
 
 
