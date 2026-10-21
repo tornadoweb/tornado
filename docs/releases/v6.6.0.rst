@@ -1,7 +1,7 @@
 What's new in Tornado 6.6.0
 ===========================
 
-Oct XX, 2026
+Oct 21, 2026
 ------------
 
 General changes
