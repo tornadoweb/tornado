@@ -68,6 +68,12 @@ class WSGIContainerDummyExecutorTest(WSGIAppMixin, AsyncHTTPTestCase):
         response = self.fetch("/simple")
         self.assertEqual(response.body, b"Hello world!")
 
+    def test_head(self):
+        response = self.fetch("/simple", method="HEAD")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"")
+        self.assertEqual(response.headers["Content-Length"], "12")
+
     @gen_test
     async def test_concurrent_barrier(self):
         self.barrier.reset()
