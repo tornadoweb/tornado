@@ -1044,10 +1044,15 @@ def parse_body_arguments(
     a string and ``body`` should be a byte string.  The ``arguments``
     and ``files`` parameters are dictionaries that will be updated
     with the parsed contents.
+
+    Media types and parameter names are case-insensitive. Parameter values,
+    including multipart boundaries, retain their original case.
     """
     if config is None:
         config = _DEFAULT_PARSE_BODY_CONFIG
-    if content_type.startswith("application/x-www-form-urlencoded"):
+    # Media types and parameter names are case-insensitive, but values may not be.
+    content_type_lower = content_type.lower()
+    if content_type_lower.startswith("application/x-www-form-urlencoded"):
         if headers and "Content-Encoding" in headers:
             raise HTTPInputError(
                 "Unsupported Content-Encoding: %s" % headers["Content-Encoding"]
@@ -1064,19 +1069,19 @@ def parse_body_arguments(
         for name, values in uri_arguments.items():
             if values:
                 arguments.setdefault(name, []).extend(values)
-    elif content_type.startswith("multipart/form-data"):
+    elif content_type_lower.startswith("multipart/form-data"):
         if headers and "Content-Encoding" in headers:
             raise HTTPInputError(
                 "Unsupported Content-Encoding: %s" % headers["Content-Encoding"]
             )
         try:
             fields = content_type.split(";")
-            if fields[0].strip() != "multipart/form-data":
+            if fields[0].strip().lower() != "multipart/form-data":
                 # This catches "Content-Type: multipart/form-dataxyz"
                 raise HTTPInputError("Invalid content type")
             for field in fields:
                 k, sep, v = field.strip().partition("=")
-                if k == "boundary" and v:
+                if k.lower() == "boundary" and v:
                     parse_multipart_form_data(
                         utf8(v), body, arguments, files, config=config.multipart
                     )

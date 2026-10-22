@@ -103,6 +103,20 @@ class QsParseTest(TestCase):
 
 
 class UrlEncodedDataTest(TestCase):
+    def test_content_type_case(self):
+        for content_type in (
+            "application/x-www-form-urlencoded",
+            "Application/X-WWW-Form-Urlencoded",
+            "APPLICATION/X-WWW-FORM-URLENCODED; charset=UTF-8",
+        ):
+            with self.subTest(content_type=content_type):
+                args, files = form_data_args()
+                parse_body_arguments(
+                    content_type, b"Name=Value&Name=Other", args, files
+                )
+                self.assertEqual(args, {"Name": [b"Value", b"Other"]})
+                self.assertEqual(files, {})
+
     def test_urlencoded_data(self):
         data = b"a=1&b=2&a=3"
         args, files = form_data_args()
@@ -120,6 +134,35 @@ class UrlEncodedDataTest(TestCase):
 
 
 class MultipartFormDataTest(TestCase):
+    def test_content_type_case(self):
+        data = (
+            b"--AaB03x\r\n"
+            b'Content-Disposition: form-data; name="Files"; filename="Report.TXT"\r\n'
+            b"\r\nHello\r\n--AaB03x--\r\n"
+        )
+        for media_type in ("multipart/form-data", "Multipart/Form-Data"):
+            for parameter in ("boundary", "Boundary", "BOUNDARY"):
+                for boundary in ("AaB03x", '"AaB03x"'):
+                    content_type = f"{media_type}; {parameter}={boundary}"
+                    with self.subTest(content_type=content_type):
+                        args, files = form_data_args()
+                        parse_body_arguments(content_type, data, args, files)
+                        self.assertEqual(args, {})
+                        self.assertEqual(files["Files"][0].filename, "Report.TXT")
+                        self.assertEqual(files["Files"][0].body, b"Hello")
+
+    def test_boundary_value_is_case_sensitive(self):
+        data = (
+            b"--AaB03x\r\n"
+            b'Content-Disposition: form-data; name="Name"\r\n'
+            b"\r\nValue\r\n--AaB03x--\r\n"
+        )
+        args, files = form_data_args()
+        with self.assertRaisesRegex(HTTPInputError, "no final boundary found"):
+            parse_body_arguments(
+                "multipart/form-data; boundary=aab03x", data, args, files
+            )
+
     def test_file_upload(self):
         data = b"""\
 --1234

@@ -271,6 +271,34 @@ class MultipartTestHandler(RequestHandler):
 
 # This test is also called from wsgi_test
 class HTTPConnectionTest(AsyncHTTPTestCase):
+    def test_multipart_content_type_case(self):
+        body = (
+            b"--AaB03x\r\n"
+            b'Content-Disposition: form-data; name="argument"\r\n\r\nValue\r\n'
+            b"--AaB03x\r\n"
+            b'Content-Disposition: form-data; name="files"; filename="Report.TXT"\r\n'
+            b"\r\nHello\r\n--AaB03x--\r\n"
+        )
+        response = self.fetch(
+            "/multipart",
+            method="POST",
+            headers={
+                "Content-Type": 'Multipart/Form-Data; BOUNDARY="AaB03x"',
+                "X-Header-Encoding-Test": "Header",
+            },
+            body=body,
+        )
+        self.assertEqual(response.code, 200)
+        self.assertEqual(
+            json_decode(response.body),
+            {
+                "header": "Header",
+                "argument": "Value",
+                "filename": "Report.TXT",
+                "filebody": "Hello",
+            },
+        )
+
     def get_handlers(self):
         return [
             ("/multipart", MultipartTestHandler),
@@ -425,6 +453,16 @@ class PostEchoGBKHandler(PostEchoHandler):
 
 
 class HTTPServerTest(AsyncHTTPTestCase):
+    def test_post_content_type_case(self):
+        response = self.fetch(
+            "/echo",
+            method="POST",
+            headers={"Content-Type": "Application/X-WWW-Form-Urlencoded"},
+            body="Name=Value&Name=Other",
+        )
+        self.assertEqual(response.code, 200)
+        self.assertEqual(json_decode(response.body), {"Name": ["Value", "Other"]})
+
     def get_app(self):
         return Application(
             [
