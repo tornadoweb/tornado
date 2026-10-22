@@ -663,7 +663,9 @@ class SimpleHTTPSClientTestCase(AsyncHTTPSTestCase, SimpleHTTPClientTestMixin):
             self.wait_for_server_connections()
 
     def test_ssl_context_handshake_fail(self):
-        with ExpectLog(gen_log, "SSL Error|Uncaught exception"):
+        # Only server-side TLS alerts may be logged; a connection reset need
+        # not produce any log after the client consumes its SSL error.
+        with ExpectLog(gen_log, "SSL Error|Uncaught exception", required=False):
             # CERT_REQUIRED is set by default.
             ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
             with self.assertRaises(ssl.SSLError):
@@ -674,7 +676,9 @@ class SimpleHTTPSClientTestCase(AsyncHTTPSTestCase, SimpleHTTPClientTestMixin):
         # No stack traces are logged for SSL errors (in this case,
         # failure to validate the testing self-signed cert).
         # The SSLError is exposed through ssl.SSLError.
-        with ExpectLog(gen_log, ".*") as expect_log:
+        # Any server-side TLS alert must not log a stack trace. The client
+        # reports its validation error only through the request result.
+        with ExpectLog(gen_log, ".*", required=False) as expect_log:
             with self.assertRaises(ssl.SSLError):
                 self.fetch("/", validate_cert=True, raise_error=True)
             self.wait_for_server_connections()
