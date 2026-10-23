@@ -452,12 +452,27 @@ class DefaultLoopResolver(Resolver):
         # one here.  The socket type used here doesn't seem to actually
         # matter (we discard the one we get back in the results),
         # so the addresses we return should still be usable with SOCK_DGRAM.
-        return [
-            (fam, address)
-            for fam, _, _, _, address in await asyncio.get_running_loop().getaddrinfo(
-                host, port, family=family, type=socket.SOCK_STREAM
-            )
-        ]
+        numericserv = getattr(socket, "AI_NUMERICSERV", None)
+        if numericserv is not None:
+            try:
+                # Numeric hosts and ports do not require name resolution and must
+                # not wait for a thread in the event loop's executor. Both flags
+                # are needed to prevent a blocking host or service lookup here.
+                addrinfo = socket.getaddrinfo(
+                    host,
+                    port,
+                    family=family,
+                    type=socket.SOCK_STREAM,
+                    flags=socket.AI_NUMERICHOST | numericserv,
+                )
+            except socket.gaierror:
+                pass
+            else:
+                return [(fam, address) for fam, _, _, _, address in addrinfo]
+        addrinfo = await asyncio.get_running_loop().getaddrinfo(
+            host, port, family=family, type=socket.SOCK_STREAM
+        )
+        return [(fam, address) for fam, _, _, _, address in addrinfo]
 
 
 class ExecutorResolver(Resolver):
