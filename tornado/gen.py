@@ -364,23 +364,30 @@ class WaitIterator(typing.Generic[_T]):
     .. versionchanged:: 4.3
        Added ``async for`` support in Python 3.5.
 
+    .. versionchanged:: 6.6
+       Arguments may be any awaitable, not only `.Future` objects. Inputs
+       that are not already ``Futures`` are converted with `.convert_yielded`,
+       so ``current_future`` is the converted `.Future`.
+
     """
 
     _unfinished: dict[Future[_T], collections.deque[int | str]]
 
-    def __init__(self, *args: Future[_T], **kwargs: Future[_T]) -> None:
+    def __init__(self, *args: Awaitable[_T], **kwargs: Awaitable[_T]) -> None:
         if args and kwargs:
             raise ValueError("You must provide args or kwargs, not both")
 
         self._unfinished = {}
+        items: Iterable[tuple[int | str, Awaitable[_T]]]
         if kwargs:
-            futures: Sequence[Future[_T]] = list(kwargs.values())
-            for key, future in kwargs.items():
-                self._unfinished.setdefault(future, collections.deque()).append(key)
+            items = kwargs.items()
         else:
-            futures = args
-            for index, future in enumerate(args):
-                self._unfinished.setdefault(future, collections.deque()).append(index)
+            items = enumerate(args)
+        futures: list[Future[_T]] = []
+        for key, awaitable in items:
+            future = convert_yielded(awaitable)
+            futures.append(future)
+            self._unfinished.setdefault(future, collections.deque()).append(key)
 
         self._finished: collections.deque[Future[_T]] = collections.deque()
         self.current_index: str | int | None = None
