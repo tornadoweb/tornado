@@ -338,15 +338,25 @@ class _HTTPRequestContext:
         else:
             return str(self.address)
 
+    @staticmethod
+    def _bare_forwarded_ip(ip: str) -> str:
+        # Fortigate and AWS wrap IPv6 as [2001:db8::1] in forwarded headers.
+        if len(ip) >= 2 and ip.startswith("[") and ip.endswith("]"):
+            return ip[1:-1]
+        return ip
+
     def _apply_xheaders(self, headers: httputil.HTTPHeaders) -> None:
         """Rewrite the ``remote_ip`` and ``protocol`` fields."""
         # Squid uses X-Forwarded-For, others use X-Real-Ip
         ip = headers.get("X-Forwarded-For", self.remote_ip)
-        # Skip trusted downstream hosts in X-Forwarded-For list
-        for ip in (cand.strip() for cand in reversed(ip.split(","))):
+        # Skip trusted downstream hosts in X-Forwarded-For list.
+        # Some proxies wrap IPv6 in brackets, which is_valid_ip rejects.
+        for ip in (
+            self._bare_forwarded_ip(cand.strip()) for cand in reversed(ip.split(","))
+        ):
             if ip not in self.trusted_downstream:
                 break
-        ip = headers.get("X-Real-Ip", ip)
+        ip = self._bare_forwarded_ip(headers.get("X-Real-Ip", ip).strip())
         if netutil.is_valid_ip(ip):
             self.remote_ip = ip
         # AWS uses X-Forwarded-Proto
