@@ -21,7 +21,6 @@ from tornado.httpclient import (
     HTTPError,
     HTTPRequest,
     HTTPResponse,
-    _decompress_encodings,
     _RequestProxy,
     main,
 )
@@ -290,7 +289,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
     async def run(self) -> None:
         try:
             # Only gzip is implemented (by HTTP1Connection).
-            self._decompress_encodings = _decompress_encodings(
+            self._decompress_encodings = httputil._decompress_encodings(
                 self.request.decompress_response, {"gzip"}, {"gzip"}
             )
             url = _unicode(self.request.url)
@@ -538,7 +537,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 no_keep_alive=True,
                 max_header_size=self.max_header_size,
                 max_body_size=self.max_body_size,
-                decompress="gzip" in self._decompress_encodings,
+                decompress=self._decompress_encodings,
             ),
             self._sockaddr,
         )

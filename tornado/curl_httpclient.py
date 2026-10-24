@@ -35,7 +35,6 @@ from tornado.httpclient import (
     HTTPError,
     HTTPRequest,
     HTTPResponse,
-    _decompress_encodings,
     main,
 )
 from tornado.log import app_log
@@ -506,7 +505,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 raise ValueError("Illegal characters in header (CR or LF): %r" % line)
         curl.setopt(pycurl.HTTPHEADER, encoded_headers)
 
-        decompress_encodings = _decompress_encodings(
+        decompress_encodings = httputil._decompress_encodings(
             request.decompress_response,
             {"gzip", "deflate"},
             _CURL_SUPPORTED_ENCODINGS,

@@ -23,7 +23,7 @@ import logging
 import re
 import types
 import zlib
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection
 from typing import Optional, Type, cast
 
 from tornado import gen, httputil, iostream
@@ -105,7 +105,7 @@ class HTTP1ConnectionParameters:
         header_timeout: float | None = None,
         max_body_size: int | None = None,
         body_timeout: float | None = None,
-        decompress: bool = False,
+        decompress: bool | Collection[str] = False,
         idle_connection_timeout: float | None = None,
     ) -> None:
         """
@@ -125,11 +125,14 @@ class HTTP1ConnectionParameters:
             for a response's headers.
         :arg int max_body_size: maximum amount of data for body
         :arg float body_timeout: how long to wait while reading body (seconds)
-        :arg bool decompress: if true, decode incoming
-            ``Content-Encoding: gzip``
+        :arg decompress: if true, decode incoming
+            ``Content-Encoding: gzip``. May also be a collection of
+            ``Content-Encoding`` names to decode; ``gzip`` is currently the
+            only one supported, and other names are ignored.
 
         .. versionchanged:: 6.7
-           Added ``idle_connection_timeout``.
+           Added ``idle_connection_timeout``. ``decompress`` may be a
+           collection of encoding names.
         """
         self.no_keep_alive = no_keep_alive
         self.chunk_size = chunk_size or 65536
@@ -139,6 +142,10 @@ class HTTP1ConnectionParameters:
         self.body_timeout = body_timeout
         self.decompress = decompress
         self.idle_connection_timeout = idle_connection_timeout
+        # Only gzip is implemented (by _GzipMessageDelegate).
+        self._decompress_encodings = httputil._decompress_encodings(
+            decompress, {"gzip"}, {"gzip"}
+        )
 
 
 class HTTP1Connection(httputil.HTTPConnection):
@@ -219,7 +226,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         Returns a `.Future` that resolves to a bool after the full response has
         been read. The result is true if the stream is still open.
         """
-        if self.params.decompress:
+        if "gzip" in self.params._decompress_encodings:
             delegate = _GzipMessageDelegate(
                 delegate, self.params.chunk_size, self._max_body_size
             )

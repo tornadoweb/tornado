@@ -789,32 +789,6 @@ class _RequestProxy:
             return None
 
 
-def _decompress_encodings(
-    decompress_response: bool | Collection[str] | None,
-    default: Collection[str],
-    supported: Collection[str],
-) -> frozenset[str]:
-    """Returns the set of content-codings to request and decode.
-
-    Interprets ``HTTPRequest.decompress_response`` for an implementation
-    that decodes ``supported`` and enables ``default`` when it is True.
-
-    Used internally by AsyncHTTPClient implementations.
-    """
-    if decompress_response is True:
-        encodings: Collection[str] = default
-    elif not decompress_response:
-        return frozenset()
-    elif isinstance(decompress_response, (str, bytes)):
-        raise TypeError(
-            "decompress_response must be a bool or a collection of strings, "
-            "not %r" % (decompress_response,)
-        )
-    else:
-        encodings = decompress_response
-    return frozenset(e.lower() for e in encodings) & frozenset(supported)
-
-
 def main() -> None:
     from tornado.options import define, options, parse_command_line
 
