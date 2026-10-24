@@ -41,7 +41,7 @@ import functools
 import ssl
 import time
 import weakref
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection
 from io import BytesIO
 from typing import Any, Optional, Type, Union, cast
 
@@ -390,7 +390,7 @@ class HTTPRequest:
             Callable[[Callable[[bytes], None]], "Future[None]"]
         ) = None,
         expect_100_continue: bool = False,
-        decompress_response: bool | None = None,
+        decompress_response: bool | Collection[str] | None = None,
         ssl_options: dict[str, Any] | ssl.SSLContext | None = None,
     ) -> None:
         r"""All parameters except ``url`` are optional.
@@ -430,9 +430,17 @@ class HTTPRequest:
            or return the 3xx response? Default True.
         :arg int max_redirects: Limit for ``follow_redirects``, default 5.
         :arg str user_agent: String to send as ``User-Agent`` header
-        :arg bool decompress_response: Request a compressed response from
-           the server and decompress it after downloading.  Default is True.
-           New in Tornado 4.0.
+        :arg decompress_response: Request a compressed response from
+           the server and decompress it after downloading.  Default is True,
+           which enables the client's default set of encodings (``gzip``
+           for ``simple_httpclient``; ``gzip`` and ``deflate`` for
+           ``curl_httpclient``). May also be a collection of
+           ``Content-Encoding`` names (such as ``{"gzip", "br"}``) to
+           enable exactly those; names the client cannot decode are
+           ignored. A false value or an empty collection disables
+           decompression. New in Tornado 4.0.
+        :type decompress_response: `bool` or `collections.abc.Collection`
+           of `str`
         :arg bool use_gzip: Deprecated alias for ``decompress_response``
            since Tornado 4.0.
         :arg str network_interface: Network interface or source IP to use for request.
@@ -514,6 +522,11 @@ class HTTPRequest:
 
         .. versionchanged:: 6.7
            ``expect_100_continue`` is now supported by ``curl_httpclient``.
+
+           ``decompress_response`` may be a collection of encoding names.
+           ``curl_httpclient`` now fails a request whose response uses a
+           ``Content-Encoding`` that was not enabled, instead of decoding
+           every encoding that libcurl supports.
         """
         # Note that some of these attributes go through property setters
         # defined below.
@@ -540,7 +553,16 @@ class HTTPRequest:
         self.max_redirects = max_redirects
         self.user_agent = user_agent
         if decompress_response is not None:
-            self.decompress_response: bool | None = decompress_response
+            if isinstance(decompress_response, (str, bytes)):
+                # A bare string would be treated as a collection of
+                # single-character encoding names.
+                raise TypeError(
+                    "decompress_response must be a bool or a collection of "
+                    "strings, not %r" % (decompress_response,)
+                )
+            self.decompress_response: bool | Collection[str] | None = (
+                decompress_response
+            )
         else:
             self.decompress_response = use_gzip
         self.network_interface = network_interface
@@ -765,6 +787,32 @@ class _RequestProxy:
             return self.defaults.get(name, None)
         else:
             return None
+
+
+def _decompress_encodings(
+    decompress_response: bool | Collection[str] | None,
+    default: Collection[str],
+    supported: Collection[str],
+) -> frozenset[str]:
+    """Returns the set of content-codings to request and decode.
+
+    Interprets ``HTTPRequest.decompress_response`` for an implementation
+    that decodes ``supported`` and enables ``default`` when it is True.
+
+    Used internally by AsyncHTTPClient implementations.
+    """
+    if decompress_response is True:
+        encodings: Collection[str] = default
+    elif not decompress_response:
+        return frozenset()
+    elif isinstance(decompress_response, (str, bytes)):
+        raise TypeError(
+            "decompress_response must be a bool or a collection of strings, "
+            "not %r" % (decompress_response,)
+        )
+    else:
+        encodings = decompress_response
+    return frozenset(e.lower() for e in encodings) & frozenset(supported)
 
 
 def main() -> None:

@@ -19,6 +19,7 @@ import weakref
 
 from tornado import gen
 from tornado.escape import utf8
+from tornado.httpclient import HTTPError
 from tornado.log import app_log
 from tornado.netutil import ssl_options_to_context
 from tornado.test import httpclient_test
@@ -53,9 +54,6 @@ def create_client(**kwargs):
 
 @unittest.skipIf(pycurl is None, "pycurl module not present")
 class CurlHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
-    # libcurl decodes the Content-Encoding named by the response whether or
-    # not we listed it in Accept-Encoding, so brotli is reachable whenever
-    # libcurl was built with it (which is common).
     decompresses_brotli = pycurl is not None and "brotli" in pycurl.version
 
     def get_http_client(self):
@@ -63,6 +61,17 @@ class CurlHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
         # make sure AsyncHTTPClient magic doesn't give us the wrong class
         self.assertTrue(isinstance(client, CurlAsyncHTTPClient))
         return client
+
+    def test_unexpected_encoding_refused(self):
+        # libcurl would decode this gzip response even though only deflate
+        # was requested, so it must be refused instead.
+        with self.assertRaises(HTTPError) as cm:
+            self.fetch(
+                "/gzip_bomb?size=1024",
+                decompress_response={"deflate"},
+                raise_error=True,
+            )
+        self.assertIn("Content-Encoding 'gzip'", str(cm.exception))
 
     def test_streaming_pause_and_resume(self):
         # With a small buffer the transfer is paused and resumed many times
