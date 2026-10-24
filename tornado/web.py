@@ -1719,7 +1719,7 @@ class RequestHandler:
 
         if self.application.settings.get("xsrf_cookies"):
             self.check_xsrf_cookie()
-        if self.application.settings.get("cross_origin_protection"):
+        if self.application.settings.get("cross_origin_protection", True):
             error = self._check_cross_origin(self.check_trusted_origin)
             if error is not None:
                 raise HTTPError(403, error)

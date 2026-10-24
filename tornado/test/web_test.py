@@ -4370,19 +4370,23 @@ class CrossOriginProtectionTest(SimpleHandlerTestCase):
                 self.assertEqual(response.code, 403)
 
 
-class CrossOriginProtectionDisabledTest(SimpleHandlerTestCase):
+class CrossOriginProtectionEnabledTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def post(self):
             self.write("ok")
 
-    def test_disabled_by_default(self):
-        response = self.fetch(
-            "/",
-            method="POST",
-            body="",
-            headers={"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.com"},
-        )
-        self.assertEqual(response.code, 200)
+    def test_enabled_by_default(self):
+        with ExpectLog(
+            gen_log,
+            ".*Sec-Fetch-Site cross-site & origin 'https://evil.com' not allowed",
+        ):
+            response = self.fetch(
+                "/",
+                method="POST",
+                body="",
+                headers={"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.com"},
+            )
+        self.assertEqual(response.code, 403)
 
 
 class CrossOriginProtectionCheckTrustedOriginTest(SimpleHandlerTestCase):
