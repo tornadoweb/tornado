@@ -112,6 +112,13 @@ def http_chunked_streaming(n: int, size: int) -> tuple[list, bytes]:
     return [("/", http_finish(StreamingHTTPHandler))], chunked_request(n, size)
 
 
+def http_trailers(n: int, size: int) -> tuple[list, bytes]:
+    hdr = b"POST / HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n"
+    hdr += b"Connection: close\r\n\r\n"
+    trailers = b"a:" + b"x" * size + b"\r\n"
+    return [("/", http_finish(HTTPHandler))], hdr + b"0\r\n" + trailers * n + b"\r\n"
+
+
 def http_fixed(n: int, size: int) -> tuple[list, bytes]:
     body = b"x" * (n * size)
     hdr = b"POST / HTTP/1.1\r\nHost: x\r\nContent-Length: %d\r\n" % len(body)
@@ -216,6 +223,9 @@ SCENARIOS = {
     ),
     "http_chunked_streaming": Scenario(
         http_chunked_streaming, 200000, 1, "chunk", dict(max_body_size=1 << 30)
+    ),
+    "http_trailers": Scenario(
+        http_trailers, 200000, 0, "line", dict(max_header_size=1 << 30)
     ),
     "http_fixed": Scenario(
         http_fixed, 1000, 100000, "100KB", dict(max_body_size=1 << 30)
