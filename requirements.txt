@@ -68,6 +68,7 @@ packaging==26.3
     #   pyproject-api
     #   sphinx
     #   tox
+    #   virtualenv
     #   wheel
 pathspec==1.1.1
     # via
@@ -94,7 +95,7 @@ pyproject-hooks==1.3.3
     # via
     #   build
     #   pip-tools
-python-discovery==1.6.0
+python-discovery==1.6.4
     # via
     #   tox
     #   virtualenv
@@ -141,7 +142,7 @@ typing-extensions==4.16.0
     #   tox
 urllib3==2.8.0
     # via requests
-virtualenv==21.7.13
+virtualenv==21.14.13
     # via tox
 wheel==0.48.0
     # via pip-tools
