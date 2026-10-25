@@ -1662,6 +1662,29 @@ class StaticFileTest(WebTestCase):
             utf8(response.headers["Etag"]), b'"' + self.robots_txt_hash + b'"'
         )
 
+    def test_static_range_if_range(self):
+        response1 = self.get_and_head("/static/robots.txt")
+        for if_range in (response1.headers["Etag"], response1.headers["Last-Modified"]):
+            response = self.get_and_head(
+                "/static/robots.txt",
+                headers={"Range": "bytes=1-4", "If-Range": if_range},
+            )
+            self.assertEqual(response.code, 206)
+            self.assertEqual(response.headers["Content-Range"], "bytes 1-4/26")
+
+        for if_range in (
+            '"stale"',
+            "W/" + response1.headers["Etag"],
+            "Thu, 01 Jan 1970 00:00:00 GMT",
+        ):
+            response = self.get_and_head(
+                "/static/robots.txt",
+                headers={"Range": "bytes=1-4", "If-Range": if_range},
+            )
+            self.assertEqual(response.code, 200)
+            self.assertNotIn("Content-Range", response.headers)
+            self.assertEqual(response.headers["Content-Length"], "26")
+
     def test_static_404(self):
         response = self.get_and_head("/static/blarg")
         self.assertEqual(response.code, 404)
