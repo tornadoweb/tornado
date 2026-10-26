@@ -10,7 +10,7 @@ ast-serialize==0.11.2
     # via mypy
 babel==2.18.0
     # via sphinx
-black==26.5.1
+black==26.10.1
     # via -r requirements.in
 build==1.6.1
     # via pip-tools
