@@ -118,6 +118,29 @@ class UrlEncodedDataTest(TestCase):
             parse_body_arguments("application/x-www-form-urlencoded", data, args, files)
         self.assertIn("Max number of fields exceeded", str(cm.exception))
 
+    def test_urlencoded_prefix_not_matched(self):
+        # A media type that merely shares the urlencoded prefix must not be
+        # parsed as form data (contrast multipart/form-dataxyz, which is
+        # rejected explicitly).
+        data = b"a=1&b=2"
+        for content_type in (
+            "application/x-www-form-urlencoded-garbage",
+            "application/x-www-form-urlencoded2",
+        ):
+            args, files = form_data_args()
+            parse_body_arguments(content_type, data, args, files)
+            self.assertEqual(args, {})
+            self.assertEqual(files, {})
+        # The real media type, with and without parameters, still parses.
+        for content_type in (
+            "application/x-www-form-urlencoded",
+            "application/x-www-form-urlencoded; charset=utf-8",
+        ):
+            args, files = form_data_args()
+            parse_body_arguments(content_type, data, args, files)
+            self.assertEqual(args["a"], [b"1"])
+            self.assertEqual(args["b"], [b"2"])
+
 
 class MultipartFormDataTest(TestCase):
     def test_file_upload(self):
