@@ -623,6 +623,68 @@ Transfer-Encoding: chunked
             )
         self.assertEqual(400, start_line.code)
 
+    def test_chunked_request_body_extensions_and_trailers(self):
+        # Chunk extensions are ignored and trailer fields are discarded
+        # (RFC 9112 sections 7.1.1 and 7.1.2).
+        self.stream.write(b"""\
+POST /echo HTTP/1.1
+Host: 127.0.0.1
+Transfer-Encoding: chunked
+Content-Type: application/x-www-form-urlencoded
+
+4;foo=bar
+foo=
+3; baz = "qu;x" ;flag
+bar
+0;last
+X-Trailer: value
+X-Other-Trailer:
+
+""".replace(b"\n", b"\r\n"))
+        start_line, headers, response = self.io_loop.run_sync(
+            lambda: read_stream_body(self.stream)
+        )
+        self.assertEqual(json_decode(response), {"foo": ["bar"]})
+
+    def test_chunked_request_body_invalid_extension(self):
+        for ext in [b";", b";foo=", b";foo bar", b';foo="bar', b";foo=\x01"]:
+            with self.subTest(ext=ext):
+                stream = IOStream(socket.socket())
+                self.io_loop.run_sync(
+                    lambda: stream.connect(("127.0.0.1", self.get_http_port()))
+                )
+                stream.write(
+                    b"POST /echo HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                    b"Transfer-Encoding: chunked\r\n\r\n"
+                    b"3" + ext + b"\r\nbar\r\n0\r\n\r\n"
+                )
+                with ExpectLog(
+                    gen_log, ".*invalid chunk extension", level=logging.INFO
+                ):
+                    start_line, headers, response = self.io_loop.run_sync(
+                        lambda: read_stream_body(stream)
+                    )
+                self.assertEqual(400, start_line.code)
+                stream.close()
+
+    def test_chunked_request_body_invalid_trailer(self):
+        self.stream.write(b"""\
+POST /echo HTTP/1.1
+Host: 127.0.0.1
+Transfer-Encoding: chunked
+
+3
+bar
+0
+not a field line
+
+""".replace(b"\n", b"\r\n"))
+        with ExpectLog(gen_log, ".*no colon in header line", level=logging.INFO):
+            start_line, headers, response = self.io_loop.run_sync(
+                lambda: read_stream_body(self.stream)
+            )
+        self.assertEqual(400, start_line.code)
+
     def test_chunked_request_body_duplicate_header(self):
         # Repeated Transfer-Encoding headers should be an error (and not confuse
         # the chunked-encoding detection to mess up framing).

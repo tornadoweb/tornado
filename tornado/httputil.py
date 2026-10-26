@@ -99,6 +99,9 @@ class _ABNF:
     field_name = token
     method = token
     host = re.compile(rf"(?:{uri_host.pattern})(?::{uri_port.pattern})?")
+    qdtext = re.compile(rf"(?:[\t !#-\[\]-~]|{obs_text.pattern})")
+    quoted_pair = re.compile(rf"\\(?:[\t ]|{VCHAR.pattern}|{obs_text.pattern})")
+    quoted_string = re.compile(rf'"(?:{qdtext.pattern}|{quoted_pair.pattern})*"')
 
     # RFC 9112 (HTTP/1.1)
     HTTP_version = re.compile(r"HTTP/[0-9]\.[0-9]")
@@ -113,6 +116,10 @@ class _ABNF:
     status_code = re.compile(r"[0-9]{3}")
     status_line = re.compile(
         rf"({HTTP_version.pattern}) ({status_code.pattern}) ({reason_phrase.pattern})?"
+    )
+    chunk_ext = re.compile(
+        rf"(?:[\t ]*;[\t ]*{token.pattern}"
+        rf"(?:[\t ]*=[\t ]*(?:{token.pattern}|{quoted_string.pattern}))?)*"
     )
 
 
