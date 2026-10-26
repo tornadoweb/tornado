@@ -817,13 +817,20 @@ class ParseCookieTest(TestCase):
         # escape sequences in a cookie value was quadratic. (Only the r"\\"
         # case reproduces it on 6.4.1; r"\134" is here for symmetry with
         # test_unquote_large.)
+        #
+        # 6.4.1 measures a ratio of about 100 on CPython and 60-100 on PyPy.
+        # The fixed version measures about 10 on CPython, but this test
+        # allocates heavily for each byte of input, and PyPy's ratio depends
+        # on how that compares to its nursery and CPU caches: as of 2026-10
+        # it measures 11-24 depending on PYPY_GC_NURSERY, so the usual limit
+        # of 20 is too tight.
         for encoded in r"\\", r"\134":
             with self.subTest(encoded):
                 assert_linear_scaling(
                     lambda n: parse_cookie('a="b=' + encoded * n + '"'),
                     1_000,
                     10_000,
-                    max_ratio=20,
+                    max_ratio=40,
                     msg="Cookie unquoting is not linear",
                 )
 
