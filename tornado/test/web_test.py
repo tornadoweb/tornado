@@ -66,6 +66,7 @@ from tornado.web import (
     create_signed_value,
     decode_signed_value,
     get_signature_key_version,
+    http_method,
     removeslash,
     stream_request_body,
     url,
@@ -3303,6 +3304,76 @@ class PatchMethodTest(SimpleHandlerTestCase):
     def test_other(self):
         response = self.fetch("/", method="OTHER", allow_nonstandard_methods=True)
         self.assertEqual(response.body, b"other")
+
+
+class HTTPMethodDecoratorTest(WebTestCase):
+    def get_handlers(self):
+        class QueryHandler(RequestHandler):
+            @http_method
+            def query(self):
+                self.write(b"query:" + self.request.body)
+
+        class RenamedHandler(RequestHandler):
+            @http_method(method="QUERY")
+            def search(self):
+                self.write("search")
+
+        class SubclassHandler(QueryHandler):
+            @http_method
+            def query(self):
+                self.write("subclass")
+
+        class UndecoratedHandler(RequestHandler):
+            def query(self):
+                self.write("query")
+
+        class GetAndQueryHandler(RequestHandler):
+            def get(self):
+                self.write("get")
+
+            @http_method
+            def query(self):
+                self.write("query")
+
+        return [
+            ("/query", QueryHandler),
+            ("/renamed", RenamedHandler),
+            ("/subclass", SubclassHandler),
+            ("/undecorated", UndecoratedHandler),
+            ("/get_and_query", GetAndQueryHandler),
+        ]
+
+    def fetch_query(self, path, body=b""):
+        return self.fetch(
+            path, method="QUERY", body=body, allow_nonstandard_methods=True
+        )
+
+    def test_decorated_method(self):
+        response = self.fetch_query("/query", body=b"x=1")
+        self.assertEqual(response.body, b"query:x=1")
+
+    def test_decorated_method_with_another_name(self):
+        self.assertEqual(self.fetch_query("/renamed").body, b"search")
+
+    def test_subclass_overrides_decorated_method(self):
+        self.assertEqual(self.fetch_query("/subclass").body, b"subclass")
+
+    def test_undecorated_method_is_not_exposed(self):
+        self.assertEqual(self.fetch_query("/undecorated").code, 405)
+
+    def test_decorated_and_legacy_methods_together(self):
+        self.assertEqual(self.fetch("/get_and_query").body, b"get")
+        self.assertEqual(self.fetch_query("/get_and_query").body, b"query")
+
+    def test_405_lists_allowed_methods(self):
+        response = self.fetch("/get_and_query", method="DELETE")
+        self.assertEqual(response.code, 405)
+        self.assertEqual(response.headers["Allow"], "GET, QUERY")
+
+    def test_405_lists_no_unimplemented_methods(self):
+        response = self.fetch("/undecorated", method="DELETE")
+        self.assertEqual(response.code, 405)
+        self.assertEqual(response.headers["Allow"], "")
 
 
 class FinishInPrepareTest(SimpleHandlerTestCase):
