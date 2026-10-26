@@ -14,7 +14,12 @@ from tornado.test.util import TestCase
 
 class TranslationLoaderTest(TestCase):
     # TODO: less hacky way to get isolated tests
-    SAVE_VARS = ["_translations", "_supported_locales", "_use_gettext"]
+    SAVE_VARS = [
+        "_translations",
+        "_supported_locales",
+        "_use_gettext",
+        "_default_locale",
+    ]
 
     def clear_locale_cache(self):
         tornado.locale.Locale._cache = {}
@@ -76,6 +81,65 @@ class TranslationLoaderTest(TestCase):
         )
         self.assertEqual(locale.pgettext("stick", "club", "clubs", 1), "le b\xe2ton")
         self.assertEqual(locale.pgettext("stick", "club", "clubs", 2), "les b\xe2tons")
+
+    def test_gettext_script_locale(self):
+        with tempfile.TemporaryDirectory() as directory:
+            messages = os.path.join(directory, "zh_Hant", "LC_MESSAGES")
+            os.makedirs(messages)
+            shutil.copyfile(
+                os.path.join(
+                    os.path.dirname(__file__),
+                    "gettext_translations/fr_FR/LC_MESSAGES/tornado_test.mo",
+                ),
+                os.path.join(messages, "tornado_test.mo"),
+            )
+            tornado.locale.load_gettext_translations(directory, "tornado_test")
+            self.assertIn("zh_Hant", tornado.locale.get_supported_locales())
+            self.assertEqual(
+                tornado.locale.Locale.get("zh_Hant").translate("school"), "\u00e9cole"
+            )
+            for code in ["zh_Hant", "zh-Hant", "ZH_hANT", "zH-hAnT"]:
+                with self.subTest(code=code):
+                    locale = tornado.locale.get(code)
+                    self.assertEqual(locale.code, "zh_Hant")
+                    self.assertEqual(locale.translate("school"), "\u00e9cole")
+
+    def test_get_closest_script_fallbacks(self):
+        tornado.locale._translations = {
+            code: {"unknown": {"school": code}} for code in ["zh_Hant", "zh", "fr_FR"]
+        }
+        tornado.locale._use_gettext = False
+        tornado.locale.set_default_locale("de_DE")
+        for codes, expected in [
+            (("ZH_hANT", "fr_FR"), "zh_Hant"),
+            (("fr-fr", "zh_Hant"), "fr_FR"),
+            (("unknown", "zh-Hant"), "zh_Hant"),
+            (("zh_XY", "fr_FR"), "zh"),
+            (("unknown", ""), "de_DE"),
+            (("zh_Hant_TW", "fr_FR"), "fr_FR"),
+        ]:
+            with self.subTest(codes=codes):
+                self.assertEqual(tornado.locale.get(*codes).code, expected)
+        self.assertEqual(tornado.locale.get().code, "de_DE")
+        self.assertEqual(tornado.locale.Locale.get("zh_Hant").code, "zh_Hant")
+
+    def test_get_closest_case_collisions(self):
+        for codes, expected in [
+            (["zh_hant", "zh_Hant"], "zh_Hant"),
+            (["zh_Hant", "zh_hant", "zh_HANT"], "zh_HANT"),
+            (["zh-Hant", "zh_Hant"], "zh-Hant"),
+        ]:
+            with self.subTest(codes=codes):
+                tornado.locale._translations = {
+                    code: {"unknown": {"school": code}} for code in codes
+                }
+                tornado.locale._use_gettext = False
+                tornado.locale.set_default_locale("en_US")
+                self.clear_locale_cache()
+                for code in ["zh_Hant", "zh_hant", "ZH_hANT", "zh-hant"]:
+                    locale = tornado.locale.get(code)
+                    self.assertEqual(locale.code, expected)
+                    self.assertEqual(locale.translate("school"), expected)
 
 
 class LocaleDataTest(TestCase):

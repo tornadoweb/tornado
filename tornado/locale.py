@@ -245,6 +245,12 @@ class Locale:
                 code = parts[0].lower() + "_" + parts[1].upper()
             if code in _supported_locales:
                 return cls.get(code)
+            if len(parts) == 2:
+                # Keep the normalized exact match above; break remaining ties
+                # lexicographically instead of depending on set iteration order.
+                for supported in sorted(_supported_locales):
+                    if supported.replace("-", "_").lower() == code.lower():
+                        return cls.get(supported)
             if parts[0].lower() in _supported_locales:
                 return cls.get(parts[0].lower())
         return cls.get(_default_locale)
