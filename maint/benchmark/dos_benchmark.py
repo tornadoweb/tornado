@@ -287,6 +287,22 @@ async def measure(
             max_stall = max(max_stall, now - last)
             last = now
 
+    loop = asyncio.get_running_loop()
+    rejected = False
+
+    def run_client() -> None:
+        client(port, data)
+        # The client returns when the server closes the connection, which
+        # it does without finishing the request if it rejected it (as a
+        # version without support for what the scenario sends does).
+        loop.call_soon_threadsafe(loop.call_later, 1, give_up)
+
+    def give_up() -> None:
+        nonlocal rejected
+        if not done.is_set():
+            rejected = True
+            done.set()
+
     ticker_task = asyncio.create_task(ticker())
     await asyncio.sleep(0.01)
     max_stall = 0.0
@@ -294,7 +310,7 @@ async def measure(
         tracemalloc.start()
     cpu0 = time.thread_time()
     wall0 = time.perf_counter()
-    thread = threading.Thread(target=client, args=(port, data))
+    thread = threading.Thread(target=run_client)
     thread.start()
     await done.wait()
     cpu = time.thread_time() - cpu0
@@ -308,6 +324,8 @@ async def measure(
     server.stop()
     await server.close_all_connections()
     thread.join()
+    if rejected:
+        raise RuntimeError("server closed the connection without finishing")
     return Result(n, size, len(data), cpu, wall, max_stall, peak_mem, peak_write_buffer)
 
 
