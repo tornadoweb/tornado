@@ -3027,6 +3027,9 @@ class StaticFileHandler(RequestHandler):
 
         request_range = None
         range_header = self.request.headers.get("Range")
+        if range_header and not self._if_range_matches():
+            # RFC 9110 13.1.5: the whole file is sent when If-Range does not match.
+            range_header = None
         if range_header:
             # As per RFC 2616 14.16, if an invalid Range header is specified,
             # the request will be treated as if the header didn't exist.
@@ -3157,6 +3160,26 @@ class StaticFileHandler(RequestHandler):
                 return True
 
         return False
+
+    def _if_range_matches(self) -> bool:
+        """Returns False if an If-Range header does not match the current file.
+
+        If-Range holds either an entity tag, which must match the ETag with
+        the strong comparison, or a date, which must match Last-Modified exactly.
+        """
+        if_range = self.request.headers.get("If-Range")
+        if if_range is None:
+            return True
+        if if_range.startswith(('"', "W/")):
+            etag = self._headers.get("Etag")
+            return not if_range.startswith("W/") and if_range == etag
+        try:
+            date = email.utils.parsedate_to_datetime(if_range)
+        except Exception:
+            return False
+        if date.tzinfo is None:
+            date = date.replace(tzinfo=datetime.UTC)
+        return date == self.modified
 
     @classmethod
     def get_absolute_path(cls, root: str, path: str) -> str:
