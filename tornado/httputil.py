@@ -1047,7 +1047,8 @@ def parse_body_arguments(
     """
     if config is None:
         config = _DEFAULT_PARSE_BODY_CONFIG
-    if content_type.startswith("application/x-www-form-urlencoded"):
+    if content_type.split(";", 1)[0].strip() == "application/x-www-form-urlencoded":
+        # This catches "Content-Type: application/x-www-form-urlencodedgarbage"
         if headers and "Content-Encoding" in headers:
             raise HTTPInputError(
                 "Unsupported Content-Encoding: %s" % headers["Content-Encoding"]
