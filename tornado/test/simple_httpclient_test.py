@@ -408,9 +408,7 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
             # cygwin returns EPERM instead of ECONNREFUSED here
             contains_errno = str(errno.ECONNREFUSED) in str(cm.exception)
             if not contains_errno and hasattr(errno, "WSAECONNREFUSED"):
-                contains_errno = str(errno.WSAECONNREFUSED) in str(  # type: ignore
-                    cm.exception
-                )
+                contains_errno = str(errno.WSAECONNREFUSED) in str(cm.exception)
             self.assertTrue(contains_errno, cm.exception)
             # This is usually "Connection refused".
             # On windows, strerror is broken and returns "Unknown error".
@@ -625,6 +623,24 @@ class SimpleHTTPSClientTestCase(AsyncHTTPSTestCase, SimpleHTTPClientTestMixin):
             force_instance=True, defaults=dict(validate_cert=False), **kwargs
         )
 
+    def wait_for_server_connections(self) -> None:
+        """Wait for the server to close all of its connections.
+
+        When the client rejects the server's certificate, its fetch fails
+        as soon as it sends its alert, but the server only logs the
+        failure once it reads that alert (or the close that follows it).
+        Without this wait the server's "SSL Error" log can land after the
+        test's ``ExpectLog`` block has exited, where the test's log check
+        reports it as unexpected. Every connection closes this way (the
+        handshake never completes), so this ends promptly.
+        """
+
+        async def wait() -> None:
+            while self.http_server._connections:
+                await gen.sleep(0.01)
+
+        self.io_loop.run_sync(wait)
+
     def test_ssl_options(self):
         resp = self.fetch("/hello", ssl_options={"cert_reqs": ssl.CERT_NONE})
         self.assertEqual(resp.body, b"Hello world!")
@@ -644,6 +660,7 @@ class SimpleHTTPSClientTestCase(AsyncHTTPSTestCase, SimpleHTTPClientTestMixin):
                     ssl_options=dict(cert_reqs=ssl.CERT_REQUIRED),
                     raise_error=True,
                 )
+            self.wait_for_server_connections()
 
     def test_ssl_context_handshake_fail(self):
         # Only server-side TLS alerts may be logged; a connection reset need
@@ -653,6 +670,7 @@ class SimpleHTTPSClientTestCase(AsyncHTTPSTestCase, SimpleHTTPClientTestMixin):
             ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
             with self.assertRaises(ssl.SSLError):
                 self.fetch("/hello", ssl_options=ctx, raise_error=True)
+            self.wait_for_server_connections()
 
     def test_error_logging(self):
         # No stack traces are logged for SSL errors (in this case,
@@ -663,6 +681,7 @@ class SimpleHTTPSClientTestCase(AsyncHTTPSTestCase, SimpleHTTPClientTestMixin):
         with ExpectLog(gen_log, ".*", required=False) as expect_log:
             with self.assertRaises(ssl.SSLError):
                 self.fetch("/", validate_cert=True, raise_error=True)
+            self.wait_for_server_connections()
         self.assertFalse(expect_log.logged_stack)
 
 
@@ -875,7 +894,7 @@ class HTTP204NoContentTestCase(AsyncHTTPTestCase):
                 self.fetch("/?error=1", raise_error=True)
                 if not self.http1:
                     self.skipTest("requires HTTP/1.x")
-                if self.http_client.configured_class != SimpleAsyncHTTPClient:
+                if not isinstance(self.http_client, SimpleAsyncHTTPClient):
                     self.skipTest("curl client accepts invalid headers")
 
 
@@ -1088,6 +1107,32 @@ class MaxBufferSizeTest(AsyncHTTPTestCase):
         response = self.fetch("/large")
         response.rethrow()
         self.assertEqual(response.body, b"a" * 1024 * 100)
+
+
+class LongChunkSizeLineTest(AsyncHTTPTestCase):
+    def get_app(self):
+        class LongChunkSizeLine(RequestHandler):
+            def get(self):
+                stream = self.detach()
+                stream.write(
+                    b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"
+                    + b"1" * 100
+                    + b"\r\n"
+                )
+
+        return Application([("/", LongChunkSizeLine)])
+
+    def get_http_client(self):
+        return SimpleAsyncHTTPClient()
+
+    def test_long_chunk_size_line(self):
+        # A chunk size line too long to read fails the request right away
+        # (not when the request times out), and isn't logged as an
+        # uncaught exception. The server leaves the connection open, so
+        # before the fix the request failed only when it timed out.
+        with ExpectLog(gen_log, "Unsatisfiable read", level=logging.INFO):
+            with self.assertRaises(UnsatisfiableReadError):
+                self.fetch("/", raise_error=True, request_timeout=60)
 
 
 class ChunkedWithContentLengthTest(AsyncHTTPTestCase):

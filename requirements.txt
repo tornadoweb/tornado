@@ -10,13 +10,13 @@ ast-serialize==0.11.2
     # via mypy
 babel==2.18.0
     # via sphinx
-black==26.5.1
+black==26.10.1
     # via -r requirements.in
 build==1.6.1
     # via pip-tools
 cachetools==7.1.8
     # via tox
-certifi==2026.7.22
+certifi==2026.10.19
     # via requests
 charset-normalizer==3.5.1
     # via requests
@@ -34,7 +34,7 @@ docutils==0.22.4
     # via
     #   sphinx
     #   sphinx-rtd-theme
-filelock==3.32.7
+filelock==4.2.1
     # via
     #   python-discovery
     #   tox
@@ -68,6 +68,7 @@ packaging==26.3
     #   pyproject-api
     #   sphinx
     #   tox
+    #   virtualenv
     #   wheel
 pathspec==1.1.1
     # via
@@ -94,7 +95,7 @@ pyproject-hooks==1.3.3
     # via
     #   build
     #   pip-tools
-python-discovery==1.6.0
+python-discovery==1.6.4
     # via
     #   tox
     #   virtualenv
@@ -141,7 +142,7 @@ typing-extensions==4.16.0
     #   tox
 urllib3==2.8.0
     # via requests
-virtualenv==21.7.13
+virtualenv==21.14.13
     # via tox
 wheel==0.48.0
     # via pip-tools

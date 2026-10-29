@@ -206,7 +206,7 @@ class OAuthMixin:
     ) -> str:
         handler = cast(RequestHandler, self)
         consumer_token = self._oauth_consumer_token()
-        url = self._OAUTH_REQUEST_TOKEN_URL  # type: ignore
+        url: str = self._OAUTH_REQUEST_TOKEN_URL  # type: ignore
         args = dict(
             oauth_consumer_key=escape.to_basestring(consumer_token["key"]),
             oauth_signature_method="HMAC-SHA1",
@@ -256,7 +256,7 @@ class OAuthMixin:
 
     def _oauth_access_token_url(self, request_token: dict[str, Any]) -> str:
         consumer_token = self._oauth_consumer_token()
-        url = self._OAUTH_ACCESS_TOKEN_URL  # type: ignore
+        url: str = self._OAUTH_ACCESS_TOKEN_URL  # type: ignore
         args = dict(
             oauth_consumer_key=escape.to_basestring(consumer_token["key"]),
             oauth_token=escape.to_basestring(request_token["key"]),
@@ -643,7 +643,7 @@ class TwitterMixin(OAuthMixin):
     async def _oauth_get_user_future(
         self, access_token: dict[str, Any]
     ) -> dict[str, Any]:
-        user = await self.twitter_request(
+        user: dict[str, Any] = await self.twitter_request(
             "/account/verify_credentials", access_token=access_token
         )
         if user:
@@ -695,7 +695,7 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
         override this method for custom provision.
         """
         handler = cast(RequestHandler, self)
-        return handler.settings[self._OAUTH_SETTINGS_KEY]
+        return cast(dict[str, str], handler.settings[self._OAUTH_SETTINGS_KEY])
 
     async def get_authenticated_user(
         self,
@@ -778,7 +778,7 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             body=body,
         )
-        return escape.json_decode(response.body)
+        return cast(dict[str, Any], escape.json_decode(response.body))
 
 
 class FacebookGraphMixin(OAuth2Mixin):

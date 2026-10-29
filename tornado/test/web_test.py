@@ -40,7 +40,9 @@ from tornado.test.util import (
     AsyncHTTPTestCase,
     AsyncTestCase,
     TestCase,
+    assert_memory_budget,
     ignore_deprecation,
+    skipNotCPython,
 )
 from tornado.testing import ExpectLog, gen_test
 from tornado.util import ObjectDict, unicode_type
@@ -233,7 +235,7 @@ class SecureCookieV2Test(TestCase):
 
 
 class FinalReturnTest(WebTestCase):
-    final_return: Future
+    final_return: Future[None]
 
     def get_handlers(self):
         test = self
@@ -838,7 +840,7 @@ class GetArgumentHandler(RequestHandler):
         elif self.get_argument("source", None) == "body":
             method = self.get_body_argument
         else:
-            method = self.get_argument  # type: ignore
+            method = self.get_argument
         self.finish(method("foo", "default"))
 
 
@@ -1257,7 +1259,7 @@ class CancellationTest(WebTestCase):
 
     def setUp(self):
         super().setUp()
-        self.handler_task: asyncio.Task | None = None
+        self.handler_task: asyncio.Task[None] | None = None
         self.handler_started = Event()
 
     # A handler that awaits something that was cancelled gets the usual
@@ -1888,21 +1890,21 @@ class MultiRootStaticFileHandler(StaticFileHandler):
     directory. Jupyter's ``FileFindHandler`` is built this way.
     """
 
-    root: tuple  # type: ignore[assignment]
+    root: tuple[str, ...]  # type: ignore[assignment]
 
     def initialize(self, path):  # type: ignore[override]
         self.root = tuple(os.path.abspath(p) + os.path.sep for p in path)
         self.default_filename = None
 
     @classmethod
-    def get_absolute_path(cls, roots, path):  # type: ignore[override]
+    def get_absolute_path(cls, roots, path):
         for root in roots:
             candidate = os.path.abspath(os.path.join(root, path))
             if os.path.exists(candidate):
                 return candidate
         return os.path.abspath(os.path.join(roots[0], path))
 
-    def validate_absolute_path(self, root, absolute_path):  # type: ignore[override]
+    def validate_absolute_path(self, root, absolute_path):
         for candidate in self.root:
             if (absolute_path + os.path.sep).startswith(candidate):
                 root = candidate
@@ -2058,16 +2060,59 @@ class StaticFileMultiRootTest(WebTestCase):
         super().setUp()
 
     def get_handlers(self):
+        class StaticUrlHandler(RequestHandler):
+            def get(self, path):
+                self.write(self.static_url(path))
+
         return [
             (
                 "/multi/(.*)",
                 MultiRootStaticFileHandler,
                 dict(path=[self.root1, self.root2]),
-            )
+            ),
+            ("/static_url/(.*)", StaticUrlHandler),
         ]
 
     def get_app_kwargs(self):
-        return dict()
+        # Jupyter also installs its handler as the application's static
+        # handler, so static_path (a list here) reaches get_absolute_path
+        # through static_url, by way of the class methods.
+        return dict(
+            static_path=[self.root1, self.root2],
+            static_handler_class=MultiRootStaticFileHandler,
+        )
+
+    def test_static_url(self):
+        response = self.fetch("/static_url/two.txt")
+        self.assertEqual(response.code, 200)
+        url = "/static/two.txt?v=" + hashlib.sha512(b"two").hexdigest()
+        self.assertEqual(response.body, utf8(url))
+        response = self.fetch(url)
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"two")
+
+    def test_static_url_missing_file(self):
+        with ExpectLog(gen_log, "Could not open static file"):
+            response = self.fetch("/static_url/missing.txt")
+        self.assertEqual(response.body, b"/static/missing.txt")
+
+    def test_make_static_url_without_static_path(self):
+        # voila's TemplateStaticFileHandler finds its directories itself and
+        # calls make_static_url directly, with static_path set to None.
+        root2 = self.root2
+
+        class SearchPathStaticFileHandler(StaticFileHandler):
+            @classmethod
+            def get_absolute_path(cls, root, path):
+                assert root is None
+                return os.path.abspath(os.path.join(root2, path))
+
+        url = SearchPathStaticFileHandler.make_static_url(
+            dict(static_url_prefix="/templates/", static_path=None), "two.txt"
+        )
+        self.assertEqual(
+            url, "/templates/two.txt?v=" + hashlib.sha512(b"two").hexdigest()
+        )
 
     def test_first_root(self):
         response = self.fetch("/multi/one.txt")
@@ -2090,6 +2135,324 @@ class StaticFileMultiRootTest(WebTestCase):
         with ExpectLog(gen_log, ".*is not in root static directory"):
             response = self.fetch("/multi/link.txt")
         self.assertEqual(response.code, 403)
+
+
+class PrefixRoutedStaticFileHandler(StaticFileHandler):
+    """A subclass that picks one of several directories by the first path
+    component, and hands the rest of the path to ``super()`` along with
+    that directory, so the base class's checks run against a root other
+    than ``self.root``. Bokeh's ``MultiRootStaticHandler`` is built this way
+    (voila's ``AllowListFileHandler`` similarly does its own checks in
+    ``get_absolute_path`` before calling ``super()``).
+    """
+
+    root: dict[str, str]  # type: ignore[assignment]
+
+    def initialize(self, roots):  # type: ignore[override]
+        self.root = roots
+        self.default_filename = None
+
+    @classmethod
+    def get_absolute_path(cls, roots, path):
+        name, _, rest = path.partition(os.path.sep)
+        if name not in roots:
+            raise HTTPError(404)
+        return super().get_absolute_path(roots[name], rest)
+
+    def validate_absolute_path(self, roots, absolute_path):
+        for root in roots.values():
+            if (absolute_path + os.path.sep).startswith(
+                os.path.abspath(root) + os.path.sep
+            ):
+                return super().validate_absolute_path(root, absolute_path)
+        raise HTTPError(403, "%s is not in root static directory", self.path)
+
+
+class StaticFilePrefixRoutedTest(WebTestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmpdir)
+        self.root_a = os.path.join(self.tmpdir, "a")
+        self.root_b = os.path.join(self.tmpdir, "b")
+        self.outside = os.path.join(self.tmpdir, "outside")
+        for d in (self.root_a, self.root_b, self.outside):
+            os.mkdir(d)
+        with open(os.path.join(self.root_a, "one.txt"), "w", encoding="utf-8") as f:
+            f.write("one")
+        with open(os.path.join(self.root_b, "two.txt"), "w", encoding="utf-8") as f:
+            f.write("two")
+        with open(os.path.join(self.outside, "secret.txt"), "w", encoding="utf-8") as f:
+            f.write("secret")
+        super().setUp()
+
+    def get_handlers(self):
+        return [
+            (
+                "/prefixed/(.*)",
+                PrefixRoutedStaticFileHandler,
+                dict(roots={"a": self.root_a, "b": self.root_b}),
+            )
+        ]
+
+    def get_app_kwargs(self):
+        return dict()
+
+    def test_serve(self):
+        response = self.fetch("/prefixed/a/one.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"one")
+
+    def test_unknown_prefix(self):
+        response = self.fetch("/prefixed/c/one.txt")
+        self.assertEqual(response.code, 404)
+
+    def test_path_traversal(self):
+        # As in StaticFileTest.test_path_traversal_protection, ".." must not
+        # be normalized away by the client.
+        self.http_client.close()
+        self.http_client = SimpleAsyncHTTPClient()
+        with ExpectLog(gen_log, ".*is not in root static directory"):
+            response = self.fetch("/prefixed/a/../outside/secret.txt")
+        self.assertEqual(response.code, 403)
+
+    def test_path_traversal_into_other_root(self):
+        # The file is inside one of the handler's roots, so the subclass's
+        # validate_absolute_path would accept it. The base class's
+        # get_absolute_path rejects it first, because it checks the path
+        # against the root it was given.
+        self.http_client.close()
+        self.http_client = SimpleAsyncHTTPClient()
+        with ExpectLog(gen_log, ".*is not in root static directory"):
+            response = self.fetch("/prefixed/a/../b/two.txt")
+        self.assertEqual(response.code, 403)
+
+    @unittest.skipIf(os.name != "posix", "non-posix OS")
+    def test_symlink_escaping_root(self):
+        os.symlink(
+            os.path.join(self.outside, "secret.txt"),
+            os.path.join(self.root_a, "link.txt"),
+        )
+        with ExpectLog(gen_log, ".*is not in root static directory"):
+            response = self.fetch("/prefixed/a/link.txt")
+        self.assertEqual(response.code, 403)
+
+
+class PerRequestSymlinkDirectoryHandler(MultiRootStaticFileHandler):
+    """Like `MultiRootStaticFileHandler`, but sets
+    ``allowed_symlink_directory`` itself, on each request, just before
+    calling ``super().validate_absolute_path``. This is how Jupyter's
+    ``FileFindHandler`` actually works: it allows symlinks into the root that
+    matched, or, with ``follow_dir_symlinks``, into the target of a symlinked
+    directory below that root (but never because of a symlinked file).
+    """
+
+    def validate_absolute_path(self, root, absolute_path):
+        for candidate in self.root:
+            if (absolute_path + os.path.sep).startswith(candidate):
+                root = candidate
+                break
+        self.allowed_symlink_directory = self._symlink_directory(root, absolute_path)
+        return super().validate_absolute_path(root, absolute_path)
+
+    @staticmethod
+    def _symlink_directory(root, absolute_path):
+        current = root.rstrip(os.path.sep)
+        for part in absolute_path[len(root) :].split(os.path.sep)[:-1]:
+            current = os.path.join(current, part)
+            if os.path.islink(current):
+                return os.path.realpath(current) + os.path.sep
+        return root
+
+
+@unittest.skipIf(os.name != "posix", "non-posix OS")
+class StaticFilePerRequestSymlinkDirectoryTest(WebTestCase):
+    """``allowed_symlink_directory`` must be read during
+    ``validate_absolute_path``, so that a subclass can set it there.
+    """
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmpdir)
+        self.root = os.path.join(self.tmpdir, "static")
+        self.linked = os.path.join(self.tmpdir, "linked")
+        os.mkdir(self.root)
+        os.mkdir(self.linked)
+        with open(os.path.join(self.linked, "file.txt"), "w", encoding="utf-8") as f:
+            f.write("linked")
+        with open(os.path.join(self.tmpdir, "secret.txt"), "w", encoding="utf-8") as f:
+            f.write("secret")
+        # A symlinked directory, whose target becomes the allowed directory.
+        os.symlink(self.linked, os.path.join(self.root, "linkdir"))
+        # A symlink inside that directory that points further out.
+        os.symlink(
+            os.path.join(self.tmpdir, "secret.txt"),
+            os.path.join(self.linked, "escape.txt"),
+        )
+        # A symlinked file directly in the root: does not widen the check.
+        os.symlink(
+            os.path.join(self.linked, "file.txt"),
+            os.path.join(self.root, "linkfile.txt"),
+        )
+        super().setUp()
+
+    def get_handlers(self):
+        return [
+            (
+                "/files/(.*)",
+                PerRequestSymlinkDirectoryHandler,
+                dict(path=[self.root]),
+            )
+        ]
+
+    def get_app_kwargs(self):
+        return dict()
+
+    def test_symlinked_directory(self):
+        response = self.fetch("/files/linkdir/file.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"linked")
+
+    def test_escape_from_symlinked_directory(self):
+        with ExpectLog(gen_log, ".*is not in root static directory"):
+            response = self.fetch("/files/linkdir/escape.txt")
+        self.assertEqual(response.code, 403)
+
+    def test_symlinked_file(self):
+        with ExpectLog(gen_log, ".*is not in root static directory"):
+            response = self.fetch("/files/linkfile.txt")
+        self.assertEqual(response.code, 403)
+
+
+class RootSwitchingStaticFileHandler(StaticFileHandler):
+    """A subclass that searches several directories in ``get_absolute_path``,
+    defined as an instance method rather than a class method, and records the
+    directory it found by reassigning ``self.root``. `StaticFileHandler.get`
+    must pass that new root to ``validate_absolute_path``. voila's
+    ``MultiStaticFileHandler`` is built this way.
+    """
+
+    def initialize(self, paths):  # type: ignore[override]
+        self.roots = paths
+        super().initialize(path=paths[0])
+
+    def get_absolute_path(self, root, path):  # type: ignore[override]
+        self.root = self.roots[0]
+        for root in self.roots:
+            abspath = os.path.abspath(os.path.join(root, path))
+            if os.path.exists(abspath):
+                self.root = root
+                break
+        return abspath
+
+
+class StaticFileRootSwitchingTest(WebTestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmpdir)
+        self.root1 = os.path.join(self.tmpdir, "static1")
+        self.root2 = os.path.join(self.tmpdir, "static2")
+        for d in (self.root1, self.root2):
+            os.mkdir(d)
+        with open(os.path.join(self.root1, "one.txt"), "w", encoding="utf-8") as f:
+            f.write("one")
+        with open(os.path.join(self.root2, "two.txt"), "w", encoding="utf-8") as f:
+            f.write("two")
+        super().setUp()
+
+    def get_handlers(self):
+        return [
+            (
+                "/switching/(.*)",
+                RootSwitchingStaticFileHandler,
+                dict(paths=[self.root1, self.root2]),
+            )
+        ]
+
+    def get_app_kwargs(self):
+        return dict()
+
+    def test_first_root(self):
+        response = self.fetch("/switching/one.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"one")
+
+    def test_second_root(self):
+        # Only passes if the root found by get_absolute_path is the one
+        # validated, rather than the one from initialize.
+        response = self.fetch("/switching/two.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"two")
+
+    @unittest.skipIf(os.name != "posix", "non-posix OS")
+    def test_symlink_to_other_root(self):
+        # The switched root is also the one symlinks are checked against.
+        os.symlink(
+            os.path.join(self.root1, "one.txt"),
+            os.path.join(self.root2, "link.txt"),
+        )
+        with ExpectLog(gen_log, ".*is not in root static directory"):
+            response = self.fetch("/switching/link.txt")
+        self.assertEqual(response.code, 403)
+
+
+class SingleFileStaticHandler(StaticFileHandler):
+    """A subclass whose ``path`` is a single file rather than a directory,
+    served at a fixed URL: ``get_absolute_path`` ignores the requested path
+    and returns the root itself. JupyterHub's ``LogoHandler`` is built this
+    way.
+    """
+
+    def get(self):  # type: ignore[override]
+        return super().get("")
+
+    def head(self):  # type: ignore[override]
+        return super().get("", include_body=False)
+
+    @classmethod
+    def get_absolute_path(cls, root, path):
+        return os.path.abspath(root)
+
+
+class StaticFileSingleFileTest(WebTestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmpdir)
+        self.elsewhere = os.path.join(self.tmpdir, "elsewhere")
+        os.mkdir(self.elsewhere)
+        self.logo = os.path.join(self.tmpdir, "logo.png")
+        with open(self.logo, "w", encoding="utf-8") as f:
+            f.write("logo")
+        self.linked_logo = os.path.join(self.elsewhere, "linked.png")
+        with open(self.linked_logo, "w", encoding="utf-8") as f:
+            f.write("linked logo")
+        super().setUp()
+
+    def get_handlers(self):
+        handlers = [("/logo", SingleFileStaticHandler, dict(path=self.logo))]
+        if os.name == "posix":
+            link = os.path.join(self.tmpdir, "logo-link.png")
+            os.symlink(self.linked_logo, link)
+            handlers.append(("/logo-link", SingleFileStaticHandler, dict(path=link)))
+        return handlers
+
+    def get_app_kwargs(self):
+        return dict()
+
+    def test_single_file(self):
+        response = self.fetch("/logo")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"logo")
+        response = self.fetch("/logo", method="HEAD")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.headers["Content-Length"], "4")
+
+    @unittest.skipIf(os.name != "posix", "non-posix OS")
+    def test_symlinked_single_file(self):
+        # The file is its own root, and the symlink check resolves both, so
+        # pointing the setting at a symlink (to a file anywhere) works.
+        response = self.fetch("/logo-link")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"linked logo")
 
 
 class StaticFileSymlinkedRootTest(WebTestCase):
@@ -2910,7 +3273,7 @@ class AllHTTPMethodsTest(SimpleHandlerTestCase):
             assert self.request.method is not None
             self.write(self.request.method)
 
-        get = delete = options = post = put = method  # type: ignore
+        get = delete = options = post = put = method
 
     def test_standard_methods(self):
         response = self.fetch("/", method="HEAD")
@@ -2925,9 +3288,7 @@ class AllHTTPMethodsTest(SimpleHandlerTestCase):
 
 class PatchMethodTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
-        SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + (  # type: ignore
-            "OTHER",
-        )
+        SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ("OTHER",)
 
         def patch(self):
             self.write("patch")
@@ -3338,7 +3699,7 @@ class ClientCloseTest(SimpleHandlerTestCase):
                 self.write("requires HTTP/1.x")
 
     def test_client_close(self):
-        with self.assertRaises((HTTPClientError, unittest.SkipTest)):  # type: ignore
+        with self.assertRaises((HTTPClientError, unittest.SkipTest)):
             response = self.fetch("/", raise_error=True)
             if response.body == b"requires HTTP/1.x":
                 self.skipTest("requires HTTP/1.x")
@@ -3549,6 +3910,33 @@ class SignedValueTest(TestCase):
             decode_signed_value(secret, name, cookie, clock=lambda: 1_500_000_000)
         )
 
+    @skipNotCPython
+    def test_decode_memory_budget(self):
+        # Signed values usually arrive in cookies, so their size is bounded
+        # by max_header_size (64KB). Decoding makes a few copies (about 4
+        # bytes per input byte as of 2026-10), whether or not the signature
+        # is valid.
+        payload = b"x" * 45_000
+        for version in (1, 2):
+            signed = create_signed_value(
+                self.SECRET, "key", payload, version=version, clock=self.present
+            )
+            for valid, value in ((True, signed), (False, signed[:-1] + b"0")):
+                with self.subTest(version=version, valid=valid):
+                    with ExpectLog(gen_log, "Invalid cookie signature", required=False):
+                        with assert_memory_budget(
+                            len(value),
+                            max_ratio=10,
+                            msg="decode_signed_value uses too much memory",
+                        ):
+                            decode_signed_value(
+                                self.SECRET,
+                                "key",
+                                value,
+                                min_version=1,
+                                clock=self.present,
+                            )
+
 
 class XSRFTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
@@ -3668,7 +4056,7 @@ class XSRFTest(SimpleHandlerTestCase):
             method="POST",
             body=b"",
             headers=dict(
-                {"X-Xsrftoken": self.xsrf_token},  # type: ignore
+                {"X-Xsrftoken": self.xsrf_token},
                 **self.cookie_headers(),
             ),
         )

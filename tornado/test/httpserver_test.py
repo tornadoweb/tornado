@@ -33,7 +33,7 @@ from tornado.httputil import (
     HTTPServerConnectionDelegate,
     ResponseStartLine,
 )
-from tornado.iostream import IOStream
+from tornado.iostream import IOStream, StreamClosedError
 from tornado.locks import Event
 from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
@@ -64,7 +64,7 @@ async def read_stream_body(stream):
             chunks.append(chunk)
 
         def finish(self):
-            conn.detach()  # type: ignore
+            conn.detach()
 
     conn = HTTP1Connection(stream, True)
     delegate = Delegate()
@@ -121,7 +121,7 @@ class SSLTest(AsyncHTTPSTestCase):
         # misbehaving.
         with ExpectLog(gen_log, "(SSL Error|uncaught exception)"):
             with ExpectLog(gen_log, "Uncaught exception", required=False):
-                with self.assertRaises((IOError, HTTPError)):  # type: ignore
+                with self.assertRaises((IOError, HTTPError)):
                     self.fetch(
                         self.get_url("/").replace("https:", "http:"),
                         request_timeout=3600,
@@ -129,14 +129,91 @@ class SSLTest(AsyncHTTPSTestCase):
                         raise_error=True,
                     )
 
-    def test_error_logging(self):
+    @gen_test
+    async def test_error_logging(self):
         # No stack traces are logged for SSL errors.
+        #
+        # Send plaintext over a raw stream and wait for the server to close
+        # the connection. The server logs the error before it closes, so the
+        # close guarantees the message has been logged. This test used to use
+        # self.fetch, but the client's error is not a reliable signal that the
+        # server has handled the bad handshake: in particular, fetch's own
+        # timeout raises TimeoutError, which is an IOError, so a slow exchange
+        # passed the assertRaises and then failed in ExpectLog with no
+        # indication of what had happened.
         with ExpectLog(gen_log, "SSL Error") as expect_log:
-            with self.assertRaises((IOError, HTTPError)):  # type: ignore
-                self.fetch(
-                    self.get_url("/").replace("https:", "http:"), raise_error=True
-                )
+            stream = IOStream(socket.socket())
+            with closing(stream):
+                await stream.connect(("127.0.0.1", self.get_http_port()))
+                await stream.write(b"GET / HTTP/1.0\r\n\r\n")
+                try:
+                    await stream.read_until_close()
+                except StreamClosedError:
+                    # The server may reset the connection instead of closing
+                    # it cleanly, since it does not read the whole request.
+                    pass
         self.assertFalse(expect_log.logged_stack)
+
+
+class SSLClientCertificateTest(AsyncHTTPSTestCase):
+    def get_app(self):
+        class CertificateHandler(RequestHandler):
+            def get(self):
+                binary_form = self.get_argument("binary_form", None)
+                if binary_form is None:
+                    certificate = self.request.get_ssl_certificate()
+                else:
+                    certificate = self.request.get_ssl_certificate(
+                        binary_form=binary_form == "true"
+                    )
+                if certificate is None:
+                    self.set_status(204)
+                else:
+                    self.write(certificate)
+
+        return Application([("/", CertificateHandler)])
+
+    def get_ssl_options(self):
+        options = super().get_ssl_options()
+        options.update(cert_reqs=ssl.CERT_OPTIONAL, ca_certs=options["certfile"])
+        return options
+
+    def test_get_ssl_certificate(self):
+        options = self.get_ssl_options()
+        for path in ["/", "/?binary_form=false"]:
+            with self.subTest(path=path):
+                response = self.fetch(
+                    path,
+                    client_cert=options["certfile"],
+                    client_key=options["keyfile"],
+                    raise_error=True,
+                )
+                certificate = json_decode(response.body)
+                self.assertEqual(
+                    certificate["subject"], [[["commonName", "foo.example.com"]]]
+                )
+                self.assertEqual(
+                    certificate["subjectAltName"], [["DNS", "foo.example.com"]]
+                )
+
+    def test_get_ssl_certificate_binary(self):
+        options = self.get_ssl_options()
+        response = self.fetch(
+            "/?binary_form=true",
+            client_cert=options["certfile"],
+            client_key=options["keyfile"],
+            raise_error=True,
+        )
+        with open(options["certfile"], encoding="ascii") as cert_file:
+            expected = ssl.PEM_cert_to_DER_cert(cert_file.read())
+        self.assertEqual(response.body, expected)
+
+    def test_no_client_certificate(self):
+        for path in ["/", "/?binary_form=false", "/?binary_form=true"]:
+            with self.subTest(path=path):
+                response = self.fetch(path, raise_error=True)
+                self.assertEqual(response.code, 204)
+                self.assertEqual(response.body, b"")
 
 
 class BadSSLOptionsTest(TestCase):
@@ -471,6 +548,19 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
             self.assertEqual("HTTP/1.1", start_line.version)
             self.assertEqual(400, start_line.code)
             self.assertEqual("Bad Request", start_line.reason)
+
+    def test_invalid_host_header_with_huge_port(self):
+        # More digits than int() accepts by default (sys.get_int_max_str_digits).
+        with ExpectLog(
+            gen_log, ".*Malformed HTTP message.*Invalid Host header", level=logging.INFO
+        ):
+            self.stream.write(
+                b"GET / HTTP/1.0\r\nHost: foo:" + b"1" * 5000 + b"\r\n\r\n"
+            )
+            start_line, headers, response = self.io_loop.run_sync(
+                lambda: read_stream_body(self.stream)
+            )
+            self.assertEqual(400, start_line.code)
 
     def test_chunked_request_body(self):
         # Chunked requests are not widely supported and we don't have a way

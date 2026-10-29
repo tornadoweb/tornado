@@ -332,8 +332,9 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         Default is 10MiB.
         """
-        return self.settings.get(
-            "websocket_max_message_size", _default_max_message_size
+        return cast(
+            int,
+            self.settings.get("websocket_max_message_size", _default_max_message_size),
         )
 
     def write_message(
@@ -662,7 +663,7 @@ class WebSocketProtocol(abc.ABC):
         self.server_terminated = False
 
     def _run_callback(
-        self, callback: Callable, *args: Any, **kwargs: Any
+        self, callback: Callable[..., Any], *args: Any, **kwargs: Any
     ) -> "Optional[Future[Any]]":
         """Runs the given callback with exception handling.
 
@@ -761,10 +762,13 @@ class _PerMessageDeflateCompressor:
     ) -> None:
         if max_wbits is None:
             max_wbits = zlib.MAX_WBITS
-        # There is no symbolic constant for the minimum wbits value.
-        if not (8 <= max_wbits <= zlib.MAX_WBITS):
+        # There is no symbolic constant for the minimum wbits value. RFC
+        # 7692 allows 8, but zlib can't compress with a 256-byte window:
+        # zlib 1.2.9 and later reject it, and earlier versions silently use
+        # 512 bytes, which a peer that asked for 8 may fail to decompress.
+        if not (9 <= max_wbits <= zlib.MAX_WBITS):
             raise ValueError(
-                "Invalid max_wbits value %r; allowed range 8-%d"
+                "Invalid max_wbits value %r; allowed range 9-%d"
                 % (max_wbits, zlib.MAX_WBITS)
             )
         self._max_wbits = max_wbits
@@ -892,7 +896,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._pending_pong: bytes | None = None
         self.close_code: int | None = None
         self.close_reason: str | None = None
-        self._ping_coroutine: asyncio.Task | None = None
+        self._ping_coroutine: asyncio.Task[Any] | None = None
 
     # Use a property for this to satisfy the abc.
     @property
@@ -964,7 +968,17 @@ class WebSocketProtocol13(WebSocketProtocol):
             if ext[0] == "permessage-deflate" and self._compression_options is not None:
                 # TODO: negotiate parameters if compression_options
                 # specifies limits.
-                self._create_compressors("server", ext[1], self._compression_options)
+                try:
+                    self._create_compressors(
+                        "server", ext[1], self._compression_options
+                    )
+                except ValueError:
+                    # Decline offers with parameters we can't accept, as
+                    # RFC 7692 section 5 requires.
+                    gen_log.debug(
+                        "Declining websocket extension %r", ext, exc_info=True
+                    )
+                    continue
                 if (
                     "client_max_window_bits" in ext[1]
                     and ext[1]["client_max_window_bits"] is None
@@ -1001,7 +1015,7 @@ class WebSocketProtocol13(WebSocketProtocol):
 
     def _parse_extensions_header(
         self, headers: httputil.HTTPHeaders
-    ) -> list[tuple[str, dict[str, str]]]:
+    ) -> list[tuple[str, dict[str, str | None]]]:
         extensions = headers.get("Sec-WebSocket-Extensions", "")
         if extensions:
             return [httputil._parse_header(e.strip()) for e in extensions.split(",")]
@@ -1054,7 +1068,6 @@ class WebSocketProtocol13(WebSocketProtocol):
         agreed_parameters: dict[str, Any],
         compression_options: dict[str, Any] | None = None,
     ) -> None:
-        # TODO: handle invalid parameters gracefully
         allowed_keys = {
             "server_no_context_takeover",
             "client_no_context_takeover",
@@ -1065,7 +1078,9 @@ class WebSocketProtocol13(WebSocketProtocol):
             if key not in allowed_keys:
                 raise ValueError("unsupported compression parameter %r" % key)
         other_side = "client" if (side == "server") else "server"
-        self._compressor = _PerMessageDeflateCompressor(
+        # Create both before assigning either, so a ValueError leaves
+        # compression off.
+        compressor = _PerMessageDeflateCompressor(
             **self._get_compressor_options(side, agreed_parameters, compression_options)
         )
         self._decompressor = _PerMessageDeflateDecompressor(
@@ -1074,6 +1089,7 @@ class WebSocketProtocol13(WebSocketProtocol):
                 other_side, agreed_parameters, compression_options
             ),
         )
+        self._compressor = compressor
 
     def _write_frame(
         self, fin: bool, opcode: int, data: bytes, flags: int = 0
@@ -1262,6 +1278,10 @@ class WebSocketProtocol13(WebSocketProtocol):
                 data = self._decompressor.decompress(data)
             except _DecompressTooLargeError:
                 self.close(1009, "message too big after decompression")
+                self._abort()
+                return None
+            except zlib.error:
+                self.close(1007, "invalid compressed data")
                 self._abort()
                 return None
 
@@ -1544,7 +1564,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         """
         if self.protocol is not None:
             self.protocol.close(code, reason)
-            self.protocol = None  # type: ignore
+            self.protocol = None
 
     def on_connection_close(self) -> None:
         if not self.connect_future.done():

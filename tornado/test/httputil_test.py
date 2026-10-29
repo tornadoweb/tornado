@@ -335,6 +335,25 @@ Foo
         ):
             _parse_header(header)
 
+    @skipNotCPython
+    def test_multipart_memory_budget(self):
+        # Many empty parts are the worst case for memory, since each part
+        # costs a fixed amount (about 5 bytes per input byte as of 2026-10
+        # with the default max_parts). Larger parts are close to 2: the
+        # body and one copy of each part's data.
+        part = (
+            b"--1234\r\n"
+            b'Content-Disposition: form-data; name="a"; filename="b"\r\n'
+            b"Content-Type: text/plain\r\n\r\n\r\n"
+        )
+        body = part * (ParseMultipartConfig().max_parts - 1) + b"--1234--\r\n"
+        args, files = form_data_args()
+        with assert_memory_budget(
+            len(body), max_ratio=10, msg="multipart parsing uses too much memory"
+        ):
+            parse_multipart_form_data(b"1234", body, args, files)
+        self.assertEqual(len(files["a"]), 99)
+
     def test_multipart_config(self):
         boundary = b"1234"
         body = b"""--1234
@@ -798,12 +817,30 @@ class ParseCookieTest(TestCase):
         # escape sequences in a cookie value was quadratic. (Only the r"\\"
         # case reproduces it on 6.4.1; r"\134" is here for symmetry with
         # test_unquote_large.)
+        #
+        # 6.4.1 measures a ratio of about 100 on CPython and 60-100 on PyPy.
+        # The fixed version measures about 10 on CPython, but this test
+        # allocates heavily for each byte of input, and PyPy's ratio depends
+        # on how that compares to its nursery and CPU caches: as of 2026-10
+        # it measures 11-24 depending on PYPY_GC_NURSERY, so the usual limit
+        # of 20 is too tight.
         for encoded in r"\\", r"\134":
             with self.subTest(encoded):
                 assert_linear_scaling(
                     lambda n: parse_cookie('a="b=' + encoded * n + '"'),
                     1_000,
                     10_000,
-                    max_ratio=20,
+                    max_ratio=40,
                     msg="Cookie unquoting is not linear",
                 )
+
+    @skipNotCPython
+    def test_parse_memory_budget(self):
+        # Many short cookies with empty values are the worst case for memory
+        # (about 20 bytes per input byte as of 2026-10). Cookies arrive in a
+        # header, so the default max_header_size of 64KB bounds the input.
+        data = "".join(f"{i}=;" for i in range(10_000))
+        with assert_memory_budget(
+            len(data), max_ratio=30, msg="parse_cookie() uses too much memory"
+        ):
+            parse_cookie(data)

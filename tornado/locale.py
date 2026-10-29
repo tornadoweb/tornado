@@ -46,11 +46,11 @@ import gettext
 import glob
 import os
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import Any
 
 from tornado import escape
-from tornado._locale_data import LOCALE_NAMES  # re-exported for compatibility
+from tornado._locale_data import LOCALE_NAMES as LOCALE_NAMES
 from tornado.log import gen_log
 
 _default_locale = "en_US"
@@ -454,7 +454,7 @@ class Locale:
                 "day": str(local_date.day),
             }
 
-    def list(self, parts: Any) -> str:
+    def list(self, parts: Sequence[str]) -> str:
         """Returns a comma-separated list for the given list of parts.
 
         The format is, e.g., "A, B and C", "A and B" or just "A" for lists

@@ -134,7 +134,7 @@ def exec_test(caller_globals, caller_locals, s):
     # Flatten the real global and local namespace into our fake
     # globals: it's all global from the perspective of code defined
     # in s.
-    global_namespace = dict(caller_globals, **caller_locals)  # type: ignore
+    global_namespace = dict(caller_globals, **caller_locals)
     local_namespace: dict[str, typing.Any] = {}
     exec(textwrap.dedent(s), global_namespace, local_namespace)
     return local_namespace
@@ -228,6 +228,38 @@ def _calibrate(
         iterations *= 2
 
 
+@contextlib.contextmanager
+def _gc_disabled() -> Generator[None, None, None]:
+    """Disable the garbage collector for the measurements in
+    `assert_linear_scaling`, on CPython only.
+
+    CPython's collections are triggered by allocation counts, and their cost
+    depends on the number of live objects, so leaving the collector enabled
+    charges an arbitrary and unevenly distributed cost to whichever operation
+    happens to trigger one. Reference counting still frees almost everything
+    while it is disabled.
+
+    PyPy has no reference counting, and `gc.disable` there only stops major
+    collections: minor collections keep promoting objects that survive the
+    nursery into an old generation that is never collected. Memory then
+    grows throughout the measurement (by about 1MB per call of the cookie
+    unquoting test at ``n=10_000``), and the larger input, which promotes
+    more, pays disproportionately for touching fresh memory. This has been
+    seen to inflate a linear ratio of about 10 to 20 or more, and in some
+    configurations to over 80, so on PyPy the collector is left alone.
+    """
+    if platform.python_implementation() != "CPython":
+        yield
+        return
+    gc_was_enabled = gc.isenabled()
+    gc.disable()
+    try:
+        yield
+    finally:
+        if gc_was_enabled:
+            gc.enable()
+
+
 def assert_linear_scaling(
     func: Callable[[int], object],
     n1: int,
@@ -255,10 +287,8 @@ def assert_linear_scaling(
     * Only CPU time used by this process is measured (see `_time_calls`).
     * Each operation is repeated enough times to be measured reliably (see
       `_MIN_MEASUREMENT_TIME`).
-    * The garbage collector is disabled during the measurements. Collections
-      are triggered by allocation counts, and their cost depends on the
-      number of live objects, so leaving it enabled charges an arbitrary and
-      unevenly distributed cost to whichever operation happens to trigger one.
+    * On CPython, the garbage collector is disabled during the measurements
+      (see `_gc_disabled`).
     * Each size is measured ``rounds`` times and the lowest result is used.
       Interference can only make an operation look slower, never faster, so
       the minimum is a much more stable estimate of its cost than the mean.
@@ -275,23 +305,21 @@ def assert_linear_scaling(
     factor larger than the margin between ``max_ratio`` and the ratio of a
     real change in complexity class. Linear code often measures a little
     over ``n2 / n1``, so a threshold of half of ``max_ratio`` would send
-    most passing tests to the slow measurement.)
+    most passing tests to the slow measurement.) The quick measurement is
+    itself preceded by a warmup of the same length, because the first calls
+    are systematically slower, especially on PyPy before its JIT has
+    compiled the code. That inflates the time for ``n1``, which is measured
+    first, and can hide even a quadratic regression.
     """
-    gc_was_enabled = gc.isenabled()
-    gc.disable()
-    try:
+    with _gc_disabled():
+        _calibrate(func, n1, _QUICK_MEASUREMENT_TIME)
         iterations1, elapsed1 = _calibrate(func, n1, _QUICK_MEASUREMENT_TIME)
         iterations2, elapsed2 = _calibrate(func, n2, _QUICK_MEASUREMENT_TIME)
-    finally:
-        if gc_was_enabled:
-            gc.enable()
     if (elapsed2 / iterations2) / (elapsed1 / iterations1) <= max_ratio * 0.75:
         return
     t1 = t2 = 0.0
     for _ in range(attempts):
-        gc_was_enabled = gc.isenabled()
-        gc.disable()
-        try:
+        with _gc_disabled():
             iterations1, elapsed1 = _calibrate(func, n1)
             iterations2, elapsed2 = _calibrate(func, n2)
             t1 = elapsed1 / iterations1
@@ -299,9 +327,6 @@ def assert_linear_scaling(
             for _ in range(rounds - 1):
                 t1 = min(t1, _time_calls(func, n1, iterations1) / iterations1)
                 t2 = min(t2, _time_calls(func, n2, iterations2) / iterations2)
-        finally:
-            if gc_was_enabled:
-                gc.enable()
         if t2 / t1 <= max_ratio:
             return
     raise AssertionError(

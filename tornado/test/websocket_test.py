@@ -10,6 +10,7 @@ import unittest
 from tornado import gen
 from tornado.concurrent import Future
 from tornado.httpclient import HTTPError, HTTPRequest
+from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream
 from tornado.locks import Event
 from tornado.log import app_log, gen_log
@@ -770,6 +771,11 @@ class WebSocketOriginTest(WebSocketBaseTestCase):
             xsrf_cookies=True,
         )
 
+    def get_http_client(self):
+        # Some tests here send handshakes with self.fetch, and the websocket
+        # handshake requires HTTP/1; force the use of SimpleAsyncHTTPClient.
+        return SimpleAsyncHTTPClient()
+
     @gen.coroutine
     def connect_with_headers(self, path, headers):
         url = "ws://127.0.0.1:%d%s" % (self.get_http_port(), path)
@@ -982,6 +988,21 @@ class CompressedMessageMemoryTest(WebSocketBaseTestCase):
         self.assertEqual(ws.close_code, 1009)
 
 
+class InvalidCompressedDataTest(WebSocketBaseTestCase):
+    def get_app(self):
+        return Application([("/", EchoHandler, dict(compression_options={}))])
+
+    @gen_test
+    def test_invalid_compressed_data(self):
+        # A compressed message that isn't valid deflate data closes the
+        # connection (and is not logged as an uncaught exception).
+        ws = yield self.ws_connect("/", compression_options={})
+        ws.protocol._write_frame(True, 0x1, b"\xff\xff\xff", flags=ws.protocol.RSV1)
+        response = yield ws.read_message()
+        self.assertIsNone(response)
+        self.assertEqual(ws.close_code, 1007)
+
+
 @abstract_base_test
 class UncompressedTestMixin(CompressionTestMixin):
     """Specialization of CompressionTestMixin when we expect no compression."""
@@ -1019,6 +1040,90 @@ class DefaultCompressionTest(CompressionTestMixin):
         self.assertLess(bytes_in, 3 * (len(self.MESSAGE) + 2))
         # Bytes out includes the 4 bytes mask key per message.
         self.assertEqual(bytes_out, bytes_in + 12)
+
+
+class InvalidCompressionOfferTest(WebSocketBaseTestCase):
+    def get_app(self):
+        return Application([("/echo", EchoHandler, dict(compression_options={}))])
+
+    async def handshake(self, extensions: str) -> HTTPHeaders:
+        stream = IOStream(socket.socket())
+        self.conns_to_close.append(stream)
+        await stream.connect(("127.0.0.1", self.get_http_port()))
+        stream.write(
+            b"GET /echo HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+            b"Upgrade: websocket\r\nConnection: Upgrade\r\n"
+            b"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+            b"Sec-WebSocket-Version: 13\r\n"
+            b"Sec-WebSocket-Extensions: " + extensions.encode() + b"\r\n\r\n"
+        )
+        data = await stream.read_until(b"\r\n\r\n")
+        start_line, _, headers = data.decode().partition("\r\n")
+        self.assertEqual(start_line, "HTTP/1.1 101 Switching Protocols")
+        return HTTPHeaders.parse(headers)
+
+    @gen_test
+    async def test_invalid_offers(self):
+        # The server declines offers it can't accept, as RFC 7692 requires,
+        # instead of failing the handshake.
+        for params in [
+            "server_max_window_bits=abc",
+            "server_max_window_bits=16",
+            "server_max_window_bits=8",  # newer zlibs can't compress with 8
+            "client_max_window_bits=7",
+            "server_max_window_bits=" + "1" * 5000,
+            "foo=1",
+        ]:
+            with self.subTest(params[:40]):
+                headers = await self.handshake("permessage-deflate; " + params)
+                self.assertNotIn("Sec-WebSocket-Extensions", headers)
+
+    @gen_test
+    async def test_second_offer_accepted(self):
+        headers = await self.handshake(
+            "permessage-deflate; server_max_window_bits=abc, permessage-deflate"
+        )
+        self.assertEqual(headers["Sec-WebSocket-Extensions"], "permessage-deflate")
+
+    @gen_test
+    async def test_no_context_takeover_accepted(self):
+        # Valueless parameters are accepted and echoed back.
+        headers = await self.handshake(
+            "permessage-deflate; server_no_context_takeover; client_no_context_takeover"
+        )
+        self.assertEqual(
+            headers["Sec-WebSocket-Extensions"],
+            "permessage-deflate; client_no_context_takeover; server_no_context_takeover",
+        )
+
+
+class ClientNoContextTakeoverTest(WebSocketBaseTestCase):
+    MESSAGE = "Hello world. Testing 123 123"
+
+    def get_app(self):
+        class Handler(EchoHandler):
+            def set_header(self, name, value):
+                # Our client doesn't offer client_no_context_takeover, but
+                # a server may require it anyway.
+                if name == "Sec-WebSocket-Extensions":
+                    value += "; client_no_context_takeover"
+                super().set_header(name, value)
+
+        return Application([("/", Handler, dict(compression_options={}))])
+
+    @gen_test
+    def test_client_no_context_takeover(self):
+        ws = yield self.ws_connect("/", compression_options={})
+        self.assertIsNotNone(ws.protocol._compressor)
+        sizes = []
+        for i in range(3):
+            before = ws.protocol._wire_bytes_out
+            ws.write_message(self.MESSAGE)
+            response = yield ws.read_message()
+            self.assertEqual(response, self.MESSAGE)
+            sizes.append(ws.protocol._wire_bytes_out - before)
+        # Without context takeover, repeated messages don't get smaller.
+        self.assertEqual(sizes, [sizes[0]] * 3)
 
 
 @abstract_base_test
@@ -1259,7 +1364,7 @@ class FloodTest(WebSocketBaseTestCase):
             write_futures.append(Future())
             return write_futures[-1]
 
-        protocol._write_frame = write_frame  # type: ignore
+        protocol._write_frame = write_frame
 
         for data in [b"1", b"2", b"3"]:
             ws.ping(data)
