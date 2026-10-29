@@ -72,6 +72,7 @@ import os.path
 import re
 import socket
 import stat
+import string
 import sys
 import threading
 import time
@@ -2848,23 +2849,40 @@ class RedirectHandler(RequestHandler):
     def get(self, *args: Any, **kwargs: Any) -> None:
         to_url = self._url.format(*args, **kwargs)
         # The scheme and netloc of the redirect must come from the template, not
-        # from the request. Find out what they are by formatting the template
-        # with a placeholder that cannot extend a scheme or netloc.
-        expected_url = self._url.format(
-            *("/" for _ in args), **{k: "/" for k in kwargs}
-        )
+        # from the request. Find out what they are from the part of the template
+        # before the first substitution. (Formatting the whole template with a
+        # placeholder doesn't work: whatever the placeholder is, it can turn the
+        # template into a URL with a different netloc, as "/" does for "/{0}/b".)
+        prefix = ""
+        has_substitution = False
+        for literal, field, _, _ in string.Formatter().parse(self._url):
+            prefix += literal
+            if field is not None:
+                has_substitution = True
+                break
         try:
-            unchanged = _scheme_and_netloc(to_url) == _scheme_and_netloc(expected_url)
+            if self.request.query_arguments:
+                # Query arguments are added before the check because url_concat
+                # can change the rest of the URL.
+                # TODO: figure out typing for the next line.
+                to_url = httputil.url_concat(
+                    to_url,
+                    list(httputil.qs_to_qsl(self.request.query_arguments)),  # type: ignore
+                )
+            scheme, netloc = _scheme_and_netloc(prefix)
+            unchanged = _scheme_and_netloc(to_url) == (scheme, netloc)
+            if has_substitution and scheme in ("http", "https") and not netloc:
+                # The host would come entirely from a substitution (or a
+                # browser would find one where urlsplit doesn't, as in
+                # "https:///host").
+                unchanged = False
         except ValueError:
             unchanged = False
         if not unchanged:
             raise HTTPError(400, "Redirect URL cannot change the scheme or netloc")
-        if self.request.query_arguments:
-            # TODO: figure out typing for the next line.
-            to_url = httputil.url_concat(
-                to_url,
-                list(httputil.qs_to_qsl(self.request.query_arguments)),  # type: ignore
-            )
+        if httputil._FORBIDDEN_HEADER_CHARS_RE.search(to_url):
+            # Let this be a 400 rather than a 500 from set_header.
+            raise HTTPError(400, "Redirect URL contains invalid characters")
         self.redirect(to_url, permanent=self._permanent)
 
 
@@ -4251,5 +4269,10 @@ def _scheme_and_netloc(url: str) -> tuple[str, str]:
     Both are empty for a relative URL. Raises `ValueError` for some malformed
     URLs.
     """
-    parts = urllib.parse.urlsplit(_normalize_url_like_browser(url))
+    url = _normalize_url_like_browser(url)
+    # urlsplit follows RFC 3986, in which "///example.com" has an empty netloc,
+    # but browsers resolving it against an http or https URL skip any number of
+    # slashes before the host. Collapse them so urlsplit sees the same host.
+    url = re.sub(r"^//+", "//", url)
+    parts = urllib.parse.urlsplit(url)
     return parts.scheme.lower(), parts.netloc.lower()
