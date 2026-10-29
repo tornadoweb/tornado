@@ -76,8 +76,8 @@ if __name__ == "__main__":
 
 import functools
 import importlib.abc
+import importlib.util
 import os
-import pkgutil
 import subprocess
 import sys
 import traceback
@@ -336,7 +336,9 @@ def main() -> None:
         assert opts.module is not None
         # runpy did a fake import of the module as __main__, but now it's
         # no longer in sys.modules.  Figure out where it is and watch it.
-        loader = pkgutil.get_loader(opts.module)
+        # pkgutil.get_loader() was removed in Python 3.14.
+        spec = importlib.util.find_spec(opts.module)
+        loader = spec.loader if spec is not None else None
         if loader is not None and isinstance(loader, importlib.abc.FileLoader):
             watch(loader.get_filename())
     if opts.until_success and not exit_status:

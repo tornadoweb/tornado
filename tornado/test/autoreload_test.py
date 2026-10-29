@@ -264,3 +264,35 @@ else:
         )
 
         self.assertEqual(out, "reloading\nexiting cleanly\n")
+
+    def test_reload_wrapper_until_success_module(self):
+        # With -m, the wrapper looks up the module's file after the
+        # program exits so it can watch it.
+        main = """\
+import sys
+
+print("exiting cleanly")
+sys.exit(0)
+"""
+
+        self.write_files(
+            {
+                "testapp": {
+                    "__init__.py": "",
+                    "__main__.py": main,
+                },
+            }
+        )
+
+        out = self.run_subprocess(
+            [
+                sys.executable,
+                "-m",
+                "tornado.autoreload",
+                "--until-success",
+                "-m",
+                "testapp",
+            ]
+        )
+
+        self.assertEqual(out, "exiting cleanly\n")
