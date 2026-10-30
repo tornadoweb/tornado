@@ -2196,6 +2196,12 @@ def removeslash(
         if self.request.path.endswith("/"):
             if self.request.method in ("GET", "HEAD"):
                 uri = self.request.path.rstrip("/")
+                if _is_protocol_relative(uri):
+                    # A path like //example.com// would otherwise redirect
+                    # to another host.
+                    raise HTTPError(
+                        403, "cannot redirect path with two initial slashes"
+                    )
                 if uri:  # don't try to redirect '/' to ''
                     if self.request.query:
                         uri += "?" + self.request.query
@@ -2225,6 +2231,12 @@ def addslash(
         if not self.request.path.endswith("/"):
             if self.request.method in ("GET", "HEAD"):
                 uri = self.request.path + "/"
+                if _is_protocol_relative(uri):
+                    # A path like //example.com would otherwise redirect to
+                    # another host.
+                    raise HTTPError(
+                        403, "cannot redirect path with two initial slashes"
+                    )
                 if self.request.query:
                     uri += "?" + self.request.query
                 self.redirect(uri, permanent=True)

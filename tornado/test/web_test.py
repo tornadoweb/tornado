@@ -4631,7 +4631,13 @@ class DecoratorTest(WebTestCase):
             def get(self):
                 pass
 
-        return [("/removeslash/", RemoveSlashHandler), ("/addslash", AddSlashHandler)]
+        return [
+            ("/removeslash/", RemoveSlashHandler),
+            ("/addslash", AddSlashHandler),
+            # Catch-all routes can see paths that start with two slashes.
+            (r"/+rem.*", RemoveSlashHandler),
+            (r"/+add.*", AddSlashHandler),
+        ]
 
     def test_removeslash(self):
         response = self.fetch("/removeslash/", follow_redirects=False)
@@ -4650,6 +4656,20 @@ class DecoratorTest(WebTestCase):
         response = self.fetch("/addslash?foo=bar", follow_redirects=False)
         self.assertEqual(response.code, 301)
         self.assertEqual(response.headers["Location"], "/addslash/?foo=bar")
+
+    def test_no_protocol_relative_redirect(self):
+        # Redirecting to //example.com would be an open redirect.
+        for path in [
+            "//add.example.com",
+            "///add.example.com",
+            "//rem.example.com/",
+            "//rem.example.com//",
+            "///rem.example.com/x/",
+        ]:
+            with self.subTest(path=path):
+                with ExpectLog(gen_log, ".*cannot redirect path"):
+                    response = self.fetch(path, follow_redirects=False)
+                self.assertEqual(response.code, 403)
 
 
 class CacheTest(WebTestCase):
