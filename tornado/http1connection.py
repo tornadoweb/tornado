@@ -653,7 +653,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                 # Proxies sometimes cause Content-Length headers to get
                 # duplicated.  If all the values are identical then we can
                 # use them but if they differ it's an error.
-                pieces = re.split(r",\s*", headers["Content-Length"])
+                pieces = re.split(r",[ \t]*", headers["Content-Length"])
                 if any(i != pieces[0] for i in pieces):
                     raise httputil.HTTPInputError(
                         "Multiple unequal Content-Lengths: %r"
