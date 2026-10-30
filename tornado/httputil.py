@@ -1349,7 +1349,7 @@ def doctests() -> unittest.TestSuite:
     return doctest.DocTestSuite(optionflags=doctest.ELLIPSIS)
 
 
-_netloc_re = re.compile(r"^(.+):(\d+)$")
+_netloc_re = re.compile(r"^(.+):([0-9]+)$")
 
 
 def split_host_and_port(netloc: str) -> tuple[str, int | None]:
