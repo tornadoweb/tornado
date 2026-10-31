@@ -16,3 +16,5 @@ MANIFEST
 secrets.cfg
 .mypy_cache/
 .hypothesis/
+config.bat
+node_modules
