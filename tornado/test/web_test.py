@@ -2490,6 +2490,62 @@ class StaticFileSingleFileTest(WebTestCase):
         self.assertEqual(response.body, b"linked logo")
 
 
+@unittest.skipIf(os.name != "nt", "NTFS alternate data streams are Windows-only")
+class StaticFileAlternateDataStreamTest(WebTestCase):
+    """On Windows, ``file.txt:name`` names an NTFS alternate data stream of
+    ``file.txt``. Streams are not files in the static directory and must not
+    be served, nor read by ``get_version``.
+    """
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmpdir)
+        self.public = os.path.join(self.tmpdir, "public.txt")
+        with open(self.public, "wb") as f:
+            f.write(b"public")
+        try:
+            with open(self.public + ":secret", "wb") as f:
+                f.write(b"secret")
+        except OSError:
+            # Not every filesystem (e.g. FAT, some network shares) supports
+            # alternate data streams.
+            self.skipTest("filesystem does not support alternate data streams")
+        StaticFileHandler.reset()
+        self.addCleanup(StaticFileHandler.reset)
+        super().setUp()
+
+    def get_handlers(self):
+        return [("/static/(.*)", StaticFileHandler, dict(path=self.tmpdir))]
+
+    def get_app_kwargs(self):
+        return dict()
+
+    def test_public_file(self):
+        response = self.fetch("/static/public.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"public")
+
+    def test_alternate_data_stream(self):
+        for path in [
+            "public.txt:secret",
+            "public.txt%3Asecret",
+            "public.txt:secret:$DATA",
+            "public.txt::$DATA",
+        ]:
+            with self.subTest(path=path):
+                with ExpectLog(gen_log, ".*is not a file"):
+                    response = self.fetch("/static/" + path)
+                self.assertEqual(response.code, 403)
+                self.assertNotIn(b"secret", response.body)
+
+    def test_alternate_data_stream_version(self):
+        with self.assertRaises(HTTPError) as cm:
+            StaticFileHandler.get_version(
+                dict(static_path=self.tmpdir), "public.txt:secret"
+            )
+        self.assertEqual(cm.exception.status_code, 403)
+
+
 class StaticFileSymlinkedRootTest(WebTestCase):
     """The root itself may be reached through a symlink; that must not make
     every request look like an escape.

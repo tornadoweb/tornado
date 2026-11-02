@@ -3353,6 +3353,16 @@ class StaticFileHandler(RequestHandler):
         # the requested path so a request to root/ will match.
         if not (absolute_path + os.path.sep).startswith(root):
             raise HTTPError(403, "%s is not in root static directory", path_message)
+        if os.name == "nt" and ":" in absolute_path[len(root) :]:
+            # On Windows, "file.txt:name" names the NTFS alternate data
+            # stream "name" of file.txt. abspath, stat and open all accept
+            # this syntax, so without this check the stream (which may
+            # hold data such as the Zone.Identifier recorded for downloaded
+            # files) would be served as if it were a file in the static
+            # directory. A colon can never appear in an ordinary Windows
+            # file name, so rejecting it anywhere below the root (the root
+            # itself contains the drive letter's colon) loses nothing.
+            raise HTTPError(403, "%s is not a file", path_message)
         return root
 
     @staticmethod
