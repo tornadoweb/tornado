@@ -457,6 +457,13 @@ class HTTP1Connection(httputil.HTTPConnection):
             assert self._request_start_line is not None
             assert self._request_headers is not None
             self._response_start_line = start_line
+            if not isinstance(start_line[2], str) or not (
+                start_line[2] == ""
+                or httputil._ABNF.reason_phrase.fullmatch(start_line[2])
+            ):
+                raise ValueError(
+                    "Illegal characters in reason phrase: %r" % (start_line[2],)
+                )
             lines.append(utf8("HTTP/1.1 %d %s" % (start_line[1], start_line[2])))
             self._chunking_output = (
                 # TODO: should this use
@@ -499,9 +506,12 @@ class HTTP1Connection(httputil.HTTPConnection):
         # TODO: headers are supposed to be of type str, but we still have some
         # cases that let bytes slip through. Remove these native_str calls when those
         # are fixed.
-        header_lines = (
-            native_str(n) + ": " + native_str(v) for n, v in headers.get_all()
-        )
+        header_lines = []
+        for n, v in headers.get_all():
+            v_str = native_str(v)
+            if not httputil._ABNF.field_value.fullmatch(v_str):
+                raise ValueError("Illegal characters in header value %r: %r" % (n, v))
+            header_lines.append(native_str(n) + ": " + v_str)
         lines.extend(line.encode("latin1") for line in header_lines)
         for line in lines:
             if CR_OR_LF_RE.search(line):
