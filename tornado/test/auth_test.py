@@ -3,6 +3,7 @@
 # and ensure that it doesn't blow up (e.g. with unicode/bytes issues in
 # python 3)
 
+import unittest
 from unittest import mock
 
 from tornado import gen
@@ -556,3 +557,13 @@ class GoogleOAuth2Test(AsyncHTTPTestCase):
             },
             json_decode(response.body),
         )
+
+
+class OAuth2DocTest(unittest.TestCase):
+    def test_oauth2_request_docstring_directives(self):
+        doc = OAuth2Mixin.oauth2_request.__doc__
+        self.assertIsNotNone(doc)
+        self.assertIn(".. testcode::", doc)
+        self.assertNotIn("..testcode::", doc)
+        self.assertIn(".. versionchanged:: 6.0", doc)
+        self.assertNotIn(".. versionchanged:::", doc)
