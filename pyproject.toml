@@ -18,6 +18,9 @@ target-version = ['py311']
 build = "cp311* cp312* cp313* cp314* cp315* cp314t*"
 #[[[end]]]
 test-command = "python -m tornado.test"
+# Wheel builds exercise the optional C extension and must fail if it cannot be
+# compiled. Local tox test environments leave it optional.
+environment = { TORNADO_EXTENSION = "1" }
 
 [tool.cibuildwheel.macos]
 archs = "universal2"
