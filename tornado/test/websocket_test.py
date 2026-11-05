@@ -327,7 +327,11 @@ class WebSocketTest(WebSocketBaseTestCase):
                     dict(close_future=self.close_future, test=self),
                 ),
                 ("/error_in_open", ErrorInOpenHandler),
-                ("/error_in_async_open", ErrorInAsyncOpenHandler),
+                (
+                    "/error_in_async_open",
+                    ErrorInAsyncOpenHandler,
+                    dict(close_future=self.close_future),
+                ),
                 ("/nodelay", NoDelayHandler),
             ],
             template_loader=DictLoader({"message.html": "<b>{{ message }}</b>"}),
@@ -697,6 +701,9 @@ class WebSocketTest(WebSocketBaseTestCase):
             ws = yield self.ws_connect("/error_in_async_open")
             res = yield ws.read_message()
         self.assertIsNone(res)
+        # on_close() is not called when open() fails.
+        yield gen.sleep(0.01)
+        self.assertFalse(self.close_future.done())
 
     @gen_test
     def test_nodelay(self):
@@ -733,6 +740,111 @@ class WebSocketNativeCoroutineTest(WebSocketBaseTestCase):
         self.assertEqual(res, "hello1")
         res = yield ws.read_message()
         self.assertEqual(res, "hello2")
+
+
+class SlowCallbackHandler(TestWebSocketHandler):
+    """Blocks in ``open()`` or ``on_message()`` until the test releases it."""
+
+    def initialize(self, test, slow_open, **kwargs):  # type: ignore[override]
+        super().initialize(**kwargs)
+        self.test = test
+        self.slow_open = slow_open
+
+    async def _slow(self):
+        self.test.started.set()
+        await self.test.release.wait()
+        self.test.finished.set()
+
+    async def open(self):
+        if self.slow_open:
+            await self._slow()
+
+    async def on_message(self, message):
+        self.test.messages.append(message)
+        await self._slow()
+
+
+class CloseDuringCallbackTest(WebSocketBaseTestCase):
+    # on_close() runs when the client goes away while an open() or
+    # on_message() coroutine is still running, without waiting for (or
+    # cancelling) that coroutine.
+    def get_app(self):
+        self.close_future: Future[tuple[int | None, str | None]] = Future()
+        self.started = Event()
+        self.release = Event()
+        self.finished = Event()
+        self.messages: list[str | bytes] = []
+        kwargs = dict(close_future=self.close_future, test=self)
+        return Application(
+            [
+                ("/slow_open", SlowCallbackHandler, dict(kwargs, slow_open=True)),
+                ("/slow_message", SlowCallbackHandler, dict(kwargs, slow_open=False)),
+            ]
+        )
+
+    @gen.coroutine
+    def check_closed_while_running(self):
+        code, reason = yield self.close_future
+        # The coroutine is still running, and it was not cancelled.
+        self.assertFalse(self.finished.is_set())
+        self.release.set()
+        yield self.finished.wait()
+        return code, reason
+
+    @gen_test
+    def test_close_frame_during_on_message(self):
+        ws = yield self.ws_connect("/slow_message")
+        yield ws.write_message("hello")
+        yield self.started.wait()
+        ws.close(1001, "going away")
+        code, reason = yield self.check_closed_while_running()
+        self.assertEqual((code, reason), (1001, "going away"))
+        self.assertEqual(self.messages, ["hello"])
+
+    @gen_test
+    def test_disconnect_during_on_message(self):
+        ws = yield self.ws_connect("/slow_message")
+        yield ws.write_message("hello")
+        yield self.started.wait()
+        ws.protocol.stream.close()
+        code, reason = yield self.check_closed_while_running()
+        self.assertEqual((code, reason), (None, None))
+
+    @gen_test
+    def test_close_frame_during_open(self):
+        ws = yield self.ws_connect("/slow_open")
+        yield self.started.wait()
+        ws.close(1000)
+        code, reason = yield self.check_closed_while_running()
+        self.assertEqual((code, reason), (1000, None))
+        self.assertEqual(self.messages, [])
+
+    @gen_test
+    def test_disconnect_during_open(self):
+        ws = yield self.ws_connect("/slow_open")
+        yield self.started.wait()
+        ws.protocol.stream.close()
+        code, reason = yield self.check_closed_while_running()
+        self.assertEqual((code, reason), (None, None))
+
+    @gen_test
+    def test_messages_wait_for_callback(self):
+        # Flow control is unchanged: a message that arrives while on_message()
+        # is running is not delivered until it returns, and a close frame
+        # queued behind it is not seen before that message is handled.
+        ws = yield self.ws_connect("/slow_message")
+        yield ws.write_message("first")
+        yield self.started.wait()
+        self.started.clear()
+        yield ws.write_message("second")
+        ws.close(1000)
+        yield gen.sleep(0.05)
+        self.assertEqual(self.messages, ["first"])
+        self.assertFalse(self.close_future.done())
+        self.release.set()
+        code, reason = yield self.close_future
+        self.assertEqual(self.messages, ["first", "second"])
+        self.assertEqual(code, 1000)
 
 
 class PermissiveOriginHandler(EchoHandler):
