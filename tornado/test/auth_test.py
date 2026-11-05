@@ -3,7 +3,6 @@
 # and ensure that it doesn't blow up (e.g. with unicode/bytes issues in
 # python 3)
 
-import unittest
 from unittest import mock
 
 from tornado import gen
@@ -476,6 +475,14 @@ class AuthTest(AsyncHTTPTestCase):
         self.assertEqual(response.code, 500)
         self.assertEqual(response.body, b"error from twitter request")
 
+    def test_oauth2_request_docstring_directives(self):
+        doc = OAuth2Mixin.oauth2_request.__doc__
+        assert doc is not None
+        self.assertIn(".. testcode::", doc)
+        self.assertNotIn("..testcode::", doc)
+        self.assertIn(".. versionchanged:: 6.0", doc)
+        self.assertNotIn(".. versionchanged:::", doc)
+
 
 class GoogleLoginHandler(RequestHandler, GoogleOAuth2Mixin):
     def initialize(self, test):
@@ -557,13 +564,3 @@ class GoogleOAuth2Test(AsyncHTTPTestCase):
             },
             json_decode(response.body),
         )
-
-
-class OAuth2DocTest(unittest.TestCase):
-    def test_oauth2_request_docstring_directives(self):
-        doc = OAuth2Mixin.oauth2_request.__doc__
-        self.assertIsNotNone(doc)
-        self.assertIn(".. testcode::", doc)
-        self.assertNotIn("..testcode::", doc)
-        self.assertIn(".. versionchanged:: 6.0", doc)
-        self.assertNotIn(".. versionchanged:::", doc)
