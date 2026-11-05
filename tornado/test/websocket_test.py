@@ -753,6 +753,10 @@ class SlowCallbackHandler(TestWebSocketHandler):
     async def _slow(self):
         self.test.started.set()
         await self.test.release.wait()
+        # The handler can still be used (although the connection may be
+        # closed) until the coroutine returns.
+        self.set_nodelay(True)
+        self.render_string("message.html", message="x")
         self.test.finished.set()
 
     async def open(self):
@@ -762,6 +766,10 @@ class SlowCallbackHandler(TestWebSocketHandler):
     async def on_message(self, message):
         self.test.messages.append(message)
         await self._slow()
+
+    def on_close(self):
+        self.test.messages_at_close = list(self.test.messages)
+        super().on_close()
 
 
 class CloseDuringCallbackTest(WebSocketBaseTestCase):
@@ -774,12 +782,14 @@ class CloseDuringCallbackTest(WebSocketBaseTestCase):
         self.release = Event()
         self.finished = Event()
         self.messages: list[str | bytes] = []
+        self.messages_at_close: list[str | bytes] | None = None
         kwargs = dict(close_future=self.close_future, test=self)
         return Application(
             [
                 ("/slow_open", SlowCallbackHandler, dict(kwargs, slow_open=True)),
                 ("/slow_message", SlowCallbackHandler, dict(kwargs, slow_open=False)),
-            ]
+            ],
+            template_loader=DictLoader({"message.html": "{{ message }}"}),
         )
 
     @gen.coroutine
@@ -800,6 +810,42 @@ class CloseDuringCallbackTest(WebSocketBaseTestCase):
         code, reason = yield self.check_closed_while_running()
         self.assertEqual((code, reason), (1001, "going away"))
         self.assertEqual(self.messages, ["hello"])
+
+    @gen.coroutine
+    def check_close_right_behind_message(self, close_frame):
+        # When a message and the close arrive together, on_message() starts
+        # running before on_close() is called.
+        stream = IOStream(socket.socket())
+        self.conns_to_close.append(stream)
+        yield stream.connect(("127.0.0.1", self.get_http_port()))
+        # Send the handshake and a text frame (masked with an all-zero mask)
+        # in one write so they are read together.
+        yield stream.write(
+            b"GET /slow_message HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+            b"Upgrade: websocket\r\nConnection: Upgrade\r\n"
+            b"Sec-WebSocket-Version: 13\r\n"
+            b"Sec-WebSocket-Key: MDEyMzQ1Njc4OWFiY2RlZg==\r\n\r\n"
+            b"\x81\x85\x00\x00\x00\x00hello" + close_frame
+        )
+        if not close_frame:
+            stream.socket.shutdown(socket.SHUT_WR)
+        code, reason = yield self.close_future
+        self.assertEqual(self.messages_at_close, ["hello"])
+        self.release.set()
+        yield self.finished.wait()
+        return code
+
+    @gen_test
+    def test_close_frame_right_behind_message(self):
+        code = yield self.check_close_right_behind_message(
+            b"\x88\x82\x00\x00\x00\x00\x03\xe8"
+        )
+        self.assertEqual(code, 1000)
+
+    @gen_test
+    def test_disconnect_right_behind_message(self):
+        code = yield self.check_close_right_behind_message(b"")
+        self.assertIsNone(code)
 
     @gen_test
     def test_disconnect_during_on_message(self):

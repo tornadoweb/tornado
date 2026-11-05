@@ -500,8 +500,12 @@ class WebSocketHandler(tornado.web.RequestHandler):
            `open` or `on_message` is still running, ``on_close`` is called
            without waiting for that coroutine to finish (the coroutine is not
            cancelled). Previously ``on_close`` was delayed until it returned.
-           A close that arrives behind messages that have not been delivered
-           yet is still not seen until those messages have been handled.
+           In particular, ``on_close`` may now run before an asynchronous
+           `open` has finished (or even if it later fails), so code in
+           ``open`` that runs after an ``await`` should not assume that the
+           connection is still open. A close that arrives behind messages
+           that have not been delivered yet is still not seen until those
+           messages have been handled.
         """
         pass
 
@@ -607,13 +611,28 @@ class WebSocketHandler(tornado.web.RequestHandler):
         self.ws_connection.set_nodelay(value)
 
     def on_connection_close(self) -> None:
+        pending = None
         if self.ws_connection:
             self.ws_connection.on_connection_close()
-            self.ws_connection = None
+            pending = self.ws_connection._pending_callback
+            if pending is not None and pending.done():
+                pending = None
+            if pending is None:
+                self.ws_connection = None
         if not self._on_close_called:
             self._on_close_called = True
             self.on_close()
-            self._break_cycles()
+            if pending is None:
+                self._break_cycles()
+            else:
+                # open() or on_message() is still running. Keep the handler
+                # usable (as it was before on_close() could be called this
+                # early) until it returns.
+                pending.add_done_callback(lambda f: self._release_connection())
+
+    def _release_connection(self) -> None:
+        self.ws_connection = None
+        self._break_cycles()
 
     def on_ws_connection_close(
         self, close_code: int | None = None, close_reason: str | None = None
@@ -670,6 +689,9 @@ class WebSocketProtocol(abc.ABC):
         self.stream: IOStream | None = None
         self.client_terminated = False
         self.server_terminated = False
+        # The Future of an open(), on_message() or on_pong() call that may
+        # not have finished. See WebSocketProtocol13._receive_frame.
+        self._pending_callback: Future[None] | None = None
 
     def _run_callback(
         self, callback: Callable[..., Any], *args: Any, **kwargs: Any
@@ -906,9 +928,6 @@ class WebSocketProtocol13(WebSocketProtocol):
         self.close_code: int | None = None
         self.close_reason: str | None = None
         self._ping_coroutine: asyncio.Task[Any] | None = None
-        # The Future of an open(), on_message() or on_pong() call that has not
-        # finished. See _receive_frame.
-        self._pending_callback: Future[None] | None = None
         # Set if open() failed; on_close() is not called in that case.
         self._open_failed = False
 
@@ -1205,6 +1224,10 @@ class WebSocketProtocol13(WebSocketProtocol):
                     work = 0
                     await asyncio.sleep(0)
         except StreamClosedError:
+            if self._pending_callback is not None:
+                # As for a close frame, let a callback that has not started
+                # yet start before on_close() (see _receive_frame).
+                await asyncio.sleep(0)
             self._abort()
         finally:
             if not self._open_failed:
@@ -1223,15 +1246,21 @@ class WebSocketProtocol13(WebSocketProtocol):
         reserved_bits = header & self.RSV_MASK
         opcode = header & self.OPCODE_MASK
         opcode_is_control = opcode & 0x8
-        if self._pending_callback is not None and opcode != 0x8:
+        if self._pending_callback is not None:
             # For flow control, we don't read any further until the
             # previous callback has finished. We read the header of the
             # next frame anyway so that a close frame (or the connection
             # closing) is seen while a slow callback is still running.
-            await self._pending_callback
-            self._pending_callback = None
-            if self.client_terminated:
-                return
+            if opcode == 0x8:
+                # A coroutine callback has not started running yet if the
+                # close frame was already buffered. Let it start so that
+                # on_close() is not called before it.
+                await asyncio.sleep(0)
+            else:
+                await self._pending_callback
+                self._pending_callback = None
+                if self.client_terminated:
+                    return
         if self._decompressor is not None and opcode != 0:
             # Compression flag is present in the first frame's header,
             # but we can't decompress until we have all the frames of
