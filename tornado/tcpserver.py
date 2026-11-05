@@ -313,7 +313,9 @@ class TCPServer:
             self._handlers.pop(fd)()
             sock.close()
 
-    def handle_stream(self, stream: IOStream, address: tuple) -> Awaitable[None] | None:
+    def handle_stream(
+        self, stream: IOStream, address: tuple[Any, ...]
+    ) -> Awaitable[None] | None:
         """Override to handle a new `.IOStream` from an incoming connection.
 
         This method may be a coroutine; if so any exceptions it raises

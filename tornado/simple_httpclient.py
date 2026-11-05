@@ -271,7 +271,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self.max_body_size = max_body_size
         self.code: int | None = None
         self.headers: httputil.HTTPHeaders | None = None
-        self.chunks: list[bytes] = []
+        self.chunks = bytearray()
         self._decompressor = None
         # Timeout handle returned by IOLoop.add_timeout
         self._timeout: object = None
@@ -339,8 +339,10 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                         else None
                     ),
                 )
-            except gen.TimeoutError:
-                raise HTTPTimeoutError("Timeout while connecting") from None
+            except TimeoutError as e:
+                # TCPClient's timeout messages describe which phase of
+                # the connection timed out (DNS, TCP, or TLS).
+                raise HTTPTimeoutError(str(e) or "Timeout while connecting") from None
 
             if self.final_callback is None:
                 # final_callback is cleared if we've hit our timeout.
@@ -388,7 +390,9 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             if username is not None:
                 assert password is not None
                 if self.request.auth_mode not in (None, "basic"):
-                    raise ValueError("unsupported auth_mode %s", self.request.auth_mode)
+                    raise ValueError(
+                        "unsupported auth_mode %s" % self.request.auth_mode
+                    )
                 self.request.headers["Authorization"] = "Basic " + _unicode(
                     base64.b64encode(
                         httputil.encode_username_password(username, password)
@@ -573,11 +577,15 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
     def on_connection_close(self) -> None:
         if self.final_callback is not None:
-            message = "Connection closed"
             if self.stream.error:
-                raise self.stream.error
+                # This is called from the connection's read loop, which
+                # only logs exceptions, so the error must go to
+                # _handle_exception instead of being raised.
+                error = self.stream.error
+                self._handle_exception(type(error), error, error.__traceback__)
+                return
             try:
-                raise HTTPStreamClosedError(message)
+                raise HTTPStreamClosedError("Connection closed")
             except HTTPStreamClosedError:
                 self._handle_exception(*sys.exc_info())
 
@@ -617,7 +625,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
     def finish(self) -> None:
         assert self.code is not None
-        data = b"".join(self.chunks)
+        data = bytes(self.chunks)
         self._remove_timeout()
         original_request = getattr(self.request, "original_request", self.request)
         if self._should_follow_redirect():
@@ -726,7 +734,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         if self.request.streaming_callback is not None:
             return self.request.streaming_callback(chunk)
         else:
-            self.chunks.append(chunk)
+            self.chunks += chunk
             return None
 
 

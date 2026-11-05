@@ -304,7 +304,7 @@ class AnyThreadEventLoopPolicyTest(TestCase):
             )
             # Clean up to silence leak warnings. Always use asyncio since
             # IOLoop doesn't (currently) close the underlying loop.
-            self.executor.submit(lambda: asyncio.get_event_loop().close()).result()  # type: ignore
+            self.executor.submit(lambda: asyncio.get_event_loop().close()).result()
 
     def test_tornado_accessor(self):
         # Tornado's IOLoop.current() API can create a loop for any thread,
@@ -314,11 +314,11 @@ class AnyThreadEventLoopPolicyTest(TestCase):
             self.assertIsInstance(self.executor.submit(IOLoop.current).result(), IOLoop)
             # Clean up to silence leak warnings. Always use asyncio since
             # IOLoop doesn't (currently) close the underlying loop.
-            self.executor.submit(lambda: asyncio.get_event_loop().close()).result()  # type: ignore
+            self.executor.submit(lambda: asyncio.get_event_loop().close()).result()
 
             asyncio.set_event_loop_policy(self.AnyThreadEventLoopPolicy())
             self.assertIsInstance(self.executor.submit(IOLoop.current).result(), IOLoop)
-            self.executor.submit(lambda: asyncio.get_event_loop().close()).result()  # type: ignore
+            self.executor.submit(lambda: asyncio.get_event_loop().close()).result()
 
 
 class SelectorThreadContextvarsTest(AsyncHTTPTestCase):

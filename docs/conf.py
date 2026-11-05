@@ -92,6 +92,7 @@ html_theme = "sphinx_rtd_theme"
 missing_references = {
     # Generic type variables; nothing to link to.
     "_IOStreamType",
+    "_P",
     "_S",
     "_T",
     # Standard library types which are defined in one module and documented
@@ -125,6 +126,7 @@ missing_references = {
     "tornado.iostream._IOStreamType",
     "tornado.locks._ReleasingContextManager",
     "tornado.queues._T",
+    "tornado.testing._T",
     "tornado.options._Mockable",
     "tornado.web._ArgDefaultMarker",
     "tornado.web._HandlerDelegate",

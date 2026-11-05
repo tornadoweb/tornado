@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from typing import Any
 
 import tornado
@@ -209,7 +210,7 @@ linkify_tests: list[tuple[str | bytes, dict[str, Any], str]] = [
 ]
 
 
-from tornado.test.util import TestCase
+from tornado.test.util import TestCase, assert_memory_budget, skipNotCPython
 
 
 class EscapeTestCase(TestCase):
@@ -231,6 +232,26 @@ class EscapeTestCase(TestCase):
         for unescaped, escaped in tests:
             self.assertEqual(utf8(xhtml_escape(unescaped)), utf8(escaped))
             self.assertEqual(utf8(unescaped), utf8(xhtml_unescape(escaped)))
+
+    @skipNotCPython
+    def test_memory_budget(self):
+        # Worst cases found as of 2026-10 are about 20 bytes per input byte:
+        # many short links, many unknown entities, and non-ASCII text in
+        # url_escape (each character becomes six). Applications may pass
+        # these functions arbitrarily large user input, so the point is a
+        # fixed ratio rather than an absolute bound.
+        cases: list[tuple[str, Callable[[str], object], str]] = [
+            ("xhtml_escape", xhtml_escape, "<" * 60_000),
+            ("xhtml_unescape", xhtml_unescape, "&a;" * 20_000),
+            ("linkify", tornado.escape.linkify, "www.a " * 10_000),
+            ("url_escape", url_escape, "\u00e9<" * 30_000),
+        ]
+        for name, func, data in cases:
+            with self.subTest(name):
+                with assert_memory_budget(
+                    len(data), max_ratio=30, msg=f"{name} uses too much memory"
+                ):
+                    func(data)
 
     def test_xhtml_unescape_numeric(self):
         tests = [
@@ -298,13 +319,8 @@ class EscapeTestCase(TestCase):
         self.assertEqual(json_decode(utf8('"\u00e9"')), "\u00e9")
 
     def test_json_encode(self):
-        # json deals with strings, not bytes.  On python 2 byte strings will
-        # convert automatically if they are utf8; on python 3 byte strings
-        # are not allowed.
+        # json deals with strings, not bytes.
         self.assertEqual(json_decode(json_encode("\u00e9")), "\u00e9")
-        if bytes is str:
-            self.assertEqual(json_decode(json_encode(utf8("\u00e9"))), "\u00e9")
-            self.assertRaises(UnicodeDecodeError, json_encode, b"\xe9")
 
     def test_squeeze(self):
         self.assertEqual(

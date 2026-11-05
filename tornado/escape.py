@@ -345,7 +345,7 @@ def linkify(
     if extra_params and not callable(extra_params):
         extra_params = " " + extra_params.strip()
 
-    def make_link(m: typing.Match) -> str:
+    def make_link(m: typing.Match[str]) -> str:
         url = m.group(1)
         proto = m.group(2)
         if require_protocol and not proto:

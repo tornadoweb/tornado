@@ -227,7 +227,9 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
             conn = next(iter(self._connections))
             await conn.close()
 
-    def handle_stream(self, stream: iostream.IOStream, address: tuple) -> None:
+    def handle_stream(
+        self, stream: iostream.IOStream, address: tuple[Any, ...]
+    ) -> None:
         context = _HTTPRequestContext(
             stream, address, self.protocol, self.trusted_downstream
         )
@@ -262,7 +264,7 @@ class _CallableAdapter(httputil.HTTPMessageDelegate):
         self.request_callback = request_callback
         self.request: httputil.HTTPServerRequest | None = None
         self.delegate = None
-        self._chunks: list[bytes] = []
+        self._chunks = bytearray()
 
     def headers_received(
         self,
@@ -277,12 +279,12 @@ class _CallableAdapter(httputil.HTTPMessageDelegate):
         return None
 
     def data_received(self, chunk: bytes) -> Awaitable[None] | None:
-        self._chunks.append(chunk)
+        self._chunks += chunk
         return None
 
     def finish(self) -> None:
         assert self.request is not None
-        self.request.body = b"".join(self._chunks)
+        self.request.body = bytes(self._chunks)
         self.request._parse_body()
         self.request_callback(self.request)
 
@@ -294,7 +296,7 @@ class _HTTPRequestContext:
     def __init__(
         self,
         stream: iostream.IOStream,
-        address: tuple,
+        address: tuple[Any, ...],
         protocol: str | None,
         trusted_downstream: list[str] | None = None,
     ) -> None:
@@ -311,7 +313,7 @@ class _HTTPRequestContext:
             self.address_family in (socket.AF_INET, socket.AF_INET6)
             and address is not None
         ):
-            self.remote_ip = address[0]
+            self.remote_ip: str = address[0]
         else:
             # Unix (or other) socket; fake the remote address.
             self.remote_ip = "0.0.0.0"

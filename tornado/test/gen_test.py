@@ -7,6 +7,7 @@ import sys
 import time
 import unittest
 import weakref
+import typing
 from concurrent import futures
 
 from tornado import gen
@@ -809,8 +810,37 @@ class GenWebTest(AsyncHTTPTestCase):
 class WithTimeoutTest(AsyncTestCase):
     @gen_test
     def test_timeout(self):
-        with self.assertRaises(gen.TimeoutError):
+        with self.assertRaises(TimeoutError) as cm:
             yield gen.with_timeout(datetime.timedelta(seconds=0.1), Future())
+        self.assertEqual(str(cm.exception), "Timeout")
+
+    @gen_test
+    def test_timeout_message(self):
+        with self.assertRaises(TimeoutError) as cm:
+            yield gen.with_timeout(
+                datetime.timedelta(seconds=0.1), Future(), message="custom"
+            )
+        self.assertEqual(str(cm.exception), "custom")
+
+    @gen_test
+    def test_timeout_message_callable(self):
+        with self.assertRaises(TimeoutError) as cm:
+            yield gen.with_timeout(
+                datetime.timedelta(seconds=0.1), Future(), message=lambda: "lazy"
+            )
+        self.assertEqual(str(cm.exception), "lazy")
+
+    @gen_test
+    def test_timeout_message_callable_not_called_on_success(self):
+        def message():
+            raise Exception("should not be called")
+
+        future: Future[str] = Future()
+        future.set_result("asdf")
+        result = yield gen.with_timeout(
+            datetime.timedelta(seconds=3600), future, message=message
+        )
+        self.assertEqual(result, "asdf")
 
     @gen_test
     def test_completes_before_timeout(self):
@@ -851,7 +881,7 @@ class WithTimeoutTest(AsyncTestCase):
     def test_timeout_concurrent_future(self):
         # A concurrent future that does not resolve before the timeout.
         with futures.ThreadPoolExecutor(1) as executor:
-            with self.assertRaises(gen.TimeoutError):
+            with self.assertRaises(TimeoutError):
                 yield gen.with_timeout(
                     self.io_loop.time(), executor.submit(time.sleep, 0.2)
                 )
@@ -882,7 +912,7 @@ class WithTimeoutTest(AsyncTestCase):
 class WaitIteratorTest(AsyncTestCase):
     @gen_test
     def test_empty_iterator(self):
-        g = gen.WaitIterator()
+        g: gen.WaitIterator[None] = gen.WaitIterator()
         self.assertTrue(g.done(), "empty generator iterated")
 
         with self.assertRaises(ValueError):
@@ -943,6 +973,25 @@ class WaitIteratorTest(AsyncTestCase):
             i += 1
         self.assertIsNone(g.current_index, "bad nil current index")
         self.assertIsNone(g.current_future, "bad nil current future")
+
+    @gen_test
+    def test_duplicate_futures(self):
+        future: Future[int] = Future()
+        future.set_result(42)
+
+        cases: list[tuple[gen.WaitIterator[int], list[int | str]]] = [
+            (gen.WaitIterator(future, future, future), [0, 1, 2]),
+            (gen.WaitIterator(first=future, second=future), ["first", "second"]),
+        ]
+        for iterator, expected_indices in cases:
+            results = []
+            indices = []
+            while not iterator.done():
+                results.append((yield iterator.next()))
+                indices.append(iterator.current_index)
+
+            self.assertEqual(results, [42] * len(expected_indices))
+            self.assertEqual(indices, expected_indices)
 
     def finish_coroutines(self, iteration, futures):
         if iteration == 3:
@@ -1038,7 +1087,7 @@ class RunnerGCTest(AsyncTestCase):
     def test_gc(self):
         # GitHub issue 1769: Runner objects can get GCed unexpectedly
         # while their future is alive.
-        weakref_scope: list[weakref.ReferenceType | None] = [None]
+        weakref_scope: list[weakref.ReferenceType[typing.Any] | None] = [None]
 
         def callback():
             gc.collect(2)

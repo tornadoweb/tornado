@@ -46,11 +46,11 @@ import gettext
 import glob
 import os
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import Any
 
 from tornado import escape
-from tornado._locale_data import LOCALE_NAMES
+from tornado._locale_data import LOCALE_NAMES as LOCALE_NAMES
 from tornado.log import gen_log
 
 _default_locale = "en_US"
@@ -355,7 +355,7 @@ class Locale:
             date = date.replace(tzinfo=datetime.UTC)
         now = datetime.datetime.now(datetime.UTC)
         if date > now:
-            if relative and (date - now).seconds < 60:
+            if relative and (date - now).total_seconds() < 60:
                 # Due to click skew, things are some things slightly
                 # in the future. Round timestamps in the immediate
                 # future down to now in relative mode.
@@ -454,7 +454,7 @@ class Locale:
                 "day": str(local_date.day),
             }
 
-    def list(self, parts: Any) -> str:
+    def list(self, parts: Sequence[str]) -> str:
         """Returns a comma-separated list for the given list of parts.
 
         The format is, e.g., "A, B and C", "A and B" or just "A" for lists

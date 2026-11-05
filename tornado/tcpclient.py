@@ -26,12 +26,25 @@ from typing import Any, Tuple
 
 from tornado import gen
 from tornado.concurrent import Future, future_add_done_callback
-from tornado.gen import TimeoutError
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado.netutil import Resolver
 
 _INITIAL_CONNECT_TIMEOUT = 0.3
+
+
+def _format_addr(addr: Any) -> str:
+    """Format a socket address for use in error messages.
+
+    IPv4 addresses are formatted as ``1.2.3.4:443`` and IPv6 addresses as
+    ``[::1]:443``. Anything else is formatted with `str`.
+    """
+    if isinstance(addr, tuple) and len(addr) >= 2:
+        host, port = addr[:2]
+        if isinstance(host, str) and ":" in host:
+            return f"[{host}]:{port}"
+        return f"{host}:{port}"
+    return str(addr)
 
 
 class _Connector:
@@ -54,9 +67,9 @@ class _Connector:
 
     def __init__(
         self,
-        addrinfo: list[tuple],
+        addrinfo: list[tuple[Any, ...]],
         connect: Callable[
-            [socket.AddressFamily, tuple], tuple[IOStream, "Future[IOStream]"]
+            [socket.AddressFamily, tuple[Any, ...]], tuple[IOStream, "Future[IOStream]"]
         ],
     ) -> None:
         self.io_loop = IOLoop.current()
@@ -69,13 +82,16 @@ class _Connector:
         self.remaining = len(addrinfo)
         self.primary_addrs, self.secondary_addrs = self.split(addrinfo)
         self.streams: set[IOStream] = set()
+        # Addresses with connection attempts in progress. Used for
+        # error messages.
+        self.pending_addrs: set[tuple[Any, ...]] = set()
 
     @staticmethod
     def split(
-        addrinfo: list[tuple],
+        addrinfo: list[tuple[Any, ...]],
     ) -> tuple[
-        list[tuple[socket.AddressFamily, tuple]],
-        list[tuple[socket.AddressFamily, tuple]],
+        list[tuple[socket.AddressFamily, tuple[Any, ...]]],
+        list[tuple[socket.AddressFamily, tuple[Any, ...]]],
     ]:
         """Partition the ``addrinfo`` list by address family.
 
@@ -109,7 +125,9 @@ class _Connector:
         future_add_done_callback(self.future, self.on_future_done)
         return self.future
 
-    def try_connect(self, addrs: Iterator[tuple[socket.AddressFamily, tuple]]) -> None:
+    def try_connect(
+        self, addrs: Iterator[tuple[socket.AddressFamily, tuple[Any, ...]]]
+    ) -> None:
         try:
             af, addr = next(addrs)
         except StopIteration:
@@ -134,18 +152,20 @@ class _Connector:
             future.set_exception(e)
         else:
             self.streams.add(stream)
+            self.pending_addrs.add(addr)
         future_add_done_callback(
             future, functools.partial(self.on_connect_done, addrs, af, addr)
         )
 
     def on_connect_done(
         self,
-        addrs: Iterator[tuple[socket.AddressFamily, tuple]],
+        addrs: Iterator[tuple[socket.AddressFamily, tuple[Any, ...]]],
         af: socket.AddressFamily,
-        addr: tuple,
+        addr: tuple[Any, ...],
         future: "Future[IOStream]",
     ) -> None:
         self.remaining -= 1
+        self.pending_addrs.discard(addr)
         try:
             stream = future.result()
         except (Exception, asyncio.CancelledError) as e:
@@ -204,7 +224,13 @@ class _Connector:
 
     def on_connect_timeout(self) -> None:
         if not self.future.done():
-            self.future.set_exception(TimeoutError())
+            if self.pending_addrs:
+                message = "Timeout while connecting to %s" % ", ".join(
+                    sorted(_format_addr(addr) for addr in self.pending_addrs)
+                )
+            else:
+                message = "Timeout while connecting"
+            self.future.set_exception(TimeoutError(message))
         self.close_streams()
 
     def clear_timeouts(self) -> None:
@@ -264,6 +290,11 @@ class TCPClient:
         `.IOLoop.add_timeout` (i.e. a `datetime.timedelta` or an absolute time
         relative to `.IOLoop.time`)
 
+        The message of the `TimeoutError` indicates which phase of the
+        connection timed out: resolving the hostname, establishing the TCP
+        connection (listing the addresses being tried), or performing the
+        TLS handshake.
+
         Similarly, when the user requires a certain source port, it can
         be specified using the ``source_port`` arg.
 
@@ -272,6 +303,10 @@ class TCPClient:
 
         .. versionchanged:: 5.0
            Added the ``timeout`` argument.
+
+        .. versionchanged:: 6.6
+           Timeout errors now have messages describing which phase of
+           the connection process timed out.
         """
         if timeout is not None:
             if isinstance(timeout, numbers.Real):
@@ -282,7 +317,9 @@ class TCPClient:
                 raise TypeError("Unsupported timeout %r" % timeout)
         if timeout is not None:
             addrinfo = await gen.with_timeout(
-                timeout, self.resolver.resolve(host, port, af)
+                timeout,
+                self.resolver.resolve(host, port, af),
+                message=f"Timeout while resolving {host}",
             )
         else:
             addrinfo = await self.resolver.resolve(host, port, af)
@@ -305,7 +342,12 @@ class TCPClient:
             )
             try:
                 if timeout is not None:
-                    stream = await gen.with_timeout(timeout, tls_future)
+                    stream = await gen.with_timeout(
+                        timeout,
+                        tls_future,
+                        message=lambda: "Timeout during TLS handshake with "
+                        + _format_addr(addr),
+                    )
                 else:
                     stream = await tls_future
             finally:
@@ -320,7 +362,7 @@ class TCPClient:
         self,
         max_buffer_size: int | None,
         af: socket.AddressFamily,
-        addr: tuple,
+        addr: tuple[Any, ...],
         source_ip: str | None = None,
         source_port: int | None = None,
     ) -> tuple[IOStream, "Future[IOStream]"]:

@@ -175,7 +175,7 @@ class WSGIContainer:
                 response.append(chunk)
         finally:
             if hasattr(app_response, "close"):
-                app_response.close()  # type: ignore
+                app_response.close()
         body = b"".join(response)
         if not data:
             raise Exception("WSGI app did not call start_response")

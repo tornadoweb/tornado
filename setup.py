@@ -87,6 +87,7 @@ setuptools.setup(
         "tornado": ["py.typed"],
         "tornado.test": [
             "README",
+            "api.txt",
             "csv_translations/fr_FR.csv",
             "gettext_translations/fr_FR/LC_MESSAGES/tornado_test.mo",
             "gettext_translations/fr_FR/LC_MESSAGES/tornado_test.po",

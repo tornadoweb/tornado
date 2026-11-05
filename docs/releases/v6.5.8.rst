@@ -22,5 +22,5 @@ Security fixes
 Deprecations
 ~~~~~~~~~~~~
 
-- The `.OpenIdMixin` class is deprecated and will be removed in Tornado 6.7. OpenID 2.0 is no
+- The ``OpenIdMixin`` class is deprecated and will be removed in Tornado 6.7. OpenID 2.0 is no
   longer widely supported by identity providers.

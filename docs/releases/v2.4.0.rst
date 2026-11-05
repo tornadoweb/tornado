@@ -68,7 +68,7 @@ Other modules
 ~~~~~~~~~~~~~
 
 * `.OAuthMixin` now accepts ``"oob"`` as a ``callback_uri``.
-* `.OpenIdMixin` now also returns the ``claimed_id`` field for the user.
+* ``OpenIdMixin`` now also returns the ``claimed_id`` field for the user.
 * `tornado.platform.twisted` shutdown sequence is now more compatible.
 * The logging configuration used in `tornado.options` is now more tolerant
   of non-ascii byte strings.
