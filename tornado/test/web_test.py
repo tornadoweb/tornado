@@ -3301,6 +3301,47 @@ class UnimplementedNonStandardMethodsTest(SimpleHandlerTestCase):
         self.assertEqual(response.code, 405)
 
 
+class AllowHeaderTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            self.write("get")
+
+        def post(self):
+            self.write("post")
+
+    def test_allow_header_unimplemented_method(self):
+        # RFC 9110 section 15.5.6: a 405 response must include an
+        # Allow header listing the supported methods.
+        response = self.fetch("/", method="DELETE")
+        self.assertEqual(response.code, 405)
+        self.assertEqual(response.headers["Allow"], "GET, POST")
+
+    def test_allow_header_unsupported_method(self):
+        response = self.fetch("/", method="OTHER", allow_nonstandard_methods=True)
+        self.assertEqual(response.code, 405)
+        self.assertEqual(response.headers["Allow"], "GET, POST")
+
+    def test_no_allow_header_on_success(self):
+        response = self.fetch("/")
+        self.assertEqual(response.code, 200)
+        self.assertNotIn("Allow", response.headers)
+
+    def test_no_allow_header_on_other_errors(self):
+        response = self.fetch("/nonexistent")
+        self.assertEqual(response.code, 404)
+        self.assertNotIn("Allow", response.headers)
+
+
+class AllowHeaderNoMethodsTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        pass
+
+    def test_allow_header_no_methods_implemented(self):
+        response = self.fetch("/", method="GET")
+        self.assertEqual(response.code, 405)
+        self.assertEqual(response.headers.get("Allow"), "")
+
+
 class AllHTTPMethodsTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def method(self):
