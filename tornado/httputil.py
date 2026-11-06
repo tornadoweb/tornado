@@ -1079,15 +1079,20 @@ def parse_body_arguments(
             if fields[0].strip().lower() != "multipart/form-data":
                 # This catches "Content-Type: multipart/form-dataxyz"
                 raise HTTPInputError("Invalid content type")
-            for field in fields:
+            boundaries = []
+            for field in fields[1:]:
                 k, sep, v = field.strip().partition("=")
-                if k.lower() == "boundary" and v:
-                    parse_multipart_form_data(
-                        utf8(v), body, arguments, files, config=config.multipart
-                    )
-                    break
-            else:
+                if k.lower() == "boundary":
+                    boundaries.append(v)
+            if len(boundaries) > 1:
+                # Intermediaries may disagree about whether the first or last
+                # copy wins, so refuse to guess.
+                raise HTTPInputError("multiple multipart boundaries")
+            if not boundaries or not boundaries[0]:
                 raise HTTPInputError("multipart boundary not found")
+            parse_multipart_form_data(
+                utf8(boundaries[0]), body, arguments, files, config=config.multipart
+            )
         except Exception as e:
             raise HTTPInputError("Invalid multipart/form-data: %s" % e) from e
 
