@@ -1002,6 +1002,21 @@ class InvalidCompressedDataTest(WebSocketBaseTestCase):
         self.assertIsNone(response)
         self.assertEqual(ws.close_code, 1007)
 
+    @gen_test
+    def test_control_frame_between_compressed_fragments(self):
+        # Control frames may be interleaved with the fragments of a
+        # message. They are never compressed, so they must not reset the
+        # compression flag taken from the message's first frame.
+        ws = yield self.ws_connect("/", compression_options={})
+        message = "Hello world. Testing 123 123"
+        assert ws.protocol._compressor is not None
+        data = ws.protocol._compressor.compress(message.encode())
+        ws.protocol._write_frame(False, 0x1, data[:5], flags=ws.protocol.RSV1)
+        ws.protocol._write_frame(True, 0x9, b"ping")
+        ws.protocol._write_frame(True, 0x0, data[5:])
+        response = yield ws.read_message()
+        self.assertEqual(response, message)
+
 
 @abstract_base_test
 class UncompressedTestMixin(CompressionTestMixin):
