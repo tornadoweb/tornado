@@ -105,10 +105,10 @@ class _ABNF:
     reason_phrase = re.compile(rf"(?:[\t ]|{VCHAR.pattern}|{obs_text.pattern})+")
     # request_target delegates to the URI RFC 3986, which is complex and may be
     # too restrictive (for example, the WHATWG version of the URL spec allows non-ASCII
-    # characters). Instead, we allow everything but control chars, whitespace, and
-    # "#" (a fragment is never part of a request target). This is field_vchar
-    # without "#", written as a single character class for performance.
-    request_target = re.compile(r"[\x21\x22\x24-\x7E\x80-\xFF]+")
+    # characters). Instead, we allow everything but control chars and whitespace.
+    # (parse_request_start_line separately rejects "#", which the full grammar
+    # does not allow anywhere in a request target.)
+    request_target = re.compile(rf"{field_vchar.pattern}+")
     request_line = re.compile(
         rf"({method.pattern}) ({request_target.pattern}) ({HTTP_version.pattern})"
     )
@@ -1198,6 +1198,9 @@ def parse_request_start_line(line: str) -> RequestStartLine:
         # invalid request-line SHOULD respond with a 400 (Bad Request)
         raise HTTPInputError("Malformed HTTP request line")
     r = RequestStartLine(match.group(1), match.group(2), match.group(3))
+    if "#" in r.path:
+        # A fragment is never part of a request target (RFC 9112 section 3.2).
+        raise HTTPInputError("Malformed HTTP request line")
     if not r.version.startswith("HTTP/1"):
         # HTTP/2 and above doesn't use parse_request_start_line.
         # This could be folded into the regex but we don't want to deviate
