@@ -197,6 +197,11 @@ class WSGIContainer:
         header_obj = httputil.HTTPHeaders()
         for key, value in headers:
             header_obj.add(key, value)
+        if request.method == "HEAD":
+            # Like RequestHandler, send only the headers for HEAD requests.
+            # Many WSGI applications return the full body and leave it to
+            # the server to discard it.
+            body = b""
         assert request.connection is not None
         request.connection.write_headers(start_line, header_obj, chunk=body)
         request.connection.finish()
