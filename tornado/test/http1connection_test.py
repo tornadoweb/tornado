@@ -182,6 +182,62 @@ class HTTP1ConnectionTest(AsyncTestCase):
         self.assertGreater(ticks[0], 10)
 
     @gen_test
+    def test_chunked_body_many_trailer_lines(self):
+        # Like a body of many tiny chunks, a trailer section of many short
+        # lines is read without monopolizing the IOLoop.
+        conn = HTTP1Connection(self.client_stream, True)
+        num_lines = 10000
+        yield self.server_stream.write(
+            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"
+            + b"1\r\nx\r\n0\r\n"
+            + b"a:\r\n" * num_lines
+            + b"\r\n"
+        )
+        self.server_stream.close()
+        # Give the data time to arrive so that the trailers can be read
+        # without waiting for the network.
+        yield gen.sleep(0.1)
+
+        ticks = [0]
+        done = [False]
+        io_loop = self.io_loop
+
+        def tick():
+            if not done[0]:
+                ticks[0] += 1
+                io_loop.add_callback(tick)
+
+        class Delegate(HTTPMessageDelegate):
+            def headers_received(self, start_line, headers):
+                io_loop.add_callback(tick)
+
+            def finish(self):
+                done[0] = True
+
+        result = yield conn.read_response(Delegate())
+        self.assertIs(result, True)
+        self.assertGreater(ticks[0], 10)
+
+    @gen_test
+    def test_chunked_body_extensions_and_trailers(self):
+        conn = HTTP1Connection(self.client_stream, True)
+        yield self.server_stream.write(
+            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n"
+            b"Trailer: Server-Timing\r\n\r\n"
+            b"3;name=value\r\nfoo\r\n0\r\nServer-Timing: db;dur=53\r\n\r\n"
+        )
+        self.server_stream.close()
+        body = []
+
+        class Delegate(HTTPMessageDelegate):
+            def data_received(self, data):
+                body.append(data)
+
+        result = yield conn.read_response(Delegate())
+        self.assertIs(result, True)
+        self.assertEqual(b"".join(body), b"foo")
+
+    @gen_test
     def test_chunked_body_bad_chunk_terminator(self):
         conn = HTTP1Connection(self.client_stream, True)
         self.server_stream.write(
