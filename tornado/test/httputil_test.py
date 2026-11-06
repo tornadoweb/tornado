@@ -152,6 +152,23 @@ class MultipartFormDataTest(TestCase):
                         self.assertEqual(files["Files"][0].filename, "Report.TXT")
                         self.assertEqual(files["Files"][0].body, b"Hello")
 
+    def test_multiple_boundaries(self):
+        data = (
+            b"--1234\r\n"
+            b'Content-Disposition: form-data; name="Name"\r\n'
+            b"\r\nValue\r\n--1234--\r\n"
+        )
+        for content_type in (
+            "multipart/form-data; boundary=1234; boundary=5678",
+            "multipart/form-data; boundary=5678; BOUNDARY=1234",
+            "multipart/form-data; boundary=1234; boundary=1234",
+            "multipart/form-data; boundary=; boundary=1234",
+        ):
+            with self.subTest(content_type=content_type):
+                args, files = form_data_args()
+                with self.assertRaisesRegex(HTTPInputError, "multiple"):
+                    parse_body_arguments(content_type, data, args, files)
+
     def test_boundary_value_is_case_sensitive(self):
         data = (
             b"--AaB03x\r\n"
