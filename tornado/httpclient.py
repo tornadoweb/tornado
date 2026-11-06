@@ -53,7 +53,7 @@ from tornado.concurrent import (
 )
 from tornado.escape import native_str, utf8
 from tornado.ioloop import IOLoop
-from tornado.util import Configurable
+from tornado.util import Configurable, _restore_exception
 
 
 class HTTPClient:
@@ -726,6 +726,12 @@ class HTTPClientError(Exception):
 
     def __str__(self) -> str:
         return "HTTP %d: %s" % (self.code, self.message)
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        # Subclasses (such as simple_httpclient.HTTPTimeoutError) have
+        # constructors that don't accept self.args, so the default
+        # implementation can't unpickle them.
+        return (_restore_exception, (type(self), self.args, self.__dict__))
 
     # There is a cyclic reference between self and self.response,
     # which breaks the default __repr__ implementation.

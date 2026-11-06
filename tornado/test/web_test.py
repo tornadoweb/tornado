@@ -10,6 +10,7 @@ import http
 import itertools
 import logging
 import os
+import pickle
 import re
 import shutil
 import socket
@@ -4735,6 +4736,23 @@ class HTTPErrorTest(TestCase):
         self.assertIsNot(e, e2)
         self.assertEqual(e.status_code, e2.status_code)
         self.assertEqual(e.reason, e2.reason)
+
+    def test_pickle(self):
+        for e in [
+            HTTPError(403, "user %s denied", "alice", reason="Go away"),
+            HTTPError(404, "100% missing"),
+            MissingArgumentError("foo"),
+        ]:
+            with self.subTest(e=e):
+                e2 = pickle.loads(pickle.dumps(e))
+                self.assertIs(type(e2), type(e))
+                self.assertEqual(e2.status_code, e.status_code)
+                self.assertEqual(e2.reason, e.reason)
+                self.assertEqual(e2.log_message, e.log_message)
+                # args holds the log message arguments, and must survive
+                # unchanged for compatibility.
+                self.assertEqual(e2.args, e.args)
+                self.assertEqual(str(e2), str(e))
 
 
 class ApplicationTest(AsyncTestCase):

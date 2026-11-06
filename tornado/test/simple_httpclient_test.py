@@ -13,6 +13,7 @@ import errno
 import gzip
 import logging
 import os
+import pickle
 import random
 import re
 import socket
@@ -52,6 +53,7 @@ from tornado.test.util import (
     AsyncHTTPSTestCase,
     AsyncHTTPTestCase,
     AsyncTestCase,
+    TestCase,
     abstract_base_test,
     refusing_port,
     skipIfNoIPv6,
@@ -1199,3 +1201,16 @@ class ChunkedWithContentLengthTest(AsyncHTTPTestCase):
         ):
             with self.assertRaises(HTTPStreamClosedError):
                 self.fetch("/chunkwithcl", raise_error=True)
+
+
+class HTTPErrorPickleTest(TestCase):
+    def test_pickle(self):
+        # These subclasses have constructors that don't match their args,
+        # which broke the default exception unpickling.
+        for e in [HTTPTimeoutError("Timeout"), HTTPStreamClosedError("Closed")]:
+            with self.subTest(e=e):
+                e2 = pickle.loads(pickle.dumps(e))
+                self.assertIs(type(e2), type(e))
+                self.assertEqual(e2.code, 599)
+                self.assertEqual(e2.args, e.args)
+                self.assertEqual(str(e2), str(e))
