@@ -150,6 +150,51 @@ class EnglishTest(TestCase):
                     "%s %d, %d" % (locale._months[date.month - 1], date.day, date.year),
                 )
 
+    def test_format_date_non_utc(self):
+        locale = tornado.locale.get("en_US")
+        utc_date = datetime.datetime(2013, 4, 28, 23, 35, tzinfo=datetime.UTC)
+        for input_offset in [330, -420, 840, -720]:
+            date = utc_date.astimezone(
+                datetime.timezone(datetime.timedelta(minutes=input_offset))
+            )
+            for gmt_offset, expected in [
+                (0, "April 28, 2013 at 11:35 pm"),
+                (-120, "April 29, 2013 at 1:35 am"),
+                (300, "April 28, 2013 at 6:35 pm"),
+            ]:
+                with self.subTest(input_offset=input_offset, gmt_offset=gmt_offset):
+                    self.assertEqual(
+                        locale.format_date(
+                            date, gmt_offset=gmt_offset, full_format=True
+                        ),
+                        expected,
+                    )
+                    self.assertEqual(
+                        locale.format_date(
+                            date, gmt_offset=gmt_offset, full_format=True
+                        ),
+                        locale.format_date(
+                            utc_date.timestamp(),
+                            gmt_offset=gmt_offset,
+                            full_format=True,
+                        ),
+                    )
+
+    def test_format_date_non_utc_yesterday(self):
+        locale = tornado.locale.get("en_US")
+        # A large input offset changes the calendar date, but must not
+        # change whether an instant is displayed as yesterday.
+        now = datetime.datetime.now(datetime.UTC)
+        yesterday = now - datetime.timedelta(days=1)
+        offset = 840 if now.hour >= 10 else -720
+        date = yesterday.astimezone(
+            datetime.timezone(datetime.timedelta(minutes=offset))
+        )
+        self.assertEqual(
+            locale.format_date(date, shorter=True),
+            "yesterday",
+        )
+
     def test_friendly_number(self):
         locale = tornado.locale.get("en_US")
         self.assertEqual(locale.friendly_number(1000000), "1,000,000")
