@@ -106,8 +106,9 @@ class _ABNF:
     # request_target delegates to the URI RFC 3986, which is complex and may be
     # too restrictive (for example, the WHATWG version of the URL spec allows non-ASCII
     # characters). Instead, we allow everything but control chars, whitespace, and
-    # "#" (a fragment is never part of a request target).
-    request_target = re.compile(rf"(?:(?!#){field_vchar.pattern})+")
+    # "#" (a fragment is never part of a request target). This is field_vchar
+    # without "#", written as a single character class for performance.
+    request_target = re.compile(r"[\x21\x22\x24-\x7E\x80-\xFF]+")
     request_line = re.compile(
         rf"({method.pattern}) ({request_target.pattern}) ({HTTP_version.pattern})"
     )
