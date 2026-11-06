@@ -4359,6 +4359,21 @@ class CrossOriginProtectionTest(SimpleHandlerTestCase):
             response = self._post({"Origin": "null"})
         self.assertEqual(response.code, 403)
 
+    def test_fallback_null_origin_no_host(self):
+        # An HTTP/1.0 request can omit the Host header. "null" must not be
+        # treated as matching the (empty) host.
+        async def post() -> bytes:
+            stream = IOStream(socket.socket())
+            await stream.connect(("127.0.0.1", self.get_http_port()))
+            stream.write(
+                b"POST / HTTP/1.0\r\nOrigin: null\r\nContent-Length: 3\r\n\r\nx=1"
+            )
+            return await stream.read_until_close()
+
+        with ExpectLog(gen_log, ".*Origin 'null' not allowed"):
+            data = self.io_loop.run_sync(post)
+        self.assertTrue(data.startswith(b"HTTP/1.1 403"), data)
+
     def test_fallback_origin_with_path(self):
         response = self._post({"Origin": self.get_url("/foo")})
         self.assertEqual(response.code, 200)

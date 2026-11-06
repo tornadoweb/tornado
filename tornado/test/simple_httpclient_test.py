@@ -148,6 +148,24 @@ class NoContentLengthHandler(RequestHandler):
             self.finish("HTTP/1 required")
 
 
+class EchoURIHandler(RequestHandler):
+    def get(self):
+        self.write(self.request.uri)
+
+
+class RawRedirectHandler(RequestHandler):
+    def get(self):
+        # Write the response directly so the Location header can contain
+        # raw UTF-8 and a space.
+        stream = self.detach()
+        stream.write(
+            b"HTTP/1.1 302 Found\r\n"
+            b"Location: /echo_uri/\xc3\xa9 x\r\n"
+            b"Content-Length: 0\r\n\r\n"
+        )
+        stream.close()
+
+
 class EchoPostHandler(RequestHandler):
     def post(self):
         self.write(self.request.body)
@@ -206,6 +224,8 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
                 url("/host_echo", HostEchoHandler),
                 url("/no_content_length", NoContentLengthHandler),
                 url("/echo_post", EchoPostHandler),
+                url("/echo_uri/.*", EchoURIHandler),
+                url("/raw_redirect", RawRedirectHandler),
                 url("/respond_in_prepare", RespondInPrepareHandler),
                 url("/redirect", RedirectHandler),
                 url("/user_agent", UserAgentHandler),
@@ -288,6 +308,29 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
         response = self.fetch("/user_agent", method="GET")
         self.assertEqual(200, response.code)
         self.assertEqual(response.body.decode(), f"Tornado/{version}")
+
+    def test_invalid_url_characters(self):
+        # Spaces and control characters would produce a malformed request
+        # line (and urlsplit would silently remove some of them).
+        for path in [
+            "/hello world",
+            "/hello\x00",
+            "/hello\x0b",
+            "/hello\x7f",
+            "/hel\tlo",
+        ]:
+            with self.subTest(path=path):
+                with self.assertRaises(ValueError):
+                    self.fetch(path, raise_error=True)
+
+    def test_non_ascii_url(self):
+        # Like browsers, percent-encode non-ASCII characters as UTF-8.
+        response = self.fetch("/echo_uri/\u00e9?q=\u00e9%20")
+        self.assertEqual(response.body, b"/echo_uri/%C3%A9?q=%C3%A9%20")
+
+    def test_non_ascii_redirect(self):
+        response = self.fetch("/raw_redirect")
+        self.assertEqual(response.body, b"/echo_uri/%C3%A9%20x")
 
     def test_see_other_redirect(self):
         for code in (302, 303):

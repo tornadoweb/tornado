@@ -106,6 +106,8 @@ class _ABNF:
     # request_target delegates to the URI RFC 3986, which is complex and may be
     # too restrictive (for example, the WHATWG version of the URL spec allows non-ASCII
     # characters). Instead, we allow everything but control chars and whitespace.
+    # (parse_request_start_line separately rejects "#", which the full grammar
+    # does not allow anywhere in a request target.)
     request_target = re.compile(rf"{field_vchar.pattern}+")
     request_line = re.compile(
         rf"({method.pattern}) ({request_target.pattern}) ({HTTP_version.pattern})"
@@ -1196,6 +1198,9 @@ def parse_request_start_line(line: str) -> RequestStartLine:
         # invalid request-line SHOULD respond with a 400 (Bad Request)
         raise HTTPInputError("Malformed HTTP request line")
     r = RequestStartLine(match.group(1), match.group(2), match.group(3))
+    if "#" in r.path:
+        # A fragment is never part of a request target (RFC 9112 section 3.2).
+        raise HTTPInputError("Malformed HTTP request line")
     if not r.version.startswith("HTTP/1"):
         # HTTP/2 and above doesn't use parse_request_start_line.
         # This could be folded into the regex but we don't want to deviate
@@ -1348,7 +1353,7 @@ def doctests() -> unittest.TestSuite:
     return doctest.DocTestSuite(optionflags=doctest.ELLIPSIS)
 
 
-_netloc_re = re.compile(r"^(.+):(\d+)$")
+_netloc_re = re.compile(r"^(.+):([0-9]+)$")
 
 
 def split_host_and_port(netloc: str) -> tuple[str, int | None]:

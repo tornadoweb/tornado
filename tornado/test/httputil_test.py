@@ -21,6 +21,7 @@ from tornado.httputil import (
     parse_multipart_form_data,
     parse_request_start_line,
     qs_to_qsl,
+    split_host_and_port,
     url_concat,
 )
 from tornado.log import gen_log
@@ -701,6 +702,28 @@ class ParseRequestStartLineTest(TestCase):
         self.assertEqual(parsed_start_line.method, self.METHOD)
         self.assertEqual(parsed_start_line.path, self.PATH)
         self.assertEqual(parsed_start_line.version, self.VERSION)
+
+    def test_fragment_rejected(self):
+        # A fragment is never sent as part of a request target.
+        for path in ["/foo#bar", "/foo?a=b#c", "#"]:
+            with self.subTest(path=path):
+                with self.assertRaises(HTTPInputError):
+                    parse_request_start_line(f"GET {path} HTTP/1.1")
+
+
+class SplitHostAndPortTest(TestCase):
+    def test_split_host_and_port(self):
+        self.assertEqual(split_host_and_port("example.com"), ("example.com", None))
+        self.assertEqual(split_host_and_port("example.com:80"), ("example.com", 80))
+        self.assertEqual(split_host_and_port("[::1]:80"), ("[::1]", 80))
+
+    def test_non_ascii_digits(self):
+        # Only ASCII digits make a port. "\u0668\u0660" is "80" in Arabic-Indic
+        # digits, which int() would accept.
+        self.assertEqual(
+            split_host_and_port("example.com:\u0668\u0660"),
+            ("example.com:\u0668\u0660", None),
+        )
 
 
 class ParseCookieTest(TestCase):

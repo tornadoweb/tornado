@@ -642,6 +642,11 @@ Transfer-Encoding: chunked
         response = self.fetch(url)
         self.assertEqual(b"Basic " + base64.b64encode(b"me:secret"), response.body)
 
+    def test_username_in_url_without_password(self):
+        url = self.get_url("/auth").replace("http://", "http://me@")
+        response = self.fetch(url)
+        self.assertEqual(b"Basic " + base64.b64encode(b"me:"), response.body)
+
     def test_body_encoding(self):
         unicode_body = "\xe9"
         byte_body = binascii.a2b_hex(b"e9")

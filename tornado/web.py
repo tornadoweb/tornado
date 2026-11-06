@@ -1748,6 +1748,10 @@ class RequestHandler:
     def _origin_matches_host(self, origin: str) -> bool:
         origin = urllib.parse.urlsplit(origin).netloc.lower()
         host = self.request.headers.get("Host", "").lower()
+        if not origin or not host:
+            # An opaque origin ("null") has no netloc, and HTTP/1.0 requests
+            # may have no Host header. Neither matches anything.
+            return False
 
         # Check to see that origin matches host directly, including ports.
         # Note that ideally we'd also match the scheme, but that would make it a
