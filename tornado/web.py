@@ -99,7 +99,12 @@ from tornado.routing import (
     _RuleList,
 )
 from tornado.routing import URLSpec as URLSpec  # re-exported for compatibility
-from tornado.util import ObjectDict, _websocket_mask, unicode_type
+from tornado.util import (
+    ObjectDict,
+    _restore_exception,
+    _websocket_mask,
+    unicode_type,
+)
 
 url = URLSpec
 
@@ -2722,6 +2727,12 @@ class HTTPError(Exception):
         if self._log_message and self.args:
             return self._log_message % self.args
         return self._log_message
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        # self.args holds the log message arguments rather than the
+        # constructor arguments, so the default implementation would
+        # lose the status code and log message when unpickling.
+        return (_restore_exception, (type(self), self.args, self.__dict__))
 
     def __str__(self) -> str:
         message = "HTTP %d: %s" % (

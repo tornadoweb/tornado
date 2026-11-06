@@ -17,6 +17,7 @@ import datetime
 import functools
 import gzip
 import logging
+import pickle
 import subprocess
 import sys
 import threading
@@ -1307,6 +1308,15 @@ class HTTPErrorTestCase(TestCase):
         e = cm.exception
         self.assertEqual(str(e), "HTTP 403: Forbidden")
         self.assertEqual(repr(e), "HTTP 403: Forbidden")
+
+    def test_pickle(self):
+        e = HTTPError(404, "Not here")
+        e2 = pickle.loads(pickle.dumps(e))
+        self.assertIs(type(e2), HTTPError)
+        self.assertEqual(e2.code, 404)
+        self.assertEqual(e2.message, "Not here")
+        self.assertEqual(e2.args, e.args)
+        self.assertEqual(str(e2), str(e))
 
 
 # Limit used by `HTTPClientMaxBodySizeTestCase`. Subclasses configure their
