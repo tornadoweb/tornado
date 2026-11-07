@@ -6,6 +6,7 @@ from tornado.concurrent import run_on_executor
 from tornado.gen import TimeoutError, WaitIterator
 from tornado.httpclient import AsyncHTTPClient, HTTPResponse
 from tornado.ioloop import IOLoop
+from tornado.log import LogFormatter
 from tornado.web import Application, RequestHandler, URLSpec
 
 
@@ -64,3 +65,12 @@ class Worker:
 async def use_worker(w: Worker) -> str:
     # run_on_executor keeps the signature and wraps the result in a Future.
     return await w.compute(1)
+
+
+def make_log_formatters() -> list[LogFormatter]:
+    percent_style: str = "%"
+    return [
+        LogFormatter(fmt="%(message)s", style=percent_style),
+        LogFormatter(fmt="{message}", style="{"),
+        LogFormatter(fmt="${message}", style="$"),
+    ]

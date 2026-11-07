@@ -21,6 +21,7 @@ import subprocess
 import sys
 import tempfile
 import warnings
+from typing import Literal
 
 from tornado.escape import utf8
 from tornado.log import LogFormatter, define_logging_options, enable_pretty_logging
@@ -82,6 +83,31 @@ class LogFormatterTest(TestCase):
     def test_basic_logging(self):
         self.logger.error("foo")
         self.assertEqual(self.get_output(), b"foo")
+
+    def test_format_styles(self):
+        record = self.logger.makeRecord(
+            self.logger.name, logging.ERROR, __file__, 1, "hello %s", ("world",), None
+        )
+        formats: dict[Literal["%", "{", "$"], str] = {
+            "%": "%(levelname)s: %(message)s",
+            "{": "{levelname}: {message}",
+            "$": "${levelname}: ${message}",
+        }
+        for style, fmt in formats.items():
+            with self.subTest(style=style):
+                formatter = LogFormatter(fmt=fmt, style=style, color=False)
+                expected = logging.Formatter(fmt=fmt, style=style).format(record)
+                self.assertEqual(formatter.format(record), expected)
+
+    def test_literal_format(self):
+        record = self.logger.makeRecord(
+            self.logger.name, logging.ERROR, __file__, 1, "hello", (), None
+        )
+        for style in ("%", "{", "$"):
+            for fmt in ("", "literal text"):
+                with self.subTest(style=style, fmt=fmt):
+                    formatter = LogFormatter(fmt=fmt, style=style, color=False)
+                    self.assertEqual(formatter.format(record), fmt)
 
     def test_bytes_logging(self):
         with ignore_bytes_warning():
