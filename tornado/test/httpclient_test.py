@@ -643,6 +643,15 @@ Transfer-Encoding: chunked
         response = self.fetch(url)
         self.assertEqual(b"Basic " + base64.b64encode(b"me:secret"), response.body)
 
+    def test_credentials_in_url_percent_encoded(self):
+        url = self.get_url("/auth").replace(
+            "http://", "http://me%40example.com:p%40ss%3Aw%2Frd%25@"
+        )
+        response = self.fetch(url)
+        self.assertEqual(
+            b"Basic " + base64.b64encode(b"me@example.com:p@ss:w/rd%"), response.body
+        )
+
     def test_username_in_url_without_password(self):
         url = self.get_url("/auth").replace("http://", "http://me@")
         response = self.fetch(url)
