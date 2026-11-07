@@ -114,6 +114,25 @@ class LogFormatterTest(TestCase):
         # The traceback contains newlines, which should not have been escaped.
         self.assertNotIn(rb"\n", output)
 
+    def test_stack_info_logging(self):
+        self.logger.error("stack requested", stack_info=True)
+        output = self.get_output().replace(b"\r\n", b"\n")
+        self.assertIn(b"stack requested\n    Stack (most recent call last):", output)
+        self.assertIn(b"in test_stack_info_logging", output)
+
+    def test_stack_info_with_exception(self):
+        try:
+            raise ValueError("example failure")
+        except ValueError:
+            self.logger.exception("caught exception", stack_info=True)
+        output = self.get_output()
+        self.assertIn(b"ValueError: example failure", output)
+        self.assertIn(b"\n    Stack (most recent call last):", output)
+        self.assertLess(
+            output.index(b"ValueError: example failure"),
+            output.index(b"Stack (most recent call last):"),
+        )
+
     def test_unicode_logging(self):
         self.logger.error("\u00e9")
         self.assertEqual(self.get_output(), utf8("\u00e9"))
