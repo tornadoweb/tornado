@@ -801,7 +801,14 @@ class XHeaderTest(HandlerBaseTestCase):
             )
 
     def get_httpserver_options(self):
-        return dict(xheaders=True, trusted_downstream=["5.5.5.5"])
+        return dict(
+            xheaders=True,
+            trusted_downstream=[
+                "5.5.5.5",
+                "2620:0:1cfe:face:b00c::5",
+                "[2620:0:1cfe:face:b00c::6]",
+            ],
+        )
 
     def test_ip_headers(self):
         self.assertEqual(self.fetch_json("/")["remote_ip"], "127.0.0.1")
@@ -828,6 +835,35 @@ class XHeaderTest(HandlerBaseTestCase):
             "2620:0:1cfe:face:b00c::3",
         )
 
+        bracketed_ipv6 = {"X-Real-IP": "[2620:0:1cfe:face:b00c::3]"}
+        self.assertEqual(
+            self.fetch_json("/", headers=bracketed_ipv6)["remote_ip"],
+            "2620:0:1cfe:face:b00c::3",
+        )
+
+        bracketed_ipv6_list = {"X-Forwarded-For": "::1, [2620:0:1cfe:face:b00c::3]"}
+        self.assertEqual(
+            self.fetch_json("/", headers=bracketed_ipv6_list)["remote_ip"],
+            "2620:0:1cfe:face:b00c::3",
+        )
+
+        # Only a bare IPv6 address may be bracketed.
+        for invalid_bracketed in (
+            "[4.4.4.4]",
+            "[www.google.com]",
+            "[]",
+            "[[::1]]",
+            "[::1]]",
+        ):
+            with self.subTest(invalid_bracketed):
+                for header in ("X-Forwarded-For", "X-Real-IP"):
+                    self.assertEqual(
+                        self.fetch_json("/", headers={header: invalid_bracketed})[
+                            "remote_ip"
+                        ],
+                        "127.0.0.1",
+                    )
+
         invalid_chars = {"X-Real-IP": "4.4.4.4<script>"}
         self.assertEqual(
             self.fetch_json("/", headers=invalid_chars)["remote_ip"], "127.0.0.1"
@@ -852,6 +888,18 @@ class XHeaderTest(HandlerBaseTestCase):
             self.skipTest("requires HTTP/1.x")
         result = json_decode(resp.body)
         self.assertEqual(result["remote_ip"], "4.4.4.4")
+
+        for trusted_ipv6 in (
+            "2620:0:1cfe:face:b00c::5",
+            "[2620:0:1cfe:face:b00c::5]",
+            "2620:0:1cfe:face:b00c::6",
+            "[2620:0:1cfe:face:b00c::6]",
+        ):
+            with self.subTest(trusted_ipv6):
+                headers = {"X-Forwarded-For": f"127.0.0.1, 4.4.4.4, {trusted_ipv6}"}
+                self.assertEqual(
+                    self.fetch_json("/", headers=headers)["remote_ip"], "4.4.4.4"
+                )
 
     def test_scheme_headers(self):
         self.assertEqual(self.fetch_json("/")["remote_protocol"], "http")
