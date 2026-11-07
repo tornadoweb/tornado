@@ -25,6 +25,11 @@
   to run a more extensive version of the test suite which as extra dependencies. The
   `-full` configurations are necessary when working on certain modules, including
   `curl_httpclient.py`, `twisted.py`, or `pycares.py`.
+* Building Tornado's optional C extension requires a C compiler and the development headers for
+  the Python version in use. Consult Python's
+  [Building C and C++ Extensions guide](https://docs.python.org/3/extending/building.html) for
+  platform-specific setup. Release wheel builds require the extension; local `tox` test runs
+  leave it optional.
 * The fastest way to run the tests is to bypass `tox` and run `python3 -m tornado.test`.
   To run a subset of tests, add a module, class, or method name to the command line:
   `python3 -m tornado.test.httputil_test`.
