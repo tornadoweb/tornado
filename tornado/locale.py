@@ -478,6 +478,8 @@ class Locale:
         """Returns a comma-separated number for the given integer."""
         if self.code not in ("en", "en_US"):
             return str(value)
+        if value < 0:
+            return "-" + self.friendly_number(-value)
         s = str(value)
         parts = []
         while s:
