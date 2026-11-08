@@ -72,10 +72,15 @@ class WSGIContainerHostTest(WSGIAppMixin, AsyncHTTPTestCase):
     def test_host_with_non_numeric_port(self):
         response = self.fetch("/host", headers={"Host": "example.com:abc"})
         self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"example.com:abc 80")
 
     def test_ipv6_host(self):
         response = self.fetch("/host", headers={"Host": "[::1]:8000"})
         self.assertEqual(response.body, b"[::1] 8000")
+
+    def test_ipv6_host_without_port(self):
+        response = self.fetch("/host", headers={"Host": "[::1]"})
+        self.assertEqual(response.body, b"[::1] 80")
 
 
 class WSGIContainerDummyExecutorTest(WSGIAppMixin, AsyncHTTPTestCase):
