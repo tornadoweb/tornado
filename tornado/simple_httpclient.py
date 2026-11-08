@@ -53,6 +53,41 @@ def _percent_encode_url(url: bytes) -> str:
     ).decode("ascii")
 
 
+def _normalize_redirect_url(url: bytes) -> str:
+    """Normalize a redirect URL without percent-encoding its hostname."""
+    # urllib's bytes URL parser assumes ASCII, while HTTP header values are
+    # exposed as latin1 so their original bytes can be recovered.
+    parts = urllib.parse.urlsplit(url.decode("latin1"))
+    netloc = parts.netloc
+    if netloc:
+        userinfo, separator, hostport = netloc.rpartition("@")
+        if not separator:
+            hostport = netloc
+        if hostport.startswith("["):
+            # IPv6 literals are ASCII and must retain their bracket syntax.
+            host = hostport
+        else:
+            host, colon, port = hostport.partition(":")
+            if any(ord(char) >= 0x80 for char in host):
+                host = host.encode("idna").decode("ascii")
+            if colon:
+                host += colon + port
+        if separator:
+            netloc = _percent_encode_url(userinfo.encode("latin1")) + "@"
+        else:
+            netloc = ""
+        netloc += host
+    return urllib.parse.urlunsplit(
+        (
+            parts.scheme,
+            netloc,
+            _percent_encode_url(parts.path.encode("latin1")),
+            _percent_encode_url(parts.query.encode("latin1")),
+            _percent_encode_url(parts.fragment.encode("latin1")),
+        )
+    )
+
+
 class HTTPTimeoutError(HTTPError):
     """Error raised by SimpleAsyncHTTPClient on timeout.
 
@@ -658,7 +693,9 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             # so that non-ASCII characters are encoded as they were sent
             # (usually UTF-8). Spaces are encoded rather than rejected, as
             # browsers and curl do for redirects.
-            location = _percent_encode_url(self.headers["Location"].encode("latin1"))
+            location = _normalize_redirect_url(
+                self.headers["Location"].encode("latin1")
+            )
             new_request.url = urllib.parse.urljoin(self.request.url, location)
             new_request.headers = self.request.headers.copy()
             parsed_orig_url = urllib.parse.urlsplit(original_request.url)

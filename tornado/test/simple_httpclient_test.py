@@ -39,6 +39,7 @@ from tornado.simple_httpclient import (
     HTTPStreamClosedError,
     HTTPTimeoutError,
     SimpleAsyncHTTPClient,
+    _normalize_redirect_url,
 )
 from tornado.tcpserver import TCPServer
 from tornado.test import httpclient_test
@@ -168,6 +169,24 @@ class RawRedirectHandler(RequestHandler):
         stream.close()
 
 
+class RawIDNRedirectHandler(RequestHandler):
+    def get(self):
+        # Keep the Location header in its original latin-1 form, as it may
+        # arrive from an HTTP/1 server that encoded an IDN in that charset.
+        stream = self.detach()
+        stream.write(
+            b"HTTP/1.1 302 Found\r\n"
+            b"Location: http://caf\xe9.example/idn_redirect_final\r\n"
+            b"Content-Length: 0\r\n\r\n"
+        )
+        stream.close()
+
+
+class IDNRedirectFinalHandler(RequestHandler):
+    def get(self):
+        self.write("ok")
+
+
 class EchoPostHandler(RequestHandler):
     def post(self):
         self.write(self.request.body)
@@ -228,6 +247,8 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
                 url("/echo_post", EchoPostHandler),
                 url("/echo_uri/.*", EchoURIHandler),
                 url("/raw_redirect", RawRedirectHandler),
+                url("/idn_redirect", RawIDNRedirectHandler),
+                url("/idn_redirect_final", IDNRedirectFinalHandler),
                 url("/respond_in_prepare", RespondInPrepareHandler),
                 url("/redirect", RedirectHandler),
                 url("/user_agent", UserAgentHandler),
@@ -653,6 +674,50 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, SimpleHTTPClientTestMixin):
 
     def create_client(self, **kwargs):
         return SimpleAsyncHTTPClient(force_instance=True, **kwargs)
+
+    def test_normalize_redirect_url_components(self):
+        cases = [
+            (
+                b"http://user:p\xe9ss@caf\xe9.example:8080/a%20b?q=%C3%A9#frag",
+                "http://user:p%E9ss@xn--caf-dma.example:8080/a%20b?q=%C3%A9#frag",
+            ),
+            (b"//[2001:db8::1]:8080/a", "//[2001:db8::1]:8080/a"),
+            (
+                b"/relative/\xc3\xa9?q=\xc3\xa9#\xc3\xa9",
+                "/relative/%C3%A9?q=%C3%A9#%C3%A9",
+            ),
+            (b"http://caf%65.example/a", "http://caf%65.example/a"),
+        ]
+        for source, expected in cases:
+            with self.subTest(source=source):
+                self.assertEqual(_normalize_redirect_url(source), expected)
+
+    @gen_test
+    def test_idn_redirect_resolves_idna_hostname(self):
+        test = self
+
+        class RecordingResolver(Resolver):
+            def initialize(self):
+                self.hosts = []
+
+            async def resolve(self, host, port, family=socket.AF_UNSPEC):
+                self.hosts.append(host)
+                # Route the request to this test server regardless of the
+                # requested hostname. The assertion below verifies that the
+                # resolver received the IDNA hostname, rather than just
+                # proving that an arbitrary hostname can be mapped locally.
+                return [(socket.AF_INET, ("127.0.0.1", test.get_http_port()))]
+
+        resolver = RecordingResolver()
+        client = self.create_client(resolver=resolver)
+        try:
+            response = yield client.fetch(self.get_url("/idn_redirect"))
+        finally:
+            client.close()
+
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"ok")
+        self.assertEqual(resolver.hosts[-1], "xn--caf-dma.example")
 
 
 class SimpleHTTPSClientTestCase(AsyncHTTPSTestCase, SimpleHTTPClientTestMixin):
