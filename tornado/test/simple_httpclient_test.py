@@ -19,6 +19,7 @@ import socket
 import ssl
 import sys
 import typing
+import urllib.parse
 from contextlib import closing
 
 from tornado import gen, version
@@ -276,6 +277,15 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
         self.assertTrue(response.request.url.endswith("/countdown/5"))
         self.assertTrue(response.effective_url.endswith("/countdown/2"))
         self.assertTrue(response.headers["Location"].endswith("/countdown/1"))
+
+    def test_redirect_unsupported_scheme(self):
+        # A redirect that can't be followed fails the request instead of
+        # leaving it unfinished.
+        for location in ["ftp://example.com/", "h:5"]:
+            with self.subTest(location):
+                with self.assertRaises(ValueError) as cm:
+                    self.fetch("/redirect?url=" + urllib.parse.quote(location))
+                self.assertIn("Unsupported url scheme", str(cm.exception))
 
     def test_header_reuse(self):
         # Apps may reuse a headers object if they are only passing in constant
