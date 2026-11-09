@@ -664,6 +664,9 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 new_request.url = urllib.parse.urljoin(self.request.url, location)
                 parsed_new_url = urllib.parse.urlsplit(new_request.url)
                 parsed_new_url.port  # Raises ValueError if the port is invalid.
+                if "@" in parsed_new_url.netloc and not parsed_new_url.hostname:
+                    # The userinfo is stripped below, which needs a host.
+                    raise ValueError("Redirect URL has no host")
             except ValueError:
                 # This is called from the connection's read loop, which only
                 # logs exceptions, so the error must go to _handle_exception.

@@ -312,7 +312,7 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
     def test_redirect_invalid_url(self):
         # A Location that isn't a valid URL fails the request with the
         # ValueError (rather than logging it and closing the connection).
-        for location in ["//x[/", "//user@example.com:99999/"]:
+        for location in ["//x[/", "//user@example.com:99999/", "//user@/"]:
             with self.subTest(location):
                 with self.assertRaises(ValueError):
                     self.fetch("/redirect?url=" + urllib.parse.quote(location))
