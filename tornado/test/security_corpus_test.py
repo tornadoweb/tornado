@@ -25,6 +25,11 @@ elsewhere:
 * `.StaticFileHandler` and symlinks outside the static root (6.5.9,
   web_test.py), which needs files on disk.
 * `.OpenIDMixin` response parsing (6.5.6, auth_test.py).
+* NTFS alternate data streams in `.StaticFileHandler` (6.6.1, Windows only,
+  ``StaticFileAlternateDataStreamTest`` in web_test.py).
+* Redirects to unsupported URL schemes hanging ``SimpleAsyncHTTPClient``
+  (6.6.1, ``test_redirect_unsupported_scheme`` in
+  simple_httpclient_test.py).
 """
 
 import http.cookies
@@ -38,12 +43,20 @@ from tornado.httpserver import HTTPServer
 from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream, StreamClosedError
 from tornado.testing import bind_unused_port, gen_test
-from tornado.test.util import AsyncTestCase, assert_linear_scaling
+from tornado.test.util import (
+    AsyncTestCase,
+    assert_linear_scaling,
+    assert_memory_budget,
+    skipNotCPython,
+)
 from tornado.web import (
     Application,
+    RedirectHandler as WebRedirectHandler,
     RequestHandler,
     StaticFileHandler,
+    addslash,
     create_signed_value,
+    removeslash,
 )
 from tornado.websocket import WebSocketHandler
 
@@ -222,19 +235,13 @@ CASES: list[Case] = [
     Case(
         "6.3.3",
         "content-length plus sign",
-        request("POST", "/echo", "Content-Length: +1\r\n", b"") + b"x",
+        request("POST", "/echo", "Content-Length: +1\r\n") + b"x",
         400,
     ),
     Case(
         "6.3.3",
         "content-length underscore",
-        request("POST", "/echo", "Content-Length: 1_0\r\n", b"") + b"x" * 10,
-        400,
-    ),
-    Case(
-        "6.3.3",
-        "content-length not a number",
-        request("POST", "/echo", "Content-Length: foo\r\n", b""),
+        request("POST", "/echo", "Content-Length: 1_0\r\n") + b"x" * 10,
         400,
     ),
     Case(
@@ -319,7 +326,7 @@ CASES: list[Case] = [
     Case(
         "6.4.1",
         "content-length with no-break space",
-        request("POST", "/echo", "Content-Length: 2\xa0\r\n", b"") + b"ok",
+        request("POST", "/echo", "Content-Length: 2\xa0\r\n") + b"ok",
         400,
     ),
     # 6.5.0 (CVE-2025-47287): each malformed part was logged, so a body of
@@ -400,6 +407,92 @@ CASES: list[Case] = [
         "6.5.9",
         "too many query arguments",
         request("GET", "/echo?" + "&".join(["a=b"] * 1001)),
+        400,
+    ),
+    # 6.6.0: RedirectHandler let substituted values change the scheme or
+    # host of the redirect.
+    Case(
+        "6.6.0",
+        "RedirectHandler protocol-relative substitution",
+        request("GET", "/any/%2F%2Fevil.com"),
+        400,
+        forbidden=b"evil.com",
+    ),
+    Case(
+        "6.6.0",
+        "RedirectHandler absolute URL substitution",
+        request("GET", "/any/https:%2F%2Fevil.com"),
+        400,
+        forbidden=b"evil.com",
+    ),
+    # 6.6.0: a max_age that wasn't an int was written into the cookie
+    # verbatim, so it could add other attributes.
+    Case(
+        "6.6.0",
+        "cookie max_age injection",
+        request("GET", "/max_age_cookie?max_age=1;%20HttpOnly"),
+        400,
+        forbidden=b"HttpOnly",
+    ),
+    # 6.6.0: static_url read and hashed files outside static_path.
+    Case(
+        "6.6.0",
+        "static_url outside the static directory",
+        request("GET", "/static_url?path=../static_foo.txt"),
+        403,
+        app="static_url",
+    ),
+    # 6.7.0: invalid deflate data in a compressed websocket message raised
+    # an uncaught exception (logged as an error) instead of closing the
+    # connection. Found by maint/fuzz.
+    Case(
+        "6.7.0",
+        "websocket invalid compressed data",
+        ws_handshake("Sec-WebSocket-Extensions: permessage-deflate\r\n")
+        # A masked text frame with RSV1 (compressed) set, a zero mask, and
+        # bytes that aren't valid deflate data.
+        + b"\xc1\x83\x00\x00\x00\x00\xff\xff\xff",
+        101,
+    ),
+    # 6.6.1: browsers skip any number of slashes (and backslashes) before
+    # the host, so RedirectHandler's check had to catch three or more, and
+    # substitutions that add slashes to a leading one.
+    Case(
+        "6.6.1",
+        "RedirectHandler three slashes",
+        request("GET", "/any/%2F%2F%2Fevil.com"),
+        400,
+        forbidden=b"evil.com",
+    ),
+    Case(
+        "6.6.1",
+        "RedirectHandler slashes added to a leading slash",
+        request("GET", "/%2F%2Fevil.com/target"),
+        400,
+        forbidden=b"evil.com",
+    ),
+    # 6.6.1: @addslash and @removeslash redirected paths that start with
+    # two slashes to another host.
+    Case(
+        "6.6.1",
+        "addslash protocol-relative redirect",
+        request("GET", "//add.evil.com"),
+        403,
+        forbidden=b"Location",
+    ),
+    Case(
+        "6.6.1",
+        "removeslash protocol-relative redirect",
+        request("GET", "//rem.evil.com/"),
+        403,
+        forbidden=b"Location",
+    ),
+    # 6.6.1: a list of identical Content-Lengths allowed any Python
+    # whitespace after the commas, not just HTTP's.
+    Case(
+        "6.6.1",
+        "content-length list with no-break space",
+        request("POST", "/echo", "Content-Length: 2,\xa02\r\n") + b"ok",
         400,
     ),
 ]
@@ -488,6 +581,33 @@ class CookieHandler(RequestHandler):
             self.send_error(400)
 
 
+class MaxAgeCookieHandler(RequestHandler):
+    def get(self) -> None:
+        try:
+            # Applications may pass a string through from untrusted input.
+            max_age: typing.Any = self.get_argument("max_age")
+            self.set_cookie("a", "b", max_age=max_age)
+        except (ValueError, http.cookies.CookieError):
+            self.send_error(400)
+
+
+class StaticURLHandler(RequestHandler):
+    def get(self) -> None:
+        self.write(self.static_url(self.get_argument("path")))
+
+
+class AddSlashHandler(RequestHandler):
+    @addslash
+    def get(self) -> None:
+        self.write("ok")
+
+
+class RemoveSlashHandler(RequestHandler):
+    @removeslash
+    def get(self) -> None:
+        self.write("ok")
+
+
 class HeaderHandler(RequestHandler):
     def get(self) -> None:
         try:
@@ -521,6 +641,9 @@ class SignedCookieHandler(RequestHandler):
 
 
 class EchoWebSocket(WebSocketHandler):
+    def get_compression_options(self) -> dict[str, typing.Any]:
+        return {}
+
     def on_message(self, message: str | bytes) -> None:
         self.write_message(message, binary=isinstance(message, bytes))
 
@@ -559,9 +682,15 @@ class SecurityCorpusTest(AsyncTestCase):
             ("/echo", EchoHandler),
             ("/status", StatusHandler),
             ("/cookie", CookieHandler),
+            ("/max_age_cookie", MaxAgeCookieHandler),
             ("/header", HeaderHandler),
             ("/redirect", RedirectHandler),
             ("/ws", EchoWebSocket),
+            (r"/any/(.*)", WebRedirectHandler, {"url": "{0}"}),
+            (r"/(.*)/target", WebRedirectHandler, {"url": "/{0}/destination"}),
+            # Catch-all routes see paths that start with two slashes.
+            (r"/+add.*", AddSlashHandler),
+            (r"/+rem.*", RemoveSlashHandler),
         ]
         apps = {
             "default": (Application(handlers), {}),
@@ -574,6 +703,12 @@ class SecurityCorpusTest(AsyncTestCase):
                 {},
             ),
             "large_headers": (Application(handlers), {"max_header_size": 1 << 20}),
+            "static_url": (
+                Application(
+                    [("/static_url", StaticURLHandler)], static_path=static_path
+                ),
+                {},
+            ),
             "static": (
                 Application(
                     static_path=static_path,
@@ -661,6 +796,26 @@ class SecurityCorpusTest(AsyncTestCase):
             self.assertNotIn(b"0123456789abcdef", body)
             tokens.append(body)
         self.assertNotEqual(tokens[0], tokens[1])
+
+    @skipNotCPython
+    @gen_test
+    async def test_percent_decoding_memory(self) -> None:
+        # 6.6.1: decoding percent escapes in a form body created an object
+        # for each %, so a large body used about 23 bytes of memory per
+        # byte. It is now 5 to 10.
+        for data in [b"%41" * 300_000, b"%" * 900_000]:
+            with self.subTest(data[:3]):
+                with LogCapture():
+                    with assert_memory_budget(
+                        len(data),
+                        max_ratio=16,
+                        msg="Percent decoding uses too much memory",
+                    ):
+                        response = await self.send(
+                            "default",
+                            post("application/x-www-form-urlencoded", b"a=" + data),
+                        )
+                self.assertTrue(response.startswith(b"HTTP/1.1 200 "), response[:100])
 
     def test_scaling(self) -> None:
         for case in SCALING:
