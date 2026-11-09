@@ -394,7 +394,14 @@ def __getattr__(name: str) -> typing.Any:
 
     global _AnyThreadEventLoopPolicy
     if _AnyThreadEventLoopPolicy is None:
-        if sys.platform == "win32" and hasattr(
+        if sys.version_info >= (3, 16):
+            # The event loop policy system was removed in Python 3.16.
+            raise AttributeError(
+                "AnyThreadEventLoopPolicy requires asyncio's event loop "
+                "policies, which were removed in Python 3.16; use "
+                "asyncio.run or asyncio.new_event_loop instead"
+            )
+        elif sys.platform == "win32" and hasattr(
             asyncio, "WindowsSelectorEventLoopPolicy"
         ):
             # "Any thread" and "selector" should be orthogonal, but there's not a clean
