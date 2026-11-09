@@ -729,6 +729,25 @@ ok
         self.assertEqual(400, start_line.code)
 
     @gen_test
+    def test_content_length_list_whitespace(self):
+        # A list of identical Content-Lengths is allowed, but only HTTP
+        # whitespace (space and tab) may follow the commas, not other
+        # characters that Python considers whitespace.
+        for sep in [b"\xa0", b"\x85"]:
+            with self.subTest(sep=sep), closing(IOStream(socket.socket())) as stream:
+                with ExpectLog(
+                    gen_log, ".*Multiple unequal Content-Lengths", level=logging.INFO
+                ):
+                    yield stream.connect(("127.0.0.1", self.get_http_port()))
+                    stream.write(
+                        b"POST /echo HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                        b"Content-Length: 5," + sep + b"5\r\n"
+                        b"Connection: close\r\n\r\nhello"
+                    )
+                    start_line, headers, response = yield read_stream_body(stream)
+                    self.assertEqual(400, start_line.code)
+
+    @gen_test
     def test_invalid_content_length(self):
         # HTTP only allows decimal digits in content-length. Make sure we don't
         # accept anything else, with special attention to things accepted by the
