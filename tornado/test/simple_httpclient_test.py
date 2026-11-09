@@ -309,6 +309,14 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
                     self.fetch("/redirect?url=" + urllib.parse.quote(location))
                 self.assertIn("Unsupported url scheme", str(cm.exception))
 
+    def test_redirect_invalid_url(self):
+        # A Location that isn't a valid URL fails the request with the
+        # ValueError (rather than logging it and closing the connection).
+        for location in ["//x[/", "//user@example.com:99999/"]:
+            with self.subTest(location):
+                with self.assertRaises(ValueError):
+                    self.fetch("/redirect?url=" + urllib.parse.quote(location))
+
     def test_header_reuse(self):
         # Apps may reuse a headers object if they are only passing in constant
         # headers like user-agent.  The header object should not be modified.

@@ -660,10 +660,17 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             # (usually UTF-8). Spaces are encoded rather than rejected, as
             # browsers and curl do for redirects.
             location = _percent_encode_url(self.headers["Location"].encode("latin1"))
-            new_request.url = urllib.parse.urljoin(self.request.url, location)
+            try:
+                new_request.url = urllib.parse.urljoin(self.request.url, location)
+                parsed_new_url = urllib.parse.urlsplit(new_request.url)
+                parsed_new_url.port  # Raises ValueError if the port is invalid.
+            except ValueError:
+                # This is called from the connection's read loop, which only
+                # logs exceptions, so the error must go to _handle_exception.
+                self._handle_exception(*sys.exc_info())
+                return
             new_request.headers = self.request.headers.copy()
             parsed_orig_url = urllib.parse.urlsplit(original_request.url)
-            parsed_new_url = urllib.parse.urlsplit(new_request.url)
             if (
                 parsed_orig_url.scheme != parsed_new_url.scheme
                 or parsed_orig_url.netloc != parsed_new_url.netloc
