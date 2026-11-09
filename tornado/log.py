@@ -214,6 +214,10 @@ class LogFormatter(logging.Formatter):
             lines = [formatted.rstrip()]
             lines.extend(_safe_unicode(ln) for ln in record.exc_text.split("\n"))
             formatted = "\n".join(lines)
+        if record.stack_info:
+            if not formatted.endswith("\n"):
+                formatted += "\n"
+            formatted += self.formatStack(record.stack_info)
         return formatted.replace("\n", "\n    ")
 
 
