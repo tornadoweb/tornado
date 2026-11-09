@@ -45,7 +45,7 @@ try:
 except ImportError:
     curses = None  # type: ignore
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 if TYPE_CHECKING:
     from tornado.options import OptionParser
@@ -133,6 +133,8 @@ class LogFormatter(logging.Formatter):
           depending on the level if color support is on.
         :arg dict colors: color mappings from logging level to terminal color
           code
+        :arg str style: Format string style: ``%``, ``{``, or ``$``, as in
+          `logging.Formatter`.
         :arg str datefmt: Datetime format.
           Used for formatting ``(asctime)`` placeholder in ``prefix_fmt``.
 
@@ -140,8 +142,17 @@ class LogFormatter(logging.Formatter):
 
            Added ``fmt`` and ``datefmt`` arguments.
         """
-        logging.Formatter.__init__(self, datefmt=datefmt)
-        self._fmt = fmt
+        # Preserve support for literal format strings without placeholders.
+        logging.Formatter.__init__(
+            self,
+            fmt=fmt,
+            datefmt=datefmt,
+            style=cast(Literal["%", "{", "$"], style),
+            validate=False,
+        )
+        # An empty format has historically meant empty output in LogFormatter.
+        if fmt == "":
+            self._fmt = fmt
 
         self._colors: dict[int, str] = {}
         if color and _stderr_supports_color():
@@ -202,7 +213,7 @@ class LogFormatter(logging.Formatter):
             record.color = record.end_color = ""
 
         assert self._fmt is not None  # set in __init__
-        formatted = self._fmt % record.__dict__
+        formatted = "" if self._fmt == "" else self.formatMessage(record)
 
         if record.exc_info:
             if not record.exc_text:
