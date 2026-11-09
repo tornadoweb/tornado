@@ -231,7 +231,32 @@ class EnglishTest(TestCase):
 
     def test_friendly_number(self):
         locale = tornado.locale.get("en_US")
-        self.assertEqual(locale.friendly_number(1000000), "1,000,000")
+        for value, expected in [
+            (0, "0"),
+            (999, "999"),
+            (1000, "1,000"),
+            (999999, "999,999"),
+            (1000000, "1,000,000"),
+        ]:
+            with self.subTest(value=value):
+                self.assertEqual(locale.friendly_number(value), expected)
+
+    def test_friendly_number_negative(self):
+        for code in ("en", "en_US"):
+            locale = tornado.locale.CSVLocale(code, {})
+            for value, expected in [
+                (-1, "-1"),
+                (-99, "-99"),
+                (-100, "-100"),
+                (-999, "-999"),
+                (-1000, "-1,000"),
+                (-99999, "-99,999"),
+                (-100000, "-100,000"),
+                (-1000000, "-1,000,000"),
+                (-100000000, "-100,000,000"),
+            ]:
+                with self.subTest(code=code, value=value):
+                    self.assertEqual(locale.friendly_number(value), expected)
 
     def test_list(self):
         locale = tornado.locale.get("en_US")
