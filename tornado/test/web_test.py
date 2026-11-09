@@ -2936,6 +2936,9 @@ class GzipTestCase(SimpleHandlerTestCase):
         def get(self):
             for v in self.get_arguments("vary"):
                 self.add_header("Vary", v)
+            content_type = self.get_argument("content_type", None)
+            if content_type is not None:
+                self.set_header("Content-Type", content_type)
             # Must write at least MIN_LENGTH bytes to activate compression.
             self.write("hello world" + ("!" * GZipContentEncoding.MIN_LENGTH))
 
@@ -2987,6 +2990,17 @@ class GzipTestCase(SimpleHandlerTestCase):
             [s.strip() for s in response.headers["Vary"].split(",")],
             ["Accept-Language", "Cookie", "Accept-Encoding"],
         )
+
+    def test_no_vary_for_incompressible_type(self):
+        # Regression test for https://github.com/tornadoweb/tornado/issues/1581
+        response = self.fetch("/?content_type=image/png")
+        self.assertNotIn("Content-Encoding", response.headers)
+        self.assertNotIn("Vary", response.headers)
+
+    def test_vary_from_handler_kept_for_incompressible_type(self):
+        response = self.fetch("/?content_type=image/png&vary=Accept-Language")
+        self.assertNotIn("Content-Encoding", response.headers)
+        self.assertEqual(response.headers["Vary"], "Accept-Language")
 
 
 class PathArgsInPrepareTest(WebTestCase):
