@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # Fuzzes the HTTP/1 server: each input is sent as the bytes of one
 # connection to an HTTPServer, whose application reads every part of the
-# request (arguments, files, cookies) and has a websocket endpoint with
-# compression, so that the input can continue with websocket frames.
+# request (arguments, files, cookies), checks its origin, and has a websocket
+# endpoint with compression, so that the input can continue with websocket
+# frames.
 # Malformed input should get an error response or a closed connection;
 # anything Tornado logs as an error (usually an unexpected exception) is a
 # crash.
@@ -95,17 +96,24 @@ def seeds() -> list[bytes]:
         b"Content-Type: application/x-www-form-urlencoded\r\n\r\n"
         b"3\r\na=b\r\n0\r\n\r\n"
     )
+    # Origin checks (cross_origin_protection is on).
+    cases.append(
+        b"POST /echo HTTP/1.1\r\nHost: example.com\r\n"
+        b"Origin: http://example.com\r\nContent-Length: 3\r\n\r\na=b"
+    )
     cases += [ws_handshake(ext) + frames for ext, frames in ws_seeds()]
+    cases.append(ws_handshake("", origin="https://trusted.example.com"))
     return cases
 
 
-def ws_handshake(extensions: str) -> bytes:
+def ws_handshake(extensions: str, origin: str = "") -> bytes:
     key = base64.b64encode(os.urandom(16)).decode()
     return (
         "GET /ws HTTP/1.1\r\nHost: example.com\r\nUpgrade: websocket\r\n"
         "Connection: Upgrade\r\nSec-WebSocket-Version: 13\r\n"
         f"Sec-WebSocket-Key: {key}\r\n"
         + (f"Sec-WebSocket-Extensions: {extensions}\r\n" if extensions else "")
+        + (f"Origin: {origin}\r\n" if origin else "")
         + "\r\n"
     ).encode()
 
@@ -157,6 +165,8 @@ SERVER = HTTPServer(
     Application(
         [("/echo", EchoHandler), ("/ws", EchoWebSocket)],
         websocket_max_message_size=1 << 20,
+        cross_origin_protection=True,
+        trusted_origins=["https://trusted.example.com"],
     )
 )
 

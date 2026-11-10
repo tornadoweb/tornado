@@ -1,8 +1,13 @@
 # Fuzzers
 
 Coverage-guided fuzzers for Tornado's HTTP parsing, using
-[atheris](https://github.com/google/atheris) (`pip install atheris`, which
-needs Linux or macOS and a CPython it has wheels for).
+[atheris](https://github.com/google/atheris) (`pip install -r
+maint/fuzz/requirements.txt`, which needs Linux or macOS and a CPython it has
+wheels for).
+
+CI runs each fuzzer for 5,000 inputs (the `fuzz` job in
+`.github/workflows/test.yml`), so that changes don't break them; longer runs
+are up to you, or to OSS-Fuzz.
 
 | Fuzzer | What each input is | Speed |
 | --- | --- | --- |
