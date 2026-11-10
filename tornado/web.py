@@ -3780,14 +3780,17 @@ class GZipContentEncoding(OutputTransform):
         finishing: bool,
     ) -> tuple[int, httputil.HTTPHeaders, bytes]:
         # TODO: can/should this type be inherited from the superclass?
-        if "Vary" in headers:
-            headers["Vary"] += ", Accept-Encoding"
-        else:
-            headers["Vary"] = "Accept-Encoding"
+        ctype = _unicode(headers.get("Content-Type", "")).split(";")[0]
+        compressible = self._compressible_type(ctype)
+        # Only a type that may be compressed depends on Accept-Encoding.
+        if compressible:
+            if "Vary" in headers:
+                headers["Vary"] += ", Accept-Encoding"
+            else:
+                headers["Vary"] = "Accept-Encoding"
         if self._gzipping:
-            ctype = _unicode(headers.get("Content-Type", "")).split(";")[0]
             self._gzipping = (
-                self._compressible_type(ctype)
+                compressible
                 and (not finishing or len(chunk) >= self.MIN_LENGTH)
                 and ("Content-Encoding" not in headers)
             )
