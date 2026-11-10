@@ -678,7 +678,7 @@ class SecurityCorpusTest(AsyncTestCase):
     def setUp(self) -> None:
         super().setUp()
         static_path = os.path.join(os.path.dirname(__file__), "static")
-        handlers = [
+        handlers: list[typing.Any] = [
             ("/echo", EchoHandler),
             ("/status", StatusHandler),
             ("/cookie", CookieHandler),
