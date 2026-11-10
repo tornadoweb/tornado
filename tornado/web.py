@@ -1752,7 +1752,11 @@ class RequestHandler:
                 return "Sec-Fetch-Site %s & origin %r not allowed" % (sfs, origin)
 
     def _origin_matches_host(self, origin: str) -> bool:
-        origin = urllib.parse.urlsplit(origin).netloc.lower()
+        try:
+            origin = urllib.parse.urlsplit(origin).netloc.lower()
+        except ValueError:
+            # A malformed origin (such as "http://[") matches nothing.
+            return False
         host = self.request.headers.get("Host", "").lower()
         if not origin or not host:
             # An opaque origin ("null") has no netloc, and HTTP/1.0 requests
