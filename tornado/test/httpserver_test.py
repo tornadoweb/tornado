@@ -271,6 +271,34 @@ class MultipartTestHandler(RequestHandler):
 
 # This test is also called from wsgi_test
 class HTTPConnectionTest(AsyncHTTPTestCase):
+    def test_multipart_content_type_case(self):
+        body = (
+            b"--AaB03x\r\n"
+            b'Content-Disposition: form-data; name="argument"\r\n\r\nValue\r\n'
+            b"--AaB03x\r\n"
+            b'Content-Disposition: form-data; name="files"; filename="Report.TXT"\r\n'
+            b"\r\nHello\r\n--AaB03x--\r\n"
+        )
+        response = self.fetch(
+            "/multipart",
+            method="POST",
+            headers={
+                "Content-Type": 'Multipart/Form-Data; BOUNDARY="AaB03x"',
+                "X-Header-Encoding-Test": "Header",
+            },
+            body=body,
+        )
+        self.assertEqual(response.code, 200)
+        self.assertEqual(
+            json_decode(response.body),
+            {
+                "header": "Header",
+                "argument": "Value",
+                "filename": "Report.TXT",
+                "filebody": "Hello",
+            },
+        )
+
     def get_handlers(self):
         return [
             ("/multipart", MultipartTestHandler),
@@ -425,6 +453,16 @@ class PostEchoGBKHandler(PostEchoHandler):
 
 
 class HTTPServerTest(AsyncHTTPTestCase):
+    def test_post_content_type_case(self):
+        response = self.fetch(
+            "/echo",
+            method="POST",
+            headers={"Content-Type": "Application/X-WWW-Form-Urlencoded"},
+            body="Name=Value&Name=Other",
+        )
+        self.assertEqual(response.code, 200)
+        self.assertEqual(json_decode(response.body), {"Name": ["Value", "Other"]})
+
     def get_app(self):
         return Application(
             [
@@ -689,6 +727,25 @@ ok
                 lambda: read_stream_body(self.stream)
             )
         self.assertEqual(400, start_line.code)
+
+    @gen_test
+    def test_content_length_list_whitespace(self):
+        # A list of identical Content-Lengths is allowed, but only HTTP
+        # whitespace (space and tab) may follow the commas, not other
+        # characters that Python considers whitespace.
+        for sep in [b"\xa0", b"\x85"]:
+            with self.subTest(sep=sep), closing(IOStream(socket.socket())) as stream:
+                with ExpectLog(
+                    gen_log, ".*Multiple unequal Content-Lengths", level=logging.INFO
+                ):
+                    yield stream.connect(("127.0.0.1", self.get_http_port()))
+                    stream.write(
+                        b"POST /echo HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                        b"Content-Length: 5," + sep + b"5\r\n"
+                        b"Connection: close\r\n\r\nhello"
+                    )
+                    start_line, headers, response = yield read_stream_body(stream)
+                    self.assertEqual(400, start_line.code)
 
     @gen_test
     def test_invalid_content_length(self):

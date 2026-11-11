@@ -106,6 +106,8 @@ class _ABNF:
     # request_target delegates to the URI RFC 3986, which is complex and may be
     # too restrictive (for example, the WHATWG version of the URL spec allows non-ASCII
     # characters). Instead, we allow everything but control chars and whitespace.
+    # (parse_request_start_line separately rejects "#", which the full grammar
+    # does not allow anywhere in a request target.)
     request_target = re.compile(rf"{field_vchar.pattern}+")
     request_line = re.compile(
         rf"({method.pattern}) ({request_target.pattern}) ({HTTP_version.pattern})"
@@ -248,6 +250,10 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
            Support for line folding was removed due to security/DoS concerns. This removal
            was ahead of the original removal schedule announced for Tornado 7.0.
            Support for LF without CR remains until Tornado 7.0.
+
+        .. versionchanged:: 6.6.1
+           Parsing of header lines terminated by LF without CR will be removed in Tornado 6.7
+           instead of 7.0 as previously documented.
         """
         if m := re.search(r"\r?\n$", line):
             # RFC 9112 section 2.2: a recipient MAY recognize a single LF as a line
@@ -1044,10 +1050,15 @@ def parse_body_arguments(
     a string and ``body`` should be a byte string.  The ``arguments``
     and ``files`` parameters are dictionaries that will be updated
     with the parsed contents.
+
+    Media types and parameter names are case-insensitive. Parameter values,
+    including multipart boundaries, retain their original case.
     """
     if config is None:
         config = _DEFAULT_PARSE_BODY_CONFIG
-    if content_type.split(";", 1)[0].strip() == "application/x-www-form-urlencoded":
+    # Media types and parameter names are case-insensitive, but values may not be.
+    content_type_lower = content_type.lower()
+    if content_type_lower.split(";", 1)[0].strip() == "application/x-www-form-urlencoded":
         # This catches "Content-Type: application/x-www-form-urlencodedgarbage"
         if headers and "Content-Encoding" in headers:
             raise HTTPInputError(
@@ -1065,25 +1076,30 @@ def parse_body_arguments(
         for name, values in uri_arguments.items():
             if values:
                 arguments.setdefault(name, []).extend(values)
-    elif content_type.startswith("multipart/form-data"):
+    elif content_type_lower.startswith("multipart/form-data"):
         if headers and "Content-Encoding" in headers:
             raise HTTPInputError(
                 "Unsupported Content-Encoding: %s" % headers["Content-Encoding"]
             )
         try:
             fields = content_type.split(";")
-            if fields[0].strip() != "multipart/form-data":
+            if fields[0].strip().lower() != "multipart/form-data":
                 # This catches "Content-Type: multipart/form-dataxyz"
                 raise HTTPInputError("Invalid content type")
-            for field in fields:
+            boundaries = []
+            for field in fields[1:]:
                 k, sep, v = field.strip().partition("=")
-                if k == "boundary" and v:
-                    parse_multipart_form_data(
-                        utf8(v), body, arguments, files, config=config.multipart
-                    )
-                    break
-            else:
+                if k.lower() == "boundary":
+                    boundaries.append(v)
+            if len(boundaries) > 1:
+                # Intermediaries may disagree about whether the first or last
+                # copy wins, so refuse to guess.
+                raise HTTPInputError("multiple multipart boundaries")
+            if not boundaries or not boundaries[0]:
                 raise HTTPInputError("multipart boundary not found")
+            parse_multipart_form_data(
+                utf8(boundaries[0]), body, arguments, files, config=config.multipart
+            )
         except Exception as e:
             raise HTTPInputError("Invalid multipart/form-data: %s" % e) from e
 
@@ -1197,6 +1213,9 @@ def parse_request_start_line(line: str) -> RequestStartLine:
         # invalid request-line SHOULD respond with a 400 (Bad Request)
         raise HTTPInputError("Malformed HTTP request line")
     r = RequestStartLine(match.group(1), match.group(2), match.group(3))
+    if "#" in r.path:
+        # A fragment is never part of a request target (RFC 9112 section 3.2).
+        raise HTTPInputError("Malformed HTTP request line")
     if not r.version.startswith("HTTP/1"):
         # HTTP/2 and above doesn't use parse_request_start_line.
         # This could be folded into the regex but we don't want to deviate
@@ -1349,7 +1368,7 @@ def doctests() -> unittest.TestSuite:
     return doctest.DocTestSuite(optionflags=doctest.ELLIPSIS)
 
 
-_netloc_re = re.compile(r"^(.+):(\d+)$")
+_netloc_re = re.compile(r"^(.+):([0-9]+)$")
 
 
 def split_host_and_port(netloc: str) -> tuple[str, int | None]:

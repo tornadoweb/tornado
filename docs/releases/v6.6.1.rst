@@ -1,0 +1,32 @@
+What's new in Tornado 6.6.1
+===========================
+
+Nov 9, 2026
+-----------
+
+Security Fixes
+~~~~~~~~~~~~~~
+
+- ``StaticFileHandler`` will no longer serve NTFS alternate data streams as if they were regular
+  files on Windows.
+- ``SimpleAsyncHTTPClient`` no longer hangs and leaks resources when processing a redirect to
+  URL schemes other than ``http`` and ``https``.
+- Parsing of percent-encoded data in URLs is much more efficient, preventing potential
+  denial-of-service attacks.
+- Additional forms of open redirects in ``RedirectHandler`` have been fixed (in addition to
+  the ones fixed in 6.6.0)
+- Open redirects in ``@addslash`` and ``@removeslash`` have been fixed.
+
+Deprecation notice
+~~~~~~~~~~~~~~~~~~
+
+- HTTP header parsing currently supports both CRLF and LF-only line endings. LF-only line endings
+  are already deprecated and slated for removal in Tornado 7.0. This change is being rescheduled
+  to Tornado 6.7.
+
+Bug Fixes
+~~~~~~~~~
+
+- Certain patterns that worked with ``RedirectHandler`` in Tornado 6.5 and before did not work
+  correctly in Tornado 6.6.0. This was an unintended regression and the original behavior has
+  been restored.

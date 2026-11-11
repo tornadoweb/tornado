@@ -10,6 +10,7 @@ import http
 import itertools
 import logging
 import os
+import pickle
 import re
 import shutil
 import socket
@@ -311,6 +312,7 @@ class CookieTest(WebTestCase):
                 self.set_cookie("equals", "a=b")
                 self.set_cookie("semicolon", "a;b")
                 self.set_cookie("quote", 'a"b')
+                self.set_cookie("space", "a b")
 
         class SetCookieForbiddenCharHandler(RequestHandler):
             def get(self):
@@ -459,7 +461,7 @@ class CookieTest(WebTestCase):
     def test_cookie_special_char(self):
         response = self.fetch("/special_char")
         headers = sorted(response.headers.get_list("Set-Cookie"))
-        self.assertEqual(len(headers), 3)
+        self.assertEqual(len(headers), 4)
         self.assertEqual(headers[0], 'equals="a=b"; Path=/')
         self.assertEqual(headers[1], 'quote="a\\"b"; Path=/')
         # Semicolons are octal-escaped
@@ -468,6 +470,8 @@ class CookieTest(WebTestCase):
             ('semicolon="a;b"; Path=/', 'semicolon="a\\073b"; Path=/'),
             headers[2],
         )
+        # Spaces are quoted (see issue #3746)
+        self.assertEqual(headers[3], 'space="a b"; Path=/')
 
         data = [
             ("foo=a=b", "a=b"),
@@ -1318,6 +1322,11 @@ class StaticFileTest(WebTestCase):
     )
     static_dir = os.path.join(os.path.dirname(__file__), "static")
 
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        super().setUp()
+
     def get_handlers(self):
         class StaticUrlHandler(RequestHandler):
             def get(self, path):
@@ -1348,10 +1357,23 @@ class StaticFileTest(WebTestCase):
                     result = check_override == -1 and check_regular == 0
                 self.write(str(result))
 
+        class GrowingStaticFileHandler(StaticFileHandler):
+            def get_content_size(self):
+                size = super().get_content_size()
+                assert self.absolute_path is not None
+                with open(self.absolute_path, "ab") as file:
+                    file.write(b"-grew")
+                return size
+
         return [
             ("/static_url/(.*)", StaticUrlHandler),
             ("/abs_static_url/(.*)", AbsoluteStaticUrlHandler),
             ("/override_static_url/(.*)", OverrideStaticUrlHandler),
+            (
+                "/growing_static/(.*)",
+                GrowingStaticFileHandler,
+                dict(path=self.temp_dir.name),
+            ),
             ("/root_static/(.*)", StaticFileHandler, dict(path="/")),
         ]
 
@@ -1365,6 +1387,19 @@ class StaticFileTest(WebTestCase):
         response = self.fetch("/static/robots.txt")
         self.assertIn(b"Disallow: /", response.body)
         self.assertEqual(response.headers.get("Content-Type"), "text/plain")
+
+    def test_static_file_growing_during_request(self):
+        initial_content = b"before"
+        path = os.path.join(self.temp_dir.name, "data.txt")
+        with open(path, "wb") as file:
+            file.write(initial_content)
+
+        response = self.fetch("/growing_static/data.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(
+            response.headers.get("Content-Length"), str(len(initial_content))
+        )
+        self.assertEqual(response.body, initial_content)
 
     def test_static_files_cacheable(self):
         # Test that the version parameter triggers cache-control headers. This
@@ -2453,6 +2488,62 @@ class StaticFileSingleFileTest(WebTestCase):
         response = self.fetch("/logo-link")
         self.assertEqual(response.code, 200)
         self.assertEqual(response.body, b"linked logo")
+
+
+@unittest.skipIf(os.name != "nt", "NTFS alternate data streams are Windows-only")
+class StaticFileAlternateDataStreamTest(WebTestCase):
+    """On Windows, ``file.txt:name`` names an NTFS alternate data stream of
+    ``file.txt``. Streams are not files in the static directory and must not
+    be served, nor read by ``get_version``.
+    """
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmpdir)
+        self.public = os.path.join(self.tmpdir, "public.txt")
+        with open(self.public, "wb") as f:
+            f.write(b"public")
+        try:
+            with open(self.public + ":secret", "wb") as f:
+                f.write(b"secret")
+        except OSError:
+            # Not every filesystem (e.g. FAT, some network shares) supports
+            # alternate data streams.
+            self.skipTest("filesystem does not support alternate data streams")
+        StaticFileHandler.reset()
+        self.addCleanup(StaticFileHandler.reset)
+        super().setUp()
+
+    def get_handlers(self):
+        return [("/static/(.*)", StaticFileHandler, dict(path=self.tmpdir))]
+
+    def get_app_kwargs(self):
+        return dict()
+
+    def test_public_file(self):
+        response = self.fetch("/static/public.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"public")
+
+    def test_alternate_data_stream(self):
+        for path in [
+            "public.txt:secret",
+            "public.txt%3Asecret",
+            "public.txt:secret:$DATA",
+            "public.txt::$DATA",
+        ]:
+            with self.subTest(path=path):
+                with ExpectLog(gen_log, ".*is not a file"):
+                    response = self.fetch("/static/" + path)
+                self.assertEqual(response.code, 403)
+                self.assertNotIn(b"secret", response.body)
+
+    def test_alternate_data_stream_version(self):
+        with self.assertRaises(HTTPError) as cm:
+            StaticFileHandler.get_version(
+                dict(static_path=self.tmpdir), "public.txt:secret"
+            )
+        self.assertEqual(cm.exception.status_code, 403)
 
 
 class StaticFileSymlinkedRootTest(WebTestCase):
@@ -4325,6 +4416,21 @@ class CrossOriginProtectionTest(SimpleHandlerTestCase):
             response = self._post({"Origin": "null"})
         self.assertEqual(response.code, 403)
 
+    def test_fallback_null_origin_no_host(self):
+        # An HTTP/1.0 request can omit the Host header. "null" must not be
+        # treated as matching the (empty) host.
+        async def post() -> bytes:
+            stream = IOStream(socket.socket())
+            await stream.connect(("127.0.0.1", self.get_http_port()))
+            stream.write(
+                b"POST / HTTP/1.0\r\nOrigin: null\r\nContent-Length: 3\r\n\r\nx=1"
+            )
+            return await stream.read_until_close()
+
+        with ExpectLog(gen_log, ".*Origin 'null' not allowed"):
+            data = self.io_loop.run_sync(post)
+        self.assertTrue(data.startswith(b"HTTP/1.1 403"), data)
+
     def test_fallback_origin_with_path(self):
         response = self._post({"Origin": self.get_url("/foo")})
         self.assertEqual(response.code, 200)
@@ -4581,7 +4687,13 @@ class DecoratorTest(WebTestCase):
             def get(self):
                 pass
 
-        return [("/removeslash/", RemoveSlashHandler), ("/addslash", AddSlashHandler)]
+        return [
+            ("/removeslash/", RemoveSlashHandler),
+            ("/addslash", AddSlashHandler),
+            # Catch-all routes can see paths that start with two slashes.
+            (r"/+rem.*", RemoveSlashHandler),
+            (r"/+add.*", AddSlashHandler),
+        ]
 
     def test_removeslash(self):
         response = self.fetch("/removeslash/", follow_redirects=False)
@@ -4600,6 +4712,20 @@ class DecoratorTest(WebTestCase):
         response = self.fetch("/addslash?foo=bar", follow_redirects=False)
         self.assertEqual(response.code, 301)
         self.assertEqual(response.headers["Location"], "/addslash/?foo=bar")
+
+    def test_no_protocol_relative_redirect(self):
+        # Redirecting to //example.com would be an open redirect.
+        for path in [
+            "//add.example.com",
+            "///add.example.com",
+            "//rem.example.com/",
+            "//rem.example.com//",
+            "///rem.example.com/x/",
+        ]:
+            with self.subTest(path=path):
+                with ExpectLog(gen_log, ".*cannot redirect path"):
+                    response = self.fetch(path, follow_redirects=False)
+                self.assertEqual(response.code, 403)
 
 
 class CacheTest(WebTestCase):
@@ -4687,6 +4813,23 @@ class HTTPErrorTest(TestCase):
         self.assertEqual(e.status_code, e2.status_code)
         self.assertEqual(e.reason, e2.reason)
 
+    def test_pickle(self):
+        for e in [
+            HTTPError(403, "user %s denied", "alice", reason="Go away"),
+            HTTPError(404, "100% missing"),
+            MissingArgumentError("foo"),
+        ]:
+            with self.subTest(e=e):
+                e2 = pickle.loads(pickle.dumps(e))
+                self.assertIs(type(e2), type(e))
+                self.assertEqual(e2.status_code, e.status_code)
+                self.assertEqual(e2.reason, e.reason)
+                self.assertEqual(e2.log_message, e.log_message)
+                # args holds the log message arguments, and must survive
+                # unchanged for compatibility.
+                self.assertEqual(e2.args, e.args)
+                self.assertEqual(str(e2), str(e))
+
 
 class ApplicationTest(AsyncTestCase):
     def test_listen(self):
@@ -4696,6 +4839,16 @@ class ApplicationTest(AsyncTestCase):
 
 
 class URLSpecReverseTest(TestCase):
+    def test_reverse_percent_literals(self):
+        for pattern, args, expected in [
+            (r"/hello%20world/(.*)", ("a b",), "/hello%20world/a%20b"),
+            (r"/(.*)/100%25", ("value",), "/value/100%25"),
+            (r"/%s/(.*)/%s", ("value",), "/%s/value/%s"),
+            (r"/hello%20world", (), "/hello%20world"),
+        ]:
+            with self.subTest(pattern=pattern):
+                self.assertEqual(url(pattern, None).reverse(*args), expected)
+
     def test_reverse(self):
         self.assertEqual("/favicon.ico", url(r"/favicon\.ico", None).reverse())
         self.assertEqual("/favicon.ico", url(r"^/favicon\.ico$", None).reverse())
@@ -4735,6 +4888,9 @@ class RedirectHandlerTest(WebTestCase):
             ("/src2", WebRedirectHandler, {"url": "/dst2?foo=bar"}),
             (r"/any/(.*)", WebRedirectHandler, {"url": "{0}"}),
             (r"/moved(.*)", WebRedirectHandler, {"url": "https://example.com{0}"}),
+            (r"/(.*)/target", WebRedirectHandler, {"url": "/{0}/destination"}),
+            (r"/hostless/(.*)", WebRedirectHandler, {"url": "https://{0}"}),
+            (r"/schemeonly/(.*)", WebRedirectHandler, {"url": "https:{0}"}),
             (r"/(.*?)/(.*?)/(.*)", WebRedirectHandler, {"url": "/{1}/{0}/{2}"}),
         ]
 
@@ -4773,7 +4929,81 @@ class RedirectHandlerTest(WebTestCase):
         # Browsers treat backslashes like slashes and ignore tabs and newlines,
         # so these variants are also protocol-relative. Path arguments are
         # url-decoded, so they can be smuggled in with percent-encoding.
-        for path in ["/a/%5Cexample.com/b", "/a/%09/example.com/b"]:
+        # Browsers also skip any number of slashes before the host, so three
+        # or more slashes are just as protocol-relative as two.
+        for path in [
+            "/a/%5Cexample.com/b",
+            "/a/%09/example.com/b",
+            "/a///example.com/b",
+            "/a////example.com/b",
+            "/a/%2F%2F%5Cexample.com/b",
+        ]:
+            with self.subTest(path=path):
+                with ExpectLog(
+                    gen_log, ".*Redirect URL cannot change the scheme or netloc"
+                ):
+                    response = self.fetch(path, follow_redirects=False)
+                self.assertEqual(response.code, 400)
+
+    def test_substitution_after_first_slash(self):
+        # The substitution comes right after the first slash, so it can add a
+        # second slash (or more) but that must not reject ordinary values.
+        for path, location in [
+            ("/ok/target", "/ok/destination"),
+            ("/a/b/target", "/a/b/destination"),
+            ("/ok/target?x=1", "/ok/destination?x=1"),
+        ]:
+            with self.subTest(path=path):
+                response = self.fetch(path, follow_redirects=False)
+                self.assertEqual(response.code, 301)
+                self.assertEqual(response.headers["Location"], location)
+        for path in [
+            "/%2Fevil.com/target",
+            "/%2F%2Fevil.com/target",
+            "/%5C%5Cevil.com/target",
+            "/%09//evil.com/target",
+            "/%2Fevil.com/target?x=1",
+        ]:
+            with self.subTest(path=path):
+                with ExpectLog(
+                    gen_log, ".*Redirect URL cannot change the scheme or netloc"
+                ):
+                    response = self.fetch(path, follow_redirects=False)
+                self.assertEqual(response.code, 400)
+
+    def test_invalid_characters(self):
+        # These would otherwise be a 500 error from set_header.
+        for path in ["/any/%0Afoo", "/any/a%00b", "/any/%2F%2F%5B?x=1"]:
+            with self.subTest(path=path):
+                with ExpectLog(gen_log, ".*Redirect URL (contains invalid|cannot)"):
+                    response = self.fetch(path, follow_redirects=False)
+                self.assertEqual(response.code, 400)
+
+    def test_non_ascii(self):
+        # Non-ASCII characters (including ones that look like slashes) are
+        # fine, and are sent as UTF-8.
+        for value in ["\u00e9", "\u4e2d\u6587", "\uff0f\uff0fexample.com"]:
+            with self.subTest(value=value):
+                response = self.fetch(
+                    "/any/" + urllib.parse.quote(value), follow_redirects=False
+                )
+                self.assertEqual(response.code, 301)
+                # Header values are decoded as latin1.
+                self.assertEqual(
+                    response.headers["Location"], utf8(value).decode("latin1")
+                )
+
+    def test_substitution_in_host(self):
+        # Substitutions cannot supply the host, even with extra slashes
+        # (which urlsplit and browsers disagree about) or a query string
+        # (which some versions of urlunsplit turn into extra slashes).
+        for path in [
+            "/hostless/evil.com",
+            "/hostless//evil.com",
+            "/schemeonly/evil.com",
+            "/schemeonly/evil.com?x=1",
+            "/schemeonly////evil.com",
+        ]:
             with self.subTest(path=path):
                 with ExpectLog(
                     gen_log, ".*Redirect URL cannot change the scheme or netloc"
@@ -4802,6 +5032,7 @@ class RedirectHandlerTest(WebTestCase):
         for path in [
             "/any/https://evil.com/",
             "/any/%5C%5Cevil.com/",
+            "/any////evil.com/",
             "/any/javascript:alert(1)",
         ]:
             with self.subTest(path=path):

@@ -17,6 +17,7 @@ import datetime
 import functools
 import gzip
 import logging
+import pickle
 import subprocess
 import sys
 import threading
@@ -641,6 +642,11 @@ Transfer-Encoding: chunked
         url = self.get_url("/auth").replace("http://", "http://me:secret@")
         response = self.fetch(url)
         self.assertEqual(b"Basic " + base64.b64encode(b"me:secret"), response.body)
+
+    def test_username_in_url_without_password(self):
+        url = self.get_url("/auth").replace("http://", "http://me@")
+        response = self.fetch(url)
+        self.assertEqual(b"Basic " + base64.b64encode(b"me:"), response.body)
 
     def test_body_encoding(self):
         unicode_body = "\xe9"
@@ -1302,6 +1308,15 @@ class HTTPErrorTestCase(TestCase):
         e = cm.exception
         self.assertEqual(str(e), "HTTP 403: Forbidden")
         self.assertEqual(repr(e), "HTTP 403: Forbidden")
+
+    def test_pickle(self):
+        e = HTTPError(404, "Not here")
+        e2 = pickle.loads(pickle.dumps(e))
+        self.assertIs(type(e2), HTTPError)
+        self.assertEqual(e2.code, 404)
+        self.assertEqual(e2.message, "Not here")
+        self.assertEqual(e2.args, e.args)
+        self.assertEqual(str(e2), str(e))
 
 
 # Limit used by `HTTPClientMaxBodySizeTestCase`. Subclasses configure their

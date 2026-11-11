@@ -21,6 +21,7 @@ from tornado.httputil import (
     parse_multipart_form_data,
     parse_request_start_line,
     qs_to_qsl,
+    split_host_and_port,
     url_concat,
 )
 from tornado.log import gen_log
@@ -103,6 +104,20 @@ class QsParseTest(TestCase):
 
 
 class UrlEncodedDataTest(TestCase):
+    def test_content_type_case(self):
+        for content_type in (
+            "application/x-www-form-urlencoded",
+            "Application/X-WWW-Form-Urlencoded",
+            "APPLICATION/X-WWW-FORM-URLENCODED; charset=UTF-8",
+        ):
+            with self.subTest(content_type=content_type):
+                args, files = form_data_args()
+                parse_body_arguments(
+                    content_type, b"Name=Value&Name=Other", args, files
+                )
+                self.assertEqual(args, {"Name": [b"Value", b"Other"]})
+                self.assertEqual(files, {})
+
     def test_urlencoded_data(self):
         data = b"a=1&b=2&a=3"
         args, files = form_data_args()
@@ -143,6 +158,52 @@ class UrlEncodedDataTest(TestCase):
 
 
 class MultipartFormDataTest(TestCase):
+    def test_content_type_case(self):
+        data = (
+            b"--AaB03x\r\n"
+            b'Content-Disposition: form-data; name="Files"; filename="Report.TXT"\r\n'
+            b"\r\nHello\r\n--AaB03x--\r\n"
+        )
+        for media_type in ("multipart/form-data", "Multipart/Form-Data"):
+            for parameter in ("boundary", "Boundary", "BOUNDARY"):
+                for boundary in ("AaB03x", '"AaB03x"'):
+                    content_type = f"{media_type}; {parameter}={boundary}"
+                    with self.subTest(content_type=content_type):
+                        args, files = form_data_args()
+                        parse_body_arguments(content_type, data, args, files)
+                        self.assertEqual(args, {})
+                        self.assertEqual(files["Files"][0].filename, "Report.TXT")
+                        self.assertEqual(files["Files"][0].body, b"Hello")
+
+    def test_multiple_boundaries(self):
+        data = (
+            b"--1234\r\n"
+            b'Content-Disposition: form-data; name="Name"\r\n'
+            b"\r\nValue\r\n--1234--\r\n"
+        )
+        for content_type in (
+            "multipart/form-data; boundary=1234; boundary=5678",
+            "multipart/form-data; boundary=5678; BOUNDARY=1234",
+            "multipart/form-data; boundary=1234; boundary=1234",
+            "multipart/form-data; boundary=; boundary=1234",
+        ):
+            with self.subTest(content_type=content_type):
+                args, files = form_data_args()
+                with self.assertRaisesRegex(HTTPInputError, "multiple"):
+                    parse_body_arguments(content_type, data, args, files)
+
+    def test_boundary_value_is_case_sensitive(self):
+        data = (
+            b"--AaB03x\r\n"
+            b'Content-Disposition: form-data; name="Name"\r\n'
+            b"\r\nValue\r\n--AaB03x--\r\n"
+        )
+        args, files = form_data_args()
+        with self.assertRaisesRegex(HTTPInputError, "no final boundary found"):
+            parse_body_arguments(
+                "multipart/form-data; boundary=aab03x", data, args, files
+            )
+
     def test_file_upload(self):
         data = b"""\
 --1234
@@ -725,6 +786,28 @@ class ParseRequestStartLineTest(TestCase):
         self.assertEqual(parsed_start_line.path, self.PATH)
         self.assertEqual(parsed_start_line.version, self.VERSION)
 
+    def test_fragment_rejected(self):
+        # A fragment is never sent as part of a request target.
+        for path in ["/foo#bar", "/foo?a=b#c", "#"]:
+            with self.subTest(path=path):
+                with self.assertRaises(HTTPInputError):
+                    parse_request_start_line(f"GET {path} HTTP/1.1")
+
+
+class SplitHostAndPortTest(TestCase):
+    def test_split_host_and_port(self):
+        self.assertEqual(split_host_and_port("example.com"), ("example.com", None))
+        self.assertEqual(split_host_and_port("example.com:80"), ("example.com", 80))
+        self.assertEqual(split_host_and_port("[::1]:80"), ("[::1]", 80))
+
+    def test_non_ascii_digits(self):
+        # Only ASCII digits make a port. "\u0668\u0660" is "80" in Arabic-Indic
+        # digits, which int() would accept.
+        self.assertEqual(
+            split_host_and_port("example.com:\u0668\u0660"),
+            ("example.com:\u0668\u0660", None),
+        )
+
 
 class ParseCookieTest(TestCase):
     # These tests copied from Django:
@@ -840,13 +923,20 @@ class ParseCookieTest(TestCase):
         # escape sequences in a cookie value was quadratic. (Only the r"\\"
         # case reproduces it on 6.4.1; r"\134" is here for symmetry with
         # test_unquote_large.)
+        #
+        # 6.4.1 measures a ratio of about 100 on CPython and 60-100 on PyPy.
+        # The fixed version measures about 10 on CPython, but this test
+        # allocates heavily for each byte of input, and PyPy's ratio depends
+        # on how that compares to its nursery and CPU caches: as of 2026-10
+        # it measures 11-24 depending on PYPY_GC_NURSERY, so the usual limit
+        # of 20 is too tight.
         for encoded in r"\\", r"\134":
             with self.subTest(encoded):
                 assert_linear_scaling(
                     lambda n: parse_cookie('a="b=' + encoded * n + '"'),
                     1_000,
                     10_000,
-                    max_ratio=20,
+                    max_ratio=40,
                     msg="Cookie unquoting is not linear",
                 )
 

@@ -14,7 +14,8 @@ from types import TracebackType
 from typing import Any, Optional, Type
 
 from tornado import gen, httputil, version
-from tornado.escape import _unicode
+from tornado.concurrent import Future
+from tornado.escape import _unicode, utf8
 from tornado.http1connection import HTTP1Connection, HTTP1ConnectionParameters
 from tornado.httpclient import (
     AsyncHTTPClient,
@@ -34,6 +35,23 @@ from tornado.netutil import (
     is_valid_ip,
 )
 from tornado.tcpclient import TCPClient
+
+# Control characters and spaces are not allowed anywhere in a URL. urlsplit
+# silently removes some of them (tabs and newlines), and the rest would be sent
+# as-is, producing a malformed request line.
+_FORBIDDEN_URL_CHARS_RE = re.compile(r"[\x00-\x20\x7f]")
+
+
+def _percent_encode_url(url: bytes) -> str:
+    """Percent-encodes spaces and non-ASCII bytes in ``url``.
+
+    Browsers (following the WHATWG URL spec) encode these before sending a
+    request; other characters, including existing percent-escapes, are left
+    alone.
+    """
+    return re.sub(
+        rb"[ \x80-\xff]+", lambda m: urllib.parse.quote_from_bytes(m[0]).encode(), url
+    ).decode("ascii")
 
 
 class HTTPTimeoutError(HTTPError):
@@ -282,7 +300,10 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
     async def run(self) -> None:
         try:
-            self.parsed = urllib.parse.urlsplit(_unicode(self.request.url))
+            url = _unicode(self.request.url)
+            if _FORBIDDEN_URL_CHARS_RE.search(url):
+                raise ValueError("Invalid character in url: %r" % url)
+            self.parsed = urllib.parse.urlsplit(url)
             if self.parsed.scheme not in ("http", "https"):
                 raise ValueError("Unsupported url scheme: %s" % self.request.url)
             # urlsplit results have hostname and port results, but they
@@ -383,7 +404,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     self.request.headers["Host"] = self.parsed.netloc
             username, password = None, None
             if self.parsed.username is not None:
-                username, password = self.parsed.username, self.parsed.password
+                username = self.parsed.username
+                password = self.parsed.password or ""
             elif self.request.auth_username is not None:
                 username = self.request.auth_username
                 password = self.request.auth_password or ""
@@ -437,6 +459,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             req_path = (self.parsed.path or "/") + (
                 ("?" + self.parsed.query) if self.parsed.query else ""
             )
+            req_path = _percent_encode_url(utf8(req_path))
             self.connection = self._create_connection(stream)
             start_line = httputil.RequestStartLine(self.request.method, req_path, "")
             self.connection.write_headers(start_line, self.request.headers)
@@ -632,9 +655,12 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             assert isinstance(self.request, _RequestProxy)
             assert self.headers is not None
             new_request = copy.copy(self.request.request)
-            new_request.url = urllib.parse.urljoin(
-                self.request.url, self.headers["Location"]
-            )
+            # Header values are decoded as latin1; recover the original bytes
+            # so that non-ASCII characters are encoded as they were sent
+            # (usually UTF-8). Spaces are encoded rather than rejected, as
+            # browsers and curl do for redirects.
+            location = _percent_encode_url(self.headers["Location"].encode("latin1"))
+            new_request.url = urllib.parse.urljoin(self.request.url, location)
             new_request.headers = self.request.headers.copy()
             parsed_orig_url = urllib.parse.urlsplit(original_request.url)
             parsed_new_url = urllib.parse.urlsplit(new_request.url)
@@ -704,7 +730,25 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self._release()
             assert self.client is not None
             fut = self.client.fetch(new_request, raise_error=False)
-            fut.add_done_callback(lambda f: final_callback(f.result()))
+
+            def on_redirect_done(f: "Future[HTTPResponse]") -> None:
+                try:
+                    response = f.result()
+                except Exception as e:
+                    # Errors other than HTTP status codes (such as a
+                    # Location with an unsupported scheme) are raised even
+                    # with raise_error=False. Pass them on, or the original
+                    # fetch would never finish.
+                    response = HTTPResponse(
+                        new_request,
+                        599,
+                        error=e,
+                        request_time=self.io_loop.time() - self.start_time,
+                        start_time=self.start_wall_time,
+                    )
+                final_callback(response)
+
+            fut.add_done_callback(on_redirect_done)
             self._on_end_request()
             return
         if self.request.streaming_callback:

@@ -15,6 +15,7 @@ import gzip
 import os
 import unittest
 import unittest.mock
+import urllib.parse
 import zlib
 
 from tornado.test.util import TestCase
@@ -33,6 +34,7 @@ except ImportError:
 
 
 from tornado.escape import (
+    _unquote_to_bytes,
     parse_qs_bytes,
     url_escape,
     url_unescape,
@@ -273,6 +275,38 @@ class EscapePropertyTest(TestCase):
                 v.encode("utf-8")
             )
         self.assertEqual(parse_qs_bytes(qs, keep_blank_values=True), expected)
+
+    # Pieces that exercise the edge cases of _unquote_to_bytes: valid and
+    # invalid escapes, escapes of % and =, and line breaks.
+    _qs_pieces = st.sampled_from(
+        [b"%", b"=", b"&", b"+", b"a", b"2", b"5", b"3", b"D", b"d", b"f", b"g"]
+        + [b"\r", b"\n", b" ", b"\x00", b"\xff", b"%41", b"%3d", b"%25", b"%e9"]
+    )
+    _qs_bytes = st.lists(_qs_pieces, max_size=30).map(b"".join)
+
+    @given(_qs_bytes)
+    def test_unquote_to_bytes_matches_stdlib(self, b):
+        self.assertEqual(_unquote_to_bytes(b), urllib.parse.unquote_to_bytes(b))
+
+    @given(_qs_bytes, st.booleans(), st.booleans())
+    def test_parse_qs_bytes_matches_stdlib(self, qs, keep_blank, strict):
+        def parse(f):
+            try:
+                return f()
+            except ValueError:
+                return "ValueError"
+
+        expected = parse(
+            lambda: {
+                k: [v.encode("latin1") for v in vs]
+                for k, vs in urllib.parse.parse_qs(
+                    qs.decode("latin1"), keep_blank, strict, encoding="latin1"
+                ).items()
+            }
+        )
+        self.assertEqual(
+            parse(lambda: parse_qs_bytes(qs, keep_blank, strict)), expected
+        )
 
 
 # Cookie names and values that browsers send unquoted: no whitespace at

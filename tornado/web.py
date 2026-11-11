@@ -72,6 +72,7 @@ import os.path
 import re
 import socket
 import stat
+import string
 import sys
 import threading
 import time
@@ -99,7 +100,12 @@ from tornado.routing import (
     _RuleList,
 )
 from tornado.routing import URLSpec as URLSpec  # re-exported for compatibility
-from tornado.util import ObjectDict, _websocket_mask, unicode_type
+from tornado.util import (
+    ObjectDict,
+    _restore_exception,
+    _websocket_mask,
+    unicode_type,
+)
 
 url = URLSpec
 
@@ -677,11 +683,6 @@ class RequestHandler:
         # The cookie library only accepts type str, in both python 2 and 3
         name = escape.native_str(name)
         value = escape.native_str(value)
-        if re.search(r"[\x00-\x20]", value):
-            # Legacy check for control characters in cookie values. This check is no longer needed
-            # since the cookie library escapes these characters correctly now. It will be removed
-            # in the next feature release.
-            raise ValueError(f"Invalid cookie {name!r}: {value!r}")
         for attr_name, attr_value in [
             ("name", name),
             ("domain", domain),
@@ -1753,6 +1754,10 @@ class RequestHandler:
     def _origin_matches_host(self, origin: str) -> bool:
         origin = urllib.parse.urlsplit(origin).netloc.lower()
         host = self.request.headers.get("Host", "").lower()
+        if not origin or not host:
+            # An opaque origin ("null") has no netloc, and HTTP/1.0 requests
+            # may have no Host header. Neither matches anything.
+            return False
 
         # Check to see that origin matches host directly, including ports.
         # Note that ideally we'd also match the scheme, but that would make it a
@@ -2191,6 +2196,12 @@ def removeslash(
         if self.request.path.endswith("/"):
             if self.request.method in ("GET", "HEAD"):
                 uri = self.request.path.rstrip("/")
+                if _is_protocol_relative(uri):
+                    # A path like //example.com// would otherwise redirect
+                    # to another host.
+                    raise HTTPError(
+                        403, "cannot redirect path with two initial slashes"
+                    )
                 if uri:  # don't try to redirect '/' to ''
                     if self.request.query:
                         uri += "?" + self.request.query
@@ -2220,6 +2231,12 @@ def addslash(
         if not self.request.path.endswith("/"):
             if self.request.method in ("GET", "HEAD"):
                 uri = self.request.path + "/"
+                if _is_protocol_relative(uri):
+                    # A path like //example.com would otherwise redirect to
+                    # another host.
+                    raise HTTPError(
+                        403, "cannot redirect path with two initial slashes"
+                    )
                 if self.request.query:
                     uri += "?" + self.request.query
                 self.redirect(uri, permanent=True)
@@ -2724,6 +2741,12 @@ class HTTPError(Exception):
             return self._log_message % self.args
         return self._log_message
 
+    def __reduce__(self) -> tuple[Any, ...]:
+        # self.args holds the log message arguments rather than the
+        # constructor arguments, so the default implementation would
+        # lose the status code and log message when unpickling.
+        return (_restore_exception, (type(self), self.args, self.__dict__))
+
     def __str__(self) -> str:
         message = "HTTP %d: %s" % (
             self.status_code,
@@ -2848,23 +2871,40 @@ class RedirectHandler(RequestHandler):
     def get(self, *args: Any, **kwargs: Any) -> None:
         to_url = self._url.format(*args, **kwargs)
         # The scheme and netloc of the redirect must come from the template, not
-        # from the request. Find out what they are by formatting the template
-        # with a placeholder that cannot extend a scheme or netloc.
-        expected_url = self._url.format(
-            *("/" for _ in args), **{k: "/" for k in kwargs}
-        )
+        # from the request. Find out what they are from the part of the template
+        # before the first substitution. (Formatting the whole template with a
+        # placeholder doesn't work: whatever the placeholder is, it can turn the
+        # template into a URL with a different netloc, as "/" does for "/{0}/b".)
+        prefix = ""
+        has_substitution = False
+        for literal, field, _, _ in string.Formatter().parse(self._url):
+            prefix += literal
+            if field is not None:
+                has_substitution = True
+                break
         try:
-            unchanged = _scheme_and_netloc(to_url) == _scheme_and_netloc(expected_url)
+            if self.request.query_arguments:
+                # Query arguments are added before the check because url_concat
+                # can change the rest of the URL.
+                # TODO: figure out typing for the next line.
+                to_url = httputil.url_concat(
+                    to_url,
+                    list(httputil.qs_to_qsl(self.request.query_arguments)),  # type: ignore
+                )
+            scheme, netloc = _scheme_and_netloc(prefix)
+            unchanged = _scheme_and_netloc(to_url) == (scheme, netloc)
+            if has_substitution and scheme in ("http", "https") and not netloc:
+                # The host would come entirely from a substitution (or a
+                # browser would find one where urlsplit doesn't, as in
+                # "https:///host").
+                unchanged = False
         except ValueError:
             unchanged = False
         if not unchanged:
             raise HTTPError(400, "Redirect URL cannot change the scheme or netloc")
-        if self.request.query_arguments:
-            # TODO: figure out typing for the next line.
-            to_url = httputil.url_concat(
-                to_url,
-                list(httputil.qs_to_qsl(self.request.query_arguments)),  # type: ignore
-            )
+        if httputil._FORBIDDEN_HEADER_CHARS_RE.search(to_url):
+            # Let this be a 400 rather than a 500 from set_header.
+            raise HTTPError(400, "Redirect URL contains invalid characters")
         self.redirect(to_url, permanent=self._permanent)
 
 
@@ -3083,11 +3123,18 @@ class StaticFileHandler(RequestHandler):
             content = self.get_content(self.absolute_path, start, end)
             if isinstance(content, bytes):
                 content = [content]
+            remaining = content_length
             for chunk in content:
-                try:
-                    self.write(chunk)
-                    await self.flush()
-                except iostream.StreamClosedError:
+                # The file may have grown since Content-Length was calculated.
+                chunk = chunk[:remaining]
+                if chunk:
+                    try:
+                        self.write(chunk)
+                        await self.flush()
+                    except iostream.StreamClosedError:
+                        return
+                    remaining -= len(chunk)
+                if remaining == 0:
                     return
         else:
             assert self.request.method == "HEAD"
@@ -3306,6 +3353,16 @@ class StaticFileHandler(RequestHandler):
         # the requested path so a request to root/ will match.
         if not (absolute_path + os.path.sep).startswith(root):
             raise HTTPError(403, "%s is not in root static directory", path_message)
+        if os.name == "nt" and ":" in absolute_path[len(root) :]:
+            # On Windows, "file.txt:name" names the NTFS alternate data
+            # stream "name" of file.txt. abspath, stat and open all accept
+            # this syntax, so without this check the stream (which may
+            # hold data such as the Zone.Identifier recorded for downloaded
+            # files) would be served as if it were a file in the static
+            # directory. A colon can never appear in an ordinary Windows
+            # file name, so rejecting it anywhere below the root (the root
+            # itself contains the drive letter's colon) loses nothing.
+            raise HTTPError(403, "%s is not a file", path_message)
         return root
 
     @staticmethod
@@ -4251,5 +4308,10 @@ def _scheme_and_netloc(url: str) -> tuple[str, str]:
     Both are empty for a relative URL. Raises `ValueError` for some malformed
     URLs.
     """
-    parts = urllib.parse.urlsplit(_normalize_url_like_browser(url))
+    url = _normalize_url_like_browser(url)
+    # urlsplit follows RFC 3986, in which "///example.com" has an empty netloc,
+    # but browsers resolving it against an http or https URL skip any number of
+    # slashes before the host. Collapse them so urlsplit sees the same host.
+    url = re.sub(r"^//+", "//", url)
+    parts = urllib.parse.urlsplit(url)
     return parts.scheme.lower(), parts.netloc.lower()
