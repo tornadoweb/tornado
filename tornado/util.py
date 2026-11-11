@@ -141,7 +141,8 @@ class GzipDecompressor:
         # header, CRC and length are checked by zlib itself.
         if not value:
             # Don't start a member (or report it as truncated) without data.
-            self._unconsumed_tail = b""
+            # (Do not touch _unconsumed_tail: empty input is a no-op and must
+            # not discard buffered data the caller has not consumed yet.)
             return b""
         if self._decompressobj is None:
             # This is the start of a member. zlib would reject anything
