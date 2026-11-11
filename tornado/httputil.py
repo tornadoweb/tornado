@@ -1058,7 +1058,11 @@ def parse_body_arguments(
         config = _DEFAULT_PARSE_BODY_CONFIG
     # Media types and parameter names are case-insensitive, but values may not be.
     content_type_lower = content_type.lower()
-    if content_type_lower.startswith("application/x-www-form-urlencoded"):
+    if (
+        content_type_lower.split(";", 1)[0].strip()
+        == "application/x-www-form-urlencoded"
+    ):
+        # This catches "Content-Type: application/x-www-form-urlencodedgarbage"
         if headers and "Content-Encoding" in headers:
             raise HTTPInputError(
                 "Unsupported Content-Encoding: %s" % headers["Content-Encoding"]
