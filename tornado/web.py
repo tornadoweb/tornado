@@ -1342,6 +1342,27 @@ class RequestHandler:
         # _ui_module closures to allow for faster GC on CPython.
         self.ui = None  # type: ignore
 
+    def _get_allowed_methods(self) -> list[str]:
+        """Returns the HTTP methods implemented by this handler.
+
+        A method is considered implemented if the handler subclass
+        overrides the corresponding method (``get``, ``post``, etc)
+        instead of inheriting the default implementation that raises
+        a 405 error. Used to generate the ``Allow`` header required
+        in 405 responses.
+        """
+        allowed = []
+        for method in self.SUPPORTED_METHODS:
+            handler_method = getattr(self, method.lower(), None)
+            if handler_method is None:
+                continue
+            # handler_method is a bound method; compare its underlying
+            # function against the base class's unimplemented stub.
+            func = getattr(handler_method, "__func__", handler_method)
+            if func is not RequestHandler._unimplemented_method:
+                allowed.append(method)
+        return allowed
+
     def send_error(self, status_code: int = 500, **kwargs: Any) -> None:
         """Sends the given HTTP error code to the browser.
 
@@ -1373,6 +1394,11 @@ class RequestHandler:
             if isinstance(exception, HTTPError) and exception.reason:
                 reason = exception.reason
         self.set_status(status_code, reason=reason)
+        if status_code == 405:
+            # RFC 9110 section 15.5.6 requires the Allow header in
+            # 405 responses, listing the methods supported by the
+            # target resource.
+            self.set_header("Allow", ", ".join(self._get_allowed_methods()))
         try:
             if status_code != 304:
                 self.write_error(status_code, **kwargs)
