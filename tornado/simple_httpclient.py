@@ -105,7 +105,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     ``max_clients`` is the number of concurrent requests that can be
     in progress; when this limit is reached additional requests will be
     queued. Note that time spent waiting in this queue still counts
-    against the ``request_timeout``.
+    against the ``request_timeout``, but not against the ``connect_timeout``.
 
     ``defaults`` is a dict of parameters that will be used as defaults on all
     `.HTTPRequest` objects submitted to this client.
@@ -126,6 +126,13 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
     .. versionchanged:: 4.2
         Added the ``max_body_size`` argument.
+
+    .. versionchanged:: 6.7
+        Time spent in the queue no longer counts against the
+        ``connect_timeout`` (as it had since Tornado 3.2), so a queued
+        request with ``request_timeout=0`` can wait in the queue
+        indefinitely. The ``request_timeout`` is also no longer restarted
+        when a request leaves the queue.
     """
 
     def initialize(  # type: ignore
@@ -146,8 +153,9 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.active: dict[
             object, tuple[HTTPRequest, Callable[[HTTPResponse], None]]
         ] = {}
+        # Values are (request, callback, timeout_handle, queue_start_time).
         self.waiting: dict[
-            object, tuple[HTTPRequest, Callable[[HTTPResponse], None], object]
+            object, tuple[HTTPRequest, Callable[[HTTPResponse], None], object, float]
         ] = {}
         self.max_buffer_size = max_buffer_size
         self.max_header_size = max_header_size
@@ -176,22 +184,18 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self, request: HTTPRequest, callback: Callable[[HTTPResponse], None]
     ) -> None:
         key = object()
+        queue_start_time = self.io_loop.time()
         self.queue.append((key, request, callback))
-        assert request.connect_timeout is not None
         assert request.request_timeout is not None
         timeout_handle = None
-        if len(self.active) >= self.max_clients:
-            timeout = (
-                min(request.connect_timeout, request.request_timeout)
-                or request.connect_timeout
-                or request.request_timeout
-            )  # min but skip zero
-            if timeout:
-                timeout_handle = self.io_loop.add_timeout(
-                    self.io_loop.time() + timeout,
-                    functools.partial(self._on_timeout, key, "in request queue"),
-                )
-        self.waiting[key] = (request, callback, timeout_handle)
+        if len(self.active) >= self.max_clients and request.request_timeout:
+            # Time spent in the queue counts against request_timeout, but not
+            # against connect_timeout, which starts when the connection does.
+            timeout_handle = self.io_loop.add_timeout(
+                queue_start_time + request.request_timeout,
+                functools.partial(self._on_timeout, key, "in request queue"),
+            )
+        self.waiting[key] = (request, callback, timeout_handle, queue_start_time)
         self._process_queue()
         if self.queue:
             gen_log.debug(
@@ -204,10 +208,13 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
             key, request, callback = self.queue.popleft()
             if key not in self.waiting:
                 continue
+            queue_start_time = self.waiting[key][3]
             self._remove_timeout(key)
             self.active[key] = (request, callback)
             release_callback = functools.partial(self._release_fetch, key)
-            self._handle_request(request, release_callback, callback)
+            self._handle_request(
+                request, release_callback, callback, queue_start_time=queue_start_time
+            )
 
     def _connection_class(self) -> type:
         return _HTTPConnection
@@ -217,6 +224,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         request: HTTPRequest,
         release_callback: Callable[[], None],
         final_callback: Callable[[HTTPResponse], None],
+        queue_start_time: float | None = None,
     ) -> None:
         self._connection_class()(
             self,
@@ -227,6 +235,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
             self.tcp_client,
             self.max_header_size,
             self.max_body_size,
+            queue_start_time=queue_start_time,
         )
 
     def _release_fetch(self, key: object) -> None:
@@ -235,7 +244,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
     def _remove_timeout(self, key: object) -> None:
         if key in self.waiting:
-            request, callback, timeout_handle = self.waiting[key]
+            request, callback, timeout_handle, _ = self.waiting[key]
             if timeout_handle is not None:
                 self.io_loop.remove_timeout(timeout_handle)
             del self.waiting[key]
@@ -248,7 +257,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         :arg object key: A simple object to mark the request.
         :info string key: More detailed timeout information.
         """
-        request, callback, timeout_handle = self.waiting[key]
+        request, callback, timeout_handle, _ = self.waiting[key]
         self.queue.remove((key, request, callback))
 
         error_message = f"Timeout {info}" if info else "Timeout"
@@ -275,10 +284,16 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         tcp_client: TCPClient,
         max_header_size: int,
         max_body_size: int,
+        queue_start_time: float | None = None,
     ) -> None:
         self.io_loop = IOLoop.current()
         self.start_time = self.io_loop.time()
         self.start_wall_time = time.time()
+        # When the request entered the client's queue. request_timeout is
+        # measured from here, while connect_timeout uses start_time.
+        self.queue_start_time = (
+            self.start_time if queue_start_time is None else queue_start_time
+        )
         self.client = client
         self.request = request
         self.release_callback = release_callback
@@ -336,16 +351,11 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                         % (self.request.network_interface,)
                     )
 
-            if self.request.connect_timeout and self.request.request_timeout:
-                timeout = min(
-                    self.request.connect_timeout, self.request.request_timeout
-                )
-            elif self.request.connect_timeout:
-                timeout = self.request.connect_timeout
-            elif self.request.request_timeout:
-                timeout = self.request.request_timeout
-            else:
-                timeout = 0
+            deadlines: list[float] = []
+            if self.request.connect_timeout:
+                deadlines.append(self.start_time + self.request.connect_timeout)
+            if self.request.request_timeout:
+                deadlines.append(self.queue_start_time + self.request.request_timeout)
             try:
                 stream = await self.tcp_client.connect(
                     host,
@@ -355,9 +365,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     max_buffer_size=self.max_buffer_size,
                     source_ip=source_ip,
                     timeout=(
-                        self.start_time + timeout - self.io_loop.time()
-                        if timeout
-                        else None
+                        min(deadlines) - self.io_loop.time() if deadlines else None
                     ),
                 )
             except TimeoutError as e:
@@ -376,7 +384,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 return
             if self.request.request_timeout:
                 self._timeout = self.io_loop.add_timeout(
-                    self.start_time + self.request.request_timeout,
+                    self.queue_start_time + self.request.request_timeout,
                     functools.partial(self._on_timeout, "during request"),
                 )
             if (
