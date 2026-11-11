@@ -72,7 +72,7 @@ Type Annotation Changes
 `tornado.netutil`
 ~~~~~~~~~~~~~~~~~
 
-- `.bind_unix_socket` now supports the Linux abstract namespace.
+- `tornado.netutil.bind_unix_socket` now supports the Linux abstract namespace.
 
 
 `tornado.platform.twisted`
