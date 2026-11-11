@@ -1,7 +1,7 @@
 import logging
 import socket
 
-from tornado import gen
+from tornado import gen, httputil
 from tornado.http1connection import HTTP1Connection
 from tornado.httputil import HTTPMessageDelegate
 from tornado.iostream import IOStream
@@ -191,3 +191,88 @@ class HTTP1ConnectionTest(AsyncTestCase):
         with ExpectLog(gen_log, ".*improperly terminated chunk", level=logging.INFO):
             result = yield conn.read_response(HTTPMessageDelegate())
         self.assertIs(result, False)
+
+    @gen_test
+    def test_write_headers_invalid_reason_phrase(self):
+        server_conn = HTTP1Connection(self.server_stream, False)
+        server_conn._request_start_line = httputil.RequestStartLine(
+            "GET", "/", "HTTP/1.1"
+        )
+        server_conn._request_headers = httputil.HTTPHeaders()
+
+        # Reject reason phrase with NUL or control characters
+        for invalid_reason in [
+            "Bad\x00Request",
+            "Bad\x07Request",
+            "Bad\rRequest",
+            "Bad\nRequest",
+            "Bad\r\nRequest",
+            "Bad\x1fRequest",
+        ]:
+            with self.subTest(reason=invalid_reason):
+                start_line = httputil.ResponseStartLine("HTTP/1.1", 400, invalid_reason)
+                with self.assertRaises(ValueError):
+                    server_conn.write_headers(start_line, httputil.HTTPHeaders())
+
+        # Accept valid reason phrases
+        for valid_reason in ["OK", "", "Custom Reason 123", "Mot\xe4rhead"]:
+            with self.subTest(reason=valid_reason):
+                start_line = httputil.ResponseStartLine("HTTP/1.1", 200, valid_reason)
+                fut = server_conn.write_headers(start_line, httputil.HTTPHeaders())
+                yield fut
+
+    @gen_test
+    def test_write_headers_invalid_header_value_server(self):
+        server_conn = HTTP1Connection(self.server_stream, False)
+        server_conn._request_start_line = httputil.RequestStartLine(
+            "GET", "/", "HTTP/1.1"
+        )
+        server_conn._request_headers = httputil.HTTPHeaders()
+        start_line = httputil.ResponseStartLine("HTTP/1.1", 200, "OK")
+
+        for invalid_val in [
+            "bad\x00value",
+            "bad\x07value",
+            "bad\x1fvalue",
+            "bad\x7fvalue",
+            "bad\rvalue",
+            "bad\nvalue",
+        ]:
+            with self.subTest(val=invalid_val):
+                headers = httputil.HTTPHeaders()
+                headers["X-Test"] = invalid_val
+                with self.assertRaises(ValueError):
+                    server_conn.write_headers(start_line, headers)
+
+        for valid_val in ["", "good-value", "good value with spaces", "caf\xe9"]:
+            with self.subTest(val=valid_val):
+                headers = httputil.HTTPHeaders()
+                headers["X-Test"] = valid_val
+                fut = server_conn.write_headers(start_line, headers)
+                yield fut
+
+    @gen_test
+    def test_write_headers_invalid_header_value_client(self):
+        client_conn = HTTP1Connection(self.client_stream, True)
+        start_line = httputil.RequestStartLine("GET", "/", "HTTP/1.1")
+
+        for invalid_val in [
+            "bad\x00value",
+            "bad\x07value",
+            "bad\x1fvalue",
+            "bad\x7fvalue",
+            "bad\rvalue",
+            "bad\nvalue",
+        ]:
+            with self.subTest(val=invalid_val):
+                headers = httputil.HTTPHeaders()
+                headers["X-Test"] = invalid_val
+                with self.assertRaises(ValueError):
+                    client_conn.write_headers(start_line, headers)
+
+        for valid_val in ["", "good-value", "good value with spaces", "caf\xe9"]:
+            with self.subTest(val=valid_val):
+                headers = httputil.HTTPHeaders()
+                headers["X-Test"] = valid_val
+                fut = client_conn.write_headers(start_line, headers)
+                yield fut

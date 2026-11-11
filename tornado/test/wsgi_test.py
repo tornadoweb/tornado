@@ -1,10 +1,13 @@
 import asyncio
 import concurrent.futures
 import threading
+from unittest.mock import MagicMock
 from wsgiref.validate import validator
 
+from tornado import httputil
+from tornado.http1connection import HTTP1Connection
 from tornado.routing import RuleRouter
-from tornado.test.util import AsyncHTTPTestCase
+from tornado.test.util import AsyncHTTPTestCase, AsyncTestCase
 from tornado.testing import gen_test
 from tornado.wsgi import WSGIContainer
 
@@ -120,3 +123,27 @@ class WSGIContainerThreadPoolTest(WSGIAppMixin, AsyncHTTPTestCase):
             self.http_client.fetch(self.get_url("/streaming_barrier")),
         )
         self.assertEqual([b"ok 0", b"ok 1"], sorted([resp.body for resp in resps]))
+
+
+class WSGIValidationTest(AsyncTestCase):
+    @gen_test
+    async def test_invalid_status_reason_rejected(self):
+        def bad_status_app(environ, start_response):
+            start_response("400 Bad\x00Request", [("Content-Type", "text/plain")])
+            return [b"Error\n"]
+
+        container = WSGIContainer(bad_status_app)
+        start_line = httputil.RequestStartLine("GET", "/", "HTTP/1.1")
+        headers = httputil.HTTPHeaders({"Host": "localhost"})
+        mock_stream = MagicMock()
+        mock_stream.closed.return_value = False
+        conn = HTTP1Connection(mock_stream, is_client=False)
+        conn._request_start_line = start_line
+        conn._request_headers = headers
+
+        request = httputil.HTTPServerRequest(
+            start_line=start_line, headers=headers, connection=conn
+        )
+        with self.assertRaises(ValueError) as cm:
+            await container.handle_request(request)
+        self.assertIn("Illegal characters in reason phrase", str(cm.exception))
