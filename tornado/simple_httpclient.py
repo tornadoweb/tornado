@@ -658,8 +658,29 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             # Header values are decoded as latin1; recover the original bytes
             # so that non-ASCII characters are encoded as they were sent
             # (usually UTF-8). Spaces are encoded rather than rejected, as
-            # browsers and curl do for redirects.
-            location = _percent_encode_url(self.headers["Location"].encode("latin1"))
+            # browsers and curl do for redirects. Only the path, query and
+            # fragment are percent-encoded here: a percent-encoded host is
+            # not a valid IDNA name, so a non-ASCII host is IDNA-encoded
+            # (punycode) instead, matching WHATWG/browser handling.
+            parts = urllib.parse.urlsplit(self.headers["Location"])
+            netloc = parts.netloc
+            if not netloc.isascii():
+                userpass, at, hostport = netloc.rpartition("@")
+                host, port = httputil.split_host_and_port(hostport)
+                netloc = (
+                    (userpass + "@" if at else "")
+                    + host.encode("idna").decode("ascii")
+                    + (":" + str(port) if port is not None else "")
+                )
+            location = urllib.parse.urlunsplit(
+                (
+                    parts.scheme,
+                    netloc,
+                    _percent_encode_url(parts.path.encode("latin1")),
+                    _percent_encode_url(parts.query.encode("latin1")),
+                    _percent_encode_url(parts.fragment.encode("latin1")),
+                )
+            )
             new_request.url = urllib.parse.urljoin(self.request.url, location)
             new_request.headers = self.request.headers.copy()
             parsed_orig_url = urllib.parse.urlsplit(original_request.url)

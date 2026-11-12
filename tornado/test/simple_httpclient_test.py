@@ -22,6 +22,7 @@ import sys
 import typing
 import urllib.parse
 from contextlib import closing
+from unittest import mock
 
 from tornado import gen, version
 from tornado.concurrent import Future
@@ -169,6 +170,18 @@ class RawRedirectHandler(RequestHandler):
         stream.close()
 
 
+class RedirectToNonAsciiHostHandler(RequestHandler):
+    def get(self):
+        # An absolute redirect whose host contains a non-ASCII character.
+        # set_header (unlike redirect, which passes utf8 bytes) writes the
+        # value as latin-1 on the wire, which is the form a client must
+        # tolerate here.
+        port = self.request.host.rsplit(":", 1)[-1]
+        self.set_status(302)
+        self.set_header("Location", "http://café.example:%s/echo_uri/final" % port)
+        self.finish()
+
+
 class EchoPostHandler(RequestHandler):
     def post(self):
         self.write(self.request.body)
@@ -229,6 +242,7 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
                 url("/echo_post", EchoPostHandler),
                 url("/echo_uri/.*", EchoURIHandler),
                 url("/raw_redirect", RawRedirectHandler),
+                url("/redirect_to_non_ascii_host", RedirectToNonAsciiHostHandler),
                 url("/respond_in_prepare", RespondInPrepareHandler),
                 url("/redirect", RedirectHandler),
                 url("/user_agent", UserAgentHandler),
@@ -663,6 +677,28 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, SimpleHTTPClientTestMixin):
 
     def create_client(self, **kwargs):
         return SimpleAsyncHTTPClient(force_instance=True, **kwargs)
+
+    def test_non_ascii_redirect_host(self):
+        # Like browsers, only the path/query/fragment of a redirect's
+        # Location are percent-encoded; a non-ASCII host is IDNA-encoded
+        # (punycode) instead of percent-encoded, which is not a valid IDNA
+        # name. Regression test for issue #3870.
+        seen_hosts = []
+        real_getaddrinfo = socket.getaddrinfo
+
+        def logging_getaddrinfo(host, port, *args, **kwargs):
+            seen_hosts.append(host)
+            if host == "xn--caf-dma.example":
+                host = "127.0.0.1"
+            elif host not in ("127.0.0.1", "localhost"):
+                raise socket.gaierror("unmapped test host: %r" % host)
+            return real_getaddrinfo(host, port, *args, **kwargs)
+
+        with mock.patch.object(socket, "getaddrinfo", logging_getaddrinfo):
+            response = self.fetch("/redirect_to_non_ascii_host")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"/echo_uri/final")
+        self.assertIn("xn--caf-dma.example", seen_hosts)
 
 
 class SimpleHTTPSClientTestCase(AsyncHTTPSTestCase, SimpleHTTPClientTestMixin):
