@@ -51,7 +51,7 @@ from tornado.test.util import (
     ignore_deprecation,
 )
 from tornado.testing import ExpectLog, bind_unused_port, gen_test
-from tornado.web import Application, RequestHandler, url
+from tornado.web import Application, RequestHandler, stream_request_body, url
 
 try:
     import tracemalloc
@@ -193,6 +193,20 @@ class HeaderEncodingHandler(RequestHandler):
         self.finish(self.request.headers["Foo"].encode("ISO8859-1"))
 
 
+@stream_request_body
+class RejectInPrepareHandler(RequestHandler):
+    def initialize(self, expect_headers):
+        self.expect_headers = expect_headers
+
+    def prepare(self):
+        self.expect_headers.append(self.request.headers.get("Expect"))
+        self.set_status(403)
+        self.finish("forbidden")
+
+    def data_received(self, chunk):
+        raise Exception("unexpected data_received")
+
+
 class EchoHeadersHandler(RequestHandler):
     def get(self):
         self.write(json_encode(dict(self.request.headers.get_all())))
@@ -302,6 +316,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
 
     def get_app(self):
         self.first_chunk_received = Event()
+        self.expect_headers: list[str | None] = []
         return Application(
             [
                 url("/hello", HelloWorldHandler),
@@ -328,6 +343,11 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
                 url("/gzip_bomb", GzipBombHandler),
                 url("/brotli_bomb", BrotliBombHandler),
                 url("/large_body", LargeBodyHandler),
+                url(
+                    "/reject_in_prepare",
+                    RejectInPrepareHandler,
+                    dict(expect_headers=self.expect_headers),
+                ),
             ],
             gzip=True,
         )
@@ -464,6 +484,24 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         response = self.fetch("/post", method="POST", body="arg1=foo&arg2=bar")
         self.assertEqual(response.code, 200)
         self.assertEqual(response.body, b"Post arg1: foo, arg2: bar")
+
+    def test_100_continue(self):
+        response = self.fetch(
+            "/echopost", method="POST", body=b"1234", expect_100_continue=True
+        )
+        self.assertEqual(response.body, b"1234")
+
+    def test_100_continue_early_response(self):
+        # The server responds without sending 100 Continue, so the client
+        # gets the response without sending the body.
+        response = self.fetch(
+            "/reject_in_prepare",
+            method="POST",
+            body=b"a" * 100_000,
+            expect_100_continue=True,
+        )
+        self.assertEqual(response.code, 403)
+        self.assertEqual(self.expect_headers, ["100-continue"])
 
     def test_chunked(self):
         response = self.fetch("/chunk")
