@@ -44,6 +44,7 @@ from tornado.test.util import (
     TestCase,
     abstract_base_test,
     assert_memory_budget,
+    curl_uses_schannel,
     skipNotCPython,
 )
 from tornado.testing import ExpectLog, gen_test
@@ -178,7 +179,15 @@ class SSLClientCertificateTest(AsyncHTTPSTestCase):
         options.update(cert_reqs=ssl.CERT_OPTIONAL, ca_certs=options["certfile"])
         return options
 
+    def skip_if_client_cert_unsupported(self):
+        if curl_uses_schannel():
+            from tornado.curl_httpclient import CurlAsyncHTTPClient
+
+            if isinstance(self.http_client, CurlAsyncHTTPClient):
+                self.skipTest("schannel cannot load PEM client certificates from files")
+
     def test_get_ssl_certificate(self):
+        self.skip_if_client_cert_unsupported()
         options = self.get_ssl_options()
         for path in ["/", "/?binary_form=false"]:
             with self.subTest(path=path):
@@ -197,6 +206,7 @@ class SSLClientCertificateTest(AsyncHTTPSTestCase):
                 )
 
     def test_get_ssl_certificate_binary(self):
+        self.skip_if_client_cert_unsupported()
         options = self.get_ssl_options()
         response = self.fetch(
             "/?binary_form=true",
