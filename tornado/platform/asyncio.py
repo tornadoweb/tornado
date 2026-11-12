@@ -477,6 +477,15 @@ class SelectorThread:
             tuple[list[_FileDescriptorLike], list[_FileDescriptorLike]]
         ) = None
         self._closing_selector = False
+        # True while the select thread has (or is about to have) a select
+        # call in progress, i.e. between _start_select and _handle_select.
+        # Only accessed on the event loop thread. Changes to the reader and
+        # writer sets need to interrupt that select call; at any other time
+        # the next _start_select picks them up without any wakeup.
+        self._selecting = False
+        # True if we have written to _waker_w and the selector thread has
+        # not yet reported it readable. A second write would be redundant.
+        self._waker_pending = False
         self._thread: threading.Thread | None = None
         self._thread_manager_task: asyncio.Task[Any] | None = None
         self._thread_manager_handle = self._thread_manager()
@@ -519,7 +528,7 @@ class SelectorThread:
         with self._select_cond:
             self._closing_selector = True
             self._select_cond.notify()
-        self._wake_selector()
+        self._wake_selector(force=True)
         if self._thread is not None:
             self._thread.join()
         if self._thread_manager_task is not None:
@@ -575,27 +584,61 @@ class SelectorThread:
             self.close()
             raise
 
-    def _wake_selector(self) -> None:
+    def _wake_selector(self, force: bool = False) -> None:
         if self._closed:
+            return
+        if not force and (self._waker_pending or not self._selecting):
+            # Either a wakeup is already on its way, or there is no select
+            # call in progress to interrupt (we are in _handle_select, or the
+            # thread has not started). Waking the selector thread anyway
+            # would cost a full round trip between the two threads.
             return
         try:
             self._waker_w.send(b"a")
         except BlockingIOError:
+            # The waker's buffer is full, so it is already readable.
             pass
+        self._waker_pending = True
 
     def _consume_waker(self) -> None:
+        self._waker_pending = False
         try:
             self._waker_r.recv(1024)
         except BlockingIOError:
             pass
 
     def _start_select(self) -> None:
+        if self._closed:
+            return
         # Capture reader and writer sets here in the event loop
         # thread to avoid any problems with concurrent
         # modification while the select loop uses them.
+        to_read = list(self._readers.keys())
+        to_write = list(self._writers.keys())
+        if not self._closing_selector:
+            # Before handing off to the selector thread, poll once without
+            # blocking. Often something is already ready (e.g. a response
+            # written by the other end of a local connection while we were
+            # running callbacks), and handling it here saves a round trip
+            # to the selector thread and back.
+            try:
+                rs, ws, xs = select.select(to_read, to_write, to_write, 0)
+            except OSError:
+                # Let the selector thread deal with errors (see _run_select).
+                pass
+            else:
+                if rs or ws or xs:
+                    self._real_loop.call_soon(
+                        self._handle_select,
+                        rs,
+                        ws + xs,
+                        context=self._main_thread_ctx,
+                    )
+                    return
         with self._select_cond:
             assert self._select_args is None
-            self._select_args = (list(self._readers.keys()), list(self._writers.keys()))
+            self._select_args = (to_read, to_write)
+            self._selecting = True
             self._select_cond.notify()
 
     def _run_select(self) -> None:
@@ -667,11 +710,23 @@ class SelectorThread:
     def _handle_select(
         self, rs: list[_FileDescriptorLike], ws: list[_FileDescriptorLike]
     ) -> None:
-        for r in rs:
-            self._handle_event(r, self._readers)
-        for w in ws:
-            self._handle_event(w, self._writers)
-        self._start_select()
+        self._selecting = False
+        try:
+            for r in rs:
+                self._handle_event(r, self._readers)
+            for w in ws:
+                self._handle_event(w, self._writers)
+        finally:
+            # Restart the select even if a callback raised; otherwise the
+            # selector thread would wait forever and no further events
+            # would be delivered.
+            #
+            # Do this on the next iteration of the event loop rather than
+            # immediately, so that callbacks scheduled by the handlers we
+            # just ran (such as the coroutine waiting for a read) get to
+            # run first. They often produce more I/O, which _start_select
+            # can then find without involving the selector thread.
+            self._real_loop.call_soon(self._start_select, context=self._main_thread_ctx)
 
     def _handle_event(
         self,
