@@ -32,6 +32,7 @@ from tornado.netutil import (
     OverrideResolver,
     Resolver,
     _client_ssl_defaults,
+    _client_ssl_noverify,
     is_valid_ip,
 )
 from tornado.tcpclient import TCPClient
@@ -484,6 +485,13 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 and self.request.client_key is None
             ):
                 return _client_ssl_defaults()
+            if (
+                not self.request.validate_cert
+                and self.request.client_cert is None
+                and self.request.client_key is None
+            ):
+                # ca_certs is irrelevant when we're not validating.
+                return _client_ssl_noverify()
             ssl_ctx = ssl.create_default_context(
                 ssl.Purpose.SERVER_AUTH, cafile=self.request.ca_certs
             )
