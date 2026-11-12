@@ -2,8 +2,8 @@ import logging
 import socket
 
 from tornado import gen
-from tornado.http1connection import HTTP1Connection
-from tornado.httputil import HTTPMessageDelegate
+from tornado.http1connection import HTTP1Connection, HTTP1ServerConnection
+from tornado.httputil import HTTPMessageDelegate, HTTPServerConnectionDelegate
 from tornado.iostream import IOStream
 from tornado.locks import Event
 from tornado.log import app_log, gen_log
@@ -191,3 +191,24 @@ class HTTP1ConnectionTest(AsyncTestCase):
         with ExpectLog(gen_log, ".*improperly terminated chunk", level=logging.INFO):
             result = yield conn.read_response(HTTPMessageDelegate())
         self.assertIs(result, False)
+
+    @gen_test
+    def test_server_connection_cancel_closes_stream(self):
+        closed = []
+
+        class Delegate(HTTPServerConnectionDelegate):
+            def start_request(self, server_conn, request_conn):
+                return HTTPMessageDelegate()
+
+            def on_close(self, server_conn):
+                closed.append(server_conn)
+
+        server_conn = HTTP1ServerConnection(self.server_stream)
+        server_conn.start_serving(Delegate())
+        yield gen.moment
+        self.assertFalse(self.server_stream.closed())
+        assert server_conn._serving_future is not None
+        server_conn._serving_future.cancel()
+        yield server_conn._serving_future
+        self.assertTrue(self.server_stream.closed())
+        self.assertEqual(closed, [server_conn])
