@@ -26,6 +26,7 @@ from tornado.test.util import (
     AsyncHTTPSTestCase,
     AsyncHTTPTestCase,
     AsyncTestCase,
+    curl_uses_schannel,
     skipNotCPython,
 )
 from tornado.testing import ExpectLog
@@ -139,9 +140,10 @@ class CurlHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
 
 
 class DigestAuthHandler(RequestHandler):
-    def initialize(self, username, password):
+    def initialize(self, username, password, charset=None):
         self.username = username
         self.password = password
+        self.charset = charset
 
     def get(self):
         realm = "test"
@@ -173,10 +175,10 @@ class DigestAuthHandler(RequestHandler):
                 self.write("fail")
         else:
             self.set_status(401)
-            self.set_header(
-                "WWW-Authenticate",
-                f'Digest realm="{realm}", nonce="{nonce}", opaque="{opaque}"',
-            )
+            challenge = f'Digest realm="{realm}", nonce="{nonce}", opaque="{opaque}"'
+            if self.charset is not None:
+                challenge += f', charset="{self.charset}"'
+            self.set_header("WWW-Authenticate", challenge)
 
 
 class CustomReasonHandler(RequestHandler):
@@ -202,7 +204,12 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
                 (
                     "/digest_non_ascii",
                     DigestAuthHandler,
-                    {"username": "foo", "password": "barユ£"},
+                    # Without charset="UTF-8" (RFC 7616 section 3.3), the
+                    # encoding of non-ascii credentials is unspecified. Libcurl
+                    # uses UTF-8 by default, but on windows it delegates digest
+                    # auth to SSPI, which uses ISO-8859-1 and fails if the
+                    # password cannot be encoded that way.
+                    {"username": "foo", "password": "barユ£", "charset": "UTF-8"},
                 ),
                 ("/custom_reason", CustomReasonHandler),
                 ("/custom_fail_reason", CustomFailReasonHandler),
@@ -333,6 +340,9 @@ class ClientCertEchoHandler(RequestHandler):
 
 
 @unittest.skipIf(pycurl is None, "pycurl module not present")
+@unittest.skipIf(
+    curl_uses_schannel(), "schannel cannot load PEM client certificates from files"
+)
 class CurlHTTPClientReuseCertsTestCase(AsyncHTTPSTestCase):
     def setUp(self):
         self.enterContext(_ignore_proxy_env_vars())
