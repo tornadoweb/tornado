@@ -15,8 +15,11 @@ import contextlib
 import contextvars
 import gc
 import io
+import sys
 import threading
 import time
+import unittest
+import unittest.mock
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 
@@ -257,6 +260,10 @@ class SelectorThreadLeakTest(TestCase):
         self.assertNotIn("never awaited", stderr.getvalue())
 
 
+@unittest.skipIf(
+    sys.version_info >= (3, 16),
+    "event loop policies removed in Python 3.16",
+)
 class AnyThreadEventLoopPolicyTest(TestCase):
     def setUp(self):
         setup_with_context_manager(self, ignore_deprecation())
@@ -319,6 +326,29 @@ class AnyThreadEventLoopPolicyTest(TestCase):
             asyncio.set_event_loop_policy(self.AnyThreadEventLoopPolicy())
             self.assertIsInstance(self.executor.submit(IOLoop.current).result(), IOLoop)
             self.executor.submit(lambda: asyncio.get_event_loop().close()).result()
+
+
+class AnyThreadEventLoopPolicyPy316Test(TestCase):
+    def setUp(self):
+        setup_with_context_manager(self, ignore_deprecation())
+
+    def test_any_thread_event_loop_policy_py316_error(self):
+        with unittest.mock.patch.object(sys, "version_info", (3, 16, 0)):
+            with unittest.mock.patch.object(
+                tornado.platform.asyncio, "_AnyThreadEventLoopPolicy", None
+            ):
+                with self.assertRaises(AttributeError) as cm:
+                    _ = getattr(tornado.platform.asyncio, "AnyThreadEventLoopPolicy")
+                self.assertIn("removed in Python 3.16", str(cm.exception))
+
+    @unittest.skipIf(
+        sys.version_info < (3, 16),
+        "event loop policies present before Python 3.16",
+    )
+    def test_any_thread_event_loop_policy_unsupported_on_py316(self):
+        with self.assertRaises(AttributeError) as cm:
+            _ = getattr(tornado.platform.asyncio, "AnyThreadEventLoopPolicy")
+        self.assertIn("removed in Python 3.16", str(cm.exception))
 
 
 class SelectorThreadContextvarsTest(AsyncHTTPTestCase):
