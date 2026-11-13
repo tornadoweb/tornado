@@ -29,7 +29,14 @@ import zlib
 from contextlib import closing
 from io import BytesIO
 
-from tornado.escape import utf8, native_str, to_unicode, json_encode, json_decode
+from tornado.escape import (
+    utf8,
+    native_str,
+    to_unicode,
+    json_encode,
+    json_decode,
+    url_escape,
+)
 from tornado import gen, netutil
 from tornado.locks import Event
 from tornado.httpclient import (
@@ -49,6 +56,7 @@ from tornado.test.util import (
     TestCase,
     abstract_base_test,
     ignore_deprecation,
+    refusing_port,
 )
 from tornado.testing import ExpectLog, bind_unused_port, gen_test
 from tornado.web import Application, RequestHandler, stream_request_body, url
@@ -622,6 +630,17 @@ Transfer-Encoding: chunked
         self.assertEqual(200, response.code)
         self.assertTrue(response.effective_url.endswith("/countdown/0"))
         self.assertEqual(b"Zero", response.body)
+
+    def test_redirect_connection_error(self):
+        # A connection error while following a redirect fails the original
+        # request instead of leaving it unfinished.
+        cleanup_func, port = refusing_port()
+        self.addCleanup(cleanup_func)
+        location = url_escape("http://127.0.0.1:%d/" % port)
+        with self.assertRaises((OSError, HTTPError)) as cm:
+            self.fetch("/redirect?url=" + location, raise_error=True)
+        # TimeoutError is an OSError, but it means the request never finished.
+        self.assertNotIsInstance(cm.exception, TimeoutError)
 
     def test_redirect_without_location(self):
         response = self.fetch("/redirect_without_location", follow_redirects=True)

@@ -11,10 +11,9 @@ import urllib.parse
 from collections.abc import Awaitable, Callable
 from io import BytesIO
 from types import TracebackType
-from typing import Any, Optional, Type
+from typing import Any, Optional, Type, cast
 
 from tornado import gen, httputil, version
-from tornado.concurrent import Future
 from tornado.escape import _unicode, utf8
 from tornado.http1connection import HTTP1Connection, HTTP1ConnectionParameters
 from tornado.httpclient import (
@@ -733,30 +732,13 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     except KeyError:
                         pass
             new_request.original_request = original_request  # type: ignore
+            assert self.final_callback is not None
             final_callback = self.final_callback
             self.final_callback = None  # type: ignore
             self._release()
             assert self.client is not None
-            fut = self.client.fetch(new_request, raise_error=False)
-
-            def on_redirect_done(f: "Future[HTTPResponse]") -> None:
-                try:
-                    response = f.result()
-                except Exception as e:
-                    # Errors other than HTTP status codes (such as a
-                    # Location with an unsupported scheme) are raised even
-                    # with raise_error=False. Pass them on, or the original
-                    # fetch would never finish.
-                    response = HTTPResponse(
-                        new_request,
-                        599,
-                        error=e,
-                        request_time=self.io_loop.time() - self.start_time,
-                        start_time=self.start_wall_time,
-                    )
-                final_callback(response)
-
-            fut.add_done_callback(on_redirect_done)
+            request_proxy = _RequestProxy(new_request, self.client.defaults)
+            self.client.fetch_impl(cast(HTTPRequest, request_proxy), final_callback)
             self._on_end_request()
             return
         if self.request.streaming_callback:
