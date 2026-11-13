@@ -720,7 +720,6 @@ class HTTP1Connection(httputil.HTTPConnection):
                 await asyncio.sleep(0)
 
     async def _read_chunked_body(self, delegate: httputil.HTTPMessageDelegate) -> None:
-        # TODO: "chunk extensions" http://tools.ietf.org/html/rfc2616#section-3.6.1
         total_size = 0
         # Chunk boundaries are not meaningful (and may be changed by
         # intermediaries), so the contents of consecutive small chunks are
@@ -749,16 +748,42 @@ class HTTP1Connection(httputil.HTTPConnection):
                 work = 0
                 await asyncio.sleep(0)
             chunk_len_str = await read(self.stream.read_until(b"\r\n", max_bytes=64))
+            chunk_line = chunk_len_str[:-2].decode("latin1")
+            # RFC 9112 section 7.1.1: unrecognized chunk extensions must be
+            # ignored. None are recognized, but they must be well-formed. The
+            # grammar allows whitespace before the semicolon, but like most
+            # other implementations we don't, so that the size stays unambiguous.
+            chunk_size, semicolon, _ = chunk_line.partition(";")
+            if semicolon:
+                chunk_ext = chunk_line[len(chunk_size) :]
+                if not httputil._ABNF.chunk_ext.fullmatch(chunk_ext):
+                    raise httputil.HTTPInputError("invalid chunk extension")
             try:
-                chunk_len = parse_hex_int(native_str(chunk_len_str[:-2]))
+                chunk_len = parse_hex_int(chunk_size)
             except ValueError:
                 raise httputil.HTTPInputError("invalid chunk size")
             if chunk_len == 0:
-                crlf = await read(self.stream.read_bytes(2))
-                if crlf != b"\r\n":
-                    raise httputil.HTTPInputError(
-                        "improperly terminated chunked request"
+                # RFC 9112 section 7.1.2: the last chunk is followed by a
+                # trailer section, which may be empty. Trailer fields are
+                # validated like header fields and then discarded.
+                trailers = httputil.HTTPHeaders()
+                trailer_size = 0
+                while True:
+                    line = await read(
+                        self.stream.read_until(
+                            b"\r\n", max_bytes=self.params.max_header_size
+                        )
                     )
+                    if line == b"\r\n":
+                        break
+                    trailer_size += len(line)
+                    if trailer_size > self.params.max_header_size:
+                        raise httputil.HTTPInputError("trailer section too large")
+                    trailers.parse_line(native_str(line[:-2].decode("latin1")))
+                    work += _CHUNK_YIELD_COST
+                    if work >= _YIELD_THRESHOLD:
+                        work = 0
+                        await asyncio.sleep(0)
                 if pending:
                     await self._deliver_body(delegate, bytes(pending))
                 return
