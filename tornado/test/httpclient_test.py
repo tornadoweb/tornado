@@ -18,6 +18,7 @@ import functools
 import gzip
 import logging
 import pickle
+import socket
 import subprocess
 import sys
 import threading
@@ -220,6 +221,32 @@ class EchoHeadersHandler(RequestHandler):
         self.write(json_encode(dict(self.request.headers.get_all())))
 
 
+class EchoURIHandler(RequestHandler):
+    def get(self):
+        self.write(self.request.uri)
+
+
+class RawRedirectHandler(RequestHandler):
+    def get(self):
+        # Write the response directly so the Location header can contain
+        # raw non-ASCII bytes (which is not allowed, but sometimes sent).
+        location = self.get_argument("location").encode(
+            self.get_argument("encoding", "utf-8")
+        )
+        stream = self.detach()
+        stream.write(
+            b"HTTP/1.1 302 Found\r\n"
+            b"Location: " + location + b"\r\n"
+            b"Content-Length: 0\r\n\r\n"
+        )
+        stream.close()
+
+
+# "localhost" in fullwidth characters. IDNA maps these to their ASCII
+# equivalents, so this is a non-ASCII hostname that resolves without help.
+FULLWIDTH_LOCALHOST = "\uff4c\uff4f\uff43\uff41\uff4c\uff48\uff4f\uff53\uff54"
+
+
 # Decompressed size of the response served by `GzipBombHandler`. Kept below
 # every implementation's default ``max_body_size`` of 100MB so that a
 # streaming_callback can retrieve the whole thing; raising it past that limit
@@ -348,6 +375,8 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
                 url("/invalid_gzip", InvalidGzipHandler),
                 url("/header-encoding", HeaderEncodingHandler),
                 url("/echo_headers", EchoHeadersHandler),
+                url("/echo_uri/.*", EchoURIHandler),
+                url("/raw_redirect", RawRedirectHandler),
                 url("/gzip_bomb", GzipBombHandler),
                 url("/brotli_bomb", BrotliBombHandler),
                 url("/large_body", LargeBodyHandler),
@@ -704,6 +733,91 @@ Transfer-Encoding: chunked
         url = self.get_url("/auth").replace("http://", "http://me@")
         response = self.fetch(url)
         self.assertEqual(b"Basic " + base64.b64encode(b"me:"), response.body)
+
+    def test_non_ascii_url(self):
+        # Like browsers, percent-encode non-ASCII characters as UTF-8.
+        response = self.fetch("/echo_uri/\u00e9?q=\u00e9%20")
+        self.assertEqual(response.body, b"/echo_uri/%C3%A9?q=%C3%A9%20")
+
+    def skip_unless_localhost_ipv4(self):
+        # The IDN tests reach the server through the name "localhost", but
+        # some resolvers (such as CaresResolver) may return only ipv6
+        # results for it while the test server listens on ipv4.
+        addrinfo = self.io_loop.run_sync(
+            lambda: netutil.Resolver().resolve("localhost", self.get_http_port())
+        )
+        if socket.AF_INET not in {addr[0] for addr in addrinfo}:
+            self.skipTest("localhost does not resolve to ipv4")
+
+    def test_idn_hostname(self):
+        # A non-ASCII hostname is converted with IDNA, for both name
+        # resolution and the Host header.
+        self.skip_unless_localhost_ipv4()
+        url = self.get_url("/echo_headers").replace("127.0.0.1", FULLWIDTH_LOCALHOST)
+        response = self.fetch(url)
+        response.rethrow()
+        self.assertEqual(
+            json_decode(response.body)["Host"], "localhost:%d" % self.get_http_port()
+        )
+
+    def test_invalid_idn_hostname(self):
+        with self.assertRaises(ValueError):
+            self.fetch("http://a..b\u00e9/")
+
+    def test_non_ascii_redirect(self):
+        # Location headers should be ASCII, but browsers interpret non-ASCII
+        # bytes as UTF-8 (and encode spaces).
+        location = url_escape("/echo_uri/\u00e9 x")
+        response = self.fetch("/raw_redirect?location=" + location)
+        self.assertEqual(response.body, b"/echo_uri/%C3%A9%20x")
+
+    def curl_module(self):
+        """Returns the pycurl module if the client in use is curl_httpclient.
+
+        libcurl follows redirects itself, so some redirect behavior depends on
+        it rather than on Tornado. Check the client in use rather than the test
+        class, since --httpclient can make curl the default client.
+        """
+        try:
+            import pycurl
+            from tornado.curl_httpclient import CurlAsyncHTTPClient
+        except ImportError:
+            return None
+        if isinstance(self.http_client, CurlAsyncHTTPClient):
+            return pycurl
+        return None
+
+    def test_non_utf8_redirect(self):
+        # Browsers reject Location headers that are not valid UTF-8.
+        if self.curl_module() is not None:
+            self.skipTest("libcurl percent-encodes non-UTF-8 redirects")
+        location = url_escape("/echo_uri/\u00e9")
+        with self.assertRaises(UnicodeDecodeError):
+            self.fetch(
+                "/raw_redirect?encoding=latin1&location=" + location, raise_error=True
+            )
+
+    def test_invalid_idn_redirect(self):
+        if self.curl_module() is not None:
+            self.skipTest("libcurl follows redirects itself")
+        location = url_escape("http://a..b\u00e9/")
+        with self.assertRaises(ValueError):
+            self.fetch("/raw_redirect?location=" + location, raise_error=True)
+
+    def test_idn_redirect(self):
+        # libcurl only converts IDN hostnames when it was built with IDN support.
+        pycurl = self.curl_module()
+        if pycurl is not None and not (pycurl.version_info()[4] & pycurl.VERSION_IDN):
+            self.skipTest("client does not convert IDN hostnames in redirects")
+        self.skip_unless_localhost_ipv4()
+        location = url_escape(
+            "http://%s:%d/echo_headers" % (FULLWIDTH_LOCALHOST, self.get_http_port())
+        )
+        response = self.fetch("/raw_redirect?location=" + location)
+        response.rethrow()
+        self.assertEqual(
+            json_decode(response.body)["Host"], "localhost:%d" % self.get_http_port()
+        )
 
     def test_body_encoding(self):
         unicode_body = "\xe9"
