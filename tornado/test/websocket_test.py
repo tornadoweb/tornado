@@ -23,9 +23,10 @@ from tornado.test.util import (
     abstract_base_test,
     assert_memory_budget,
     ignore_deprecation,
+    refusing_port,
     skipNotCPython,
 )
-from tornado.testing import ExpectLog, bind_unused_port, gen_test
+from tornado.testing import ExpectLog, gen_test
 from tornado.web import Application, RequestHandler
 
 try:
@@ -472,8 +473,8 @@ class WebSocketTest(WebSocketBaseTestCase):
 
     @gen_test
     def test_websocket_network_fail(self):
-        sock, port = bind_unused_port()
-        sock.close()
+        cleanup_func, port = refusing_port()
+        self.addCleanup(cleanup_func)
         with self.assertRaises(IOError):
             with ExpectLog(gen_log, ".*", required=False):
                 yield websocket_connect(
