@@ -459,14 +459,12 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
             with self.assertRaises(socket.error) as cm:
                 self.fetch("http://127.0.0.1:%d/" % port, raise_error=True)
 
-        if sys.platform != "cygwin":
-            # cygwin returns EPERM instead of ECONNREFUSED here
+        # cygwin returns EPERM instead of ECONNREFUSED here, and on windows
+        # refusing_port gives a different error (see its docstring).
+        if sys.platform not in ("cygwin", "win32"):
             contains_errno = str(errno.ECONNREFUSED) in str(cm.exception)
-            if not contains_errno and hasattr(errno, "WSAECONNREFUSED"):
-                contains_errno = str(errno.WSAECONNREFUSED) in str(cm.exception)
             self.assertTrue(contains_errno, cm.exception)
             # This is usually "Connection refused".
-            # On windows, strerror is broken and returns "Unknown error".
             expected_message = os.strerror(errno.ECONNREFUSED)
             self.assertTrue(expected_message in str(cm.exception), cm.exception)
 

@@ -7,6 +7,7 @@ import platform
 import random
 import socket
 import ssl
+import sys
 import typing
 import unittest
 from unittest import mock
@@ -904,7 +905,12 @@ class TestIOStreamMixin(TestReadWriteMixin):
             with self.assertRaises(StreamClosedError):
                 yield stream.connect(("127.0.0.1", port))
 
-        self.assertTrue(isinstance(stream.error, ConnectionRefusedError), stream.error)
+        if sys.platform == "win32":
+            # See refusing_port: on Windows the connection fails with a
+            # different error.
+            self.assertIsInstance(stream.error, OSError)
+        else:
+            self.assertIsInstance(stream.error, ConnectionRefusedError)
 
     @gen_test
     def test_gaierror(self):
