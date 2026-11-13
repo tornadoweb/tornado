@@ -1,4 +1,5 @@
 import asyncio
+import ctypes
 import errno
 import hashlib
 import logging
@@ -416,6 +417,31 @@ class TestReadWriteMixin(AsyncTestCase):
         finally:
             ws.close()
             rs.close()
+
+    @gen_test
+    async def test_write_zero_dimensional_memoryview(self):
+        async with self.iostream_pair() as (rs, ws):
+            view = memoryview(b"abcdefgh").cast("Q", shape=())
+            await ws.write(view)
+            await ws.write(b"|after")
+            self.assertEqual(await rs.read_bytes(14), b"abcdefgh|after")
+
+    @gen_test
+    async def test_write_zero_dimensional_memoryview_buffer_limit(self):
+        async with self.iostream_pair(max_write_buffer_size=4) as (rs, ws):
+            view = memoryview(b"abcdefgh").cast("Q", shape=())
+            with self.assertRaises(StreamBufferFullError):
+                ws.write(view)
+            await ws.write(b"ok")
+            self.assertEqual(await rs.read_bytes(2), b"ok")
+
+    @gen_test
+    async def test_write_empty_multidimensional_memoryview(self):
+        async with self.iostream_pair() as (rs, ws):
+            view = memoryview(((ctypes.c_ubyte * 4) * 0)())
+            await ws.write(view)
+            await ws.write(b"after")
+            self.assertEqual(await rs.read_bytes(5), b"after")
 
     @gen_test
     def test_read_bytes_partial(self):

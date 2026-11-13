@@ -540,10 +540,10 @@ class BaseIOStream:
 
         """
         self._check_closed()
+        if isinstance(data, memoryview):
+            # Make sure that ``len(data) == data.nbytes``.
+            data = data.cast("B") if data.nbytes else b""
         if data:
-            if isinstance(data, memoryview):
-                # Make sure that ``len(data) == data.nbytes``
-                data = data.cast("B")
             if (
                 self.max_write_buffer_size is not None
                 and len(self._write_buffer) + len(data) > self.max_write_buffer_size
