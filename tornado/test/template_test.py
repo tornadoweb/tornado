@@ -1,4 +1,5 @@
 import os
+import tempfile
 import traceback
 import unittest
 
@@ -496,6 +497,47 @@ raw: {% raw name %}""",
 
 
 class TemplateLoaderTest(TestCase):
+    def test_absolute_parent_relative_directives(self):
+        with tempfile.TemporaryDirectory() as root:
+            subdir = os.path.join(root, "sub")
+            os.mkdir(subdir)
+            templates = {
+                "base.html": "wrong directory",
+                "part.html": "wrong directory",
+                "sub/base.html": "{% block body %}default{% end %}",
+                "sub/part.html": "{{ value }}",
+                "sub/include.html": "{% include 'part.html' %}",
+                "sub/extends.html": (
+                    "{% extends 'base.html' %}"
+                    "{% block body %}{% include 'part.html' %}{% end %}"
+                ),
+            }
+            for name, source in templates.items():
+                with open(os.path.join(root, name), "w", encoding="utf-8") as f:
+                    f.write(source)
+            loader = Loader(root)
+            for name in ("include.html", "extends.html"):
+                with self.subTest(name=name):
+                    absolute = os.path.join(subdir, name)
+                    self.assertEqual(loader.load(absolute).generate(value="ok"), b"ok")
+                    self.assertEqual(
+                        loader.load(os.path.join("sub", name)).generate(value="ok"),
+                        b"ok",
+                    )
+            self.assertEqual(loader.resolve_path("part.html"), "part.html")
+            self.assertEqual(loader.resolve_path("part.html", "<string>"), "part.html")
+            absolute_part = os.path.join(subdir, "part.html")
+            self.assertEqual(
+                loader.resolve_path(
+                    absolute_part, os.path.join(subdir, "include.html")
+                ),
+                absolute_part,
+            )
+            self.assertEqual(
+                loader.resolve_path("part.html", os.path.join(subdir, "include.html")),
+                os.path.join("sub", "part.html"),
+            )
+
     def setUp(self):
         self.loader = Loader(os.path.join(os.path.dirname(__file__), "templates"))
 
