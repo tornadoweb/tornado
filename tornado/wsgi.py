@@ -100,6 +100,10 @@ class WSGIContainer:
     If the ``executor`` argument is provided, the WSGI application will be executed
     on that executor. This must be an instance of `concurrent.futures.Executor`,
     typically a ``ThreadPoolExecutor`` (``ProcessPoolExecutor`` is not supported).
+    With an executor, each application call and the iteration and closing of its
+    response iterable run together in a single executor task. The response is buffered until that
+    task completes. Cancelling the request handler does not stop a running
+    executor task; it will still consume and close the iterable.
     If no ``executor`` is given, the application will run on the event loop thread in
     Tornado 6.3; this will change to use an internal thread pool by default in
     Tornado 7.0.
@@ -150,32 +154,61 @@ class WSGIContainer:
             data["headers"] = headers
             return response.append
 
-        loop = IOLoop.current()
-        app_response = await loop.run_in_executor(
-            self.executor,
-            self.wsgi_application,
-            self.environ(request),
-            start_response,
-        )
-        try:
-            app_response_iter = iter(app_response)
+        environ = self.environ(request)
 
-            def next_chunk() -> bytes | None:
+        def run_application() -> None:
+            try:
+                app_response = self.wsgi_application(environ, start_response)
                 try:
-                    return next(app_response_iter)
-                except StopIteration:
-                    # StopIteration is special and is not allowed to pass through
-                    # coroutines normally.
-                    return None
+                    app_response_iter = iter(app_response)
+                    while True:
+                        try:
+                            chunk = next(app_response_iter)
+                        except StopIteration:
+                            break
+                        if chunk is None:
+                            break
+                        response.append(chunk)
+                finally:
+                    if hasattr(app_response, "close"):
+                        app_response.close()
+            except StopIteration as e:
+                # StopIteration cannot be transferred through an asyncio Future.
+                raise RuntimeError("WSGI application raised StopIteration") from e
 
-            while True:
-                chunk = await loop.run_in_executor(self.executor, next_chunk)
-                if chunk is None:
-                    break
-                response.append(chunk)
-        finally:
-            if hasattr(app_response, "close"):
-                app_response.close()
+        loop = IOLoop.current()
+        if self.executor is dummy_executor:
+            # Retain the synchronous default's existing scheduling.
+            app_response = await loop.run_in_executor(
+                self.executor,
+                self.wsgi_application,
+                environ,
+                start_response,
+            )
+            try:
+                app_response_iter = iter(app_response)
+
+                def next_chunk() -> bytes | None:
+                    try:
+                        return next(app_response_iter)
+                    except StopIteration:
+                        # StopIteration is special and is not allowed to pass through
+                        # coroutines normally.
+                        return None
+
+                while True:
+                    chunk = await loop.run_in_executor(self.executor, next_chunk)
+                    if chunk is None:
+                        break
+                    response.append(chunk)
+            finally:
+                if hasattr(app_response, "close"):
+                    app_response.close()
+        else:
+            # Keep cleanup in the same job as the application and iteration. It
+            # must not queue behind an application waiting for resources it
+            # releases, or overlap iteration if the awaiting coroutine is cancelled.
+            await loop.run_in_executor(self.executor, run_application)
         body = b"".join(response)
         if not data:
             raise Exception("WSGI app did not call start_response")
