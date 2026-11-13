@@ -242,6 +242,41 @@ jobs:
           python maint/benchmark/compare_benchmarks.py --base base --head .
           --markdown "$GITHUB_STEP_SUMMARY"
 
+  fuzz:
+    # Runs each fuzzer in maint/fuzz briefly, so that changes don't break the
+    # harnesses (which OSS-Fuzz runs for longer) and the seed inputs pass.
+    name: Run fuzzers briefly
+    needs: test_quick
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        name: Install Python
+        with:
+          # [[[cog cog.outl(f"python-version: '3.{default_python_minor}'")]]]
+          python-version: '3.13'
+          # [[[end]]]
+      - name: Install atheris
+        run: python -m pip install -r maint/fuzz/requirements.txt
+      - name: Run fuzzers
+        env:
+          PYTHONPATH: .
+        run: |
+          for fuzzer in maint/fuzz/fuzz_*.py; do
+            echo "::group::$fuzzer"
+            python "$fuzzer" -runs=5000 -timeout=10
+            echo "::endgroup::"
+          done
+      - name: Upload crashing inputs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-artifacts
+          path: maint/fuzz/artifacts/
+
   zizmor:
     name: Analyze action configs with zizmor
     runs-on: ubuntu-24.04
