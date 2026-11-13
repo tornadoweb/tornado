@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import asyncio
 import collections
 import datetime
 import types
@@ -459,7 +460,15 @@ class Semaphore(_TimeoutGarbageCollector):
         self.__enter__()
 
     async def __aenter__(self) -> None:
-        await self.acquire()
+        waiter = asyncio.ensure_future(self.acquire())
+        try:
+            await waiter
+        except asyncio.CancelledError:
+            # A release may have handed us the permit before cancellation
+            # prevented entry into the context (and thus __aexit__).
+            if not waiter.cancelled():
+                self.release()
+            raise
 
     async def __aexit__(
         self,
@@ -571,7 +580,15 @@ class Lock:
         self.__enter__()
 
     async def __aenter__(self) -> None:
-        await self.acquire()
+        waiter = asyncio.ensure_future(self.acquire())
+        try:
+            await waiter
+        except asyncio.CancelledError:
+            # A release may have handed us the permit before cancellation
+            # prevented entry into the context (and thus __aexit__).
+            if not waiter.cancelled():
+                self.release()
+            raise
 
     async def __aexit__(
         self,
