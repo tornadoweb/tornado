@@ -336,6 +336,14 @@ class Subprocess:
         try:
             ret_pid, status = os.waitpid(pid, os.WNOHANG)
         except ChildProcessError:
+            # The child has already been reaped by something else (for
+            # example a direct call to ``subprocess.Popen.wait``). If we
+            # were waiting on it, resolve its exit status from the
+            # ``Popen`` object so that ``wait_for_exit`` /
+            # ``set_exit_callback`` don't hang forever.
+            subproc = cls._waiting.pop(pid, None)
+            if subproc is not None and subproc.proc.returncode is not None:
+                subproc.io_loop.add_callback(subproc._set_returncode_from_popen)
             return
         if ret_pid == 0:
             return
@@ -356,6 +364,18 @@ class Subprocess:
         # object. If we don't inform it of the process's return code,
         # it will log a warning at destruction in python 3.6+.
         self.proc.returncode = self.returncode
+        if self._exit_callback:
+            callback = self._exit_callback
+            self._exit_callback = None
+            callback(self.returncode)
+
+    def _set_returncode_from_popen(self) -> None:
+        # The process was reaped elsewhere (e.g. ``subprocess.Popen.wait``),
+        # so ``proc.returncode`` is already in the decoded form that
+        # ``_set_returncode`` would produce. Reuse it directly instead of
+        # going through ``os.waitpid`` again, which would raise
+        # ``ChildProcessError``.
+        self.returncode = self.proc.returncode
         if self._exit_callback:
             callback = self._exit_callback
             self._exit_callback = None

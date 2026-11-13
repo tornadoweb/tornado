@@ -292,3 +292,29 @@ class SubprocessTest(AsyncTestCase):
         subproc = Subprocess([sys.executable, "-c", "import sys; sys.exit(1)"])
         ret = yield subproc.wait_for_exit(raise_error=False)
         self.assertEqual(ret, 1)
+
+    @gen_test
+    def test_wait_for_exit_after_proc_wait(self):
+        # Regression test for https://github.com/tornadoweb/tornado/issues/3364
+        # If the child has already been reaped (e.g. via a direct call to
+        # ``subprocess.Popen.wait``) before ``wait_for_exit`` is called, the
+        # returned Future must still resolve instead of hanging forever.
+        Subprocess.initialize()
+        self.addCleanup(Subprocess.uninitialize)
+        subproc = Subprocess([sys.executable, "-c", "pass"])
+        subproc.proc.wait()
+        ret = yield subproc.wait_for_exit()
+        self.assertEqual(ret, 0)
+        self.assertEqual(subproc.returncode, ret)
+
+    @gen_test
+    def test_wait_for_exit_after_proc_wait_nonzero(self):
+        # Same as above but with a non-zero exit status to verify the
+        # decoded return code is propagated correctly.
+        Subprocess.initialize()
+        self.addCleanup(Subprocess.uninitialize)
+        subproc = Subprocess([sys.executable, "-c", "import sys; sys.exit(3)"])
+        subproc.proc.wait()
+        ret = yield subproc.wait_for_exit(raise_error=False)
+        self.assertEqual(ret, 3)
+        self.assertEqual(subproc.returncode, ret)
