@@ -955,8 +955,10 @@ class HTTP1ServerConnection:
                 except (
                     iostream.StreamClosedError,
                     iostream.UnsatisfiableReadError,
-                    asyncio.CancelledError,
                 ):
+                    return
+                except asyncio.CancelledError:
+                    conn.close()
                     return
                 except Exception:
                     gen_log.error("Uncaught exception", exc_info=True)

@@ -34,6 +34,7 @@ import unicodedata
 from functools import lru_cache
 from http.client import responses as responses  # noqa: F401
 from ssl import SSLError
+import urllib.parse
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 import warnings
 
@@ -1368,6 +1369,40 @@ def doctests() -> unittest.TestSuite:
 
 
 _netloc_re = re.compile(r"^(.+):([0-9]+)$")
+
+
+def _url_to_ascii(url: str) -> str:
+    """Converts ``url`` to an ASCII URL that can be sent in a request.
+
+    A non-ASCII hostname is converted with IDNA (``café.example`` becomes
+    ``xn--caf-dma.example``) and all other non-ASCII characters are
+    percent-encoded as UTF-8, as browsers do. Other characters, including
+    existing percent-escapes, are left alone, so ASCII URLs are unchanged.
+
+    Raises `ValueError` if the hostname cannot be converted.
+    """
+    if url.isascii():
+        return url
+    netloc = urllib.parse.urlsplit(url).netloc
+    if not netloc.isascii():
+        userinfo, at, hostport = netloc.rpartition("@")
+        host, port = hostport, ""
+        match = re.fullmatch(r"(.*)(:[0-9]*)", hostport)
+        if match:
+            host, port = match.groups()
+        if not host.isascii():
+            try:
+                host = host.encode("idna").decode("ascii")
+            except UnicodeError as e:
+                raise ValueError("Invalid hostname %r: %s" % (host, e)) from e
+        # Replace the netloc in place rather than reassembling the URL with
+        # urlunsplit, which would drop an empty query or fragment.
+        start = url.find("//" + netloc)
+        if start < 0:
+            raise ValueError("Invalid URL %r" % url)
+        start += 2
+        url = url[:start] + userinfo + at + host + port + url[start + len(netloc) :]
+    return re.sub(r"[^\x00-\x7f]+", lambda m: urllib.parse.quote(m[0], safe=""), url)
 
 
 def split_host_and_port(netloc: str) -> tuple[str, int | None]:
