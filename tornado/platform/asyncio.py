@@ -465,6 +465,21 @@ class SelectorThread:
     but can be attached to a running asyncio loop.
     """
 
+    # Threading model: _run_select is the only method that runs on the
+    # selector thread. Everything else (add_reader and friends,
+    # _start_select, _handle_select, and the waker methods) runs on the event
+    # loop thread, except that close() may also be called from an atexit
+    # hook.
+    #
+    # The two threads communicate only through _select_cond and the
+    # variables it protects (_select_args and _closing_selector) in one
+    # direction, and through call_soon_threadsafe in the other. The
+    # selector thread runs one select call per _start_select: the event
+    # loop hands it the fd lists in _select_args, and the thread sends the
+    # results back to _handle_select. All other state (including _readers,
+    # _writers, _selecting and _waker_pending) belongs to the event loop
+    # thread and needs no locking.
+
     _closed = False
 
     def __init__(self, real_loop: asyncio.AbstractEventLoop) -> None:
@@ -477,14 +492,19 @@ class SelectorThread:
             tuple[list[_FileDescriptorLike], list[_FileDescriptorLike]]
         ) = None
         self._closing_selector = False
-        # True while the select thread has (or is about to have) a select
-        # call in progress, i.e. between _start_select and _handle_select.
-        # Only accessed on the event loop thread. Changes to the reader and
-        # writer sets need to interrupt that select call; at any other time
-        # the next _start_select picks them up without any wakeup.
+        # True from the time _start_select hands the fd lists to the
+        # selector thread until _handle_select receives the results, i.e.
+        # while the selector thread has (or is about to have) a select call
+        # in progress. Changes to the reader and writer sets during that time
+        # need to interrupt the select call; at any other time the next
+        # _start_select picks them up without any wakeup.
+        #
+        # This variable belongs to the event loop thread (the selector
+        # thread never touches it), so it does not need _select_cond.
         self._selecting = False
         # True if we have written to _waker_w and the selector thread has
         # not yet reported it readable. A second write would be redundant.
+        # Also belongs to the event loop thread.
         self._waker_pending = False
         self._thread: threading.Thread | None = None
         self._thread_manager_task: asyncio.Task[Any] | None = None
@@ -528,6 +548,12 @@ class SelectorThread:
         with self._select_cond:
             self._closing_selector = True
             self._select_cond.notify()
+        # The selector thread may be waiting on _select_cond (in which case
+        # the notify above wakes it) or blocked in select (in which case this
+        # does). Wake it unconditionally rather than consulting _selecting
+        # and _waker_pending: those belong to the event loop thread, and
+        # close may be called from the atexit hook on another thread. An
+        # unnecessary wakeup here costs nothing that matters.
         self._wake_selector(force=True)
         if self._thread is not None:
             self._thread.join()
@@ -585,6 +611,7 @@ class SelectorThread:
             raise
 
     def _wake_selector(self, force: bool = False) -> None:
+        # Runs on the event loop thread (or, with force=True, from close).
         if self._closed:
             return
         if not force and (self._waker_pending or not self._selecting):
@@ -601,6 +628,7 @@ class SelectorThread:
         self._waker_pending = True
 
     def _consume_waker(self) -> None:
+        # Runs on the event loop thread, as the reader callback for the waker.
         self._waker_pending = False
         try:
             self._waker_r.recv(1024)
@@ -608,6 +636,10 @@ class SelectorThread:
             pass
 
     def _start_select(self) -> None:
+        # Runs on the event loop thread. Called once when the thread starts
+        # and then (via call_soon) after each _handle_select. Each call
+        # either schedules _handle_select directly or hands exactly one
+        # select call to the selector thread, which will schedule it.
         if self._closed:
             return
         # Capture reader and writer sets here in the event loop
@@ -615,6 +647,9 @@ class SelectorThread:
         # modification while the select loop uses them.
         to_read = list(self._readers.keys())
         to_write = list(self._writers.keys())
+        # Reading _closing_selector without the lock is fine here: it only
+        # ever changes from False to True, and if we miss that change the
+        # selector thread will see it under the lock and exit.
         if not self._closing_selector:
             # Before handing off to the selector thread, poll once without
             # blocking. Often something is already ready (e.g. a response
@@ -635,13 +670,19 @@ class SelectorThread:
                         context=self._main_thread_ctx,
                     )
                     return
+        # From here until _handle_select runs, changes to the fd sets must
+        # wake the selector thread.
+        self._selecting = True
         with self._select_cond:
             assert self._select_args is None
             self._select_args = (to_read, to_write)
-            self._selecting = True
             self._select_cond.notify()
 
     def _run_select(self) -> None:
+        # This is the only method that runs on the selector thread. It must
+        # not touch any state other than _select_args and _closing_selector
+        # (under _select_cond) and the waker's file descriptor; it reports
+        # results back to the event loop thread with call_soon_threadsafe.
         while True:
             with self._select_cond:
                 while self._select_args is None and not self._closing_selector:
@@ -710,6 +751,11 @@ class SelectorThread:
     def _handle_select(
         self, rs: list[_FileDescriptorLike], ws: list[_FileDescriptorLike]
     ) -> None:
+        # Runs on the event loop thread, with the results of one select call
+        # (either from the selector thread or from the poll in
+        # _start_select). The selector thread is now idle, waiting on
+        # _select_cond, so changes to the fd sets no longer need to wake it
+        # until the next _start_select.
         self._selecting = False
         try:
             for r in rs:
