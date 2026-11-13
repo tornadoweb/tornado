@@ -33,18 +33,21 @@ from tornado.httputil import (
     HTTPServerConnectionDelegate,
     ResponseStartLine,
 )
-from tornado.iostream import IOStream
+from tornado.iostream import IOStream, StreamClosedError
 from tornado.locks import Event
 from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.test.util import abstract_base_test
-from tornado.testing import (
+from tornado.test.util import (
     AsyncHTTPSTestCase,
     AsyncHTTPTestCase,
     AsyncTestCase,
-    ExpectLog,
-    gen_test,
+    TestCase,
+    abstract_base_test,
+    assert_memory_budget,
+    curl_uses_schannel,
+    skipNotCPython,
 )
+from tornado.testing import ExpectLog, gen_test
 from tornado.web import Application, RequestHandler, stream_request_body
 
 
@@ -62,7 +65,7 @@ async def read_stream_body(stream):
             chunks.append(chunk)
 
         def finish(self):
-            conn.detach()  # type: ignore
+            conn.detach()
 
     conn = HTTP1Connection(stream, True)
     delegate = Delegate()
@@ -119,7 +122,7 @@ class SSLTest(AsyncHTTPSTestCase):
         # misbehaving.
         with ExpectLog(gen_log, "(SSL Error|uncaught exception)"):
             with ExpectLog(gen_log, "Uncaught exception", required=False):
-                with self.assertRaises((IOError, HTTPError)):  # type: ignore
+                with self.assertRaises((IOError, HTTPError)):
                     self.fetch(
                         self.get_url("/").replace("https:", "http:"),
                         request_timeout=3600,
@@ -127,17 +130,103 @@ class SSLTest(AsyncHTTPSTestCase):
                         raise_error=True,
                     )
 
-    def test_error_logging(self):
+    @gen_test
+    async def test_error_logging(self):
         # No stack traces are logged for SSL errors.
+        #
+        # Send plaintext over a raw stream and wait for the server to close
+        # the connection. The server logs the error before it closes, so the
+        # close guarantees the message has been logged. This test used to use
+        # self.fetch, but the client's error is not a reliable signal that the
+        # server has handled the bad handshake: in particular, fetch's own
+        # timeout raises TimeoutError, which is an IOError, so a slow exchange
+        # passed the assertRaises and then failed in ExpectLog with no
+        # indication of what had happened.
         with ExpectLog(gen_log, "SSL Error") as expect_log:
-            with self.assertRaises((IOError, HTTPError)):  # type: ignore
-                self.fetch(
-                    self.get_url("/").replace("https:", "http:"), raise_error=True
-                )
+            stream = IOStream(socket.socket())
+            with closing(stream):
+                await stream.connect(("127.0.0.1", self.get_http_port()))
+                await stream.write(b"GET / HTTP/1.0\r\n\r\n")
+                try:
+                    await stream.read_until_close()
+                except StreamClosedError:
+                    # The server may reset the connection instead of closing
+                    # it cleanly, since it does not read the whole request.
+                    pass
         self.assertFalse(expect_log.logged_stack)
 
 
-class BadSSLOptionsTest(unittest.TestCase):
+class SSLClientCertificateTest(AsyncHTTPSTestCase):
+    def get_app(self):
+        class CertificateHandler(RequestHandler):
+            def get(self):
+                binary_form = self.get_argument("binary_form", None)
+                if binary_form is None:
+                    certificate = self.request.get_ssl_certificate()
+                else:
+                    certificate = self.request.get_ssl_certificate(
+                        binary_form=binary_form == "true"
+                    )
+                if certificate is None:
+                    self.set_status(204)
+                else:
+                    self.write(certificate)
+
+        return Application([("/", CertificateHandler)])
+
+    def get_ssl_options(self):
+        options = super().get_ssl_options()
+        options.update(cert_reqs=ssl.CERT_OPTIONAL, ca_certs=options["certfile"])
+        return options
+
+    def skip_if_client_cert_unsupported(self):
+        if curl_uses_schannel():
+            from tornado.curl_httpclient import CurlAsyncHTTPClient
+
+            if isinstance(self.http_client, CurlAsyncHTTPClient):
+                self.skipTest("schannel cannot load PEM client certificates from files")
+
+    def test_get_ssl_certificate(self):
+        self.skip_if_client_cert_unsupported()
+        options = self.get_ssl_options()
+        for path in ["/", "/?binary_form=false"]:
+            with self.subTest(path=path):
+                response = self.fetch(
+                    path,
+                    client_cert=options["certfile"],
+                    client_key=options["keyfile"],
+                    raise_error=True,
+                )
+                certificate = json_decode(response.body)
+                self.assertEqual(
+                    certificate["subject"], [[["commonName", "foo.example.com"]]]
+                )
+                self.assertEqual(
+                    certificate["subjectAltName"], [["DNS", "foo.example.com"]]
+                )
+
+    def test_get_ssl_certificate_binary(self):
+        self.skip_if_client_cert_unsupported()
+        options = self.get_ssl_options()
+        response = self.fetch(
+            "/?binary_form=true",
+            client_cert=options["certfile"],
+            client_key=options["keyfile"],
+            raise_error=True,
+        )
+        with open(options["certfile"], encoding="ascii") as cert_file:
+            expected = ssl.PEM_cert_to_DER_cert(cert_file.read())
+        self.assertEqual(response.body, expected)
+
+    def test_no_client_certificate(self):
+        for path in ["/", "/?binary_form=false", "/?binary_form=true"]:
+            with self.subTest(path=path):
+                response = self.fetch(path, raise_error=True)
+                self.assertEqual(response.code, 204)
+                self.assertEqual(response.body, b"")
+
+
+class BadSSLOptionsTest(TestCase):
     def test_missing_arguments(self):
         application = Application()
         self.assertRaises(
@@ -192,6 +281,34 @@ class MultipartTestHandler(RequestHandler):
 
 # This test is also called from wsgi_test
 class HTTPConnectionTest(AsyncHTTPTestCase):
+    def test_multipart_content_type_case(self):
+        body = (
+            b"--AaB03x\r\n"
+            b'Content-Disposition: form-data; name="argument"\r\n\r\nValue\r\n'
+            b"--AaB03x\r\n"
+            b'Content-Disposition: form-data; name="files"; filename="Report.TXT"\r\n'
+            b"\r\nHello\r\n--AaB03x--\r\n"
+        )
+        response = self.fetch(
+            "/multipart",
+            method="POST",
+            headers={
+                "Content-Type": 'Multipart/Form-Data; BOUNDARY="AaB03x"',
+                "X-Header-Encoding-Test": "Header",
+            },
+            body=body,
+        )
+        self.assertEqual(response.code, 200)
+        self.assertEqual(
+            json_decode(response.body),
+            {
+                "header": "Header",
+                "argument": "Value",
+                "filename": "Report.TXT",
+                "filebody": "Hello",
+            },
+        )
+
     def get_handlers(self):
         return [
             ("/multipart", MultipartTestHandler),
@@ -346,6 +463,16 @@ class PostEchoGBKHandler(PostEchoHandler):
 
 
 class HTTPServerTest(AsyncHTTPTestCase):
+    def test_post_content_type_case(self):
+        response = self.fetch(
+            "/echo",
+            method="POST",
+            headers={"Content-Type": "Application/X-WWW-Form-Urlencoded"},
+            body="Name=Value&Name=Other",
+        )
+        self.assertEqual(response.code, 200)
+        self.assertEqual(json_decode(response.body), {"Name": ["Value", "Other"]})
+
     def get_app(self):
         return Application(
             [
@@ -469,6 +596,19 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
             self.assertEqual("HTTP/1.1", start_line.version)
             self.assertEqual(400, start_line.code)
             self.assertEqual("Bad Request", start_line.reason)
+
+    def test_invalid_host_header_with_huge_port(self):
+        # More digits than int() accepts by default (sys.get_int_max_str_digits).
+        with ExpectLog(
+            gen_log, ".*Malformed HTTP message.*Invalid Host header", level=logging.INFO
+        ):
+            self.stream.write(
+                b"GET / HTTP/1.0\r\nHost: foo:" + b"1" * 5000 + b"\r\n\r\n"
+            )
+            start_line, headers, response = self.io_loop.run_sync(
+                lambda: read_stream_body(self.stream)
+            )
+            self.assertEqual(400, start_line.code)
 
     def test_chunked_request_body(self):
         # Chunked requests are not widely supported and we don't have a way
@@ -597,6 +737,25 @@ ok
                 lambda: read_stream_body(self.stream)
             )
         self.assertEqual(400, start_line.code)
+
+    @gen_test
+    def test_content_length_list_whitespace(self):
+        # A list of identical Content-Lengths is allowed, but only HTTP
+        # whitespace (space and tab) may follow the commas, not other
+        # characters that Python considers whitespace.
+        for sep in [b"\xa0", b"\x85"]:
+            with self.subTest(sep=sep), closing(IOStream(socket.socket())) as stream:
+                with ExpectLog(
+                    gen_log, ".*Multiple unequal Content-Lengths", level=logging.INFO
+                ):
+                    yield stream.connect(("127.0.0.1", self.get_http_port()))
+                    stream.write(
+                        b"POST /echo HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                        b"Content-Length: 5," + sep + b"5\r\n"
+                        b"Connection: close\r\n\r\nhello"
+                    )
+                    start_line, headers, response = yield read_stream_body(stream)
+                    self.assertEqual(400, start_line.code)
 
     @gen_test
     def test_invalid_content_length(self):
@@ -1126,9 +1285,63 @@ class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
         )
         self.assertEqual(json_decode(response.body), {"foo": ["bar"]})
 
+    def test_gzip_concatenated(self):
+        response = self.fetch(
+            "/",
+            method="POST",
+            body=gzip.compress(b"foo=") + gzip.compress(b"bar"),
+            headers={"Content-Encoding": "gzip"},
+        )
+        self.assertEqual(json_decode(response.body), {"foo": ["bar"]})
+
+    def test_gzip_invalid(self):
+        body = gzip.compress(b"foo=bar")
+        for invalid in [body + b"\0", body[:-1]]:
+            with self.subTest(invalid=invalid):
+                with ExpectLog(gen_log, ".*invalid gzip data", level=logging.INFO):
+                    response = self.fetch(
+                        "/",
+                        method="POST",
+                        body=invalid,
+                        headers={"Content-Encoding": "gzip"},
+                    )
+                self.assertEqual(response.code, 400)
+
     def test_size_limit(self):
         with ExpectLog(gen_log, ".*decompressed body too large", level=logging.INFO):
             self.post_gzip("x" * 101)
+
+
+@skipNotCPython
+class GzipMemoryTest(AsyncHTTPTestCase):
+    MAX_BODY_SIZE = 1024 * 1024
+
+    def get_app(self):
+        return Application([("/", EchoHandler)])
+
+    def get_httpserver_options(self):
+        return dict(decompress_request=True, max_body_size=self.MAX_BODY_SIZE)
+
+    def test_gzip_bomb(self):
+        # A small gzip body that decompresses to far more than max_body_size
+        # must be rejected without decompressing it all into memory. (Peak
+        # memory is about 1.5 times max_body_size as of 2026-10.)
+        body = gzip.compress(b"\0" * (16 * self.MAX_BODY_SIZE))
+        with assert_memory_budget(
+            self.MAX_BODY_SIZE,
+            max_ratio=3,
+            msg="Decompressing a request body is not bounded by max_body_size",
+        ):
+            with ExpectLog(
+                gen_log, ".*decompressed body too large", level=logging.INFO
+            ):
+                response = self.fetch(
+                    "/",
+                    method="POST",
+                    body=body,
+                    headers={"Content-Encoding": "gzip"},
+                )
+        self.assertEqual(response.code, 400)
 
 
 class GzipUnsupportedTest(GzipBaseTest, AsyncHTTPTestCase):
@@ -1219,9 +1432,10 @@ class StreamingChunkSizeTest(AsyncHTTPTestCase):
             write(self.BODY[:20])
             write(self.BODY[20:])
 
-        chunks = self.fetch_chunk_sizes(body_producer=body_producer)
-        # HTTP chunk boundaries translate to application-visible breaks
-        self.assertEqual([16, 4, 16, 14], chunks)
+        # HTTP chunk boundaries are not preserved: small chunks may be
+        # coalesced, so the assertions in fetch_chunk_sizes are as specific
+        # as we can get.
+        self.fetch_chunk_sizes(body_producer=body_producer)
 
     def test_chunked_compressed(self):
         compressed = self.compress(self.BODY)

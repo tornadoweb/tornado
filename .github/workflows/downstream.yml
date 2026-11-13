@@ -1,0 +1,55 @@
+name: Downstream
+
+on:
+  push:
+    branches:
+      - "branch[0-9]*"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  # A newer push to the same branch supersedes the run.
+  group: downstream-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build wheel
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          # [[[cog cog.outl(f"python-version: '3.{default_python_minor}'")]]]
+          python-version: '3.13'
+          # [[[end]]]
+      - name: Build wheel
+        env:
+          # Fail instead of silently building a wheel without the extension.
+          TORNADO_EXTENSION: "1"
+        run: python -m pip wheel --no-deps -w dist . && ls -l dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tornado-dist
+          path: ./dist/tornado-*.whl
+
+  downstream:
+    name: Downstream testbed
+    needs: build
+    uses: tornadoweb/tornado-testbed/.github/workflows/testbed.yml@main
+    with:
+      # The testbed shares this workflow run, so it downloads the wheel
+      # built above. That tests exactly this commit, and needs no access to
+      # this repository (which may be private).
+      tornado_artifact: tornado-dist
+      # [[[cog cog.outl(f"python_version: '3.{default_python_minor}'")]]]
+      python_version: '3.13'
+      # [[[end]]]
+    permissions:
+      contents: read

@@ -11,51 +11,15 @@ from tornado.auth import (
     GoogleOAuth2Mixin,
     OAuth2Mixin,
     OAuthMixin,
-    OpenIdMixin,
     TwitterMixin,
 )
 from tornado.escape import json_decode
 from tornado.httpclient import HTTPClientError
 from tornado.httputil import url_concat
 from tornado.log import app_log
-from tornado.testing import AsyncHTTPTestCase, ExpectLog, setup_with_context_manager
-from tornado.test.util import ignore_deprecation
+from tornado.testing import ExpectLog
+from tornado.test.util import AsyncHTTPTestCase
 from tornado.web import Application, HTTPError, RequestHandler
-
-
-class OpenIdClientLoginHandler(RequestHandler, OpenIdMixin):
-    def initialize(self, test):
-        self._OPENID_ENDPOINT = test.get_url("/openid/server/authenticate")
-
-    @gen.coroutine
-    def get(self):
-        if self.get_argument("openid.mode", None):
-            user = yield self.get_authenticated_user(
-                http_client=self.settings["http_client"]
-            )
-            if user is None:
-                raise Exception("user is None")
-            self.finish(user)
-            return
-        res = self.authenticate_redirect()  # type: ignore
-        assert res is None
-
-
-class OpenIdServerAuthenticateHandler(RequestHandler):
-    flip_flop = False
-
-    def post(self):
-        if self.get_argument("openid.mode") != "check_authentication":
-            raise Exception("incorrect openid.mode %r")
-        # Cover both orderings of the response parameters if we call this handler twice.
-        # (the flip_flop side effect is simpler than plumbing parameters around).
-        # We check both orderings to catch mistaken uses of re.match instead of re.search
-        # or incorrect matching of the newline characters.
-        if type(self).flip_flop:
-            self.write("is_valid:true\nns:http://specs.openid.net/auth/2.0\n")
-        else:
-            self.write("ns:http://specs.openid.net/auth/2.0\nis_valid:true\n")
-        type(self).flip_flop = not type(self).flip_flop
 
 
 class OAuth1ClientLoginHandler(RequestHandler, OAuthMixin):
@@ -272,41 +236,6 @@ class TwitterServerVerifyCredentialsHandler(RequestHandler):
         assert self.get_argument("oauth_version") == "1.0"
         assert self.get_argument("oauth_token") == "hjkl"
         self.write(dict(screen_name="foo", name="Foo"))
-
-
-class OpenIDAuthTest(AsyncHTTPTestCase):
-    def setUp(self):
-        setup_with_context_manager(self, ignore_deprecation())
-        return super().setUp()
-
-    def get_app(self):
-        return Application(
-            [
-                ("/openid/client/login", OpenIdClientLoginHandler, dict(test=self)),
-                ("/openid/server/authenticate", OpenIdServerAuthenticateHandler),
-            ],
-            http_client=self.http_client,
-        )
-
-    def test_openid_redirect(self):
-        with ignore_deprecation():
-            response = self.fetch("/openid/client/login", follow_redirects=False)
-            self.assertEqual(response.code, 302)
-            self.assertIn("/openid/server/authenticate?", response.headers["Location"])
-
-    def test_openid_get_user(self):
-        for i in range(2):
-            with self.subTest(i=i):
-                with ignore_deprecation():
-                    response = self.fetch(
-                        "/openid/client/login?openid.mode=blah"
-                        "&openid.ns.ax=http://openid.net/srv/ax/1.0"
-                        "&openid.ax.type.email=http://axschema.org/contact/email"
-                        "&openid.ax.value.email=foo@example.com"
-                    )
-                response.rethrow()
-                parsed = json_decode(response.body)
-                self.assertEqual(parsed["email"], "foo@example.com")
 
 
 class AuthTest(AsyncHTTPTestCase):

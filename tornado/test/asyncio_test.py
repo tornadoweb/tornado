@@ -11,28 +11,34 @@
 # under the License.
 
 import asyncio
+import contextlib
 import contextvars
+import gc
+import io
+import logging
+import socket
 import threading
 import time
-import unittest
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 
 import tornado.platform.asyncio
+from tornado.platform import asyncio as platform_asyncio
 from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.platform.asyncio import (
     AddThreadSelectorEventLoop,
     AsyncIOLoop,
+    SelectorThread,
     to_asyncio_future,
 )
-from tornado.test.util import ignore_deprecation
-from tornado.testing import (
+from tornado.test.util import (
     AsyncHTTPTestCase,
     AsyncTestCase,
-    gen_test,
-    setup_with_context_manager,
+    TestCase,
+    ignore_deprecation,
 )
+from tornado.testing import ExpectLog, gen_test, setup_with_context_manager
 from tornado.web import Application, RequestHandler
 
 
@@ -115,7 +121,7 @@ class AsyncIOLoopTest(AsyncTestCase):
         loop.close()
 
 
-class LeakTest(unittest.TestCase):
+class LeakTest(TestCase):
     def setUp(self):
         # Trigger a cleanup of the mapping so we start with a clean slate.
         AsyncIOLoop(make_current=False).close()
@@ -155,7 +161,7 @@ class LeakTest(unittest.TestCase):
         self.assertEqual(new_count, 1)
 
 
-class SelectorThreadLeakTest(unittest.TestCase):
+class SelectorThreadLeakTest(TestCase):
     # These tests are only relevant on windows, but they should pass anywhere.
     def setUp(self):
         # As a precaution, ensure that we've run an event loop at least once
@@ -205,8 +211,199 @@ class SelectorThreadLeakTest(unittest.TestCase):
             loop.close()
         self.assert_no_thread_leak()
 
+    def test_atexit_closes_waker_sockets(self):
+        # The atexit hook is the backstop for selectors whose loop was never
+        # closed. It has to close the waker socketpair as well as shut the
+        # thread down: otherwise the sockets survive until the interpreter
+        # finalizes them, and each one is reported as an unclosed socket after
+        # the test suite has finished.
+        loop = asyncio.new_event_loop()
+        selector = SelectorThread(loop)
+        try:
+            loop.run_until_complete(asyncio.sleep(0.05))
+            self.assertIn(selector, platform_asyncio._selector_loops)
+            platform_asyncio._atexit_callback()
+            self.assertEqual(selector._waker_r.fileno(), -1)
+            self.assertEqual(selector._waker_w.fileno(), -1)
+            self.assertFalse(selector._thread.is_alive())  # type: ignore[union-attr]
+        finally:
+            selector.close()
+            loop.close()
 
-class AnyThreadEventLoopPolicyTest(unittest.TestCase):
+    def test_close_before_thread_manager_starts(self):
+        # The task that starts the selector thread is created by a call_soon
+        # callback, so a loop that stops immediately can close with that task
+        # created but never run. Closing must clean it up; otherwise it is
+        # reported as "Task was destroyed but it is pending", and its coroutine
+        # as "never awaited", whenever it is eventually garbage collected --
+        # which is at an unpredictable point, quite possibly during an
+        # unrelated test.
+        loop = asyncio.new_event_loop()
+        selector = SelectorThread(loop)
+        loop.call_soon(loop.stop)
+        loop.run_forever()
+        task = selector._thread_manager_task
+        self.assertIsNotNone(task)
+        # Once the task runs it completes immediately, so a task that is not
+        # done here is one that never started.
+        self.assertFalse(task.done())  # type: ignore[union-attr]
+        selector.close()
+        loop.close()
+        del loop, selector, task
+        # An asyncio error logged here would be caught by the log check in
+        # tornado.test.util.TestCase, but only if the collection happens while
+        # this test is running, so force it.
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            gc.collect()
+        self.assertNotIn("never awaited", stderr.getvalue())
+
+
+class SelectorThreadTest(TestCase):
+    # SelectorThread is only used automatically on Windows, but it can wrap
+    # any event loop, so these tests run everywhere.
+    def setUp(self):
+        super().setUp()
+        self.asyncio_loop = asyncio.new_event_loop()
+        self.loop = AddThreadSelectorEventLoop(self.asyncio_loop)  # type: ignore[abstract]
+        self.sockets: list[socket.socket] = []
+        self.addCleanup(self.close)
+
+    def close(self):
+        # Stop the selector thread before closing the sockets it may be
+        # selecting on.
+        self.loop.close()
+        for s in self.sockets:
+            s.close()
+
+    def socketpair(self):
+        a, b = socket.socketpair()
+        a.setblocking(False)
+        b.setblocking(False)
+        self.sockets.extend([a, b])
+        return a, b
+
+    def run_loop(self, coro):
+        return self.asyncio_loop.run_until_complete(asyncio.wait_for(coro, 10))
+
+    def test_add_reader_while_selecting(self):
+        # A reader added while the selector thread is blocked in select must
+        # interrupt it.
+        a, b = self.socketpair()
+
+        async def f():
+            # Let the selector thread start and block.
+            await asyncio.sleep(0.01)
+            fut = asyncio.get_running_loop().create_future()
+            self.loop.add_reader(a, lambda: fut.set_result(a.recv(10)))
+            await asyncio.sleep(0.01)
+            b.send(b"x")
+            return await fut
+
+        self.assertEqual(self.run_loop(f()), b"x")
+
+    def test_already_readable(self):
+        a, b = self.socketpair()
+        b.send(b"x")
+
+        async def f():
+            fut = asyncio.get_running_loop().create_future()
+            self.loop.add_reader(a, lambda: fut.set_result(a.recv(10)))
+            return await fut
+
+        self.assertEqual(self.run_loop(f()), b"x")
+
+    def test_ping_pong(self):
+        # Exercises the path where data written by one side is found
+        # without waiting for the selector thread.
+        a, b = self.socketpair()
+        n = 100
+
+        async def f():
+            done = asyncio.get_running_loop().create_future()
+            count = 0
+
+            def on_a():
+                a.recv(10)
+                a.send(b"x")
+
+            def on_b():
+                nonlocal count
+                b.recv(10)
+                count += 1
+                if count == n:
+                    done.set_result(None)
+                else:
+                    b.send(b"x")
+
+            self.loop.add_reader(a, on_a)
+            self.loop.add_reader(b, on_b)
+            b.send(b"x")
+            await done
+            self.loop.remove_reader(a)
+            self.loop.remove_reader(b)
+            return count
+
+        self.assertEqual(self.run_loop(f()), n)
+
+    def test_callback_exception(self):
+        # An exception in one callback must not stop delivery of later
+        # events.
+        a, b = self.socketpair()
+        c, d = self.socketpair()
+
+        def bad():
+            self.loop.remove_reader(a)
+            raise Exception("oops")
+
+        async def f():
+            await asyncio.sleep(0.01)
+            fut = asyncio.get_running_loop().create_future()
+            self.loop.add_reader(a, bad)
+            b.send(b"x")
+            await asyncio.sleep(0.05)
+            self.loop.add_reader(c, lambda: fut.set_result(c.recv(10)))
+            d.send(b"y")
+            return await fut
+
+        with ExpectLog(logging.getLogger("asyncio"), "Exception in callback"):
+            self.assertEqual(self.run_loop(f()), b"y")
+
+    def test_redundant_wakeups_skipped(self):
+        # Changes made while the selector thread is in select need only one
+        # wakeup between them.
+        class CountingWaker:
+            def __init__(self, sock):
+                self.sock = sock
+                self.sends = 0
+
+            def send(self, data):
+                self.sends += 1
+                return self.sock.send(data)
+
+            def close(self):
+                self.sock.close()
+
+        selector = self.loop._selector
+        waker = CountingWaker(selector._waker_w)
+        selector._waker_w = waker  # type: ignore[assignment]
+        socks = [self.socketpair()[0] for i in range(5)]
+
+        async def f():
+            # Let the selector thread start and block.
+            await asyncio.sleep(0.01)
+            for s in socks:
+                self.loop.add_reader(s, lambda: None)
+            for s in socks:
+                self.loop.remove_reader(s)
+            # The wakeup is processed before this sleep returns.
+            await asyncio.sleep(0.05)
+
+        self.run_loop(f())
+        self.assertEqual(waker.sends, 1)
+
+
+class AnyThreadEventLoopPolicyTest(TestCase):
     def setUp(self):
         setup_with_context_manager(self, ignore_deprecation())
         # Referencing the event loop policy attributes raises deprecation warnings,
@@ -253,7 +450,7 @@ class AnyThreadEventLoopPolicyTest(unittest.TestCase):
             )
             # Clean up to silence leak warnings. Always use asyncio since
             # IOLoop doesn't (currently) close the underlying loop.
-            self.executor.submit(lambda: asyncio.get_event_loop().close()).result()  # type: ignore
+            self.executor.submit(lambda: asyncio.get_event_loop().close()).result()
 
     def test_tornado_accessor(self):
         # Tornado's IOLoop.current() API can create a loop for any thread,
@@ -263,11 +460,11 @@ class AnyThreadEventLoopPolicyTest(unittest.TestCase):
             self.assertIsInstance(self.executor.submit(IOLoop.current).result(), IOLoop)
             # Clean up to silence leak warnings. Always use asyncio since
             # IOLoop doesn't (currently) close the underlying loop.
-            self.executor.submit(lambda: asyncio.get_event_loop().close()).result()  # type: ignore
+            self.executor.submit(lambda: asyncio.get_event_loop().close()).result()
 
             asyncio.set_event_loop_policy(self.AnyThreadEventLoopPolicy())
             self.assertIsInstance(self.executor.submit(IOLoop.current).result(), IOLoop)
-            self.executor.submit(lambda: asyncio.get_event_loop().close()).result()  # type: ignore
+            self.executor.submit(lambda: asyncio.get_event_loop().close()).result()
 
 
 class SelectorThreadContextvarsTest(AsyncHTTPTestCase):

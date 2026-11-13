@@ -1,0 +1,15 @@
+What's new in Tornado 6.5.10
+============================
+
+Sep 15, 2026
+------------
+
+Bug fixes
+~~~~~~~~~
+
+`tornado.web`
+~~~~~~~~~~~~~
+
+- The ``allowed_symlink_directory`` argument of  ``StaticFileHandler`` may now be a list
+  of directories instead of just a single directory. This feature has been adjusted to
+  improve compatibility with Jupyter, which would fail to load with Tornado 6.5.9.

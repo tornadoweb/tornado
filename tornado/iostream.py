@@ -48,6 +48,9 @@ from tornado.log import gen_log
 from tornado.netutil import _client_ssl_defaults, _server_ssl_defaults, ssl_wrap_socket
 from tornado.util import errno_from_exception
 
+if typing.TYPE_CHECKING:
+    import unittest
+
 _IOStreamType = TypeVar("_IOStreamType", bound="IOStream")
 
 # These errnos indicate that a connection has been abruptly terminated.
@@ -56,7 +59,7 @@ _ERRNO_CONNRESET = (errno.ECONNRESET, errno.ECONNABORTED, errno.EPIPE, errno.ETI
 
 if hasattr(errno, "WSAECONNRESET"):
     _ERRNO_CONNRESET += (  # type: ignore
-        errno.WSAECONNRESET,  # type: ignore
+        errno.WSAECONNRESET,
         errno.WSAECONNABORTED,  # type: ignore
         errno.WSAETIMEDOUT,  # type: ignore
     )
@@ -133,9 +136,9 @@ class _StreamBuffer:
         """
         size = len(data)
         if size > self._large_buf_threshold:
-            if not isinstance(data, memoryview):
-                data = memoryview(data)
-            self._buffers.append((True, data))
+            # Always make a new view (even of a memoryview) so we can
+            # release it when we're done with it.
+            self._buffers.append((True, memoryview(data)))
         elif size > 0:
             if self._buffers:
                 is_memview, b = self._buffers[-1]
@@ -153,6 +156,9 @@ class _StreamBuffer:
         """
         Get a view over at most ``size`` bytes (possibly fewer) at the
         current buffer position.
+
+        The caller must release the returned view (e.g. with a ``with``
+        statement) before the buffer is modified again.
         """
         assert size > 0
         try:
@@ -164,7 +170,12 @@ class _StreamBuffer:
         if is_memview:
             return typing.cast(memoryview, b[pos : pos + size])
         else:
-            return memoryview(b)[pos : pos + size]
+            # Release the full view immediately so that only the returned
+            # slice holds a reference to the bytearray's buffer. (The
+            # bytearray cannot be resized while any view of it is
+            # alive, and on PyPy views are not freed until garbage collection)
+            with memoryview(b) as m:
+                return m[pos : pos + size]
 
     def advance(self, size: int) -> None:
         """
@@ -181,6 +192,10 @@ class _StreamBuffer:
             if b_remain <= 0:
                 buffers.popleft()
                 size -= len(b) - pos
+                if is_large:
+                    # Release our view of the caller's data so it can be
+                    # resized (if it is a bytearray) without waiting for GC.
+                    typing.cast(memoryview, b).release()
                 pos = 0
             elif is_large:
                 pos += size
@@ -193,6 +208,17 @@ class _StreamBuffer:
 
         assert size == 0
         self._first_pos = pos
+
+    def clear(self) -> None:
+        """
+        Discard all buffered data, releasing our views of large buffers.
+        """
+        for is_large, b in self._buffers:
+            if is_large:
+                typing.cast(memoryview, b).release()
+        self._buffers.clear()
+        self._first_pos = 0
+        self._size = 0
 
 
 class BaseIOStream:
@@ -250,12 +276,12 @@ class BaseIOStream:
         self._total_write_index = 0
         self._total_write_done_index = 0
         self._read_delimiter: bytes | None = None
-        self._read_regex: Pattern | None = None
+        self._read_regex: Pattern[bytes] | None = None
         self._read_max_bytes: int | None = None
         self._read_bytes: int | None = None
         self._read_partial = False
         self._read_until_close = False
-        self._read_future: Future | None = None
+        self._read_future: Future[Any] | None = None
         self._write_futures: collections.deque[tuple[int, Future[None]]] = (
             collections.deque()
         )
@@ -439,11 +465,13 @@ class BaseIOStream:
         available_bytes = self._read_buffer_size
         n = len(buf)
         if available_bytes >= n:
-            buf[:] = memoryview(self._read_buffer)[:n]
+            with memoryview(self._read_buffer) as m, m[:n] as src:
+                buf[:] = src
             del self._read_buffer[:n]
             self._after_user_read_buffer = self._read_buffer
         elif available_bytes > 0:
-            buf[:available_bytes] = memoryview(self._read_buffer)[:]
+            with memoryview(self._read_buffer) as m:
+                buf[:available_bytes] = m
 
         # Set up the supplied buffer as our temporary read buffer.
         # The original (if it had any data remaining) has been
@@ -515,7 +543,7 @@ class BaseIOStream:
         if data:
             if isinstance(data, memoryview):
                 # Make sure that ``len(data) == data.nbytes``
-                data = memoryview(data).cast("B")
+                data = data.cast("B")
             if (
                 self.max_write_buffer_size is not None
                 and len(self._write_buffer) + len(data) > self.max_write_buffer_size
@@ -579,7 +607,18 @@ class BaseIOStream:
                         self.error = exc_info[1]
             if self._read_until_close:
                 self._read_until_close = False
-                self._finish_read(self._read_buffer_size)
+                if self.error is None or self._is_connreset(self.error):
+                    # A connection reset is treated as a normal close
+                    # throughout this class (on some platforms, notably
+                    # windows, a peer that closes cleanly may still be
+                    # reported as a reset), so deliver the buffered data as
+                    # the result of the read.
+                    self._finish_read(self._read_buffer_size)
+                # Otherwise the stream is closing because of a real error, so
+                # leave the read future pending for _signal_closed() to fail
+                # with StreamClosedError(real_error=self.error). Resolving it
+                # with the buffered data would report a truncated result as if
+                # it were complete.
             elif self._read_future is not None:
                 # resolve reads that are pending and ready to complete
                 try:
@@ -597,7 +636,7 @@ class BaseIOStream:
         self._signal_closed()
 
     def _signal_closed(self) -> None:
-        futures: list[Future] = []
+        futures: list[Future[Any]] = []
         if self._read_future is not None:
             futures.append(self._read_future)
             self._read_future = None
@@ -624,7 +663,10 @@ class BaseIOStream:
                     self._ssl_connect_future.set_exception(self.error)
                 else:
                     self._ssl_connect_future.set_exception(StreamClosedError())
-            self._ssl_connect_future.exception()
+            try:
+                self._ssl_connect_future.exception()
+            except asyncio.CancelledError:
+                pass
             self._ssl_connect_future = None
         if self._close_callback is not None:
             cb = self._close_callback
@@ -633,6 +675,11 @@ class BaseIOStream:
         # Clear the buffers so they can be cleared immediately even
         # if the IOStream object is kept alive by a reference cycle.
         # TODO: Clear the read buffer too; it currently breaks some tests.
+        if self._write_buffer is not None:
+            # Release our views of the caller's data from large writes
+            # that did not complete, so the caller can resize it (on PyPy,
+            # views are not freed until garbage collection).
+            self._write_buffer.clear()
         self._write_buffer = None  # type: ignore
 
     def reading(self) -> bool:
@@ -773,7 +820,7 @@ class BaseIOStream:
         if pos is not None:
             self._read_from_buffer(pos)
 
-    def _start_read(self) -> Future:
+    def _start_read(self) -> Future[Any]:
         if self._read_future is not None:
             # It is an error to start a read while a prior read is unresolved.
             # However, if the prior read is unresolved because the stream was
@@ -840,16 +887,22 @@ class BaseIOStream:
         to read (i.e. the read returns EWOULDBLOCK or equivalent).  On
         error closes the socket and raises an exception.
         """
+        buf: bytearray | None = None
         try:
             while True:
                 try:
                     if self._user_read_buffer:
-                        buf: memoryview | bytearray = memoryview(self._read_buffer)[
-                            self._read_buffer_size :
-                        ]
+                        # Release the views explicitly so the caller can
+                        # resize their buffer after the read completes
+                        # (PyPy does not free them until garbage collection).
+                        with (
+                            memoryview(self._read_buffer) as m,
+                            m[self._read_buffer_size :] as view,
+                        ):
+                            bytes_read = self.read_from_fd(view)
                     else:
                         buf = bytearray(self.read_chunk_size)
-                    bytes_read = self.read_from_fd(buf)
+                        bytes_read = self.read_from_fd(buf)
                 except OSError as e:
                     # ssl.SSLError is a subclass of socket.error
                     if self._is_connreset(e):
@@ -867,7 +920,9 @@ class BaseIOStream:
                 self.close()
                 return 0
             if not self._user_read_buffer:
-                self._read_buffer += memoryview(buf)[:bytes_read]
+                assert buf is not None
+                with memoryview(buf) as m, m[:bytes_read] as view:
+                    self._read_buffer += view
             self._read_buffer_size += bytes_read
         finally:
             # Break the reference to buf so we don't waste a chunk's worth of
@@ -875,8 +930,11 @@ class BaseIOStream:
             del buf
         if self._read_buffer_size > self.max_buffer_size:
             gen_log.error("Reached maximum read buffer size")
-            self.close()
-            raise StreamBufferFullError("Reached maximum read buffer size")
+            buffer_full_error = StreamBufferFullError(
+                "Reached maximum read buffer size"
+            )
+            self.close(exc_info=buffer_full_error)
+            raise buffer_full_error
         return bytes_read
 
     def _read_from_buffer(self, pos: int) -> None:
@@ -928,7 +986,7 @@ class BaseIOStream:
                 self._check_max_bytes(self._read_regex, self._read_buffer_size)
         return None
 
-    def _check_max_bytes(self, delimiter: bytes | Pattern, size: int) -> None:
+    def _check_max_bytes(self, delimiter: bytes | Pattern[bytes], size: int) -> None:
         if self._read_max_bytes is not None and size > self._read_max_bytes:
             raise UnsatisfiableReadError(
                 "delimiter %r not found within %d bytes"
@@ -950,7 +1008,8 @@ class BaseIOStream:
                     # with more than 128KB at a time.
                     size = 128 * 1024
 
-                num_bytes = self.write_to_fd(self._write_buffer.peek(size))
+                with self._write_buffer.peek(size) as data:
+                    num_bytes = self.write_to_fd(data)
                 if num_bytes == 0:
                     break
                 self._write_buffer.advance(num_bytes)
@@ -978,10 +1037,24 @@ class BaseIOStream:
         if loc == 0:
             return b""
         assert loc <= self._read_buffer_size
-        # Slice the bytearray buffer into bytes, without intermediate copying
-        b = (memoryview(self._read_buffer)[:loc]).tobytes()
+        buf = self._read_buffer
+        if loc == len(buf):
+            # Taking the whole buffer is the most common case, and bytes()
+            # copies it without a memoryview.
+            b = bytes(buf)
+        elif loc <= 2048:
+            # Copying a small slice twice is cheaper than creating and
+            # releasing memoryviews.
+            b = bytes(buf[:loc])
+        else:
+            # Slice the bytearray buffer into bytes, without intermediate
+            # copying. The views must be released before the bytearray is
+            # resized (explicitly, since PyPy does not free them until
+            # garbage collection).
+            with memoryview(buf) as m, m[:loc] as view:
+                b = view.tobytes()
         self._read_buffer_size -= loc
-        del self._read_buffer[:loc]
+        del buf[:loc]
         return b
 
     def _check_closed(self) -> None:
@@ -1109,7 +1182,7 @@ class IOStream(BaseIOStream):
 
     def write_to_fd(self, data: memoryview) -> int:
         try:
-            return self.socket.send(data)  # type: ignore
+            return self.socket.send(data)
         finally:
             # Avoid keeping to data, which can be a memoryview.
             # See https://github.com/tornadoweb/tornado/pull/2008
@@ -1187,7 +1260,7 @@ class IOStream(BaseIOStream):
         server_side: bool,
         ssl_options: dict[str, Any] | ssl.SSLContext | None = None,
         server_hostname: str | None = None,
-    ) -> Awaitable["SSLIOStream"]:
+    ) -> "Future[SSLIOStream]":
         """Convert this `IOStream` to an `SSLIOStream`.
 
         This enables protocols that begin in clear-text mode and
@@ -1221,6 +1294,10 @@ class IOStream(BaseIOStream):
            SSL certificates are validated by default; pass
            ``ssl_options=dict(cert_reqs=ssl.CERT_NONE)`` or a
            suitably-configured `ssl.SSLContext` to disable.
+
+        .. versionchanged:: 6.6
+           Cancelling the returned `.Future` before the handshake completes
+           now closes the new stream and its socket.
         """
         if (
             self._read_future
@@ -1233,9 +1310,9 @@ class IOStream(BaseIOStream):
             raise ValueError("IOStream is not idle; cannot convert to SSL")
         if ssl_options is None:
             if server_side:
-                ssl_options = _server_ssl_defaults
+                ssl_options = _server_ssl_defaults()
             else:
-                ssl_options = _client_ssl_defaults
+                ssl_options = _client_ssl_defaults()
 
         socket = self.socket
         self.io_loop.remove_handler(socket)
@@ -1256,6 +1333,13 @@ class IOStream(BaseIOStream):
         ssl_stream._ssl_connect_future = future
         ssl_stream.max_buffer_size = self.max_buffer_size
         ssl_stream.read_chunk_size = self.read_chunk_size
+        # The socket now belongs to ssl_stream, which the caller can't see
+        # until the handshake completes. If the caller gives up (e.g. on a
+        # timeout) and cancels the future, close the stream so the socket
+        # is not leaked.
+        future.add_done_callback(
+            lambda f: ssl_stream.close() if f.cancelled() else None
+        )
         return future
 
     def _handle_connect(self) -> None:
@@ -1322,7 +1406,9 @@ class SSLIOStream(IOStream):
         `ssl.SSLContext` object or a dictionary of keywords arguments
         for `ssl.SSLContext.wrap_socket`
         """
-        self._ssl_options = kwargs.pop("ssl_options", _client_ssl_defaults)
+        self._ssl_options = kwargs.pop("ssl_options", None)
+        if self._ssl_options is None:
+            self._ssl_options = _client_ssl_defaults()
         super().__init__(*args, **kwargs)
         self._ssl_accepting = True
         self._handshake_reading = False
@@ -1416,7 +1502,7 @@ class SSLIOStream(IOStream):
         super()._handle_write()
 
     def connect(
-        self, address: tuple, server_hostname: str | None = None
+        self, address: tuple[Any, ...], server_hostname: str | None = None
     ) -> "Future[SSLIOStream]":
         self._server_hostname = server_hostname
         # Ignore the result of connect(). If it fails,
@@ -1501,7 +1587,7 @@ class SSLIOStream(IOStream):
         if len(data) >> 30:
             data = memoryview(data)[: 1 << 30]
         try:
-            return self.socket.send(data)  # type: ignore
+            return self.socket.send(data)
         except ssl.SSLError as e:
             if e.args[0] == ssl.SSL_ERROR_WANT_WRITE:
                 # In Python 3.5+, SSLSocket.send raises a WANT_WRITE error if
@@ -1581,7 +1667,7 @@ class PipeIOStream(BaseIOStream):
 
     def write_to_fd(self, data: memoryview) -> int:
         try:
-            return os.write(self.fd, data)  # type: ignore
+            return os.write(self.fd, data)
         finally:
             # Avoid keeping to data, which can be a memoryview.
             # See https://github.com/tornadoweb/tornado/pull/2008
@@ -1589,7 +1675,7 @@ class PipeIOStream(BaseIOStream):
 
     def read_from_fd(self, buf: bytearray | memoryview) -> int | None:
         try:
-            return self._fio.readinto(buf)  # type: ignore
+            return self._fio.readinto(buf)
         except OSError as e:
             if errno_from_exception(e) == errno.EBADF:
                 # If the writing half of a pipe is closed, select will
@@ -1602,7 +1688,7 @@ class PipeIOStream(BaseIOStream):
             del buf
 
 
-def doctests() -> Any:
+def doctests() -> "unittest.TestSuite":
     import doctest
 
     return doctest.DocTestSuite()

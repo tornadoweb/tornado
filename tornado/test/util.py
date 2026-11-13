@@ -1,17 +1,66 @@
 import contextlib
+import gc
 import os
 import platform
 import socket
 import sys
 import sysconfig
 import textwrap
+import time
 import typing
 import unittest
 import warnings
+from collections.abc import Callable, Generator
 
+import tornado.testing
 from tornado.testing import bind_unused_port
 
 _TestCaseType = typing.TypeVar("_TestCaseType", bound=type[unittest.TestCase])
+
+
+class TestCase(unittest.TestCase):
+    """`unittest.TestCase` that fails if the test logs anything unexpected.
+
+    The check is registered with `unittest.TestCase.enterContext` before
+    ``super().setUp()`` runs, so it covers ``setUp`` as well as the test
+    itself. Cleanups run in LIFO order after ``tearDown``, so it covers
+    ``tearDown`` too.
+
+    Note that ``assertNoLogs`` replaces the root logger's handlers for the
+    duration of the test, so unexpected log output appears in the failure
+    message instead of being printed as it happens.
+    """
+
+    def setUp(self) -> None:
+        self.enterContext(self.assertNoLogs())
+        super().setUp()
+
+
+class AsyncTestCase(tornado.testing.AsyncTestCase):
+    """`tornado.testing.AsyncTestCase` with the `TestCase` log check.
+
+    Covering ``tearDown`` matters here in particular: it is
+    `tornado.testing.AsyncTestCase.tearDown` that closes the `.IOLoop`, which
+    is itself a common source of stray log output.
+    """
+
+    def setUp(self) -> None:
+        self.enterContext(self.assertNoLogs())
+        super().setUp()
+
+
+# These two list their tornado.testing base first so that it keeps its place
+# ahead of any mixin in the method resolution order of the concrete test
+# classes (see the comment on TestIOStreamWebMixin in iostream_test.py). The
+# log check is inherited from AsyncTestCase, which stays late in the MRO, so
+# it is set up exactly once.
+class AsyncHTTPTestCase(tornado.testing.AsyncHTTPTestCase, AsyncTestCase):
+    pass
+
+
+class AsyncHTTPSTestCase(tornado.testing.AsyncHTTPSTestCase, AsyncHTTPTestCase):
+    pass
+
 
 skipIfNonUnix = unittest.skipIf(
     os.name != "posix" or sys.platform == "cygwin", "non-unix platform"
@@ -36,6 +85,22 @@ skipNotCPython = unittest.skipIf(
 )
 
 
+def curl_uses_schannel() -> bool:
+    """Returns true if pycurl is available and uses the schannel TLS backend.
+
+    This is the case for the pycurl wheels on windows. Schannel can only load
+    client certificates from PKCS#12 files, not the PEM files used in our tests.
+    """
+    try:
+        import pycurl
+    except ImportError:
+        return False
+    # libcurl may be built with multiple TLS backends; all are listed here,
+    # with the inactive ones in parentheses, e.g. "(OpenSSL/3.6.5) Schannel".
+    ssl_version = pycurl.version_info()[5] or ""
+    return any(name.startswith("Schannel") for name in ssl_version.split())
+
+
 def _detect_ipv6():
     if not socket.has_ipv6:
         # socket.has_ipv6 check reports whether ipv6 was present at compile
@@ -57,11 +122,20 @@ skipIfNoIPv6 = unittest.skipIf(not _detect_ipv6(), "ipv6 support not present")
 
 
 def refusing_port():
-    """Returns a local port number that will refuse all connections.
+    """Returns a local port number that connections will fail to reach.
 
     Return value is (cleanup_func, port); the cleanup function
     must be called to free the port to be reused.
+
+    On most platforms, connections to this port are refused. On Windows,
+    a refused connection is reported only after the SYN has been
+    retransmitted twice (about two seconds, even on loopback), so instead
+    we return port 0, which fails immediately with a different error
+    (WSAEADDRNOTAVAIL). Tests using this function should therefore accept
+    any connection error on Windows.
     """
+    if sys.platform == "win32":
+        return (lambda: None, 0)
     # On travis-ci port numbers are reassigned frequently. To avoid
     # collisions with other tests, we use an open client-side socket's
     # ephemeral port number to ensure that nothing can listen on that
@@ -85,7 +159,7 @@ def exec_test(caller_globals, caller_locals, s):
     # Flatten the real global and local namespace into our fake
     # globals: it's all global from the perspective of code defined
     # in s.
-    global_namespace = dict(caller_globals, **caller_locals)  # type: ignore
+    global_namespace = dict(caller_globals, **caller_locals)
     local_namespace: dict[str, typing.Any] = {}
     exec(textwrap.dedent(s), global_namespace, local_namespace)
     return local_namespace
@@ -130,3 +204,189 @@ def abstract_base_test(cls: _TestCaseType) -> _TestCaseType:
             super().setUpClass()
 
     return AbstractBaseWrapper  # type: ignore
+
+
+# The minimum duration of a single timing measurement in
+# assert_linear_scaling. Short measurements are dominated by timer
+# granularity (on Windows, time.process_time is based on the scheduler's
+# clock, with a resolution of about 16ms) and by whatever else the operating
+# system happens to be doing at the time, so the operation being measured is
+# repeated until it has run for at least this long.
+_MIN_MEASUREMENT_TIME = 0.1
+
+# The minimum duration of the preliminary measurement in
+# assert_linear_scaling (see there).
+_QUICK_MEASUREMENT_TIME = 0.02
+
+
+def _time_calls(func: Callable[[int], object], n: int, iterations: int) -> float:
+    """Return the CPU time used by ``iterations`` calls of ``func(n)``.
+
+    `time.process_time` is used instead of `time.perf_counter` because it
+    counts only the time this process spends running on a CPU. On a busy CI
+    worker a process may spend more time waiting to be scheduled than
+    running, and that waiting tells us nothing about the algorithmic
+    complexity we're trying to measure.
+    """
+    start = time.process_time()
+    for _ in range(iterations):
+        func(n)
+    return time.process_time() - start
+
+
+def _calibrate(
+    func: Callable[[int], object], n: int, min_time: float = _MIN_MEASUREMENT_TIME
+) -> tuple[int, float]:
+    """Return a usable iteration count for ``func(n)``, and its timing.
+
+    The count is doubled until the measurement lasts at least ``min_time``,
+    in the same way as `timeit.Timer.autorange`. The
+    discarded measurements also serve as a warmup. The last measurement is
+    returned along with the count so that the caller can use it as one of its
+    samples.
+    """
+    iterations = 1
+    while True:
+        elapsed = _time_calls(func, n, iterations)
+        if elapsed >= min_time:
+            return iterations, elapsed
+        iterations *= 2
+
+
+@contextlib.contextmanager
+def _gc_disabled() -> Generator[None, None, None]:
+    """Disable the garbage collector for the measurements in
+    `assert_linear_scaling`, on CPython only.
+
+    CPython's collections are triggered by allocation counts, and their cost
+    depends on the number of live objects, so leaving the collector enabled
+    charges an arbitrary and unevenly distributed cost to whichever operation
+    happens to trigger one. Reference counting still frees almost everything
+    while it is disabled.
+
+    PyPy has no reference counting, and `gc.disable` there only stops major
+    collections: minor collections keep promoting objects that survive the
+    nursery into an old generation that is never collected. Memory then
+    grows throughout the measurement (by about 1MB per call of the cookie
+    unquoting test at ``n=10_000``), and the larger input, which promotes
+    more, pays disproportionately for touching fresh memory. This has been
+    seen to inflate a linear ratio of about 10 to 20 or more, and in some
+    configurations to over 80, so on PyPy the collector is left alone.
+    """
+    if platform.python_implementation() != "CPython":
+        yield
+        return
+    gc_was_enabled = gc.isenabled()
+    gc.disable()
+    try:
+        yield
+    finally:
+        if gc_was_enabled:
+            gc.enable()
+
+
+def assert_linear_scaling(
+    func: Callable[[int], object],
+    n1: int,
+    n2: int,
+    *,
+    max_ratio: float,
+    msg: str,
+    rounds: int = 3,
+    attempts: int = 3,
+) -> None:
+    """Fail if ``func(n2)`` takes disproportionately longer than ``func(n1)``.
+
+    This is for regression tests of accidentally quadratic (or worse) code,
+    where the larger input is expected to exceed ``max_ratio`` times the cost
+    of the smaller one by a wide margin. ``max_ratio`` should be set well
+    above the expected ratio of ``n2 / n1``: the goal is to detect a change in
+    complexity class, not to measure constant factors.
+
+    Timing tests are vulnerable to interference from everything else
+    happening on the machine, which on an overloaded CI worker can be a lot.
+    Widening ``max_ratio`` is a blunt instrument for this: it makes the test
+    both less flaky and less useful. Instead, this function attacks the noise
+    itself:
+
+    * Only CPU time used by this process is measured (see `_time_calls`).
+    * Each operation is repeated enough times to be measured reliably (see
+      `_MIN_MEASUREMENT_TIME`).
+    * On CPython, the garbage collector is disabled during the measurements
+      (see `_gc_disabled`).
+    * Each size is measured ``rounds`` times and the lowest result is used.
+      Interference can only make an operation look slower, never faster, so
+      the minimum is a much more stable estimate of its cost than the mean.
+      The two sizes are measured alternately, so that a machine that gets
+      slower (or faster) while the test runs affects both alike.
+    * The whole measurement is retried up to ``attempts`` times before
+      failing. A change in complexity class is reproducible; a scheduling
+      hiccup usually isn't.
+
+    All this takes about a second, so it is preceded by a single quick
+    measurement, which passes the test if the ratio is under three quarters
+    of ``max_ratio``. (Interference that inflates the time for ``n1`` could
+    let a quick measurement pass code that should fail, but only by a
+    factor larger than the margin between ``max_ratio`` and the ratio of a
+    real change in complexity class. Linear code often measures a little
+    over ``n2 / n1``, so a threshold of half of ``max_ratio`` would send
+    most passing tests to the slow measurement.) The quick measurement is
+    itself preceded by a warmup of the same length, because the first calls
+    are systematically slower, especially on PyPy before its JIT has
+    compiled the code. That inflates the time for ``n1``, which is measured
+    first, and can hide even a quadratic regression.
+    """
+    with _gc_disabled():
+        _calibrate(func, n1, _QUICK_MEASUREMENT_TIME)
+        iterations1, elapsed1 = _calibrate(func, n1, _QUICK_MEASUREMENT_TIME)
+        iterations2, elapsed2 = _calibrate(func, n2, _QUICK_MEASUREMENT_TIME)
+    if (elapsed2 / iterations2) / (elapsed1 / iterations1) <= max_ratio * 0.75:
+        return
+    t1 = t2 = 0.0
+    for _ in range(attempts):
+        with _gc_disabled():
+            iterations1, elapsed1 = _calibrate(func, n1)
+            iterations2, elapsed2 = _calibrate(func, n2)
+            t1 = elapsed1 / iterations1
+            t2 = elapsed2 / iterations2
+            for _ in range(rounds - 1):
+                t1 = min(t1, _time_calls(func, n1, iterations1) / iterations1)
+                t2 = min(t2, _time_calls(func, n2, iterations2) / iterations2)
+        if t2 / t1 <= max_ratio:
+            return
+    raise AssertionError(
+        f"{msg}: n={n1} took {t1:.4f}s and n={n2} took {t2:.4f}s, a ratio of "
+        f"{t2 / t1:.1f} (limit {max_ratio}), in each of {attempts} attempts"
+    )
+
+
+@contextlib.contextmanager
+def assert_memory_budget(
+    input_size: int, *, max_ratio: float, msg: str
+) -> Generator[None, None, None]:
+    """Fail if the body of the ``with`` block allocates more than
+    ``max_ratio`` bytes at once for each byte of its input (whose size is
+    ``input_size``).
+
+    The input may also be a configured limit, such as ``max_body_size``,
+    when the point of the test is that memory use is bounded by the limit
+    and not by what the client sends.
+
+    Unlike time, memory use can be measured exactly, so a single
+    measurement is enough. Requires `tracemalloc` (which PyPy lacks), so
+    callers should use `skipNotCPython`.
+    """
+    import tracemalloc
+
+    tracemalloc.start()
+    try:
+        yield
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    ratio = peak / input_size
+    if ratio > max_ratio:
+        raise AssertionError(
+            f"{msg}: {input_size} bytes of input used {peak} bytes of memory, "
+            f"a ratio of {ratio:.1f} (limit {max_ratio})"
+        )

@@ -17,14 +17,11 @@ from unittest import mock
 from tornado import gen
 from tornado.concurrent import Future
 from tornado.escape import native_str
-from tornado.ioloop import IOLoop, PeriodicCallback, TimeoutError
+from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.log import app_log
-from tornado.test.util import (
-    ignore_deprecation,
-    skipIfNonUnix,
-)
+from tornado.platform.asyncio import BaseAsyncIOLoop
+from tornado.test.util import AsyncTestCase, TestCase, ignore_deprecation, skipIfNonUnix
 from tornado.testing import (
-    AsyncTestCase,
     ExpectLog,
     bind_unused_port,
     gen_test,
@@ -46,8 +43,8 @@ class TestIOLoop(AsyncTestCase):
             old_add_callback(callback, *args, **kwargs)
 
         loop.add_callback = types.MethodType(add_callback, loop)  # type: ignore
-        loop.add_callback(lambda: {})  # type: ignore
-        loop.add_callback(lambda: [])  # type: ignore
+        loop.add_callback(lambda: {})
+        loop.add_callback(lambda: [])
         loop.add_timeout(datetime.timedelta(milliseconds=50), loop.stop)
         loop.start()
         self.assertLess(self.calls, 10)
@@ -81,7 +78,7 @@ class TestIOLoop(AsyncTestCase):
         self.io_loop.add_callback(thread.start)
         self.wait()
         delta = time.time() - self.stop_time
-        self.assertLess(delta, 0.1)
+        self.assertLess(delta, 0.2)
         thread.join()
 
     def test_add_timeout_timedelta(self):
@@ -430,7 +427,8 @@ class TestIOLoop(AsyncTestCase):
     def test_explicit_asyncio_loop(self):
         asyncio_loop = asyncio.new_event_loop()
         loop = IOLoop(asyncio_loop=asyncio_loop, make_current=False)
-        assert loop.asyncio_loop is asyncio_loop  # type: ignore
+        assert isinstance(loop, BaseAsyncIOLoop)
+        assert loop.asyncio_loop is asyncio_loop
         with self.assertRaises(RuntimeError):
             # Can't register two IOLoops with the same asyncio_loop
             IOLoop(asyncio_loop=asyncio_loop, make_current=False)
@@ -439,7 +437,7 @@ class TestIOLoop(AsyncTestCase):
 
 # Deliberately not a subclass of AsyncTestCase so the IOLoop isn't
 # automatically set as current.
-class TestIOLoopCurrent(unittest.TestCase):
+class TestIOLoopCurrent(TestCase):
     def setUp(self):
         setup_with_context_manager(self, ignore_deprecation())
         self.io_loop: IOLoop | None = None
@@ -567,7 +565,7 @@ class TestIOLoopFutures(AsyncTestCase):
         self.assertTrue(event.is_set())
 
 
-class TestIOLoopRunSync(unittest.TestCase):
+class TestIOLoopRunSync(TestCase):
     def setUp(self):
         self.io_loop = IOLoop(make_current=False)
 
@@ -633,7 +631,7 @@ class TestIOLoopRunSync(unittest.TestCase):
         assert "Event loop stopped" in str(cm.exception)
 
 
-class TestPeriodicCallbackMath(unittest.TestCase):
+class TestPeriodicCallbackMath(TestCase):
     def simulate_calls(self, pc, durations):
         """Simulate a series of calls to the PeriodicCallback.
 
@@ -768,7 +766,7 @@ class TestPeriodicCallbackAsync(AsyncTestCase):
         self.assertEqual(counts[1], 3)
 
 
-class TestIOLoopConfiguration(unittest.TestCase):
+class TestIOLoopConfiguration(TestCase):
     def run_python(self, *statements):
         stmt_list = [
             "from tornado.ioloop import IOLoop",

@@ -1,0 +1,44 @@
+What's new in Tornado 6.5.9
+===========================
+
+Sep 14, 2026
+------------
+
+Security fixes
+~~~~~~~~~~~~~~
+
+- `.StaticFileHandler` no longer follows symlinks outside of the static root directory.
+  Applications that wish to continue the previous behavior may set the new argument
+  ``allowed_symlink_directory`` to the directory (an ancestor of the static root) that
+  should be used for symlink validation. Thanks to `Yasha-ops <https://github.com/Yasha-ops>`_
+  and `iaohkut-from-NightWolf-Team <https://github.com/iaohkut-from-NightWolf-Team>`_ for
+  reporting this issue.
+- ``curl_httpclient`` has a new ``max_body_size`` argument (default 100MB, same as
+  for ``simple_httpclient``). This limit is enforced on all requests, whether or not
+  ``streaming_callback`` is used. ``curl_httpclient`` now also controls its memory usage
+  when decompressing response bodies. Thanks to `afldl <https://github.com/afldl>`_,
+  `iaohkut-from-NightWolf-Team <https://github.com/iaohkut-from-NightWolf-Team>`_, and
+  `aoto-tech <https://github.com/aoto-tech>`_ for reporting this issue.
+- ``simple_httpclient`` now correctly applies the ``max_body_size`` limit to responses
+  using HTTP/1.0 format (no ``Content-Length`` or ``Transfer-Encoding``). Previously it
+  silently truncated such responses at ``max_buffer_size`` instead. Thanks to
+  `afldl <https://github.com/afldl>`_ for reporting this issue.
+- ``simple_httpclient`` now rejects responses that use more than 10 ``100 Continue`` responses,
+  which could previously cause stack overflow errors. Thanks to `afldl <https://github.com/afldl>`_
+  for reporting this issue.
+- The limit ``ParseBodyConfig.urlencoded.max_argument`` is now applied to URL arguments
+  in addition to ``POST`` bodies. Thanks to 
+  `iaohkut-from-NightWolf-Team <https://github.com/iaohkut-from-NightWolf-Team>`_,
+  `afldl <https://github.com/afldl>`_, and `manus-pi <https://github.com/manus-pi>`_
+  for reporting this issue.
+
+Bug fixes
+~~~~~~~~~
+
+`tornado.iostream`
+~~~~~~~~~~~~~~~~~~
+
+- ``.IOStream.read_until_close`` now reports errors correctly when a stream is closed due to
+  an error or exceeds a memory limit. Previously it would report a successful read of whatever
+  was in the buffer. Connection resets are still treated as a normal close (as they are
+  elsewhere in `.IOStream`), since some platforms report a clean shutdown by the peer this way.

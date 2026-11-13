@@ -76,8 +76,8 @@ if __name__ == "__main__":
 
 import functools
 import importlib.abc
+import importlib.util
 import os
-import pkgutil
 import subprocess
 import sys
 import traceback
@@ -99,8 +99,8 @@ from collections.abc import Callable
 # fixes that behavior.
 _has_execv = sys.platform != "win32"
 
-_watched_files = set()
-_reload_hooks = []
+_watched_files: set[str] = set()
+_reload_hooks: list[Callable[[], None]] = []
 _reload_attempted = False
 _io_loops: "weakref.WeakKeyDictionary[ioloop.IOLoop, bool]" = (
     weakref.WeakKeyDictionary()
@@ -336,7 +336,8 @@ def main() -> None:
         assert opts.module is not None
         # runpy did a fake import of the module as __main__, but now it's
         # no longer in sys.modules.  Figure out where it is and watch it.
-        loader = pkgutil.get_loader(opts.module)
+        spec = importlib.util.find_spec(opts.module)
+        loader = spec.loader if spec is not None else None
         if loader is not None and isinstance(loader, importlib.abc.FileLoader):
             watch(loader.get_filename())
     if opts.until_success and not exit_status:

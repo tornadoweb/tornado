@@ -46,11 +46,11 @@ import gettext
 import glob
 import os
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import Any
 
 from tornado import escape
-from tornado._locale_data import LOCALE_NAMES
+from tornado._locale_data import LOCALE_NAMES as LOCALE_NAMES
 from tornado.log import gen_log
 
 _default_locale = "en_US"
@@ -138,20 +138,21 @@ def load_translations(directory: str, encoding: str | None = None) -> None:
             )
             continue
         full_path = os.path.join(directory, path)
-        if encoding is None:
+        file_encoding = encoding
+        if file_encoding is None:
             # Try to autodetect encoding based on the BOM.
             with open(full_path, "rb") as bf:
                 data = bf.read(len(codecs.BOM_UTF16_LE))
             if data in (codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE):
-                encoding = "utf-16"
+                file_encoding = "utf-16"
             else:
                 # utf-8-sig is "utf-8 with optional BOM". It's discouraged
                 # in most cases but is common with CSV files because Excel
                 # cannot read utf-8 files without a BOM.
-                encoding = "utf-8-sig"
+                file_encoding = "utf-8-sig"
         # python 3: csv.reader requires a file open in text mode.
         # Specify an encoding to avoid dependence on $LANG environment variable.
-        with open(full_path, encoding=encoding) as f:
+        with open(full_path, encoding=file_encoding) as f:
             _translations[locale] = {}
             for i, row in enumerate(csv.reader(f)):
                 if not row or len(row) < 2:
@@ -350,12 +351,14 @@ class Locale:
            datetimes are still assumed to be UTC).
         """
         if isinstance(date, (int, float)):
-            date = datetime.datetime.fromtimestamp(date, datetime.timezone.utc)
+            date = datetime.datetime.fromtimestamp(date, datetime.UTC)
         if date.tzinfo is None:
-            date = date.replace(tzinfo=datetime.timezone.utc)
-        now = datetime.datetime.now(datetime.timezone.utc)
+            date = date.replace(tzinfo=datetime.UTC)
+        else:
+            date = date.astimezone(datetime.UTC)
+        now = datetime.datetime.now(datetime.UTC)
         if date > now:
-            if relative and (date - now).seconds < 60:
+            if relative and (date - now).total_seconds() < 60:
                 # Due to click skew, things are some things slightly
                 # in the future. Round timestamps in the immediate
                 # future down to now in relative mode.
@@ -454,7 +457,7 @@ class Locale:
                 "day": str(local_date.day),
             }
 
-    def list(self, parts: Any) -> str:
+    def list(self, parts: Sequence[str]) -> str:
         """Returns a comma-separated list for the given list of parts.
 
         The format is, e.g., "A, B and C", "A and B" or just "A" for lists

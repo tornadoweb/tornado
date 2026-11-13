@@ -45,19 +45,17 @@ def install() -> None:
     install()
 
 
-if hasattr(gen.convert_yielded, "register"):
+@gen.convert_yielded.register(Deferred)
+def _(d: Deferred) -> Future[typing.Any]:
+    f: Future[typing.Any] = Future()
 
-    @gen.convert_yielded.register(Deferred)
-    def _(d: Deferred) -> Future:
-        f: Future[typing.Any] = Future()
+    def errback(failure: failure.Failure) -> None:
+        try:
+            failure.raiseException()
+            # Should never happen, but just in case
+            raise Exception("errback called without error")
+        except:
+            future_set_exc_info(f, sys.exc_info())
 
-        def errback(failure: failure.Failure) -> None:
-            try:
-                failure.raiseException()
-                # Should never happen, but just in case
-                raise Exception("errback called without error")
-            except:
-                future_set_exc_info(f, sys.exc_info())
-
-        d.addCallbacks(f.set_result, errback)
-        return f
+    d.addCallbacks(f.set_result, errback)
+    return f

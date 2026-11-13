@@ -4,7 +4,8 @@ import threading
 from wsgiref.validate import validator
 
 from tornado.routing import RuleRouter
-from tornado.testing import AsyncHTTPTestCase, gen_test
+from tornado.test.util import AsyncHTTPTestCase
+from tornado.testing import gen_test
 from tornado.wsgi import WSGIContainer
 
 
@@ -66,6 +67,12 @@ class WSGIContainerDummyExecutorTest(WSGIAppMixin, AsyncHTTPTestCase):
     def test_simple(self):
         response = self.fetch("/simple")
         self.assertEqual(response.body, b"Hello world!")
+
+    def test_head(self):
+        response = self.fetch("/simple", method="HEAD")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"")
+        self.assertEqual(response.headers["Content-Length"], "12")
 
     @gen_test
     async def test_concurrent_barrier(self):

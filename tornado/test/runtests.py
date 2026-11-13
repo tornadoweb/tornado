@@ -12,13 +12,14 @@ from functools import reduce
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 from tornado.netutil import Resolver
-from tornado.options import add_parse_callback, define, options
+from tornado.options import add_parse_callback, define
 from tornado.test.util import ABT_SKIP_MESSAGE
 
 TEST_MODULES = [
     "tornado.httputil.doctests",
     "tornado.iostream.doctests",
     "tornado.util.doctests",
+    "tornado.test.api_test",
     "tornado.test.asyncio_test",
     "tornado.test.auth_test",
     "tornado.test.autoreload_test",
@@ -40,8 +41,10 @@ TEST_MODULES = [
     "tornado.test.log_test",
     "tornado.test.options_test",
     "tornado.test.process_test",
+    "tornado.test.property_test",
     "tornado.test.queues_test",
     "tornado.test.routing_test",
+    "tornado.test.security_corpus_test",
     "tornado.test.simple_httpclient_test",
     "tornado.test.tcpclient_test",
     "tornado.test.tcpserver_test",
@@ -80,13 +83,13 @@ def test_runner_factory(stderr):
             result = super().run(test)
             if result.skipped:
                 skip_reasons = {reason for (test, reason) in result.skipped}
-                self.stream.write(  # type: ignore
+                self.stream.write(
                     textwrap.fill(
                         "Some tests were skipped because: %s"
                         % ", ".join(sorted(skip_reasons))
                     )
                 )
-                self.stream.write("\n")  # type: ignore
+                self.stream.write("\n")
             return result
 
     return TornadoTextTestRunner
@@ -163,11 +166,6 @@ def main():
             reduce(operator.or_, (getattr(gc, v) for v in values))
         ),
     )
-    define(
-        "fail-if-logs",
-        default=True,
-        help="If true, fail the tests if any log output is produced (unless captured by ExpectLog)",
-    )
 
     def set_locale(x):
         locale.setlocale(locale.LC_ALL, x)
@@ -182,7 +180,7 @@ def main():
     # anything written by anything but the test runner as an error.
     orig_stderr = sys.stderr
     counting_stderr = CountingStderr(orig_stderr)
-    sys.stderr = counting_stderr  # type: ignore
+    sys.stderr = counting_stderr
 
     import tornado.testing
 
@@ -214,8 +212,7 @@ def main():
                 log_counter.error_count,
                 counting_stderr.byte_count,
             )
-            if options.fail_if_logs:
-                sys.exit(1)
+            sys.exit(1)
 
 
 if __name__ == "__main__":

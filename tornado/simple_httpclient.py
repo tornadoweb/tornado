@@ -14,7 +14,7 @@ from types import TracebackType
 from typing import Any, Optional, Type, cast
 
 from tornado import gen, httputil, version
-from tornado.escape import _unicode
+from tornado.escape import _unicode, utf8
 from tornado.http1connection import HTTP1Connection, HTTP1ConnectionParameters
 from tornado.httpclient import (
     AsyncHTTPClient,
@@ -31,9 +31,27 @@ from tornado.netutil import (
     OverrideResolver,
     Resolver,
     _client_ssl_defaults,
+    _client_ssl_noverify,
     is_valid_ip,
 )
 from tornado.tcpclient import TCPClient
+
+# Control characters and spaces are not allowed anywhere in a URL. urlsplit
+# silently removes some of them (tabs and newlines), and the rest would be sent
+# as-is, producing a malformed request line.
+_FORBIDDEN_URL_CHARS_RE = re.compile(r"[\x00-\x20\x7f]")
+
+
+def _percent_encode_url(url: bytes) -> str:
+    """Percent-encodes spaces and non-ASCII bytes in ``url``.
+
+    Browsers (following the WHATWG URL spec) encode these before sending a
+    request; other characters, including existing percent-escapes, are left
+    alone.
+    """
+    return re.sub(
+        rb"[ \x80-\xff]+", lambda m: urllib.parse.quote_from_bytes(m[0]).encode(), url
+    ).decode("ascii")
 
 
 class HTTPTimeoutError(HTTPError):
@@ -271,7 +289,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self.max_body_size = max_body_size
         self.code: int | None = None
         self.headers: httputil.HTTPHeaders | None = None
-        self.chunks: list[bytes] = []
+        self.chunks = bytearray()
         self._decompressor = None
         # Timeout handle returned by IOLoop.add_timeout
         self._timeout: object = None
@@ -282,7 +300,10 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
     async def run(self) -> None:
         try:
-            self.parsed = urllib.parse.urlsplit(_unicode(self.request.url))
+            url = _unicode(self.request.url)
+            if _FORBIDDEN_URL_CHARS_RE.search(url):
+                raise ValueError("Invalid character in url: %r" % url)
+            self.parsed = urllib.parse.urlsplit(url)
             if self.parsed.scheme not in ("http", "https"):
                 raise ValueError("Unsupported url scheme: %s" % self.request.url)
             # urlsplit results have hostname and port results, but they
@@ -325,19 +346,24 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 timeout = self.request.request_timeout
             else:
                 timeout = 0
-            if timeout:
-                self._timeout = self.io_loop.add_timeout(
-                    self.start_time + timeout,
-                    functools.partial(self._on_timeout, "while connecting"),
+            try:
+                stream = await self.tcp_client.connect(
+                    host,
+                    port,
+                    af=af,
+                    ssl_options=ssl_options,
+                    max_buffer_size=self.max_buffer_size,
+                    source_ip=source_ip,
+                    timeout=(
+                        self.start_time + timeout - self.io_loop.time()
+                        if timeout
+                        else None
+                    ),
                 )
-            stream = await self.tcp_client.connect(
-                host,
-                port,
-                af=af,
-                ssl_options=ssl_options,
-                max_buffer_size=self.max_buffer_size,
-                source_ip=source_ip,
-            )
+            except TimeoutError as e:
+                # TCPClient's timeout messages describe which phase of
+                # the connection timed out (DNS, TCP, or TLS).
+                raise HTTPTimeoutError(str(e) or "Timeout while connecting") from None
 
             if self.final_callback is None:
                 # final_callback is cleared if we've hit our timeout.
@@ -378,14 +404,17 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     self.request.headers["Host"] = self.parsed.netloc
             username, password = None, None
             if self.parsed.username is not None:
-                username, password = self.parsed.username, self.parsed.password
+                username = self.parsed.username
+                password = self.parsed.password or ""
             elif self.request.auth_username is not None:
                 username = self.request.auth_username
                 password = self.request.auth_password or ""
             if username is not None:
                 assert password is not None
                 if self.request.auth_mode not in (None, "basic"):
-                    raise ValueError("unsupported auth_mode %s", self.request.auth_mode)
+                    raise ValueError(
+                        "unsupported auth_mode %s" % self.request.auth_mode
+                    )
                 self.request.headers["Authorization"] = "Basic " + _unicode(
                     base64.b64encode(
                         httputil.encode_username_password(username, password)
@@ -430,6 +459,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             req_path = (self.parsed.path or "/") + (
                 ("?" + self.parsed.query) if self.parsed.query else ""
             )
+            req_path = _percent_encode_url(utf8(req_path))
             self.connection = self._create_connection(stream)
             start_line = httputil.RequestStartLine(self.request.method, req_path, "")
             self.connection.write_headers(start_line, self.request.headers)
@@ -453,7 +483,14 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 and self.request.client_cert is None
                 and self.request.client_key is None
             ):
-                return _client_ssl_defaults
+                return _client_ssl_defaults()
+            if (
+                not self.request.validate_cert
+                and self.request.client_cert is None
+                and self.request.client_key is None
+            ):
+                # ca_certs is irrelevant when we're not validating.
+                return _client_ssl_noverify()
             ssl_ctx = ssl.create_default_context(
                 ssl.Purpose.SERVER_AUTH, cafile=self.request.ca_certs
             )
@@ -570,11 +607,15 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
     def on_connection_close(self) -> None:
         if self.final_callback is not None:
-            message = "Connection closed"
             if self.stream.error:
-                raise self.stream.error
+                # This is called from the connection's read loop, which
+                # only logs exceptions, so the error must go to
+                # _handle_exception instead of being raised.
+                error = self.stream.error
+                self._handle_exception(type(error), error, error.__traceback__)
+                return
             try:
-                raise HTTPStreamClosedError(message)
+                raise HTTPStreamClosedError("Connection closed")
             except HTTPStreamClosedError:
                 self._handle_exception(*sys.exc_info())
 
@@ -614,16 +655,19 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
     def finish(self) -> None:
         assert self.code is not None
-        data = b"".join(self.chunks)
+        data = bytes(self.chunks)
         self._remove_timeout()
         original_request = getattr(self.request, "original_request", self.request)
         if self._should_follow_redirect():
             assert isinstance(self.request, _RequestProxy)
             assert self.headers is not None
             new_request = copy.copy(self.request.request)
-            new_request.url = urllib.parse.urljoin(
-                self.request.url, self.headers["Location"]
-            )
+            # Header values are decoded as latin1; recover the original bytes
+            # so that non-ASCII characters are encoded as they were sent
+            # (usually UTF-8). Spaces are encoded rather than rejected, as
+            # browsers and curl do for redirects.
+            location = _percent_encode_url(self.headers["Location"].encode("latin1"))
+            new_request.url = urllib.parse.urljoin(self.request.url, location)
             new_request.headers = self.request.headers.copy()
             parsed_orig_url = urllib.parse.urlsplit(original_request.url)
             parsed_new_url = urllib.parse.urlsplit(new_request.url)
@@ -724,7 +768,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         if self.request.streaming_callback is not None:
             return self.request.streaming_callback(chunk)
         else:
-            self.chunks.append(chunk)
+            self.chunks += chunk
             return None
 
 

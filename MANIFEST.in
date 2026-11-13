@@ -3,6 +3,7 @@ prune docs/build
 include tornado/py.typed
 include tornado/speedups.c
 include tornado/test/README
+include tornado/test/api.txt
 include tornado/test/csv_translations/fr_FR.csv
 include tornado/test/gettext_translations/fr_FR/LC_MESSAGES/tornado_test.mo
 include tornado/test/gettext_translations/fr_FR/LC_MESSAGES/tornado_test.po

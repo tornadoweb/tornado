@@ -37,6 +37,7 @@ from typing import Any, Union
 from tornado.log import app_log
 
 _T = typing.TypeVar("_T")
+_P = typing.ParamSpec("_P")
 
 
 class ReturnValueIgnoredError(Exception):
@@ -71,7 +72,17 @@ class DummyExecutor(futures.Executor):
 dummy_executor = DummyExecutor()
 
 
-def run_on_executor(*args: Any, **kwargs: Any) -> Callable:
+@typing.overload
+def run_on_executor(fn: Callable[_P, _T], /) -> Callable[_P, Future[_T]]: ...
+
+
+@typing.overload
+def run_on_executor(
+    *, executor: str = ...
+) -> Callable[[Callable[_P, _T]], Callable[_P, Future[_T]]]: ...
+
+
+def run_on_executor(*args: Any, **kwargs: Any) -> Any:
     """Decorator to run a synchronous method asynchronously on an executor.
 
     Returns a future.
@@ -112,15 +123,16 @@ def run_on_executor(*args: Any, **kwargs: Any) -> Callable:
        The ``callback`` argument was removed.
     """
 
-    # Fully type-checking decorators is tricky, and this one is
-    # discouraged anyway so it doesn't have all the generic magic.
-    def run_on_executor_decorator(fn: Callable) -> Callable[..., Future]:
+    def run_on_executor_decorator(
+        fn: Callable[_P, _T],
+    ) -> Callable[_P, Future[_T]]:
         executor = kwargs.get("executor", "executor")
 
         @functools.wraps(fn)
-        def wrapper(self: Any, *args: Any, **kwargs: Any) -> Future:
-            async_future: Future = Future()
-            conc_future = getattr(self, executor).submit(fn, self, *args, **kwargs)
+        def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> Future[_T]:
+            # The first argument is self; the executor is one of its attributes.
+            async_future: Future[_T] = Future()
+            conc_future = getattr(args[0], executor).submit(fn, *args, **kwargs)
             chain_future(conc_future, async_future)
             return async_future
 
@@ -131,7 +143,7 @@ def run_on_executor(*args: Any, **kwargs: Any) -> Callable:
     if len(args) == 1:
         return run_on_executor_decorator(args[0])
     elif len(args) != 0:
-        raise ValueError("expected 1 argument, got %d", len(args))
+        raise ValueError("expected 1 argument, got %d" % len(args))
     return run_on_executor_decorator
 
 
@@ -152,13 +164,21 @@ def chain_future(
        Now accepts both Tornado/asyncio `Future` objects and
        `concurrent.futures.Future`.
 
+    .. versionchanged:: 6.6
+
+       If ``a`` is cancelled, ``b`` is now cancelled too. Previously ``b``
+       would never complete.
+
     """
 
     def copy(a: "Future[_T]") -> None:
         if b.done():
             return
-        if hasattr(a, "exc_info") and a.exc_info() is not None:  # type: ignore
-            future_set_exc_info(b, a.exc_info())  # type: ignore
+        if a.cancelled():
+            b.cancel()
+            return
+        if hasattr(a, "exc_info") and a.exc_info() is not None:
+            future_set_exc_info(b, a.exc_info())
         else:
             a_exc = a.exception()
             if a_exc is not None:

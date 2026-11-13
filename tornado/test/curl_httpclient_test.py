@@ -1,13 +1,35 @@
+# Tests for tornado.curl_httpclient
+#
+# Most of our tests actually live in HTTPClientCommonTestCase in httpclient_test.py.
+# New tests should be added there unless they deal with implementation details specific
+# to CurlAsyncHTTPClient.
+#
+# Subclasses of AsyncHTTPTestCase in this file should override get_http_client to return
+# an instance of CurlAsyncHTTPClient. Tests that do not do this will actually be run
+# with the default HTTP client instead, which is sometimes overridden to be a different
+# implementation.
+from contextlib import contextmanager
+import gc
 from hashlib import md5
 import os
 import ssl
 import unittest
+from unittest import mock
+import weakref
 
 from tornado import gen
 from tornado.escape import utf8
+from tornado.log import app_log
 from tornado.netutil import ssl_options_to_context
 from tornado.test import httpclient_test
-from tornado.testing import AsyncHTTPSTestCase, AsyncHTTPTestCase
+from tornado.test.util import (
+    AsyncHTTPSTestCase,
+    AsyncHTTPTestCase,
+    AsyncTestCase,
+    curl_uses_schannel,
+    skipNotCPython,
+)
+from tornado.testing import ExpectLog
 from tornado.web import Application, RequestHandler
 
 try:
@@ -16,22 +38,112 @@ except ImportError:
     pycurl = None  # type: ignore
 
 if pycurl is not None:
-    from tornado.curl_httpclient import CurlAsyncHTTPClient
+    from tornado.curl_httpclient import (
+        CurlAsyncHTTPClient,
+        CurlError,
+        _CurlStreamingBuffer,
+    )
+
+
+def create_client(**kwargs):
+    return CurlAsyncHTTPClient(
+        force_instance=True, defaults=dict(allow_ipv6=False), **kwargs
+    )
 
 
 @unittest.skipIf(pycurl is None, "pycurl module not present")
 class CurlHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
+    # libcurl decodes the Content-Encoding named by the response whether or
+    # not we listed it in Accept-Encoding, so brotli is reachable whenever
+    # libcurl was built with it (which is common).
+    decompresses_brotli = pycurl is not None and "brotli" in pycurl.version
+
     def get_http_client(self):
         client = CurlAsyncHTTPClient(defaults=dict(allow_ipv6=False))
         # make sure AsyncHTTPClient magic doesn't give us the wrong class
         self.assertTrue(isinstance(client, CurlAsyncHTTPClient))
         return client
 
+    def test_streaming_pause_and_resume(self):
+        # With a small buffer the transfer is paused and resumed many times
+        # over one response. libcurl re-delivers the chunk that was in
+        # flight when it was paused, so that chunk must not be consumed
+        # twice.
+        chunks: list[bytes] = []
+        with mock.patch.object(_CurlStreamingBuffer, "max_buffer_size", 1024):
+            response = self.fetch("/large_body", streaming_callback=chunks.append)
+        self.assertEqual(response.code, 200)
+        self.assertEqual(b"".join(chunks), httpclient_test.large_body())
+
+    def test_concurrent_paused_streams(self):
+        # Several streaming requests in flight at once, each pausing and
+        # resuming repeatedly: pausing one transfer must not disturb another.
+        client = create_client(max_clients=4)
+        buffers = [bytearray() for _ in range(8)]
+        try:
+            with mock.patch.object(_CurlStreamingBuffer, "max_buffer_size", 1024):
+                self.io_loop.run_sync(
+                    lambda: gen.multi(
+                        [
+                            client.fetch(
+                                self.get_url("/large_body"),
+                                streaming_callback=buf.extend,
+                            )
+                            for buf in buffers
+                        ]
+                    )
+                )
+        finally:
+            client.close()
+        for buf in buffers:
+            self.assertEqual(bytes(buf), httpclient_test.large_body())
+
+    @skipNotCPython
+    def test_client_not_leaked_by_write_callbacks(self):
+        # The WRITEFUNCTION callbacks installed for both the buffered and
+        # the streaming path hold references to the client and to the curl
+        # handle. They must not keep the client alive after close().
+
+        def use_and_close_a_client():
+            client = create_client()
+            self.io_loop.run_sync(lambda: client.fetch(self.get_url("/hello")))
+            self.io_loop.run_sync(
+                lambda: client.fetch(
+                    self.get_url("/large_body"),
+                    streaming_callback=lambda chunk: None,
+                )
+            )
+            client.close()
+            return weakref.ref(client)
+
+        ref = use_and_close_a_client()
+        gc.collect()
+        self.assertIsNone(ref())
+
+    def test_streaming_callback_exception(self):
+        # An exception in the streaming_callback is logged, and does not
+        # stop the transfer or leave it paused forever.
+        chunks: list[bytes] = []
+
+        def streaming_callback(chunk):
+            chunks.append(chunk)
+            if len(chunks) == 1:
+                raise ZeroDivisionError()
+
+        with mock.patch.object(_CurlStreamingBuffer, "max_buffer_size", 1024):
+            with ExpectLog(app_log, "Exception in callback"):
+                response = self.fetch(
+                    "/large_body", streaming_callback=streaming_callback
+                )
+        self.assertEqual(response.code, 200)
+        self.assertEqual(b"".join(chunks), httpclient_test.large_body())
+
 
 class DigestAuthHandler(RequestHandler):
-    def initialize(self, username, password):
+    def initialize(self, username, password, charset=None):
         self.username = username
         self.password = password
+        self.charset = charset
 
     def get(self):
         realm = "test"
@@ -63,10 +175,10 @@ class DigestAuthHandler(RequestHandler):
                 self.write("fail")
         else:
             self.set_status(401)
-            self.set_header(
-                "WWW-Authenticate",
-                f'Digest realm="{realm}", nonce="{nonce}", opaque="{opaque}"',
-            )
+            challenge = f'Digest realm="{realm}", nonce="{nonce}", opaque="{opaque}"'
+            if self.charset is not None:
+                challenge += f', charset="{self.charset}"'
+            self.set_header("WWW-Authenticate", challenge)
 
 
 class CustomReasonHandler(RequestHandler):
@@ -79,11 +191,18 @@ class CustomFailReasonHandler(RequestHandler):
         self.set_status(400, "Custom reason")
 
 
+class NonUtf8HeaderHandler(RequestHandler):
+    def get(self):
+        self.set_header("X-Test", "caf\u00e9")
+
+
 @unittest.skipIf(pycurl is None, "pycurl module not present")
 class CurlHTTPClientTestCase(AsyncHTTPTestCase):
+    http_client: "CurlAsyncHTTPClient"
+
     def setUp(self):
         super().setUp()
-        self.http_client = self.create_client()
+        self.http_client = create_client()
 
     def get_app(self):
         return Application(
@@ -92,16 +211,17 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
                 (
                     "/digest_non_ascii",
                     DigestAuthHandler,
-                    {"username": "foo", "password": "barユ£"},
+                    # Without charset="UTF-8" (RFC 7616 section 3.3), the
+                    # encoding of non-ascii credentials is unspecified. Libcurl
+                    # uses UTF-8 by default, but on windows it delegates digest
+                    # auth to SSPI, which uses ISO-8859-1 and fails if the
+                    # password cannot be encoded that way.
+                    {"username": "foo", "password": "barユ£", "charset": "UTF-8"},
                 ),
                 ("/custom_reason", CustomReasonHandler),
                 ("/custom_fail_reason", CustomFailReasonHandler),
+                ("/non_utf8_header", NonUtf8HeaderHandler),
             ]
-        )
-
-    def create_client(self, **kwargs):
-        return CurlAsyncHTTPClient(
-            force_instance=True, defaults=dict(allow_ipv6=False), **kwargs
         )
 
     def test_digest_auth(self):
@@ -113,6 +233,49 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
     def test_custom_reason(self):
         response = self.fetch("/custom_reason")
         self.assertEqual(response.reason, "Custom reason")
+
+    def test_debug_non_utf8(self):
+        for debug_type, prefix in ((0, ""), (1, "< "), (2, "> ")):
+            with self.subTest(debug_type=debug_type):
+                with self.assertLogs("tornado.curl_httpclient", "DEBUG") as logs:
+                    self.http_client._curl_debug(debug_type, b"caf\xe9\r\n\x00\xff")
+                self.assertEqual(
+                    [record.getMessage() for record in logs.records],
+                    [prefix + "b'caf\\xe9\\r\\n\\x00\\xff'"],
+                )
+
+    def test_debug_utf8(self):
+        for debug_type, expected in (
+            (0, ["caf\u00e9\r\nsecond"]),
+            (1, ["< caf\u00e9", "< second"]),
+            (2, ["> caf\u00e9", "> second"]),
+        ):
+            with self.subTest(debug_type=debug_type):
+                with self.assertLogs("tornado.curl_httpclient", "DEBUG") as logs:
+                    self.http_client._curl_debug(
+                        debug_type, utf8("caf\u00e9\r\nsecond\r\n")
+                    )
+                self.assertEqual(
+                    [record.getMessage() for record in logs.records], expected
+                )
+
+    def test_debug_binary_data(self):
+        with self.assertLogs("tornado.curl_httpclient", "DEBUG") as logs:
+            for debug_type in (3, 4, 5, 6):
+                self.http_client._curl_debug(debug_type, b"\x00\xff")
+        self.assertEqual(
+            [record.getMessage() for record in logs.records], ["> b'\\x00\\xff'"]
+        )
+
+    def test_debug_non_utf8_response_header(self):
+        with self.assertLogs("tornado.curl_httpclient", "DEBUG") as logs:
+            response = self.fetch("/non_utf8_header")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.headers["X-Test"], "caf\u00e9")
+        self.assertIn(
+            "< b'X-Test: caf\\xe9\\r\\n'",
+            [record.getMessage() for record in logs.records],
+        )
 
     def test_fail_custom_reason(self):
         response = self.fetch("/custom_fail_reason")
@@ -144,6 +307,30 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
             self.fetch("/digest", streaming_callback=_async_recv_chunk)
 
 
+@contextmanager
+def _ignore_proxy_env_vars():
+    # libcurl consults the (lowercase or uppercase) *_proxy environment
+    # variables to decide whether and how to proxy a request, which can
+    # override or interfere with the proxy settings the tests configure
+    # explicitly. Hide them for the duration of the test so the results
+    # don't depend on the environment the tests happen to run in.
+    proxy_vars = [
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "no_proxy",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "NO_PROXY",
+    ]
+    saved = {name: os.environ.pop(name) for name in proxy_vars if name in os.environ}
+    try:
+        yield
+    finally:
+        os.environ.update(saved)
+
+
 class ProxyAuthEchoHandler(RequestHandler):
     def get(self):
         if self.request.headers.get("Proxy-Authorization", None) is not None:
@@ -154,6 +341,10 @@ class ProxyAuthEchoHandler(RequestHandler):
 
 @unittest.skipIf(pycurl is None, "pycurl module not present")
 class CurlHTTPClientReuseProxyAuthTestCase(AsyncHTTPTestCase):
+    def setUp(self):
+        self.enterContext(_ignore_proxy_env_vars())
+        super().setUp()
+
     def get_app(self):
         # Note that we don't properly support proxy-style requests, but it works well enough
         # for this test if we start the url matcher with a wildcard.
@@ -200,7 +391,14 @@ class ClientCertEchoHandler(RequestHandler):
 
 
 @unittest.skipIf(pycurl is None, "pycurl module not present")
+@unittest.skipIf(
+    curl_uses_schannel(), "schannel cannot load PEM client certificates from files"
+)
 class CurlHTTPClientReuseCertsTestCase(AsyncHTTPSTestCase):
+    def setUp(self):
+        self.enterContext(_ignore_proxy_env_vars())
+        super().setUp()
+
     def get_app(self):
         return Application([(".*/client_cert", ClientCertEchoHandler)])
 
@@ -237,3 +435,118 @@ class CurlHTTPClientReuseCertsTestCase(AsyncHTTPSTestCase):
         )
         response = self.fetch(self.get_url("/client_cert"))
         self.assertEqual(response.body, b"no client cert")
+
+
+@unittest.skipIf(pycurl is None, "pycurl module not present")
+class CurlHTTPClientMaxBodySizeTestCase(httpclient_test.HTTPClientMaxBodySizeTestCase):
+    # curl_httpclient does not log when it refuses a body; the message is
+    # carried by the CurlError instead.
+    def get_http_client(self):
+        # max_clients=1 so that each test also reuses the curl handle left
+        # behind by the one before it.
+        return create_client(max_body_size=httpclient_test.MAX_BODY_SIZE, max_clients=1)
+
+    def test_refusal_message(self):
+        # The generic test only checks that the body was refused; make sure
+        # the error says why, since libcurl's own message for a short write
+        # ("Failure writing output to destination") would not.
+        with self.assertRaises(CurlError) as cm:
+            self.fetch("/bomb", raise_error=True)
+        self.assertIn("max_body_size", str(cm.exception))
+
+    def test_redirect_body_not_counted(self):
+        # libcurl discards the body of a redirect that it follows, so a
+        # redirect carrying a large body of its own does not count towards
+        # the limit for the response that follows it. Not shared:
+        # simple_httpclient applies max_body_size to the redirect response
+        # too, and refuses this one before following it.
+        response = self.fetch("/body_bearing_redirect")
+        response.rethrow()
+        self.assertEqual(response.body, b"a" * httpclient_test.MAX_BODY_SIZE)
+
+
+@unittest.skipIf(pycurl is None, "pycurl module not present")
+class CurlStreamingBufferTest(AsyncTestCase):
+    """Unit tests for the buffer that feeds a ``streaming_callback``."""
+
+    def setUp(self):
+        super().setUp()
+        self.timeouts_requested: list[int] = []
+        test = self
+
+        class FakeClient:
+            io_loop = test.io_loop
+            max_body_size = 1024 * 1024
+
+            def _set_timeout(self, msecs):
+                test.timeouts_requested.append(msecs)
+
+        self.client = FakeClient()
+
+    def make_buffer(self, curl, callback):
+        return _CurlStreamingBuffer(
+            self.client,  # type: ignore[arg-type]
+            curl,
+            callback,
+        )
+
+    def test_unpause_asks_for_a_socket_action(self):
+        # Only libcurl 8.x reports through the timer callback that an
+        # unpaused transfer is runnable again; older versions leave it
+        # stalled unless we ask for a socket_action ourselves.
+        paused = []
+
+        class FakeCurl:
+            def pause(self, flags):
+                paused.append(flags)
+
+        chunks: list[bytes] = []
+        buf = self.make_buffer(FakeCurl(), chunks.append)
+        with mock.patch.object(_CurlStreamingBuffer, "max_buffer_size", 4):
+            self.assertEqual(buf.write(b"hello"), 5)
+            self.assertEqual(buf.write(b"world"), pycurl.WRITEFUNC_PAUSE)
+        buf.flush()
+        self.assertEqual(chunks, [b"hello"])
+        self.assertEqual(paused, [pycurl.PAUSE_CONT])
+        self.assertEqual(self.timeouts_requested, [0])
+
+    def test_body_too_large(self):
+        # Exceeding the client's max_body_size makes write() report a short
+        # write, which libcurl turns into a failed transfer, and records why
+        # so that _finish can say so.
+        class FakeCurl:
+            def pause(self, flags):
+                raise AssertionError("should not pause")
+
+        chunks: list[bytes] = []
+        buf = self.make_buffer(FakeCurl(), chunks.append)
+        self.client.max_body_size = 8
+        self.assertEqual(buf.write(b"12345"), 5)
+        self.assertFalse(buf.body_too_large)
+        # 5 + 5 > 8, so this chunk is refused rather than truncated.
+        self.assertEqual(buf.write(b"67890"), 0)
+        self.assertTrue(buf.body_too_large)
+        buf.flush()
+        self.assertEqual(chunks, [b"12345"])
+
+    def test_unpause_error_is_ignored(self):
+        # When a transfer fails while it is paused, libcurl reports the
+        # failure from curl_easy_pause instead of from the write callback.
+        # That is not an error in the flush itself, and must not be raised
+        # into the IOLoop: _finish will pass the failure to the callback.
+        class FakeCurl:
+            def pause(self, flags):
+                raise pycurl.error(pycurl.E_WRITE_ERROR, "write error")
+
+        chunks: list[bytes] = []
+        buf = self.make_buffer(FakeCurl(), chunks.append)
+        with mock.patch.object(_CurlStreamingBuffer, "max_buffer_size", 4):
+            self.assertEqual(buf.write(b"hello"), 5)
+            # The buffer is full, so this chunk is left with libcurl.
+            self.assertEqual(buf.write(b"world"), pycurl.WRITEFUNC_PAUSE)
+        self.assertTrue(buf.paused)
+        buf.flush()
+        self.assertEqual(chunks, [b"hello"])
+        self.assertFalse(buf.paused)
+        # A failed unpause is not worth a socket_action.
+        self.assertEqual(self.timeouts_requested, [])
