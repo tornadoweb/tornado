@@ -453,7 +453,9 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             curl.setopt(pycurl.PROTOCOLS, pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS)
             curl.setopt(pycurl.REDIR_PROTOCOLS, pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS)
 
-        curl.setopt(pycurl.URL, native_str(request.url))
+        # libcurl only accepts ASCII URLs (and only converts IDN hostnames when
+        # it is built with IDN support), so do the conversion ourselves.
+        curl.setopt(pycurl.URL, httputil._url_to_ascii(native_str(request.url)))
 
         # libcurl's magic "Expect: 100-continue" behavior causes delays
         # with servers that don't support it (which include, among others,

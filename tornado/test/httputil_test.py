@@ -23,6 +23,7 @@ from tornado.httputil import (
     qs_to_qsl,
     split_host_and_port,
     url_concat,
+    _url_to_ascii,
 )
 from tornado.log import gen_log
 from tornado.test.util import (
@@ -784,6 +785,37 @@ class SplitHostAndPortTest(TestCase):
             split_host_and_port("example.com:\u0668\u0660"),
             ("example.com:\u0668\u0660", None),
         )
+
+
+class URLToASCIITest(TestCase):
+    def test_url_to_ascii(self):
+        for url, expected in [
+            # ASCII URLs are unchanged, even if they are unusual.
+            ("http://example.com/a b%41?#", "http://example.com/a b%41?#"),
+            ("http://caf\u00e9.example/", "http://xn--caf-dma.example/"),
+            (
+                "https://u\u00e9:p\u00e9@caf\u00e9.example:8080/\u00e9?\u00e9=1#\u00e9",
+                "https://u%C3%A9:p%C3%A9@xn--caf-dma.example:8080/%C3%A9?%C3%A9=1#%C3%A9",
+            ),
+            # Empty queries and fragments are kept.
+            ("http://caf\u00e9.example/?", "http://xn--caf-dma.example/?"),
+            ("http://caf\u00e9.example#", "http://xn--caf-dma.example#"),
+            ("http://[::1]:80/\u00e9", "http://[::1]:80/%C3%A9"),
+            ("//caf\u00e9.example/x", "//xn--caf-dma.example/x"),
+            ("/\u00e9", "/%C3%A9"),
+            (
+                "http://\uff4c\uff4f\uff43\uff41\uff4c\uff48\uff4f\uff53\uff54/",
+                "http://localhost/",
+            ),
+        ]:
+            with self.subTest(url=url):
+                self.assertEqual(_url_to_ascii(url), expected)
+
+    def test_invalid_hostname(self):
+        for url in ["http://a..b\u00e9/", "http://" + "\u00e9" * 64 + ".example/"]:
+            with self.subTest(url=url):
+                with self.assertRaises(ValueError):
+                    _url_to_ascii(url)
 
 
 class ParseCookieTest(TestCase):
