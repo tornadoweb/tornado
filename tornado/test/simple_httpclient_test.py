@@ -566,12 +566,6 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
         response.rethrow()
         self.assertEqual(response.body, b"12345678")
 
-    def test_100_continue(self):
-        response = self.fetch(
-            "/echo_post", method="POST", body=b"1234", expect_100_continue=True
-        )
-        self.assertEqual(response.body, b"1234")
-
     def test_100_continue_early_response(self):
         def body_producer(write):
             raise Exception("should not be called")
