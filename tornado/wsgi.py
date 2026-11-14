@@ -213,12 +213,8 @@ class WSGIContainer:
         .. versionchanged:: 6.3
            No longer a static method.
         """
-        hostport = request.host.split(":")
-        if len(hostport) == 2:
-            host = hostport[0]
-            port = int(hostport[1])
-        else:
-            host = request.host
+        host, port = httputil.split_host_and_port(request.host)
+        if port is None:
             port = 443 if request.protocol == "https" else 80
         environ = {
             "REQUEST_METHOD": request.method,
