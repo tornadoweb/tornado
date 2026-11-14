@@ -15,7 +15,7 @@ target-version = ['py311']
 #    versions += ["cp314t*"]
 #    cog.outl(f"build = \"{" ".join(versions)}\"")
 # ]]]
-build = "cp311* cp312* cp313* cp314* cp315* cp314t*"
+build = "cp311* cp312* cp313* cp314* cp315* cp316* cp314t*"
 #[[[end]]]
 test-command = "python -m tornado.test"
 

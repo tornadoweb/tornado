@@ -98,10 +98,14 @@ jobs:
             tox_env: py314-full
           - python: '3.14t'
             tox_env: py314t
-          - python: '3.15.0-dev - 3.15'
-            tox_env: py315
-          - python: '3.15t-dev'
+          - python: '3.15'
+            tox_env: py315-full
+          - python: '3.15t'
             tox_env: py315t
+          - python: '3.16.0-dev - 3.16'
+            tox_env: py316
+          - python: '3.16t-dev'
+            tox_env: py316t
           - python: '3.11.0'
             tox_env: py311-full
           - python: 'pypy-3.11-v8.x'
