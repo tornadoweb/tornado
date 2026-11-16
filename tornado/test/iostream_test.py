@@ -535,6 +535,53 @@ class TestReadWriteMixin(AsyncTestCase):
             ws.close()
             rs.close()
 
+    # A zero-width match (such as a lookahead) consumes nothing: the read
+    # returns b"" once the data it looks at has arrived, and that data is
+    # left for the next read. HTTP1Connection uses this to wait for the first
+    # byte of a request without reading it.
+    @gen_test
+    async def test_read_until_regex_zero_width_waits(self):
+        async with self.iostream_pair() as (rs, ws):
+            fut = rs.read_until_regex(rb"(?=[\s\S])")
+            await asyncio.sleep(0.01)
+            self.assertFalse(fut.done())
+            await ws.write(b"abc")
+            self.assertEqual(await fut, b"")
+            self.assertEqual(await rs.read_bytes(3), b"abc")
+
+    @gen_test
+    async def test_read_until_regex_zero_width_buffered(self):
+        async with self.iostream_pair() as (rs, ws):
+            await ws.write(b"abcdef")
+            self.assertEqual(await rs.read_bytes(3), b"abc")
+            # The rest is already buffered, so the read finishes inline, and
+            # repeating it is harmless.
+            for i in range(2):
+                fut = rs.read_until_regex(rb"(?=[\s\S])")
+                self.assertTrue(fut.done())
+                self.assertEqual(fut.result(), b"")
+            self.assertEqual(await rs.read_until(b"f"), b"def")
+
+    @gen_test
+    async def test_read_until_regex_lookahead_partial(self):
+        # A lookahead for several bytes waits until all of them are here.
+        async with self.iostream_pair() as (rs, ws):
+            fut = rs.read_until_regex(rb"(?=GET )")
+            await ws.write(b"GE")
+            await asyncio.sleep(0.01)
+            self.assertFalse(fut.done())
+            await ws.write(b"T /\r\n")
+            self.assertEqual(await fut, b"")
+            self.assertEqual(await rs.read_until(b"\r\n"), b"GET /\r\n")
+
+    @gen_test
+    async def test_read_until_regex_zero_width_closed(self):
+        async with self.iostream_pair() as (rs, ws):
+            fut = rs.read_until_regex(rb"(?=[\s\S])")
+            ws.close()
+            with self.assertRaises(StreamClosedError):
+                await fut
+
     @gen_test
     def test_read_until_regex_max_bytes_inline(self):
         rs, ws = yield self.make_iostream_pair()
