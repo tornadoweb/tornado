@@ -245,10 +245,10 @@ class HTTP1Connection(httputil.HTTPConnection):
                 # newline, which may come first since blank lines before a
                 # request are allowed.)
                 first_byte = self.stream.read_until_regex(rb"(?=[\s\S])")
-                if first_byte.done():
+                if _is_done(first_byte):
                     # Data was already buffered (as for pipelined requests),
                     # so skip the cost of setting up a timeout.
-                    first_byte.result()
+                    await first_byte
                 else:
                     try:
                         await gen.with_timeout(
