@@ -12,6 +12,7 @@ from tornado.httputil import (
     HTTPInputError,
     HTTPServerRequest,
     ParseMultipartConfig,
+    ParseUrlEncodedConfig,
     RequestStartLine,
     _DEFAULT_PARSE_BODY_CONFIG,
     _parse_header,
@@ -133,6 +134,47 @@ class UrlEncodedDataTest(TestCase):
         with self.assertRaises(HTTPInputError) as cm:
             parse_body_arguments("application/x-www-form-urlencoded", data, args, files)
         self.assertIn("Max number of fields exceeded", str(cm.exception))
+
+    @skipNotCPython
+    def test_memory_budget(self):
+        # Large bodies use a few bytes of memory per input byte: up to about
+        # 8 for lone % signs (see EscapeTestCase.test_unquote_memory_budget)
+        # and about 2 for many long fields, as of 2026-11.
+        n = ParseUrlEncodedConfig().max_arguments - 1
+        for name, body in [
+            ("lone %", b"a=" + b"%" * 900_000),
+            (
+                "escaped keys",
+                b"&".join(b"%d" % i + b"%41" * 333 + b"=" for i in range(n)),
+            ),
+            ("long values", b"&".join(b"a=" + b"x" * 1000 for i in range(n))),
+        ]:
+            with self.subTest(name):
+                args, files = form_data_args()
+                with assert_memory_budget(
+                    len(body),
+                    max_ratio=12,
+                    msg="urlencoded body parsing uses too much memory",
+                ):
+                    parse_body_arguments(
+                        "application/x-www-form-urlencoded", body, args, files
+                    )
+
+    @skipNotCPython
+    def test_memory_budget_many_fields(self):
+        # Each field costs a fixed amount (about 250 bytes as of 2026-11), so
+        # many short fields use about 50 bytes per input byte. max_arguments
+        # bounds the total, so the budget is per field rather than per byte.
+        max_arguments = ParseUrlEncodedConfig().max_arguments
+        body = b"".join(b"%d=&" % i for i in range(max_arguments - 1))
+        args, files = form_data_args()
+        with assert_memory_budget(
+            max_arguments,
+            max_ratio=500,
+            msg="urlencoded body parsing uses too much memory per field",
+        ):
+            parse_body_arguments("application/x-www-form-urlencoded", body, args, files)
+        self.assertEqual(len(args), max_arguments - 1)
 
 
 class MultipartFormDataTest(TestCase):
