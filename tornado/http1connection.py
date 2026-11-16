@@ -123,13 +123,13 @@ class HTTP1ConnectionParameters:
             to send its headers. `.SimpleAsyncHTTPClient` doesn't, since it
             doesn't reuse connections, so one timeout covers the whole wait
             for a response's headers.
-
-        .. versionchanged:: 6.7
-           Added ``idle_connection_timeout``.
         :arg int max_body_size: maximum amount of data for body
         :arg float body_timeout: how long to wait while reading body (seconds)
         :arg bool decompress: if true, decode incoming
             ``Content-Encoding: gzip``
+
+        .. versionchanged:: 6.7
+           Added ``idle_connection_timeout``.
         """
         self.no_keep_alive = no_keep_alive
         self.chunk_size = chunk_size or 65536
