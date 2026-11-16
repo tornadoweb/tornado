@@ -1,0 +1,2 @@
+# Pinned for the CI smoke test in .github/workflows/test.yml.
+atheris==3.1.0

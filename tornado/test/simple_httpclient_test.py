@@ -289,6 +289,20 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
                     self.fetch("/redirect?url=" + urllib.parse.quote(location))
                 self.assertIn("Unsupported url scheme", str(cm.exception))
 
+    def test_redirect_invalid_url(self):
+        # A Location that isn't a valid URL fails the request with the
+        # ValueError (rather than logging it and closing the connection).
+        for location in ["//x[/", "//user@example.com:99999/", "//user@/"]:
+            with self.subTest(location):
+                with self.assertRaises(ValueError):
+                    self.fetch("/redirect?url=" + urllib.parse.quote(location))
+
+    def test_invalid_host_or_port(self):
+        for bad_url in ["http://127.0.0.1:99999/", "http:///", "http://user@/"]:
+            with self.subTest(bad_url):
+                with self.assertRaises(ValueError):
+                    self.fetch(bad_url)
+
     def test_header_reuse(self):
         # Apps may reuse a headers object if they are only passing in constant
         # headers like user-agent.  The header object should not be modified.
@@ -944,7 +958,12 @@ class HostnameMappingTestCase(AsyncHTTPTestCase):
         )
 
     def get_app(self):
-        return Application([url("/hello", HelloWorldHandler)])
+        return Application(
+            [
+                url("/hello", HelloWorldHandler),
+                url("/redirect", httpclient_test.RedirectHandler),
+            ]
+        )
 
     def test_hostname_mapping(self):
         response = self.fetch("http://www.example.com:%d/hello" % self.get_http_port())
@@ -954,6 +973,21 @@ class HostnameMappingTestCase(AsyncHTTPTestCase):
     def test_port_mapping(self):
         response = self.fetch("http://foo.example.com:8000/hello")
         response.rethrow()
+        self.assertEqual(response.body, b"Hello world!")
+
+    def test_redirect_strips_userinfo_from_ipv6_url(self):
+        # Removing the userinfo from a cross-origin redirect keeps the
+        # brackets around an IPv6 address. (The mapping sends the request to
+        # the test server, so this doesn't need IPv6.)
+        self.http_client.close()
+        self.http_client = SimpleAsyncHTTPClient(
+            hostname_mapping={("::1", 8000): ("127.0.0.1", self.get_http_port())}
+        )
+        response = self.fetch(
+            "/redirect?url=" + urllib.parse.quote("http://user@[::1]:8000/hello")
+        )
+        response.rethrow()
+        self.assertEqual(response.effective_url, "http://[::1]:8000/hello")
         self.assertEqual(response.body, b"Hello world!")
 
 

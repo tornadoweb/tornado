@@ -304,6 +304,11 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             if "@" in netloc:
                 userpass, _, netloc = netloc.rpartition("@")
             host, port = httputil.split_host_and_port(netloc)
+            if not host:
+                raise ValueError("No host in url: %s" % self.request.url)
+            if port is not None and port > 65535:
+                # getaddrinfo would quietly wrap the port around.
+                raise ValueError("Port out of range in url: %s" % self.request.url)
             if port is None:
                 port = 443 if self.parsed.scheme == "https" else 80
             if re.match(r"^\[.*\]$", host):
@@ -668,8 +673,12 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 new_request.url = httputil._url_to_ascii(
                     urllib.parse.urljoin(self.request.url, location)
                 )
+                parsed_new_url = urllib.parse.urlsplit(new_request.url)
             except ValueError as e:
-                # Includes UnicodeDecodeError and invalid IDN hostnames.
+                # Includes UnicodeDecodeError, invalid IDN hostnames, and URLs
+                # that urllib can't parse (such as "//x["). This is called from
+                # the connection's read loop, which only logs exceptions, so
+                # the error must go to _handle_exception.
                 self._handle_exception(type(e), e, e.__traceback__)
                 return
             new_request.headers = self.request.headers.copy()
@@ -679,7 +688,6 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             parsed_orig_url = urllib.parse.urlsplit(
                 httputil._url_to_ascii(original_request.url)
             )
-            parsed_new_url = urllib.parse.urlsplit(new_request.url)
             if (
                 parsed_orig_url.scheme != parsed_new_url.scheme
                 or parsed_orig_url.netloc != parsed_new_url.netloc
@@ -701,11 +709,11 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 new_request.auth_username = None
                 new_request.auth_password = None
                 if "@" in parsed_new_url.netloc:
-                    if parsed_new_url.port is not None:
-                        new_netloc = f"{parsed_new_url.hostname}:{parsed_new_url.port}"
-                    else:
-                        assert parsed_new_url.hostname is not None
-                        new_netloc = parsed_new_url.hostname
+                    # Strip the userinfo. This keeps the rest of the netloc
+                    # as it was (unlike rebuilding it from the hostname and
+                    # port, which would drop an IPv6 address's brackets).
+                    # The port is checked when the new request starts.
+                    new_netloc = parsed_new_url.netloc.rpartition("@")[2]
                     parsed_new_url = parsed_new_url._replace(netloc=new_netloc)
                 new_request.url = urllib.parse.urlunsplit(parsed_new_url)
                 for h in ["Authorization", "Cookie"]:

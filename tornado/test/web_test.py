@@ -4410,6 +4410,15 @@ class CrossOriginProtectionTest(SimpleHandlerTestCase):
                     response = self._post({"Origin": origin})
                 self.assertEqual(response.code, 403)
 
+    def test_fallback_malformed_origin(self):
+        # An origin that urlsplit rejects is not allowed (and is not an
+        # uncaught exception).
+        for origin in ["http://[", "http://a]", "http://[::1]x"]:
+            with self.subTest(origin=origin):
+                with ExpectLog(gen_log, ".*Origin .* not allowed"):
+                    response = self._post({"Origin": origin})
+                self.assertEqual(response.code, 403)
+
     def test_fallback_null_origin(self):
         # Browsers send "null" for opaque origins such as sandboxed iframes.
         with ExpectLog(gen_log, ".*Origin 'null' not allowed"):
