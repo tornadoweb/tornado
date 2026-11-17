@@ -228,6 +228,13 @@ class EchoURIHandler(RequestHandler):
 
 class RawRedirectHandler(RequestHandler):
     def get(self):
+        if not self.request.version.startswith("HTTP/1."):
+            # detach() and the raw response below only work for HTTP/1.x.
+            # (This happens when the tests are run with an HTTP/2 server
+            # via --httpserver). Tell fetch_raw_redirect to skip the test.
+            self.set_status(505)
+            self.finish("requires HTTP/1.x")
+            return
         # Write the response directly so the Location header can contain
         # raw non-ASCII bytes (which is not allowed, but sometimes sent).
         location = self.get_argument("location").encode(
@@ -764,11 +771,22 @@ Transfer-Encoding: chunked
         with self.assertRaises(ValueError):
             self.fetch("http://a..b\u00e9/")
 
+    def fetch_raw_redirect(self, query: str, **kwargs: typing.Any) -> HTTPResponse:
+        try:
+            response = self.fetch("/raw_redirect?" + query, **kwargs)
+        except HTTPError as e:
+            if e.code == 505:
+                self.skipTest("requires HTTP/1.x")
+            raise
+        if response.code == 505:
+            self.skipTest("requires HTTP/1.x")
+        return response
+
     def test_non_ascii_redirect(self):
         # Location headers should be ASCII, but browsers interpret non-ASCII
         # bytes as UTF-8 (and encode spaces).
         location = url_escape("/echo_uri/\u00e9 x")
-        response = self.fetch("/raw_redirect?location=" + location)
+        response = self.fetch_raw_redirect("location=" + location)
         self.assertEqual(response.body, b"/echo_uri/%C3%A9%20x")
 
     def curl_module(self):
@@ -793,8 +811,8 @@ Transfer-Encoding: chunked
             self.skipTest("libcurl percent-encodes non-UTF-8 redirects")
         location = url_escape("/echo_uri/\u00e9")
         with self.assertRaises(UnicodeDecodeError):
-            self.fetch(
-                "/raw_redirect?encoding=latin1&location=" + location, raise_error=True
+            self.fetch_raw_redirect(
+                "encoding=latin1&location=" + location, raise_error=True
             )
 
     def test_invalid_idn_redirect(self):
@@ -802,7 +820,7 @@ Transfer-Encoding: chunked
             self.skipTest("libcurl follows redirects itself")
         location = url_escape("http://a..b\u00e9/")
         with self.assertRaises(ValueError):
-            self.fetch("/raw_redirect?location=" + location, raise_error=True)
+            self.fetch_raw_redirect("location=" + location, raise_error=True)
 
     def test_idn_redirect(self):
         # libcurl only converts IDN hostnames when it was built with IDN support.
@@ -813,7 +831,7 @@ Transfer-Encoding: chunked
         location = url_escape(
             "http://%s:%d/echo_headers" % (FULLWIDTH_LOCALHOST, self.get_http_port())
         )
-        response = self.fetch("/raw_redirect?location=" + location)
+        response = self.fetch_raw_redirect("location=" + location)
         response.rethrow()
         self.assertEqual(
             json_decode(response.body)["Host"], "localhost:%d" % self.get_http_port()
