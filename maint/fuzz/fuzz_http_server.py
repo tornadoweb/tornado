@@ -24,7 +24,6 @@ import common
 with atheris.instrument_imports(include=["tornado"]):
     from tornado.httpserver import HTTPServer
     from tornado.iostream import IOStream
-    from tornado.test import security_corpus_test
     from tornado.web import Application, RequestHandler
     from tornado.websocket import WebSocketClosedError, WebSocketHandler
 
@@ -81,6 +80,10 @@ def test_one_input(data: bytes) -> None:
 
 
 def seeds() -> list[bytes]:
+    # Only needed for seeds, so it's imported here (and not instrumented)
+    # to keep it out of every fuzzer process's startup.
+    from tornado.test import security_corpus_test
+
     cases = [c.request for c in security_corpus_test.CASES if c.app == "default"]
     cases += [
         s.build(n)
@@ -171,4 +174,4 @@ SERVER = HTTPServer(
 )
 
 if __name__ == "__main__":
-    common.main("http_server", test_one_input, seeds())
+    common.main("http_server", test_one_input, seeds)
