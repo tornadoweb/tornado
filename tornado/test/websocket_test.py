@@ -1095,6 +1095,24 @@ class InvalidCompressionOfferTest(WebSocketBaseTestCase):
                 self.assertNotIn("Sec-WebSocket-Extensions", headers)
 
     @gen_test
+    async def test_malformed_extensions_header(self):
+        # Headers that _parse_header rejects with ValueError used to become a
+        # 500 response and an error log. Now all extensions are declined, so
+        # the handshake succeeds without them. The mixed RFC 2231
+        # continuations only fail before Python 3.13.5, which accepts them
+        # (and then declines the unknown parameter).
+        for extensions in [
+            "permessage-deflate; a*=1; a*1=2",
+            "x; a*=1; a*1=2",
+            "permessage-deflate; a*=idna''%ff",
+            "x; a*=idna''%ff",
+            "permessage-deflate, x; a*=idna''%ff",
+        ]:
+            with self.subTest(extensions):
+                headers = await self.handshake(extensions)
+                self.assertNotIn("Sec-WebSocket-Extensions", headers)
+
+    @gen_test
     async def test_second_offer_accepted(self):
         headers = await self.handshake(
             "permessage-deflate; server_max_window_bits=abc, permessage-deflate"

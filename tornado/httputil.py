@@ -1152,7 +1152,10 @@ def parse_multipart_form_data(
             raise HTTPInputError("multipart/form-data part header too large")
         headers = HTTPHeaders.parse(part[:eoh].decode("utf-8"), _chars_are_bytes=False)
         disp_header = headers.get("Content-Disposition", "")
-        disposition, disp_params = _parse_header(disp_header)
+        try:
+            disposition, disp_params = _parse_header(disp_header)
+        except ValueError as e:
+            raise HTTPInputError("Invalid multipart/form-data: %s" % e) from e
         if disposition != "form-data" or not part.endswith(b"\r\n"):
             raise HTTPInputError("Invalid multipart/form-data")
         value = part[eoh + 4 : -2]
@@ -1289,6 +1292,7 @@ def _parse_header(line: str) -> tuple[str, dict[str, str | None]]:
 
     Return the main content-type and a dictionary of options. Parameters
     without a value (as used in websocket extension negotiation) map to None.
+    Raises `ValueError` for some malformed RFC 2231 parameters.
 
     >>> d = "form-data; foo=\"b\\\\a\\\"r\"; file*=utf-8''T%C3%A4st"
     >>> ct, d = _parse_header(d)
@@ -1314,7 +1318,13 @@ def _parse_header(line: str) -> tuple[str, dict[str, str | None]]:
             params.append((name, native_str(value)))
         elif p:
             valueless.append(p.lower())
-    decoded_params = email.utils.decode_params(params)
+    try:
+        decoded_params = email.utils.decode_params(params)
+    except TypeError:
+        # Before Python 3.13.5, decode_params fails this way when a parameter
+        # is given both with and without a continuation number (as in
+        # "name*=a; name*1=b"). Newer versions accept it.
+        raise ValueError("invalid RFC 2231 parameter continuation")
     decoded_params.pop(0)  # get rid of the dummy again
     pdict: dict[str, str | None] = {}
     for name, decoded_value in decoded_params:
