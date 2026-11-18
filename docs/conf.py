@@ -92,6 +92,7 @@ html_theme = "sphinx_rtd_theme"
 missing_references = {
     # Generic type variables; nothing to link to.
     "_IOStreamType",
+    "_P",
     "_S",
     "_T",
     # Standard library types which are defined in one module and documented
@@ -125,6 +126,7 @@ missing_references = {
     "tornado.iostream._IOStreamType",
     "tornado.locks._ReleasingContextManager",
     "tornado.queues._T",
+    "tornado.testing._T",
     "tornado.options._Mockable",
     "tornado.web._ArgDefaultMarker",
     "tornado.web._HandlerDelegate",
@@ -141,8 +143,37 @@ def missing_reference_handler(app, env, node, contnode):
         raise sphinx.errors.NoUri
 
 
+def viewcode_follow_imported(app, modname, fullname):
+    """Keep sphinx.ext.viewcode from linking to modules outside tornado.
+
+    By default, viewcode follows each documented object to the module named
+    by its ``__module__`` attribute. For aliases of objects defined elsewhere
+    (e.g. ``tornado.process.CalledProcessError`` is
+    ``subprocess.CalledProcessError``, ``tornado.util.TimeoutError`` is the
+    builtin ``TimeoutError``, and ``tornado.concurrent.Future`` is
+    ``asyncio.Future``, whose ``__module__`` is ``_asyncio``), that adds
+    stdlib modules to ``_modules/index.html``, and modules without Python
+    source (``builtins``, ``_asyncio``) show up there as broken links.
+
+    Follow imports only when they lead to another tornado module (so
+    ``tornado.web.URLSpec`` still links to its source in ``tornado.routing``);
+    otherwise look the object up in the module where it is documented, which
+    yields no source link for aliases of external objects.
+    """
+    obj = sys.modules.get(modname)
+    for attr in fullname.split("."):
+        obj = getattr(obj, attr, None)
+    real_modname = getattr(obj, "__module__", None)
+    if isinstance(real_modname, str) and (
+        real_modname == "tornado" or real_modname.startswith("tornado.")
+    ):
+        return real_modname
+    return modname
+
+
 def setup(app):
     app.connect("missing-reference", missing_reference_handler)
+    app.connect("viewcode-follow-imported", viewcode_follow_imported)
 
 
 # Read the Docs configuration updates from

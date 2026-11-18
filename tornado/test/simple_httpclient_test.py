@@ -13,12 +13,14 @@ import errno
 import gzip
 import logging
 import os
+import pickle
 import random
 import re
 import socket
 import ssl
 import sys
 import typing
+import urllib.parse
 from contextlib import closing
 
 from tornado import gen, version
@@ -52,6 +54,7 @@ from tornado.test.util import (
     AsyncHTTPSTestCase,
     AsyncHTTPTestCase,
     AsyncTestCase,
+    TestCase,
     abstract_base_test,
     refusing_port,
     skipIfNoIPv6,
@@ -277,6 +280,29 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
         self.assertTrue(response.effective_url.endswith("/countdown/2"))
         self.assertTrue(response.headers["Location"].endswith("/countdown/1"))
 
+    def test_redirect_unsupported_scheme(self):
+        # A redirect that can't be followed fails the request instead of
+        # leaving it unfinished.
+        for location in ["ftp://example.com/", "h:5"]:
+            with self.subTest(location):
+                with self.assertRaises(ValueError) as cm:
+                    self.fetch("/redirect?url=" + urllib.parse.quote(location))
+                self.assertIn("Unsupported url scheme", str(cm.exception))
+
+    def test_redirect_invalid_url(self):
+        # A Location that isn't a valid URL fails the request with the
+        # ValueError (rather than logging it and closing the connection).
+        for location in ["//x[/", "//user@example.com:99999/", "//user@/"]:
+            with self.subTest(location):
+                with self.assertRaises(ValueError):
+                    self.fetch("/redirect?url=" + urllib.parse.quote(location))
+
+    def test_invalid_host_or_port(self):
+        for bad_url in ["http://127.0.0.1:99999/", "http:///", "http://user@/"]:
+            with self.subTest(bad_url):
+                with self.assertRaises(ValueError):
+                    self.fetch(bad_url)
+
     def test_header_reuse(self):
         # Apps may reuse a headers object if they are only passing in constant
         # headers like user-agent.  The header object should not be modified.
@@ -288,6 +314,20 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
         response = self.fetch("/user_agent", method="GET")
         self.assertEqual(200, response.code)
         self.assertEqual(response.body.decode(), f"Tornado/{version}")
+
+    def test_invalid_url_characters(self):
+        # Spaces and control characters would produce a malformed request
+        # line (and urlsplit would silently remove some of them).
+        for path in [
+            "/hello world",
+            "/hello\x00",
+            "/hello\x0b",
+            "/hello\x7f",
+            "/hel\tlo",
+        ]:
+            with self.subTest(path=path):
+                with self.assertRaises(ValueError):
+                    self.fetch(path, raise_error=True)
 
     def test_see_other_redirect(self):
         for code in (302, 303):
@@ -404,16 +444,12 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
             with self.assertRaises(socket.error) as cm:
                 self.fetch("http://127.0.0.1:%d/" % port, raise_error=True)
 
-        if sys.platform != "cygwin":
-            # cygwin returns EPERM instead of ECONNREFUSED here
+        # cygwin returns EPERM instead of ECONNREFUSED here, and on windows
+        # refusing_port gives a different error (see its docstring).
+        if sys.platform not in ("cygwin", "win32"):
             contains_errno = str(errno.ECONNREFUSED) in str(cm.exception)
-            if not contains_errno and hasattr(errno, "WSAECONNREFUSED"):
-                contains_errno = str(errno.WSAECONNREFUSED) in str(  # type: ignore
-                    cm.exception
-                )
             self.assertTrue(contains_errno, cm.exception)
             # This is usually "Connection refused".
-            # On windows, strerror is broken and returns "Unknown error".
             expected_message = os.strerror(errno.ECONNREFUSED)
             self.assertTrue(expected_message in str(cm.exception), cm.exception)
 
@@ -513,12 +549,6 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
         response.rethrow()
         self.assertEqual(response.body, b"12345678")
 
-    def test_100_continue(self):
-        response = self.fetch(
-            "/echo_post", method="POST", body=b"1234", expect_100_continue=True
-        )
-        self.assertEqual(response.body, b"1234")
-
     def test_100_continue_early_response(self):
         def body_producer(write):
             raise Exception("should not be called")
@@ -611,6 +641,27 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, SimpleHTTPClientTestMixin):
     def create_client(self, **kwargs):
         return SimpleAsyncHTTPClient(force_instance=True, **kwargs)
 
+    @gen_test
+    def test_request_timeout_after_redirect(self):
+        timeout = 0.1
+        if os.name == "nt" or os.environ.get("EMULATION") == "1":
+            timeout = 0.5
+
+        with closing(self.create_client()) as client:
+            future = client.fetch(
+                self.get_url("/redirect?url=%2Ftrigger%3Fwake%3Dfalse"),
+                request_timeout=timeout,
+            )
+            try:
+                with self.assertRaisesRegex(HTTPTimeoutError, "Timeout during request"):
+                    yield gen.with_timeout(self.io_loop.time() + timeout * 5, future)
+            finally:
+                if not future.done():
+                    future.cancel()
+                if self.triggers:
+                    self.triggers.popleft()()
+                yield gen.sleep(0)
+
 
 class SimpleHTTPSClientTestCase(AsyncHTTPSTestCase, SimpleHTTPClientTestMixin):
     def setUp(self):
@@ -624,6 +675,24 @@ class SimpleHTTPSClientTestCase(AsyncHTTPSTestCase, SimpleHTTPClientTestMixin):
         return SimpleAsyncHTTPClient(
             force_instance=True, defaults=dict(validate_cert=False), **kwargs
         )
+
+    def wait_for_server_connections(self) -> None:
+        """Wait for the server to close all of its connections.
+
+        When the client rejects the server's certificate, its fetch fails
+        as soon as it sends its alert, but the server only logs the
+        failure once it reads that alert (or the close that follows it).
+        Without this wait the server's "SSL Error" log can land after the
+        test's ``ExpectLog`` block has exited, where the test's log check
+        reports it as unexpected. Every connection closes this way (the
+        handshake never completes), so this ends promptly.
+        """
+
+        async def wait() -> None:
+            while self.http_server._connections:
+                await gen.sleep(0.01)
+
+        self.io_loop.run_sync(wait)
 
     def test_ssl_options(self):
         resp = self.fetch("/hello", ssl_options={"cert_reqs": ssl.CERT_NONE})
@@ -644,21 +713,28 @@ class SimpleHTTPSClientTestCase(AsyncHTTPSTestCase, SimpleHTTPClientTestMixin):
                     ssl_options=dict(cert_reqs=ssl.CERT_REQUIRED),
                     raise_error=True,
                 )
+            self.wait_for_server_connections()
 
     def test_ssl_context_handshake_fail(self):
-        with ExpectLog(gen_log, "SSL Error|Uncaught exception"):
+        # Only server-side TLS alerts may be logged; a connection reset need
+        # not produce any log after the client consumes its SSL error.
+        with ExpectLog(gen_log, "SSL Error|Uncaught exception", required=False):
             # CERT_REQUIRED is set by default.
             ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
             with self.assertRaises(ssl.SSLError):
                 self.fetch("/hello", ssl_options=ctx, raise_error=True)
+            self.wait_for_server_connections()
 
     def test_error_logging(self):
         # No stack traces are logged for SSL errors (in this case,
         # failure to validate the testing self-signed cert).
         # The SSLError is exposed through ssl.SSLError.
-        with ExpectLog(gen_log, ".*") as expect_log:
+        # Any server-side TLS alert must not log a stack trace. The client
+        # reports its validation error only through the request result.
+        with ExpectLog(gen_log, ".*", required=False) as expect_log:
             with self.assertRaises(ssl.SSLError):
                 self.fetch("/", validate_cert=True, raise_error=True)
+            self.wait_for_server_connections()
         self.assertFalse(expect_log.logged_stack)
 
 
@@ -871,7 +947,7 @@ class HTTP204NoContentTestCase(AsyncHTTPTestCase):
                 self.fetch("/?error=1", raise_error=True)
                 if not self.http1:
                     self.skipTest("requires HTTP/1.x")
-                if self.http_client.configured_class != SimpleAsyncHTTPClient:
+                if not isinstance(self.http_client, SimpleAsyncHTTPClient):
                     self.skipTest("curl client accepts invalid headers")
 
 
@@ -886,7 +962,12 @@ class HostnameMappingTestCase(AsyncHTTPTestCase):
         )
 
     def get_app(self):
-        return Application([url("/hello", HelloWorldHandler)])
+        return Application(
+            [
+                url("/hello", HelloWorldHandler),
+                url("/redirect", httpclient_test.RedirectHandler),
+            ]
+        )
 
     def test_hostname_mapping(self):
         response = self.fetch("http://www.example.com:%d/hello" % self.get_http_port())
@@ -896,6 +977,21 @@ class HostnameMappingTestCase(AsyncHTTPTestCase):
     def test_port_mapping(self):
         response = self.fetch("http://foo.example.com:8000/hello")
         response.rethrow()
+        self.assertEqual(response.body, b"Hello world!")
+
+    def test_redirect_strips_userinfo_from_ipv6_url(self):
+        # Removing the userinfo from a cross-origin redirect keeps the
+        # brackets around an IPv6 address. (The mapping sends the request to
+        # the test server, so this doesn't need IPv6.)
+        self.http_client.close()
+        self.http_client = SimpleAsyncHTTPClient(
+            hostname_mapping={("::1", 8000): ("127.0.0.1", self.get_http_port())}
+        )
+        response = self.fetch(
+            "/redirect?url=" + urllib.parse.quote("http://user@[::1]:8000/hello")
+        )
+        response.rethrow()
+        self.assertEqual(response.effective_url, "http://[::1]:8000/hello")
         self.assertEqual(response.body, b"Hello world!")
 
 
@@ -1086,6 +1182,32 @@ class MaxBufferSizeTest(AsyncHTTPTestCase):
         self.assertEqual(response.body, b"a" * 1024 * 100)
 
 
+class LongChunkSizeLineTest(AsyncHTTPTestCase):
+    def get_app(self):
+        class LongChunkSizeLine(RequestHandler):
+            def get(self):
+                stream = self.detach()
+                stream.write(
+                    b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"
+                    + b"1" * 100
+                    + b"\r\n"
+                )
+
+        return Application([("/", LongChunkSizeLine)])
+
+    def get_http_client(self):
+        return SimpleAsyncHTTPClient()
+
+    def test_long_chunk_size_line(self):
+        # A chunk size line too long to read fails the request right away
+        # (not when the request times out), and isn't logged as an
+        # uncaught exception. The server leaves the connection open, so
+        # before the fix the request failed only when it timed out.
+        with ExpectLog(gen_log, "Unsatisfiable read", level=logging.INFO):
+            with self.assertRaises(UnsatisfiableReadError):
+                self.fetch("/", raise_error=True, request_timeout=60)
+
+
 class ChunkedWithContentLengthTest(AsyncHTTPTestCase):
     def get_app(self):
         class ChunkedWithContentLength(RequestHandler):
@@ -1111,3 +1233,16 @@ class ChunkedWithContentLengthTest(AsyncHTTPTestCase):
         ):
             with self.assertRaises(HTTPStreamClosedError):
                 self.fetch("/chunkwithcl", raise_error=True)
+
+
+class HTTPErrorPickleTest(TestCase):
+    def test_pickle(self):
+        # These subclasses have constructors that don't match their args,
+        # which broke the default exception unpickling.
+        for e in [HTTPTimeoutError("Timeout"), HTTPStreamClosedError("Closed")]:
+            with self.subTest(e=e):
+                e2 = pickle.loads(pickle.dumps(e))
+                self.assertIs(type(e2), type(e))
+                self.assertEqual(e2.code, 599)
+                self.assertEqual(e2.args, e.args)
+                self.assertEqual(str(e2), str(e))

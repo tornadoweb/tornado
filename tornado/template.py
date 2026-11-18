@@ -750,7 +750,7 @@ class _CodeWriter:
     def indent_size(self) -> int:
         return self._indent
 
-    def indent(self) -> "ContextManager":
+    def indent(self) -> "ContextManager[_CodeWriter]":
         class Indenter:
             def __enter__(_) -> "_CodeWriter":
                 self._indent += 1
@@ -762,7 +762,7 @@ class _CodeWriter:
 
         return Indenter()
 
-    def include(self, template: Template, line: int) -> "ContextManager":
+    def include(self, template: Template, line: int) -> "ContextManager[_CodeWriter]":
         self.include_stack.append((self.current_template, line))
         self.current_template = template
 

@@ -94,12 +94,16 @@ from tornado.concurrent import (
 )
 from tornado.ioloop import IOLoop
 from tornado.log import app_log
-from tornado.util import TimeoutError  # noqa: F401 (re-exported for compatibility)
+from tornado.util import TimeoutError as TimeoutError  # re-exported for compatibility
 
 _T = typing.TypeVar("_T")
 
 _Yieldable = Union[
-    None, Awaitable, list[Awaitable], dict[Any, Awaitable], concurrent.futures.Future
+    None,
+    Awaitable[Any],
+    list[Awaitable[Any]],
+    dict[Any, Awaitable[Any]],
+    concurrent.futures.Future[Any],
 ]
 
 
@@ -138,8 +142,8 @@ def _value_from_stopiteration(e: Union[StopIteration, "Return"]) -> Any:
         return None
 
 
-def _create_future() -> Future:
-    future: Future = Future()
+def _create_future() -> Future[Any]:
+    future: Future[Any] = Future()
     # Fixup asyncio debug info by removing extraneous stack entries
     source_traceback = getattr(future, "_source_traceback", ())
     while source_traceback:
@@ -207,7 +211,7 @@ def coroutine(
         # This function is type-annotated with a comment to work around
         # https://bitbucket.org/pypy/pypy/issues/2868/segfault-with-args-type-annotation-in
         future = _create_future()
-        ctx_run: Callable = contextvars.copy_context().run
+        ctx_run: Callable[..., Any] = contextvars.copy_context().run
         try:
             result = ctx_run(func, *args, **kwargs)
         except (Return, StopIteration) as e:
@@ -268,7 +272,7 @@ def coroutine(
         future_set_result_unless_cancelled(future, result)
         return future
 
-    wrapper.__wrapped__ = func  # type: ignore
+    wrapper.__wrapped__ = func
     wrapper.__tornado_coroutine__ = True  # type: ignore
     return wrapper
 
@@ -307,7 +311,7 @@ class Return(Exception):
         self.args = (value,)
 
 
-class WaitIterator:
+class WaitIterator(typing.Generic[_T]):
     """Provides an iterator to yield the results of awaitables as they finish.
 
     Yielding a set of awaitables like this:
@@ -362,15 +366,15 @@ class WaitIterator:
 
     """
 
-    _unfinished: dict[Future, collections.deque[int | str]] = {}
+    _unfinished: dict[Future[_T], collections.deque[int | str]]
 
-    def __init__(self, *args: Future, **kwargs: Future) -> None:
+    def __init__(self, *args: Future[_T], **kwargs: Future[_T]) -> None:
         if args and kwargs:
             raise ValueError("You must provide args or kwargs, not both")
 
         self._unfinished = {}
         if kwargs:
-            futures: Sequence[Future] = list(kwargs.values())
+            futures: Sequence[Future[_T]] = list(kwargs.values())
             for key, future in kwargs.items():
                 self._unfinished.setdefault(future, collections.deque()).append(key)
         else:
@@ -378,10 +382,10 @@ class WaitIterator:
             for index, future in enumerate(args):
                 self._unfinished.setdefault(future, collections.deque()).append(index)
 
-        self._finished: collections.deque[Future] = collections.deque()
+        self._finished: collections.deque[Future[_T]] = collections.deque()
         self.current_index: str | int | None = None
-        self.current_future: Future | None = None
-        self._running_future: Future | None = None
+        self.current_future: Future[_T] | None = None
+        self._running_future: Future[_T] | None = None
 
         for future in futures:
             future_add_done_callback(future, self._done_callback)
@@ -394,7 +398,7 @@ class WaitIterator:
         self.current_index = self.current_future = None
         return True
 
-    def next(self) -> Future:
+    def next(self) -> Future[_T]:
         """Returns a `.Future` that will yield the next available result.
 
         Note that this `.Future` will not be the same object as any of
@@ -407,13 +411,13 @@ class WaitIterator:
 
         return self._running_future
 
-    def _done_callback(self, done: Future) -> None:
+    def _done_callback(self, done: Future[_T]) -> None:
         if self._running_future and not self._running_future.done():
             self._return_result(done)
         else:
             self._finished.append(done)
 
-    def _return_result(self, done: Future) -> Future:
+    def _return_result(self, done: Future[_T]) -> Future[_T]:
         """Called set the returned future's state that of the future
         we yielded, and set the current future for the iterator.
         """
@@ -431,10 +435,10 @@ class WaitIterator:
 
         return res
 
-    def __aiter__(self) -> typing.AsyncIterator:
+    def __aiter__(self) -> "WaitIterator[_T]":
         return self
 
-    def __anext__(self) -> Future:
+    def __anext__(self) -> Future[_T]:
         if self.done():
             # Lookup by name to silence pyflakes on older versions.
             raise getattr(builtins, "StopAsyncIteration")()
@@ -445,20 +449,20 @@ class WaitIterator:
 def multi(
     children: Sequence[_Yieldable],
     quiet_exceptions: type[Exception] | tuple[type[Exception], ...] = (),
-) -> Future[list]: ...
+) -> Future[list[Any]]: ...
 
 
 @overload
 def multi(
     children: Mapping[Any, _Yieldable],
     quiet_exceptions: type[Exception] | tuple[type[Exception], ...] = (),
-) -> Future[dict]: ...
+) -> Future[dict[Any, Any]]: ...
 
 
 def multi(
     children: Sequence[_Yieldable] | Mapping[Any, _Yieldable],
     quiet_exceptions: "Union[Type[Exception], Tuple[Type[Exception], ...]]" = (),
-) -> "Union[Future[List], Future[Dict]]":
+) -> "Union[Future[List[Any]], Future[Dict[Any, Any]]]":
     """Runs multiple asynchronous operations in parallel.
 
     ``children`` may either be a list or a dict whose values are
@@ -517,7 +521,7 @@ Multi = multi
 def multi_future(
     children: Sequence[_Yieldable] | Mapping[Any, _Yieldable],
     quiet_exceptions: "Union[Type[Exception], Tuple[Type[Exception], ...]]" = (),
-) -> "Union[Future[List], Future[Dict]]":
+) -> "Union[Future[List[Any]], Future[Dict[Any, Any]]]":
     """Wait for multiple asynchronous futures in parallel.
 
     Since Tornado 6.0, this function is exactly the same as `multi`.
@@ -533,8 +537,8 @@ def multi_future(
        Use `multi` instead.
     """
     if isinstance(children, dict):
-        keys: list | None = list(children.keys())
-        children_seq: Iterable = children.values()
+        keys: list[Any] | None = list(children.keys())
+        children_seq: Iterable[Any] = children.values()
     else:
         keys = None
         children_seq = children
@@ -546,7 +550,7 @@ def multi_future(
     if not children_futs:
         future_set_result_unless_cancelled(future, {} if keys is not None else [])
 
-    def callback(fut: Future) -> None:
+    def callback(fut: Future[Any]) -> None:
         unfinished_children.remove(fut)
         if not unfinished_children:
             result_list = []
@@ -573,7 +577,7 @@ def multi_future(
                 else:
                     future_set_result_unless_cancelled(future, result_list)
 
-    listening: set[Future] = set()
+    listening: set[Future[Any]] = set()
     for f in children_futs:
         if f not in listening:
             listening.add(f)
@@ -581,7 +585,7 @@ def multi_future(
     return future
 
 
-def maybe_future(x: Any) -> Future:
+def maybe_future(x: Any) -> Future[Any]:
     """Converts ``x`` into a `.Future`.
 
     If ``x`` is already a `.Future`, it is simply returned; otherwise
@@ -595,7 +599,7 @@ def maybe_future(x: Any) -> Future:
        you expect (often just ``None``), and ``yield`` anything unknown.
     """
     if is_future(x):
-        return x
+        return typing.cast(Future[Any], x)
     else:
         fut = _create_future()
         fut.set_result(x)
@@ -608,7 +612,7 @@ def with_timeout(
     quiet_exceptions: "Union[Type[Exception], Tuple[Type[Exception], ...]]" = (),
     *,
     message: str | Callable[[], str] | None = None,
-) -> Future:
+) -> Future[Any]:
     """Wraps a `.Future` (or other yieldable object) in a timeout.
 
     Raises `TimeoutError` if the input future does not
@@ -659,7 +663,7 @@ def with_timeout(
     chain_future(future_converted, result)
     io_loop = IOLoop.current()
 
-    def error_callback(future: Future) -> None:
+    def error_callback(future: Future[Any]) -> None:
         try:
             future.result()
         except asyncio.CancelledError:
@@ -743,9 +747,9 @@ class _NullFuture:
 # _null_future is used as a dummy value in the coroutine runner. It differs
 # from moment in that moment always adds a delay of one IOLoop iteration
 # while _null_future is processed as soon as possible.
-_null_future = typing.cast(Future, _NullFuture())
+_null_future = typing.cast(Future[Any], _NullFuture())
 
-moment = typing.cast(Future, _NullFuture())
+moment = typing.cast(Future[Any], _NullFuture())
 moment.__doc__ = """A special object which may be yielded to allow the IOLoop to run for
 one iteration.
 
@@ -776,7 +780,7 @@ class Runner:
 
     def __init__(
         self,
-        ctx_run: Callable,
+        ctx_run: Callable[..., Any],
         gen: "Generator[_Yieldable, Any, _T]",
         result_future: "Future[_T]",
         first_yielded: _Yieldable,
@@ -784,7 +788,7 @@ class Runner:
         self.ctx_run = ctx_run
         self.gen = gen
         self.result_future = result_future
-        self.future: None | Future = _null_future
+        self.future: None | Future[Any] = _null_future
         self.running = False
         self.finished = False
         self.io_loop = IOLoop.current()
@@ -891,7 +895,7 @@ class Runner:
             return False
 
 
-def _wrap_awaitable(awaitable: Awaitable) -> Future:
+def _wrap_awaitable(awaitable: Awaitable[Any]) -> Future[Any]:
     # Convert Awaitables into Futures.
     # Note that we use ensure_future, which handles both awaitables
     # and coroutines, rather than create_task, which only accepts
@@ -904,14 +908,15 @@ def _wrap_awaitable(awaitable: Awaitable) -> Future:
     return fut
 
 
-def convert_yielded(yielded: _Yieldable) -> Future:
+@singledispatch
+def convert_yielded(yielded: _Yieldable) -> Future[Any]:
     """Convert a yielded object into a `.Future`.
 
     The default implementation accepts lists, dictionaries, and
     Futures. This has the side effect of starting any coroutines that
     did not start themselves, similar to `asyncio.ensure_future`.
 
-    If the `~functools.singledispatch` library is available, this function
+    This function is a `~functools.singledispatch` function, so it
     may be extended to support additional types. For example::
 
         @convert_yielded.register(asyncio.Future)
@@ -926,13 +931,10 @@ def convert_yielded(yielded: _Yieldable) -> Future:
     elif yielded is _null_future:
         return _null_future
     elif isinstance(yielded, (list, dict)):
-        return multi(yielded)  # type: ignore
+        return multi(yielded)
     elif is_future(yielded):
-        return typing.cast(Future, yielded)
+        return typing.cast(Future[Any], yielded)
     elif isawaitable(yielded):
-        return _wrap_awaitable(yielded)  # type: ignore
+        return _wrap_awaitable(yielded)
     else:
         raise BadYieldError(f"yielded unknown object {yielded!r}")
-
-
-convert_yielded = singledispatch(convert_yielded)

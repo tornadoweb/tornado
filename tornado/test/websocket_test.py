@@ -10,6 +10,7 @@ import unittest
 from tornado import gen
 from tornado.concurrent import Future
 from tornado.httpclient import HTTPError, HTTPRequest
+from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream
 from tornado.locks import Event
 from tornado.log import app_log, gen_log
@@ -20,14 +21,17 @@ from tornado.test.util import (
     AsyncHTTPTestCase,
     TestCase,
     abstract_base_test,
+    assert_memory_budget,
     ignore_deprecation,
+    refusing_port,
+    skipNotCPython,
 )
-from tornado.testing import ExpectLog, bind_unused_port, gen_test
+from tornado.testing import ExpectLog, gen_test
 from tornado.web import Application, RequestHandler
 
 try:
     import tornado.websocket  # noqa: F401
-    from tornado.util import _websocket_mask_python
+    from tornado.util import _websocket_mask_int, _websocket_mask_loop
 except ImportError:
     # The unittest module presents misleading errors on ImportError
     # (it acts as if websocket_test could not be found, hiding the underlying
@@ -469,8 +473,8 @@ class WebSocketTest(WebSocketBaseTestCase):
 
     @gen_test
     def test_websocket_network_fail(self):
-        sock, port = bind_unused_port()
-        sock.close()
+        cleanup_func, port = refusing_port()
+        self.addCleanup(cleanup_func)
         with self.assertRaises(IOError):
             with ExpectLog(gen_log, ".*", required=False):
                 yield websocket_connect(
@@ -768,6 +772,11 @@ class WebSocketOriginTest(WebSocketBaseTestCase):
             xsrf_cookies=True,
         )
 
+    def get_http_client(self):
+        # Some tests here send handshakes with self.fetch, and the websocket
+        # handshake requires HTTP/1; force the use of SimpleAsyncHTTPClient.
+        return SimpleAsyncHTTPClient()
+
     @gen.coroutine
     def connect_with_headers(self, path, headers):
         url = "ws://127.0.0.1:%d%s" % (self.get_http_port(), path)
@@ -951,6 +960,65 @@ class CompressionTestMixin(WebSocketBaseTestCase):
         self.assertIsNone(response)
 
 
+@skipNotCPython
+class CompressedMessageMemoryTest(WebSocketBaseTestCase):
+    MAX_MESSAGE_SIZE = 1024 * 1024
+
+    def get_app(self):
+        return Application(
+            [("/", EchoHandler, dict(compression_options={}))],
+            websocket_max_message_size=self.MAX_MESSAGE_SIZE,
+        )
+
+    @gen_test
+    def test_compression_bomb(self):
+        # A small compressed message that decompresses to far more than
+        # max_message_size must be rejected without decompressing it all
+        # into memory. (Peak memory is about twice max_message_size as of
+        # 2026-10.)
+        ws = yield self.ws_connect("/", compression_options={})
+        message = b"\0" * (16 * self.MAX_MESSAGE_SIZE)
+        with assert_memory_budget(
+            self.MAX_MESSAGE_SIZE,
+            max_ratio=3,
+            msg="Decompressing a message is not bounded by max_message_size",
+        ):
+            ws.write_message(message, binary=True)
+            response = yield ws.read_message()
+        self.assertIsNone(response)
+        self.assertEqual(ws.close_code, 1009)
+
+
+class InvalidCompressedDataTest(WebSocketBaseTestCase):
+    def get_app(self):
+        return Application([("/", EchoHandler, dict(compression_options={}))])
+
+    @gen_test
+    def test_invalid_compressed_data(self):
+        # A compressed message that isn't valid deflate data closes the
+        # connection (and is not logged as an uncaught exception).
+        ws = yield self.ws_connect("/", compression_options={})
+        ws.protocol._write_frame(True, 0x1, b"\xff\xff\xff", flags=ws.protocol.RSV1)
+        response = yield ws.read_message()
+        self.assertIsNone(response)
+        self.assertEqual(ws.close_code, 1007)
+
+    @gen_test
+    def test_control_frame_between_compressed_fragments(self):
+        # Control frames may be interleaved with the fragments of a
+        # message. They are never compressed, so they must not reset the
+        # compression flag taken from the message's first frame.
+        ws = yield self.ws_connect("/", compression_options={})
+        message = "Hello world. Testing 123 123"
+        assert ws.protocol._compressor is not None
+        data = ws.protocol._compressor.compress(message.encode())
+        ws.protocol._write_frame(False, 0x1, data[:5], flags=ws.protocol.RSV1)
+        ws.protocol._write_frame(True, 0x9, b"ping")
+        ws.protocol._write_frame(True, 0x0, data[5:])
+        response = yield ws.read_message()
+        self.assertEqual(response, message)
+
+
 @abstract_base_test
 class UncompressedTestMixin(CompressionTestMixin):
     """Specialization of CompressionTestMixin when we expect no compression."""
@@ -990,6 +1058,108 @@ class DefaultCompressionTest(CompressionTestMixin):
         self.assertEqual(bytes_out, bytes_in + 12)
 
 
+class InvalidCompressionOfferTest(WebSocketBaseTestCase):
+    def get_app(self):
+        return Application([("/echo", EchoHandler, dict(compression_options={}))])
+
+    async def handshake(self, extensions: str) -> HTTPHeaders:
+        stream = IOStream(socket.socket())
+        self.conns_to_close.append(stream)
+        await stream.connect(("127.0.0.1", self.get_http_port()))
+        stream.write(
+            b"GET /echo HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+            b"Upgrade: websocket\r\nConnection: Upgrade\r\n"
+            b"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+            b"Sec-WebSocket-Version: 13\r\n"
+            b"Sec-WebSocket-Extensions: " + extensions.encode() + b"\r\n\r\n"
+        )
+        data = await stream.read_until(b"\r\n\r\n")
+        start_line, _, headers = data.decode().partition("\r\n")
+        self.assertEqual(start_line, "HTTP/1.1 101 Switching Protocols")
+        return HTTPHeaders.parse(headers)
+
+    @gen_test
+    async def test_invalid_offers(self):
+        # The server declines offers it can't accept, as RFC 7692 requires,
+        # instead of failing the handshake.
+        for params in [
+            "server_max_window_bits=abc",
+            "server_max_window_bits=16",
+            "server_max_window_bits=8",  # newer zlibs can't compress with 8
+            "client_max_window_bits=7",
+            "server_max_window_bits=" + "1" * 5000,
+            "foo=1",
+        ]:
+            with self.subTest(params[:40]):
+                headers = await self.handshake("permessage-deflate; " + params)
+                self.assertNotIn("Sec-WebSocket-Extensions", headers)
+
+    @gen_test
+    async def test_malformed_extensions_header(self):
+        # Headers that _parse_header rejects with ValueError used to become a
+        # 500 response and an error log. Now all extensions are declined, so
+        # the handshake succeeds without them. The mixed RFC 2231
+        # continuations only fail before Python 3.13.5, which accepts them
+        # (and then declines the unknown parameter).
+        for extensions in [
+            "permessage-deflate; a*=1; a*1=2",
+            "x; a*=1; a*1=2",
+            "permessage-deflate; a*=idna''%ff",
+            "x; a*=idna''%ff",
+            "permessage-deflate, x; a*=idna''%ff",
+        ]:
+            with self.subTest(extensions):
+                headers = await self.handshake(extensions)
+                self.assertNotIn("Sec-WebSocket-Extensions", headers)
+
+    @gen_test
+    async def test_second_offer_accepted(self):
+        headers = await self.handshake(
+            "permessage-deflate; server_max_window_bits=abc, permessage-deflate"
+        )
+        self.assertEqual(headers["Sec-WebSocket-Extensions"], "permessage-deflate")
+
+    @gen_test
+    async def test_no_context_takeover_accepted(self):
+        # Valueless parameters are accepted and echoed back.
+        headers = await self.handshake(
+            "permessage-deflate; server_no_context_takeover; client_no_context_takeover"
+        )
+        self.assertEqual(
+            headers["Sec-WebSocket-Extensions"],
+            "permessage-deflate; client_no_context_takeover; server_no_context_takeover",
+        )
+
+
+class ClientNoContextTakeoverTest(WebSocketBaseTestCase):
+    MESSAGE = "Hello world. Testing 123 123"
+
+    def get_app(self):
+        class Handler(EchoHandler):
+            def set_header(self, name, value):
+                # Our client doesn't offer client_no_context_takeover, but
+                # a server may require it anyway.
+                if name == "Sec-WebSocket-Extensions":
+                    value += "; client_no_context_takeover"
+                super().set_header(name, value)
+
+        return Application([("/", Handler, dict(compression_options={}))])
+
+    @gen_test
+    def test_client_no_context_takeover(self):
+        ws = yield self.ws_connect("/", compression_options={})
+        self.assertIsNotNone(ws.protocol._compressor)
+        sizes = []
+        for i in range(3):
+            before = ws.protocol._wire_bytes_out
+            ws.write_message(self.MESSAGE)
+            response = yield ws.read_message()
+            self.assertEqual(response, self.MESSAGE)
+            sizes.append(ws.protocol._wire_bytes_out - before)
+        # Without context takeover, repeated messages don't get smaller.
+        self.assertEqual(sizes, [sizes[0]] * 3)
+
+
 @abstract_base_test
 class MaskFunctionMixin(TestCase):
     # Subclasses should define self.mask(mask, data)
@@ -1013,6 +1183,15 @@ class MaskFunctionMixin(TestCase):
             b"\xff\xfa\xff\xff\xfb\xfe",
         )
 
+    def test_lengths(self: typing.Any):
+        # Cover every alignment of the tail as well as longer inputs.
+        mask = b"\x9b\x31\xe7\x04"
+        for n in list(range(40)) + [255, 256, 1000, 65537]:
+            data = bytes((i * 7 + 3) & 0xFF for i in range(n))
+            expected = bytes(b ^ mask[i % 4] for i, b in enumerate(data))
+            with self.subTest(n=n):
+                self.assertEqual(self.mask(mask, data), expected)
+
     def test_length_validation(self: typing.Any):
         # Test all lengths of mask that are not 4 bytes.
         for mask in (b"", b"a", b"ab", b"abc", b"abcde", b"abcdef"):
@@ -1021,9 +1200,14 @@ class MaskFunctionMixin(TestCase):
                     self.mask(mask, b"data asdf")
 
 
-class PythonMaskFunctionTest(MaskFunctionMixin):
+class PythonIntMaskFunctionTest(MaskFunctionMixin):
     def mask(self, mask, data):
-        return _websocket_mask_python(mask, data)
+        return _websocket_mask_int(mask, data)
+
+
+class PythonLoopMaskFunctionTest(MaskFunctionMixin):
+    def mask(self, mask, data):
+        return _websocket_mask_loop(mask, data)
 
 
 @unittest.skipIf(speedups is None, "tornado.speedups module not present")
@@ -1214,7 +1398,7 @@ class FloodTest(WebSocketBaseTestCase):
             write_futures.append(Future())
             return write_futures[-1]
 
-        protocol._write_frame = write_frame  # type: ignore
+        protocol._write_frame = write_frame
 
         for data in [b"1", b"2", b"3"]:
             ws.ping(data)

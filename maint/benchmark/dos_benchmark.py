@@ -240,12 +240,24 @@ def client(port: int, data: bytes) -> None:
         s.close()
 
 
-async def run(name: str, sc: Scenario) -> None:
+class Result(typing.NamedTuple):
+    n: int
+    size: int
+    wire_bytes: int
+    cpu: float
+    wall: float
+    max_stall: float
+    peak_mem: int | None
+    peak_write_buffer: int
+
+
+async def measure(
+    sc: Scenario, n: int, size: int, trace_memory: bool = False
+) -> Result:
+    """Runs one scenario with ``n`` units of ``size`` bytes."""
     global done, peak_write_buffer
     done = asyncio.Event()
     peak_write_buffer = 0
-    n = options.n or sc.n
-    size = sc.size if options.size < 0 else options.size
     handlers, data = sc.build(n, size)
     app = web.Application(handlers)
     sockets = netutil.bind_sockets(0, "127.0.0.1")
@@ -268,7 +280,7 @@ async def run(name: str, sc: Scenario) -> None:
     ticker_task = asyncio.create_task(ticker())
     await asyncio.sleep(0.01)
     max_stall = 0.0
-    if options.tracemalloc:
+    if trace_memory:
         tracemalloc.start()
     cpu0 = time.thread_time()
     wall0 = time.perf_counter()
@@ -277,25 +289,33 @@ async def run(name: str, sc: Scenario) -> None:
     await done.wait()
     cpu = time.thread_time() - cpu0
     wall = time.perf_counter() - wall0
-    mem = ""
-    if options.tracemalloc:
-        mem = " peak_mem=%.1fMB" % (tracemalloc.get_traced_memory()[1] / 1e6)
+    peak_mem = None
+    if trace_memory:
+        peak_mem = tracemalloc.get_traced_memory()[1]
         tracemalloc.stop()
     stop = True
     await ticker_task
     server.stop()
     await server.close_all_connections()
     thread.join()
+    return Result(n, size, len(data), cpu, wall, max_stall, peak_mem, peak_write_buffer)
+
+
+async def run(name: str, sc: Scenario) -> None:
+    n = options.n or sc.n
+    size = sc.size if options.size < 0 else options.size
+    r = await measure(sc, n, size, options.tracemalloc)
+    mem = "" if r.peak_mem is None else " peak_mem=%.1fMB" % (r.peak_mem / 1e6)
     wbuf = (
-        " peak_write_buffer=%.1fMB" % (peak_write_buffer / 1e6)
-        if peak_write_buffer
+        " peak_write_buffer=%.1fMB" % (r.peak_write_buffer / 1e6)
+        if r.peak_write_buffer
         else ""
     )
     print(
-        f"{name:24s} n={n} size={size} wire={len(data) / 1e6:.1f}MB "
-        f"cpu={cpu:.2f}s wall={wall:.2f}s "
-        f"us/{sc.unit}={cpu / n * 1e6:.2f} us/byte={cpu / len(data) * 1e6:.3f} "
-        f"max_stall={max_stall * 1000:.0f}ms{mem}{wbuf}"
+        f"{name:24s} n={n} size={size} wire={r.wire_bytes / 1e6:.1f}MB "
+        f"cpu={r.cpu:.2f}s wall={r.wall:.2f}s "
+        f"us/{sc.unit}={r.cpu / n * 1e6:.2f} us/byte={r.cpu / r.wire_bytes * 1e6:.3f} "
+        f"max_stall={r.max_stall * 1000:.0f}ms{mem}{wbuf}"
     )
     sys.stdout.flush()
 

@@ -35,7 +35,7 @@ class _TimeoutGarbageCollector:
     """
 
     def __init__(self) -> None:
-        self._waiters: collections.deque[Future] = collections.deque()
+        self._waiters: collections.deque[Future[Any]] = collections.deque()
         self._timeouts = 0
 
     def _garbage_collect(self) -> None:

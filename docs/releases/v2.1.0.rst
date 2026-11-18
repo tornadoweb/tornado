@@ -123,7 +123,7 @@ New modules
 Other modules
 ~~~~~~~~~~~~~
 
-* `tornado.auth.OpenIdMixin` now uses the correct realm when the
+* ``tornado.auth.OpenIdMixin`` now uses the correct realm when the
   callback URI is on a different domain.
 * `tornado.autoreload` has a new command-line interface which can be used
   to wrap any script.  This replaces the ``--autoreload`` argument to

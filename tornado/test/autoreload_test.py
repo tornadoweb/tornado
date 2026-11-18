@@ -264,3 +264,29 @@ else:
         )
 
         self.assertEqual(out, "reloading\nexiting cleanly\n")
+
+    def test_reload_wrapper_until_success_module(self):
+        # After a module run with -m exits, the wrapper looks up the module's
+        # file so it can watch it. This used pkgutil.get_loader, which was
+        # removed in Python 3.14.
+        self.write_files(
+            {
+                "testapp": {
+                    "__init__.py": "",
+                    "__main__.py": "print('exiting cleanly')\n",
+                },
+            }
+        )
+
+        out = self.run_subprocess(
+            [
+                sys.executable,
+                "-m",
+                "tornado.autoreload",
+                "--until-success",
+                "-m",
+                "testapp",
+            ]
+        )
+
+        self.assertEqual(out, "exiting cleanly\n")

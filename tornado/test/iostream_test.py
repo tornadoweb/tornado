@@ -7,6 +7,7 @@ import platform
 import random
 import socket
 import ssl
+import sys
 import typing
 import unittest
 from unittest import mock
@@ -534,6 +535,53 @@ class TestReadWriteMixin(AsyncTestCase):
             ws.close()
             rs.close()
 
+    # A zero-width match (such as a lookahead) consumes nothing: the read
+    # returns b"" once the data it looks at has arrived, and that data is
+    # left for the next read. HTTP1Connection uses this to wait for the first
+    # byte of a request without reading it.
+    @gen_test
+    async def test_read_until_regex_zero_width_waits(self):
+        async with self.iostream_pair() as (rs, ws):
+            fut = rs.read_until_regex(rb"(?=[\s\S])")
+            await asyncio.sleep(0.01)
+            self.assertFalse(fut.done())
+            await ws.write(b"abc")
+            self.assertEqual(await fut, b"")
+            self.assertEqual(await rs.read_bytes(3), b"abc")
+
+    @gen_test
+    async def test_read_until_regex_zero_width_buffered(self):
+        async with self.iostream_pair() as (rs, ws):
+            await ws.write(b"abcdef")
+            self.assertEqual(await rs.read_bytes(3), b"abc")
+            # The rest is already buffered, so the read finishes inline, and
+            # repeating it is harmless.
+            for i in range(2):
+                fut = rs.read_until_regex(rb"(?=[\s\S])")
+                self.assertTrue(fut.done())
+                self.assertEqual(fut.result(), b"")
+            self.assertEqual(await rs.read_until(b"f"), b"def")
+
+    @gen_test
+    async def test_read_until_regex_lookahead_partial(self):
+        # A lookahead for several bytes waits until all of them are here.
+        async with self.iostream_pair() as (rs, ws):
+            fut = rs.read_until_regex(rb"(?=GET )")
+            await ws.write(b"GE")
+            await asyncio.sleep(0.01)
+            self.assertFalse(fut.done())
+            await ws.write(b"T /\r\n")
+            self.assertEqual(await fut, b"")
+            self.assertEqual(await rs.read_until(b"\r\n"), b"GET /\r\n")
+
+    @gen_test
+    async def test_read_until_regex_zero_width_closed(self):
+        async with self.iostream_pair() as (rs, ws):
+            fut = rs.read_until_regex(rb"(?=[\s\S])")
+            ws.close()
+            with self.assertRaises(StreamClosedError):
+                await fut
+
     @gen_test
     def test_read_until_regex_max_bytes_inline(self):
         rs, ws = yield self.make_iostream_pair()
@@ -727,7 +775,7 @@ class TestReadWriteMixin(AsyncTestCase):
         try:
             data = bytearray(b"x" * 10000)
             fut = rs.read_bytes(len(data))
-            yield ws.write(data)  # type: ignore
+            yield ws.write(data)
             self.assertEqual((yield fut), bytes(data))
             del data[:]
         finally:
@@ -745,7 +793,7 @@ class TestReadWriteMixin(AsyncTestCase):
             # Write more than the OS buffers can hold (nobody is reading)
             # so that the write is still pending when we close.
             data = bytearray(b"x" * (10 * 1024 * 1024))
-            fut = ws.write(data)  # type: ignore
+            fut = ws.write(data)
             self.assertTrue(ws.writing())
             # Hold a reference to the write buffer so the test doesn't depend
             # on when it is freed (at once on CPython, at GC on PyPy).
@@ -770,7 +818,7 @@ class TestReadWriteMixin(AsyncTestCase):
             with self.assertRaises(StreamClosedError):
                 # Depending on timing this may fail synchronously or
                 # asynchronously; either way the write must not complete.
-                yield ws.write(data)  # type: ignore
+                yield ws.write(data)
             self.assertTrue(ws.closed())
             del data[:]
         finally:
@@ -904,7 +952,12 @@ class TestIOStreamMixin(TestReadWriteMixin):
             with self.assertRaises(StreamClosedError):
                 yield stream.connect(("127.0.0.1", port))
 
-        self.assertTrue(isinstance(stream.error, ConnectionRefusedError), stream.error)
+        if sys.platform == "win32":
+            # See refusing_port: on Windows the connection fails with a
+            # different error.
+            self.assertIsInstance(stream.error, OSError)
+        else:
+            self.assertIsInstance(stream.error, ConnectionRefusedError)
 
     @gen_test
     def test_gaierror(self):
@@ -975,7 +1028,7 @@ class TestIOStreamMixin(TestReadWriteMixin):
                     raise ConnectionResetError(errno.ECONNRESET, "Connection reset")
                 return result
 
-            rs.read_from_fd = read_from_fd  # type: ignore[method-assign]
+            rs.read_from_fd = read_from_fd
             ws.write(b"1234")
             data = yield rs.read_bytes(1)
             self.assertEqual(data, b"1")
@@ -1103,7 +1156,7 @@ class TestIOStreamMixin(TestReadWriteMixin):
         stream = self._make_client_iostream(socket.socket())
         connect_fut = stream.connect(("127.0.0.1", port))
         data = bytearray(b"x" * 10000)
-        write_fut = stream.write(data)  # type: ignore
+        write_fut = stream.write(data)
         # Hold a reference to the write buffer so the test doesn't depend on
         # when it is freed (at once on CPython, at garbage collection on PyPy).
         write_buffer = stream._write_buffer  # noqa: F841
@@ -1263,7 +1316,9 @@ class TestIOStreamStartTLS(AsyncTestCase):
     def test_handshake_fail(self):
         server_future = self.server_start_tls(_server_ssl_options())
         # Certificates are verified with the default configuration.
-        with ExpectLog(gen_log, "SSL Error"):
+        # The client reports its error through the Future. Depending on the
+        # platform, the server may see a TLS alert or only a connection reset.
+        with ExpectLog(gen_log, "SSL Error", required=False):
             client_future = self.client_start_tls(server_hostname="localhost")
             with self.assertRaises(ssl.SSLError):
                 yield client_future
@@ -1274,7 +1329,9 @@ class TestIOStreamStartTLS(AsyncTestCase):
     def test_check_hostname(self):
         # Test that server_hostname parameter to start_tls is being used.
         server_future = self.server_start_tls(_server_ssl_options())
-        with ExpectLog(gen_log, "SSL Error"):
+        # The client reports its error through the Future. Depending on the
+        # platform, the server may see a TLS alert or only a connection reset.
+        with ExpectLog(gen_log, "SSL Error", required=False):
             client_future = self.client_start_tls(
                 ssl.create_default_context(), server_hostname="127.0.0.1"
             )
@@ -1446,21 +1503,84 @@ class TestIOStreamCheckHostname(AsyncTestCase):
             required=platform.system() != "Windows",
         ):
             with self.assertRaises(ssl.SSLCertVerificationError):
-                with ExpectLog(
-                    gen_log,
-                    ".*(certificate verify failed|CERTIFICATE_VERIFY_FAILED)"
-                    ": Hostname mismatch",
-                    level=logging.WARNING,
-                ):
-                    await stream.connect(
-                        ("127.0.0.1", self.port),
-                        server_hostname="bar.example.com",
-                    )
+                await stream.connect(
+                    ("127.0.0.1", self.port),
+                    server_hostname="bar.example.com",
+                )
             # The server logs a warning while cleaning up the failed connection.
             # Unfortunately there's no good hook to wait for this logging.
             # It doesn't seem to happen on windows; I'm not sure why.
             if platform.system() != "Windows":
                 await asyncio.sleep(0.1)
+
+    async def _check_client_handshake_logging(
+        self, ssl_context, hostname, start_tls=False
+    ):
+        # A client can handle handshake errors through the connect Future.
+        # It should not also receive a warning from the stream itself.
+        if start_tls:
+            stream = IOStream(socket.socket())
+            await stream.connect(("127.0.0.1", self.port))
+        else:
+            stream = SSLIOStream(socket.socket(), ssl_options=ssl_context)
+        assert stream.socket is not None
+        client_fd = stream.socket.fileno()
+        records = []
+
+        class RecordFilter(logging.Filter):
+            def filter(self, record):
+                records.append(record)
+                return True
+
+        record_filter = RecordFilter()
+        gen_log.addFilter(record_filter)
+        try:
+            # A TLS alert on the server side is independent of the client
+            # exception and may be logged while the failed socket is closed.
+            with ExpectLog(gen_log, "SSL Error", required=False):
+                with self.assertRaises(ssl.SSLCertVerificationError):
+                    if start_tls:
+                        await stream.start_tls(
+                            False, ssl_context, server_hostname=hostname
+                        )
+                    else:
+                        await stream.connect(
+                            ("127.0.0.1", self.port), server_hostname=hostname
+                        )
+                await asyncio.sleep(0.1)
+            if not start_tls:
+                self.assertTrue(stream.closed())
+            self.assertFalse(
+                [
+                    record
+                    for record in records
+                    if record.levelno >= logging.WARNING
+                    and record.args
+                    and record.args[0] == client_fd
+                ]
+            )
+        finally:
+            gen_log.removeFilter(record_filter)
+            if stream.socket is not None:
+                stream.close()
+
+    @gen_test
+    async def test_hostname_error_not_logged_by_client(self):
+        await self._check_client_handshake_logging(
+            self.client_ssl_ctx, "bar.example.com"
+        )
+
+    @gen_test
+    async def test_untrusted_certificate_not_logged_by_client(self):
+        await self._check_client_handshake_logging(
+            ssl.create_default_context(), "foo.example.com"
+        )
+
+    @gen_test
+    async def test_start_tls_error_not_logged_by_client(self):
+        await self._check_client_handshake_logging(
+            ssl.create_default_context(), "foo.example.com", start_tls=True
+        )
 
     @gen_test
     async def test_check_disabled(self):

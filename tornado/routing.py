@@ -415,7 +415,7 @@ class ReversibleRuleRouter(ReversibleRouter, RuleRouter):
     """
 
     def __init__(self, rules: _RuleList | None = None) -> None:
-        self.named_rules: dict[str, Any] = {}
+        self.named_rules: dict[str, Rule] = {}
         super().__init__(rules)
 
     def process_rule(self, rule: "Rule") -> "Rule":
@@ -522,7 +522,7 @@ class AnyMatches(Matcher):
 class HostMatches(Matcher):
     """Matches requests from hosts specified by ``host_pattern`` regex."""
 
-    def __init__(self, host_pattern: str | Pattern) -> None:
+    def __init__(self, host_pattern: str | Pattern[str]) -> None:
         if isinstance(host_pattern, basestring_type):
             if not host_pattern.endswith("$"):
                 host_pattern += "$"
@@ -542,7 +542,7 @@ class DefaultHostMatches(Matcher):
     Always returns no match if ``X-Real-Ip`` header is present.
     """
 
-    def __init__(self, application: Any, host_pattern: Pattern) -> None:
+    def __init__(self, application: Any, host_pattern: Pattern[str]) -> None:
         self.application = application
         self.host_pattern = host_pattern
 
@@ -557,7 +557,7 @@ class DefaultHostMatches(Matcher):
 class PathMatches(Matcher):
     """Matches requests with paths specified by ``path_pattern`` regex."""
 
-    def __init__(self, path_pattern: str | Pattern) -> None:
+    def __init__(self, path_pattern: str | Pattern[str]) -> None:
         if isinstance(path_pattern, basestring_type):
             if not path_pattern.endswith("$"):
                 path_pattern += "$"
@@ -601,8 +601,6 @@ class PathMatches(Matcher):
         assert len(args) == self._group_count, (
             "required number of arguments " "not found"
         )
-        if not len(args):
-            return self._path
         converted_args = []
         for a in args:
             if not isinstance(a, (unicode_type, bytes)):
@@ -616,7 +614,8 @@ class PathMatches(Matcher):
         For example: Given the url pattern /([0-9]{4})/([a-z-]+)/, this method
         would return ('/%s/%s/', 2).
         """
-        pattern = self.regex.pattern
+        # Literal percent signs must not become formatting directives in reverse().
+        pattern = self.regex.pattern.replace("%", "%%")
         if pattern.startswith("^"):
             pattern = pattern[1:]
         if pattern.endswith("$"):
@@ -661,7 +660,7 @@ class URLSpec(Rule):
 
     def __init__(
         self,
-        pattern: str | Pattern,
+        pattern: str | Pattern[str],
         handler: Any,
         kwargs: dict[str, Any] | None = None,
         name: str | None = None,
