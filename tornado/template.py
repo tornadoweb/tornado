@@ -474,12 +474,7 @@ class Loader(BaseLoader):
         self.root = os.path.abspath(root_directory)
 
     def resolve_path(self, name: str, parent_path: str | None = None) -> str:
-        if (
-            parent_path
-            and not parent_path.startswith("<")
-            and not parent_path.startswith("/")
-            and not name.startswith("/")
-        ):
+        if parent_path and not parent_path.startswith("<") and not os.path.isabs(name):
             current_path = os.path.join(self.root, parent_path)
             file_dir = os.path.dirname(os.path.abspath(current_path))
             relative_path = os.path.abspath(os.path.join(file_dir, name))
@@ -755,7 +750,7 @@ class _CodeWriter:
     def indent_size(self) -> int:
         return self._indent
 
-    def indent(self) -> "ContextManager":
+    def indent(self) -> "ContextManager[_CodeWriter]":
         class Indenter:
             def __enter__(_) -> "_CodeWriter":
                 self._indent += 1
@@ -767,7 +762,7 @@ class _CodeWriter:
 
         return Indenter()
 
-    def include(self, template: Template, line: int) -> "ContextManager":
+    def include(self, template: Template, line: int) -> "ContextManager[_CodeWriter]":
         self.include_stack.append((self.current_template, line))
         self.current_template = template
 

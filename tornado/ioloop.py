@@ -49,11 +49,8 @@ from tornado.concurrent import (
     is_future,
 )
 from tornado.log import app_log
-from tornado.util import (  # noqa: F401 (TimeoutError re-exported for compatibility)
-    Configurable,
-    TimeoutError,
-    import_object,
-)
+from tornado.util import Configurable, import_object
+from tornado.util import TimeoutError as TimeoutError  # re-exported for compatibility
 
 
 class _Selectable(Protocol):
@@ -165,7 +162,7 @@ class IOLoop(Configurable):
     # https://github.com/python/cpython/issues/91887
     # If that change is accepted, this can eventually be removed.
     # If it is not, we will consider the rationale and may remove this.
-    _pending_tasks: set[Future] = set()
+    _pending_tasks: set[Future[Any]] = set()
 
     @classmethod
     def configure(cls, impl: None | str | type[Configurable], **kwargs: Any) -> None:
@@ -456,7 +453,15 @@ class IOLoop(Configurable):
         """
         raise NotImplementedError()
 
-    def run_sync(self, func: Callable, timeout: float | None = None) -> Any:
+    @typing.overload
+    def run_sync(
+        self, func: Callable[[], Awaitable[_T]], timeout: float | None = None
+    ) -> _T: ...
+
+    @typing.overload
+    def run_sync(self, func: Callable[[], _T], timeout: float | None = None) -> _T: ...
+
+    def run_sync(self, func: Callable[[], Any], timeout: float | None = None) -> Any:
         """Starts the `IOLoop`, runs the given function, and stops the loop.
 
         The function must return either an awaitable object or
@@ -490,7 +495,7 @@ class IOLoop(Configurable):
         """
 
         class FutureCell(TypedDict):
-            future: Future | None
+            future: Future[Any] | None
             timeout_called: bool
 
         future_cell: FutureCell = {"future": None, "timeout_called": False}
@@ -561,7 +566,7 @@ class IOLoop(Configurable):
     def add_timeout(
         self,
         deadline: float | datetime.timedelta,
-        callback: Callable,
+        callback: Callable[..., Any],
         *args: Any,
         **kwargs: Any,
     ) -> object:
@@ -600,7 +605,7 @@ class IOLoop(Configurable):
             raise TypeError("Unsupported deadline %r" % deadline)
 
     def call_later(
-        self, delay: float, callback: Callable, *args: Any, **kwargs: Any
+        self, delay: float, callback: Callable[..., Any], *args: Any, **kwargs: Any
     ) -> object:
         """Runs the ``callback`` after ``delay`` seconds have passed.
 
@@ -615,7 +620,7 @@ class IOLoop(Configurable):
         return self.call_at(self.time() + delay, callback, *args, **kwargs)
 
     def call_at(
-        self, when: float, callback: Callable, *args: Any, **kwargs: Any
+        self, when: float, callback: Callable[..., Any], *args: Any, **kwargs: Any
     ) -> object:
         """Runs the ``callback`` at the absolute time designated by ``when``.
 
@@ -641,7 +646,9 @@ class IOLoop(Configurable):
         """
         raise NotImplementedError()
 
-    def add_callback(self, callback: Callable, *args: Any, **kwargs: Any) -> None:
+    def add_callback(
+        self, callback: Callable[..., Any], *args: Any, **kwargs: Any
+    ) -> None:
         """Calls the given callback on the next I/O loop iteration.
 
         It is safe to call this method from any thread at any time,
@@ -654,7 +661,7 @@ class IOLoop(Configurable):
         raise NotImplementedError()
 
     def add_callback_from_signal(
-        self, callback: Callable, *args: Any, **kwargs: Any
+        self, callback: Callable[..., Any], *args: Any, **kwargs: Any
     ) -> None:
         """Calls the given callback on the next I/O loop iteration.
 
@@ -668,7 +675,9 @@ class IOLoop(Configurable):
         """
         raise NotImplementedError()
 
-    def spawn_callback(self, callback: Callable, *args: Any, **kwargs: Any) -> None:
+    def spawn_callback(
+        self, callback: Callable[..., Any], *args: Any, **kwargs: Any
+    ) -> None:
         """Calls the given callback on the next IOLoop iteration.
 
         As of Tornado 6.0, this method is equivalent to `add_callback`.
@@ -775,7 +784,7 @@ class IOLoop(Configurable):
         except Exception:
             app_log.error("Exception in callback %r", callback, exc_info=True)
 
-    def _discard_future_result(self, future: Future) -> None:
+    def _discard_future_result(self, future: Future[Any]) -> None:
         """Avoid unhandled-exception warnings from spawned coroutines."""
         future.result()
 
@@ -819,10 +828,10 @@ class IOLoop(Configurable):
         except OSError:
             pass
 
-    def _register_task(self, f: Future) -> None:
+    def _register_task(self, f: Future[Any]) -> None:
         self._pending_tasks.add(f)
 
-    def _unregister_task(self, f: Future) -> None:
+    def _unregister_task(self, f: Future[Any]) -> None:
         self._pending_tasks.discard(f)
 
 
@@ -895,7 +904,7 @@ class PeriodicCallback:
 
     def __init__(
         self,
-        callback: Callable[[], Awaitable | None],
+        callback: Callable[[], Awaitable[Any] | None],
         callback_time: datetime.timedelta | float,
         jitter: float = 0,
     ) -> None:

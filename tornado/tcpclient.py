@@ -67,9 +67,9 @@ class _Connector:
 
     def __init__(
         self,
-        addrinfo: list[tuple],
+        addrinfo: list[tuple[Any, ...]],
         connect: Callable[
-            [socket.AddressFamily, tuple], tuple[IOStream, "Future[IOStream]"]
+            [socket.AddressFamily, tuple[Any, ...]], tuple[IOStream, "Future[IOStream]"]
         ],
     ) -> None:
         self.io_loop = IOLoop.current()
@@ -84,14 +84,14 @@ class _Connector:
         self.streams: set[IOStream] = set()
         # Addresses with connection attempts in progress. Used for
         # error messages.
-        self.pending_addrs: set[tuple] = set()
+        self.pending_addrs: set[tuple[Any, ...]] = set()
 
     @staticmethod
     def split(
-        addrinfo: list[tuple],
+        addrinfo: list[tuple[Any, ...]],
     ) -> tuple[
-        list[tuple[socket.AddressFamily, tuple]],
-        list[tuple[socket.AddressFamily, tuple]],
+        list[tuple[socket.AddressFamily, tuple[Any, ...]]],
+        list[tuple[socket.AddressFamily, tuple[Any, ...]]],
     ]:
         """Partition the ``addrinfo`` list by address family.
 
@@ -125,7 +125,9 @@ class _Connector:
         future_add_done_callback(self.future, self.on_future_done)
         return self.future
 
-    def try_connect(self, addrs: Iterator[tuple[socket.AddressFamily, tuple]]) -> None:
+    def try_connect(
+        self, addrs: Iterator[tuple[socket.AddressFamily, tuple[Any, ...]]]
+    ) -> None:
         try:
             af, addr = next(addrs)
         except StopIteration:
@@ -157,9 +159,9 @@ class _Connector:
 
     def on_connect_done(
         self,
-        addrs: Iterator[tuple[socket.AddressFamily, tuple]],
+        addrs: Iterator[tuple[socket.AddressFamily, tuple[Any, ...]]],
         af: socket.AddressFamily,
-        addr: tuple,
+        addr: tuple[Any, ...],
         future: "Future[IOStream]",
     ) -> None:
         self.remaining -= 1
@@ -330,7 +332,15 @@ class TCPClient:
                 source_port=source_port,
             ),
         )
-        af, addr, stream = await connector.start(connect_timeout=timeout)
+        connect_future = connector.start(connect_timeout=timeout)
+        try:
+            af, addr, stream = await connect_future
+        except asyncio.CancelledError:
+            # Cancellation can arrive after the connection succeeds but
+            # before this coroutine receives the stream.
+            if not connect_future.cancelled() and connect_future.exception() is None:
+                connect_future.result()[2].close()
+            raise
         # TODO: For better performance we could cache the (af, addr)
         # information here and reuse it on subsequent connections to
         # the same host. (http://tools.ietf.org/html/rfc6555#section-4.2)
@@ -348,6 +358,15 @@ class TCPClient:
                     )
                 else:
                     stream = await tls_future
+            except asyncio.CancelledError:
+                if (
+                    tls_future.done()
+                    and not tls_future.cancelled()
+                    and tls_future.exception() is None
+                ):
+                    # Cancelling a completed future does not close its stream.
+                    tls_future.result().close()
+                raise
             finally:
                 # If we're exiting early (timeout or cancellation), cancel
                 # the handshake so the new SSLIOStream (which now owns the
@@ -360,7 +379,7 @@ class TCPClient:
         self,
         max_buffer_size: int | None,
         af: socket.AddressFamily,
-        addr: tuple,
+        addr: tuple[Any, ...],
         source_ip: str | None = None,
         source_port: int | None = None,
     ) -> tuple[IOStream, "Future[IOStream]"]:

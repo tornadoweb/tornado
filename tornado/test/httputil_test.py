@@ -2,6 +2,7 @@ import copy
 import datetime
 import logging
 import pickle
+import sys
 import time
 import urllib.parse
 
@@ -12,22 +13,27 @@ from tornado.httputil import (
     HTTPInputError,
     HTTPServerRequest,
     ParseMultipartConfig,
+    ParseUrlEncodedConfig,
     RequestStartLine,
     _DEFAULT_PARSE_BODY_CONFIG,
+    _parse_header,
     format_timestamp,
     parse_body_arguments,
     parse_cookie,
     parse_multipart_form_data,
     parse_request_start_line,
     qs_to_qsl,
+    split_host_and_port,
     url_concat,
+    _url_to_ascii,
 )
 from tornado.log import gen_log
 from tornado.test.util import (
     TestCase,
     assert_linear_scaling,
+    assert_memory_budget,
     ignore_deprecation,
-    skipIfEmulated,
+    skipNotCPython,
 )
 
 
@@ -101,6 +107,20 @@ class QsParseTest(TestCase):
 
 
 class UrlEncodedDataTest(TestCase):
+    def test_content_type_case(self):
+        for content_type in (
+            "application/x-www-form-urlencoded",
+            "Application/X-WWW-Form-Urlencoded",
+            "APPLICATION/X-WWW-FORM-URLENCODED; charset=UTF-8",
+        ):
+            with self.subTest(content_type=content_type):
+                args, files = form_data_args()
+                parse_body_arguments(
+                    content_type, b"Name=Value&Name=Other", args, files
+                )
+                self.assertEqual(args, {"Name": [b"Value", b"Other"]})
+                self.assertEqual(files, {})
+
     def test_urlencoded_data(self):
         data = b"a=1&b=2&a=3"
         args, files = form_data_args()
@@ -116,8 +136,95 @@ class UrlEncodedDataTest(TestCase):
             parse_body_arguments("application/x-www-form-urlencoded", data, args, files)
         self.assertIn("Max number of fields exceeded", str(cm.exception))
 
+    @skipNotCPython
+    def test_memory_budget(self):
+        # Large bodies use a few bytes of memory per input byte: up to about
+        # 8 for lone % signs (see EscapeTestCase.test_unquote_memory_budget)
+        # and about 2 for many long fields, as of 2026-11.
+        n = ParseUrlEncodedConfig().max_arguments - 1
+        for name, body in [
+            ("lone %", b"a=" + b"%" * 900_000),
+            (
+                "escaped keys",
+                b"&".join(b"%d" % i + b"%41" * 333 + b"=" for i in range(n)),
+            ),
+            ("long values", b"&".join(b"a=" + b"x" * 1000 for i in range(n))),
+        ]:
+            with self.subTest(name):
+                args, files = form_data_args()
+                with assert_memory_budget(
+                    len(body),
+                    max_ratio=12,
+                    msg="urlencoded body parsing uses too much memory",
+                ):
+                    parse_body_arguments(
+                        "application/x-www-form-urlencoded", body, args, files
+                    )
+
+    @skipNotCPython
+    def test_memory_budget_many_fields(self):
+        # Each field costs a fixed amount (about 250 bytes as of 2026-11), so
+        # many short fields use about 50 bytes per input byte. max_arguments
+        # bounds the total, so the budget is per field rather than per byte.
+        max_arguments = ParseUrlEncodedConfig().max_arguments
+        body = b"".join(b"%d=&" % i for i in range(max_arguments - 1))
+        args, files = form_data_args()
+        with assert_memory_budget(
+            max_arguments,
+            max_ratio=500,
+            msg="urlencoded body parsing uses too much memory per field",
+        ):
+            parse_body_arguments("application/x-www-form-urlencoded", body, args, files)
+        self.assertEqual(len(args), max_arguments - 1)
+
 
 class MultipartFormDataTest(TestCase):
+    def test_content_type_case(self):
+        data = (
+            b"--AaB03x\r\n"
+            b'Content-Disposition: form-data; name="Files"; filename="Report.TXT"\r\n'
+            b"\r\nHello\r\n--AaB03x--\r\n"
+        )
+        for media_type in ("multipart/form-data", "Multipart/Form-Data"):
+            for parameter in ("boundary", "Boundary", "BOUNDARY"):
+                for boundary in ("AaB03x", '"AaB03x"'):
+                    content_type = f"{media_type}; {parameter}={boundary}"
+                    with self.subTest(content_type=content_type):
+                        args, files = form_data_args()
+                        parse_body_arguments(content_type, data, args, files)
+                        self.assertEqual(args, {})
+                        self.assertEqual(files["Files"][0].filename, "Report.TXT")
+                        self.assertEqual(files["Files"][0].body, b"Hello")
+
+    def test_multiple_boundaries(self):
+        data = (
+            b"--1234\r\n"
+            b'Content-Disposition: form-data; name="Name"\r\n'
+            b"\r\nValue\r\n--1234--\r\n"
+        )
+        for content_type in (
+            "multipart/form-data; boundary=1234; boundary=5678",
+            "multipart/form-data; boundary=5678; BOUNDARY=1234",
+            "multipart/form-data; boundary=1234; boundary=1234",
+            "multipart/form-data; boundary=; boundary=1234",
+        ):
+            with self.subTest(content_type=content_type):
+                args, files = form_data_args()
+                with self.assertRaisesRegex(HTTPInputError, "multiple"):
+                    parse_body_arguments(content_type, data, args, files)
+
+    def test_boundary_value_is_case_sensitive(self):
+        data = (
+            b"--AaB03x\r\n"
+            b'Content-Disposition: form-data; name="Name"\r\n'
+            b"\r\nValue\r\n--AaB03x--\r\n"
+        )
+        args, files = form_data_args()
+        with self.assertRaisesRegex(HTTPInputError, "no final boundary found"):
+            parse_body_arguments(
+                "multipart/form-data; boundary=aab03x", data, args, files
+            )
+
     def test_file_upload(self):
         data = b"""\
 --1234
@@ -297,6 +404,51 @@ Foo
         self.assertEqual(file["filename"], "ab.txt")
         self.assertEqual(file["body"], b"Foo")
 
+    def test_mixed_rfc2231_continuations(self):
+        # A parameter given both with and without a continuation number
+        # made email.utils.decode_params raise TypeError before Python
+        # 3.13.5. It must be reported as bad input.
+        data = (
+            b"--1234\r\nContent-Disposition: form-data; name*=a; name*1=b\r\n"
+            b"\r\nFoo\r\n--1234--\r\n"
+        )
+        args, files = form_data_args()
+        if sys.version_info >= (3, 13, 5):
+            parse_multipart_form_data(b"1234", data, args, files)
+            self.assertEqual(args, {"ab": [b"Foo"]})
+        else:
+            with self.assertRaises(HTTPInputError):
+                parse_multipart_form_data(b"1234", data, args, files)
+
+    def test_undecodable_rfc2231_parameter(self):
+        # _parse_header raises ValueError (UnicodeError) for a charset that
+        # can't decode with errors="replace".
+        data = (
+            b"--1234\r\nContent-Disposition: form-data; name*=idna''%ff\r\n"
+            b"\r\nFoo\r\n--1234--\r\n"
+        )
+        args, files = form_data_args()
+        with self.assertRaises(HTTPInputError):
+            parse_multipart_form_data(b"1234", data, args, files)
+
+    def test_rfc2231_continuations(self):
+        # Correctly numbered continuations, alone or with an encoded first
+        # section, are joined.
+        for disposition, name in [
+            (b"name*0=a; name*1=b", "ab"),
+            (b"name*0*=utf-8''%C3%A4; name*1=b", "\u00e4b"),
+            (b"name*=utf-8''%C3%A4b", "\u00e4b"),
+        ]:
+            with self.subTest(disposition):
+                data = (
+                    b"--1234\r\nContent-Disposition: form-data; "
+                    + disposition
+                    + b"\r\n\r\nFoo\r\n--1234--\r\n"
+                )
+                args, files = form_data_args()
+                parse_multipart_form_data(b"1234", data, args, files)
+                self.assertEqual(args, {name: [b"Foo"]})
+
     def test_disposition_param_linear_performance(self):
         # This is a regression test for performance of parsing parameters
         # to the content-disposition header, specifically for semicolons within
@@ -322,6 +474,35 @@ Foo
             max_ratio=20,
             msg="Disposition param parsing is not linear",
         )
+
+    @skipNotCPython
+    def test_parse_header_memory_budget(self):
+        # Many tiny parameters are the worst case for memory in
+        # _parse_header (about 45 bytes per input byte as of 2026-10).
+        header = "form-data" + "; a=b" * 10_000
+        with assert_memory_budget(
+            len(header), max_ratio=60, msg="_parse_header uses too much memory"
+        ):
+            _parse_header(header)
+
+    @skipNotCPython
+    def test_multipart_memory_budget(self):
+        # Many empty parts are the worst case for memory, since each part
+        # costs a fixed amount (about 5 bytes per input byte as of 2026-10
+        # with the default max_parts). Larger parts are close to 2: the
+        # body and one copy of each part's data.
+        part = (
+            b"--1234\r\n"
+            b'Content-Disposition: form-data; name="a"; filename="b"\r\n'
+            b"Content-Type: text/plain\r\n\r\n\r\n"
+        )
+        body = part * (ParseMultipartConfig().max_parts - 1) + b"--1234--\r\n"
+        args, files = form_data_args()
+        with assert_memory_budget(
+            len(body), max_ratio=10, msg="multipart parsing uses too much memory"
+        ):
+            parse_multipart_form_data(b"1234", body, args, files)
+        self.assertEqual(len(files["a"]), 99)
 
     def test_multipart_config(self):
         boundary = b"1234"
@@ -354,6 +535,41 @@ Content-Disposition: form-data; name="files"; filename="ab.txt"
                 boundary, body, args, files, config=config_disabled
             )
         self.assertIn("multipart/form-data parsing is disabled", str(cm.exception))
+
+
+class ParseHeaderTest(TestCase):
+    def test_mixed_rfc2231_continuations(self):
+        # See MultipartFormDataTest.test_mixed_rfc2231_continuations.
+        for header in [
+            "form-data; name*=a; name*1=b",
+            "form-data; name*1=b; name*=a",
+            "permessage-deflate; a*=1; a*1=2",
+        ]:
+            with self.subTest(header):
+                if sys.version_info >= (3, 13, 5):
+                    _parse_header(header)
+                else:
+                    with self.assertRaises(ValueError):
+                        _parse_header(header)
+
+    def test_undecodable_rfc2231_parameter(self):
+        with self.assertRaises(ValueError):
+            _parse_header("form-data; name*=idna''%ff")
+
+    def test_valid_parameters(self):
+        # The parameter forms closest to the one above still work.
+        self.assertEqual(
+            _parse_header("form-data; name*0=a; name*1=b; filename*=utf-8''x%20y"),
+            ("form-data", {"name": "ab", "filename": "x y"}),
+        )
+        self.assertEqual(
+            _parse_header("form-data; name*0*=utf-8''%C3%A4; name*1=b"),
+            ("form-data", {"name": "\u00e4b"}),
+        )
+        self.assertEqual(
+            _parse_header("permessage-deflate; client_max_window_bits=10; x"),
+            ("permessage-deflate", {"client_max_window_bits": "10", "x": None}),
+        )
 
 
 class HTTPHeadersTest(TestCase):
@@ -546,6 +762,33 @@ class HTTPHeadersTest(TestCase):
             msg="HTTPHeaders.add() does not scale linearly",
         )
 
+    def test_parse_repeated_linear_performance(self):
+        # Regression test for CVE-2025-67725, through the parsing path that
+        # HTTP1Connection uses rather than HTTPHeaders.add() directly. Before
+        # Tornado 6.5.3 this measured a ratio of about 30; the per-line
+        # parsing costs hide some of the quadratic part at these sizes.
+        def f(n):
+            HTTPHeaders.parse("X: a\r\n" * n)
+
+        assert_linear_scaling(
+            f,
+            10_000,
+            100_000,
+            max_ratio=20,
+            msg="HTTPHeaders.parse() of a repeated header is not linear",
+        )
+
+    @skipNotCPython
+    def test_parse_memory_budget(self):
+        # Many short, distinct headers are the worst case for memory (about
+        # 18 bytes per input byte as of 2026-10). The default max_header_size
+        # is 64KB, so this is about as large as a server will parse.
+        data = "".join(f"X{i}: b\r\n" for i in range(8_000))
+        with assert_memory_budget(
+            len(data), max_ratio=30, msg="HTTPHeaders.parse() uses too much memory"
+        ):
+            HTTPHeaders.parse(data)
+
 
 class FormatTimestampTest(TestCase):
     # Make sure that all the input types are supported.
@@ -644,6 +887,59 @@ class ParseRequestStartLineTest(TestCase):
         self.assertEqual(parsed_start_line.path, self.PATH)
         self.assertEqual(parsed_start_line.version, self.VERSION)
 
+    def test_fragment_rejected(self):
+        # A fragment is never sent as part of a request target.
+        for path in ["/foo#bar", "/foo?a=b#c", "#"]:
+            with self.subTest(path=path):
+                with self.assertRaises(HTTPInputError):
+                    parse_request_start_line(f"GET {path} HTTP/1.1")
+
+
+class SplitHostAndPortTest(TestCase):
+    def test_split_host_and_port(self):
+        self.assertEqual(split_host_and_port("example.com"), ("example.com", None))
+        self.assertEqual(split_host_and_port("example.com:80"), ("example.com", 80))
+        self.assertEqual(split_host_and_port("[::1]:80"), ("[::1]", 80))
+
+    def test_non_ascii_digits(self):
+        # Only ASCII digits make a port. "\u0668\u0660" is "80" in Arabic-Indic
+        # digits, which int() would accept.
+        self.assertEqual(
+            split_host_and_port("example.com:\u0668\u0660"),
+            ("example.com:\u0668\u0660", None),
+        )
+
+
+class URLToASCIITest(TestCase):
+    def test_url_to_ascii(self):
+        for url, expected in [
+            # ASCII URLs are unchanged, even if they are unusual.
+            ("http://example.com/a b%41?#", "http://example.com/a b%41?#"),
+            ("http://caf\u00e9.example/", "http://xn--caf-dma.example/"),
+            (
+                "https://u\u00e9:p\u00e9@caf\u00e9.example:8080/\u00e9?\u00e9=1#\u00e9",
+                "https://u%C3%A9:p%C3%A9@xn--caf-dma.example:8080/%C3%A9?%C3%A9=1#%C3%A9",
+            ),
+            # Empty queries and fragments are kept.
+            ("http://caf\u00e9.example/?", "http://xn--caf-dma.example/?"),
+            ("http://caf\u00e9.example#", "http://xn--caf-dma.example#"),
+            ("http://[::1]:80/\u00e9", "http://[::1]:80/%C3%A9"),
+            ("//caf\u00e9.example/x", "//xn--caf-dma.example/x"),
+            ("/\u00e9", "/%C3%A9"),
+            (
+                "http://\uff4c\uff4f\uff43\uff41\uff4c\uff48\uff4f\uff53\uff54/",
+                "http://localhost/",
+            ),
+        ]:
+            with self.subTest(url=url):
+                self.assertEqual(_url_to_ascii(url), expected)
+
+    def test_invalid_hostname(self):
+        for url in ["http://a..b\u00e9/", "http://" + "\u00e9" * 64 + ".example/"]:
+            with self.subTest(url=url):
+                with self.assertRaises(ValueError):
+                    _url_to_ascii(url)
+
 
 class ParseCookieTest(TestCase):
     # These tests copied from Django:
@@ -741,24 +1037,48 @@ class ParseCookieTest(TestCase):
                 c = parse_cookie(encoded)
                 self.assertEqual(c["a"], decoded)
 
-    @skipIfEmulated
     def test_unquote_large(self):
         # Adapted from
         # https://github.com/python/cpython/blob/dc7a2b6522ec7af41282bc34f405bee9b306d611/Lib/test/test_http_cookies.py#L87
         # Modified from that test because we handle semicolons differently from the stdlib.
-        #
-        # This is a performance regression test: prior to improvements in Tornado 6.4.2, this test
-        # would take over a minute with n= 100k. Now it runs in tens of milliseconds.
         n = 100000
         for encoded in r"\\", r"\134":
             with self.subTest(encoded):
-                start = time.time()
                 data = 'a="b=' + encoded * n + '"'
                 value = parse_cookie(data)["a"]
-                end = time.time()
                 self.assertEqual(value[:3], "b=\\")
                 self.assertEqual(value[-3:], "\\\\\\")
                 self.assertEqual(len(value), n + 2)
 
-                # Very loose performance check to avoid false positives
-                self.assertLess(end - start, 1, "Test took too long")
+    def test_unquote_linear_performance(self):
+        # Regression test for CVE-2024-7592: before Tornado 6.4.2, unquoting
+        # escape sequences in a cookie value was quadratic. (Only the r"\\"
+        # case reproduces it on 6.4.1; r"\134" is here for symmetry with
+        # test_unquote_large.)
+        #
+        # 6.4.1 measures a ratio of about 100 on CPython and 60-100 on PyPy.
+        # The fixed version measures about 10 on CPython, but this test
+        # allocates heavily for each byte of input, and PyPy's ratio depends
+        # on how that compares to its nursery and CPU caches: as of 2026-10
+        # it measures 11-24 depending on PYPY_GC_NURSERY, so the usual limit
+        # of 20 is too tight.
+        for encoded in r"\\", r"\134":
+            with self.subTest(encoded):
+                assert_linear_scaling(
+                    lambda n: parse_cookie('a="b=' + encoded * n + '"'),
+                    1_000,
+                    10_000,
+                    max_ratio=40,
+                    msg="Cookie unquoting is not linear",
+                )
+
+    @skipNotCPython
+    def test_parse_memory_budget(self):
+        # Many short cookies with empty values are the worst case for memory
+        # (about 20 bytes per input byte as of 2026-10). Cookies arrive in a
+        # header, so the default max_header_size of 64KB bounds the input.
+        data = "".join(f"{i}=;" for i in range(10_000))
+        with assert_memory_budget(
+            len(data), max_ratio=30, msg="parse_cookie() uses too much memory"
+        ):
+            parse_cookie(data)

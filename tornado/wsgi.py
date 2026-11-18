@@ -175,7 +175,7 @@ class WSGIContainer:
                 response.append(chunk)
         finally:
             if hasattr(app_response, "close"):
-                app_response.close()  # type: ignore
+                app_response.close()
         body = b"".join(response)
         if not data:
             raise Exception("WSGI app did not call start_response")
@@ -197,6 +197,11 @@ class WSGIContainer:
         header_obj = httputil.HTTPHeaders()
         for key, value in headers:
             header_obj.add(key, value)
+        if request.method == "HEAD":
+            # Like RequestHandler, send only the headers for HEAD requests.
+            # Many WSGI applications return the full body and leave it to
+            # the server to discard it.
+            body = b""
         assert request.connection is not None
         request.connection.write_headers(start_line, header_obj, chunk=body)
         request.connection.finish()
@@ -208,12 +213,8 @@ class WSGIContainer:
         .. versionchanged:: 6.3
            No longer a static method.
         """
-        hostport = request.host.split(":")
-        if len(hostport) == 2:
-            host = hostport[0]
-            port = int(hostport[1])
-        else:
-            host = request.host
+        host, port = httputil.split_host_and_port(request.host)
+        if port is None:
             port = 443 if request.protocol == "https" else 80
         environ = {
             "REQUEST_METHOD": request.method,

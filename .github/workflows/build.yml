@@ -17,7 +17,8 @@ on:
   workflow_dispatch:
     # Allow this workflow to be run manually (pushing to testpypi instead of pypi)
 
-permissions: {}
+permissions:
+  contents: read
 
 env:
   # [[[cog cog.outl(f"python-version: '3.{default_python_minor}'")]]]

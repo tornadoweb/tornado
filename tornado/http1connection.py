@@ -56,7 +56,7 @@ _YIELD_THRESHOLD = 256 * 1024
 _CHUNK_YIELD_COST = 1024
 
 
-def _is_done(future: Awaitable) -> bool:
+def _is_done(future: Awaitable[object]) -> bool:
     # IOStream's read methods are declared to return Awaitables, but they
     # are actually Futures which may already be resolved.
     return isinstance(future, Future) and future.done()
@@ -106,17 +106,30 @@ class HTTP1ConnectionParameters:
         max_body_size: int | None = None,
         body_timeout: float | None = None,
         decompress: bool = False,
+        idle_connection_timeout: float | None = None,
     ) -> None:
         """
         :arg bool no_keep_alive: If true, always close the connection after
             one request.
         :arg int chunk_size: how much data to read into memory at once
         :arg int max_header_size:  maximum amount of data for HTTP headers
-        :arg float header_timeout: how long to wait for all headers (seconds)
+        :arg float header_timeout: how long to wait for all headers (seconds),
+            from the first byte of the message. Without
+            ``idle_connection_timeout``, this also includes the wait for the
+            first byte.
+        :arg float idle_connection_timeout: how long to wait for the first
+            byte of a message (seconds). `.HTTPServer` sets this, so that an
+            idle kept-alive connection can wait longer than a client may take
+            to send its headers. `.SimpleAsyncHTTPClient` doesn't, since it
+            doesn't reuse connections, so one timeout covers the whole wait
+            for a response's headers.
         :arg int max_body_size: maximum amount of data for body
         :arg float body_timeout: how long to wait while reading body (seconds)
         :arg bool decompress: if true, decode incoming
             ``Content-Encoding: gzip``
+
+        .. versionchanged:: 6.7
+           Added ``idle_connection_timeout``.
         """
         self.no_keep_alive = no_keep_alive
         self.chunk_size = chunk_size or 65536
@@ -125,6 +138,7 @@ class HTTP1ConnectionParameters:
         self.max_body_size = max_body_size
         self.body_timeout = body_timeout
         self.decompress = decompress
+        self.idle_connection_timeout = idle_connection_timeout
 
 
 class HTTP1Connection(httputil.HTTPConnection):
@@ -223,6 +237,29 @@ class HTTP1Connection(httputil.HTTPConnection):
     ) -> bool:
         need_delegate_close = False
         try:
+            if self.params.idle_connection_timeout is not None:
+                # Wait for the first byte separately, so that the header
+                # timeout starts when the message does. The lookahead matches
+                # an empty string once any byte is buffered, so nothing is
+                # consumed. ([\s\S] matches any byte; "." would not match a
+                # newline, which may come first since blank lines before a
+                # request are allowed.)
+                first_byte = self.stream.read_until_regex(rb"(?=[\s\S])")
+                if _is_done(first_byte):
+                    # Data was already buffered (as for pipelined requests),
+                    # so skip the cost of setting up a timeout.
+                    await first_byte
+                else:
+                    try:
+                        await gen.with_timeout(
+                            self.stream.io_loop.time()
+                            + self.params.idle_connection_timeout,
+                            first_byte,
+                            quiet_exceptions=iostream.StreamClosedError,
+                        )
+                    except TimeoutError:
+                        self.close()
+                        return False
             header_future = self.stream.read_until_regex(
                 b"\r?\n\r?\n", max_bytes=self.params.max_header_size
             )
@@ -653,7 +690,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                 # Proxies sometimes cause Content-Length headers to get
                 # duplicated.  If all the values are identical then we can
                 # use them but if they differ it's an error.
-                pieces = re.split(r",\s*", headers["Content-Length"])
+                pieces = re.split(r",[ \t]*", headers["Content-Length"])
                 if any(i != pieces[0] for i in pieces):
                     raise httputil.HTTPInputError(
                         "Multiple unequal Content-Lengths: %r"
@@ -955,8 +992,10 @@ class HTTP1ServerConnection:
                 except (
                     iostream.StreamClosedError,
                     iostream.UnsatisfiableReadError,
-                    asyncio.CancelledError,
                 ):
+                    return
+                except asyncio.CancelledError:
+                    conn.close()
                     return
                 except Exception:
                     gen_log.error("Uncaught exception", exc_info=True)

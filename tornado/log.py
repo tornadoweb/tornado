@@ -45,7 +45,10 @@ try:
 except ImportError:
     curses = None  # type: ignore
 
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from tornado.options import OptionParser
 
 # Logger objects for internal tornado use
 access_log = logging.getLogger("tornado.access")
@@ -74,7 +77,7 @@ def _stderr_supports_color() -> bool:
 
 def _safe_unicode(s: Any) -> str:
     try:
-        return _unicode(s)
+        return cast(str, _unicode(s))
     except UnicodeDecodeError:
         return repr(s)
 
@@ -166,7 +169,7 @@ class LogFormatter(logging.Formatter):
         else:
             self._normal = ""
 
-    def format(self, record: Any) -> str:
+    def format(self, record: logging.LogRecord) -> str:
         try:
             message = record.getMessage()
             assert isinstance(message, basestring_type)  # guaranteed by logging
@@ -198,6 +201,7 @@ class LogFormatter(logging.Formatter):
         else:
             record.color = record.end_color = ""
 
+        assert self._fmt is not None  # set in __init__
         formatted = self._fmt % record.__dict__
 
         if record.exc_info:
@@ -214,7 +218,7 @@ class LogFormatter(logging.Formatter):
 
 
 def enable_pretty_logging(
-    options: Any = None, logger: logging.Logger | None = None
+    options: "OptionParser | None" = None, logger: logging.Logger | None = None
 ) -> None:
     """Turns on formatted logging output as configured.
 
@@ -263,7 +267,7 @@ def enable_pretty_logging(
         logger.addHandler(channel)
 
 
-def define_logging_options(options: Any = None) -> None:
+def define_logging_options(options: "OptionParser | None" = None) -> None:
     """Add logging-related flags to ``options``.
 
     These options are present automatically on the default options instance;

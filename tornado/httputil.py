@@ -32,17 +32,14 @@ import re
 import time
 import unicodedata
 from functools import lru_cache
-from http.client import responses
+from http.client import responses as responses  # noqa: F401
 from ssl import SSLError
+import urllib.parse
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 import warnings
 
 from tornado.escape import native_str, parse_qs_bytes, to_unicode, utf8
 from tornado.util import ObjectDict, unicode_type
-
-# responses is unused in this file, but we re-export it to other files.
-# Reference it so pyflakes doesn't complain.
-responses
 
 import typing
 from collections.abc import Awaitable, Generator, Iterable, Iterator, Mapping
@@ -110,6 +107,8 @@ class _ABNF:
     # request_target delegates to the URI RFC 3986, which is complex and may be
     # too restrictive (for example, the WHATWG version of the URL spec allows non-ASCII
     # characters). Instead, we allow everything but control chars and whitespace.
+    # (parse_request_start_line separately rejects "#", which the full grammar
+    # does not allow anywhere in a request target.)
     request_target = re.compile(rf"{field_vchar.pattern}+")
     request_line = re.compile(
         rf"({method.pattern}) ({request_target.pattern}) ({HTTP_version.pattern})"
@@ -252,6 +251,10 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
            Support for line folding was removed due to security/DoS concerns. This removal
            was ahead of the original removal schedule announced for Tornado 7.0.
            Support for LF without CR remains until Tornado 7.0.
+
+        .. versionchanged:: 6.6.1
+           Parsing of header lines terminated by LF without CR will be removed in Tornado 6.7
+           instead of 7.0 as previously documented.
         """
         if m := re.search(r"\r?\n$", line):
             # RFC 9112 section 2.2: a recipient MAY recognize a single LF as a line
@@ -344,7 +347,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
     def __len__(self) -> int:
         return len(self._as_list)
 
-    def __iter__(self) -> Iterator[typing.Any]:
+    def __iter__(self) -> Iterator[str]:
         return iter(self._as_list)
 
     def copy(self) -> HTTPHeaders:
@@ -552,12 +555,16 @@ class HTTPServerRequest:
             # be used to exploit differences between proxies when multiple headers
             # are supplied).
             raise HTTPInputError("Multiple host headers not allowed: %r" % self.host)
-        self.host_name = split_host_and_port(self.host.lower())[0]
+        try:
+            self.host_name = split_host_and_port(self.host.lower())[0]
+        except ValueError:
+            # The port has more digits than int() allows.
+            raise HTTPInputError("Invalid Host header: %r" % self.host)
         self.files = files or {}
         self.connection = connection
         self.server_connection = server_connection
         self._start_time = time.time()
-        self._finish_time = None
+        self._finish_time: float | None = None
 
         if self.uri is not None:
             self.path, sep, self.query = self.uri.partition("?")
@@ -578,7 +585,7 @@ class HTTPServerRequest:
         self.body_arguments: dict[str, list[bytes]] = {}
 
     @property
-    def cookies(self) -> dict[str, http.cookies.Morsel]:
+    def cookies(self) -> dict[str, http.cookies.Morsel[typing.Any]]:
         """A dictionary of ``http.cookies.Morsel`` objects."""
         if not hasattr(self, "_cookies"):
             self._cookies: http.cookies.SimpleCookie = http.cookies.SimpleCookie()
@@ -600,7 +607,7 @@ class HTTPServerRequest:
 
     def full_url(self) -> str:
         """Reconstructs the full URL for this request."""
-        return self.protocol + "://" + self.host + self.uri  # type: ignore[operator]
+        return self.protocol + "://" + self.host + self.uri
 
     def request_time(self) -> float:
         """Returns the amount of time it took for this request to execute."""
@@ -609,7 +616,9 @@ class HTTPServerRequest:
         else:
             return self._finish_time - self._start_time
 
-    def get_ssl_certificate(self, binary_form: bool = False) -> None | dict | bytes:
+    def get_ssl_certificate(
+        self, binary_form: bool = False
+    ) -> None | dict[str, typing.Any] | bytes:
         """Returns the client's SSL certificate, if any.
 
         To use client certificates, the HTTPServer's
@@ -1042,10 +1051,15 @@ def parse_body_arguments(
     a string and ``body`` should be a byte string.  The ``arguments``
     and ``files`` parameters are dictionaries that will be updated
     with the parsed contents.
+
+    Media types and parameter names are case-insensitive. Parameter values,
+    including multipart boundaries, retain their original case.
     """
     if config is None:
         config = _DEFAULT_PARSE_BODY_CONFIG
-    if content_type.startswith("application/x-www-form-urlencoded"):
+    # Media types and parameter names are case-insensitive, but values may not be.
+    content_type_lower = content_type.lower()
+    if content_type_lower.startswith("application/x-www-form-urlencoded"):
         if headers and "Content-Encoding" in headers:
             raise HTTPInputError(
                 "Unsupported Content-Encoding: %s" % headers["Content-Encoding"]
@@ -1062,25 +1076,30 @@ def parse_body_arguments(
         for name, values in uri_arguments.items():
             if values:
                 arguments.setdefault(name, []).extend(values)
-    elif content_type.startswith("multipart/form-data"):
+    elif content_type_lower.startswith("multipart/form-data"):
         if headers and "Content-Encoding" in headers:
             raise HTTPInputError(
                 "Unsupported Content-Encoding: %s" % headers["Content-Encoding"]
             )
         try:
             fields = content_type.split(";")
-            if fields[0].strip() != "multipart/form-data":
+            if fields[0].strip().lower() != "multipart/form-data":
                 # This catches "Content-Type: multipart/form-dataxyz"
                 raise HTTPInputError("Invalid content type")
-            for field in fields:
+            boundaries = []
+            for field in fields[1:]:
                 k, sep, v = field.strip().partition("=")
-                if k == "boundary" and v:
-                    parse_multipart_form_data(
-                        utf8(v), body, arguments, files, config=config.multipart
-                    )
-                    break
-            else:
+                if k.lower() == "boundary":
+                    boundaries.append(v)
+            if len(boundaries) > 1:
+                # Intermediaries may disagree about whether the first or last
+                # copy wins, so refuse to guess.
+                raise HTTPInputError("multiple multipart boundaries")
+            if not boundaries or not boundaries[0]:
                 raise HTTPInputError("multipart boundary not found")
+            parse_multipart_form_data(
+                utf8(boundaries[0]), body, arguments, files, config=config.multipart
+            )
         except Exception as e:
             raise HTTPInputError("Invalid multipart/form-data: %s" % e) from e
 
@@ -1133,26 +1152,28 @@ def parse_multipart_form_data(
             raise HTTPInputError("multipart/form-data part header too large")
         headers = HTTPHeaders.parse(part[:eoh].decode("utf-8"), _chars_are_bytes=False)
         disp_header = headers.get("Content-Disposition", "")
-        disposition, disp_params = _parse_header(disp_header)
+        try:
+            disposition, disp_params = _parse_header(disp_header)
+        except ValueError as e:
+            raise HTTPInputError("Invalid multipart/form-data: %s" % e) from e
         if disposition != "form-data" or not part.endswith(b"\r\n"):
             raise HTTPInputError("Invalid multipart/form-data")
         value = part[eoh + 4 : -2]
-        if not disp_params.get("name"):
+        name = disp_params.get("name")
+        if not name:
             raise HTTPInputError("multipart/form-data missing name")
-        name = disp_params["name"]
-        if disp_params.get("filename"):
+        filename = disp_params.get("filename")
+        if filename:
             ctype = headers.get("Content-Type", "application/unknown")
             files.setdefault(name, []).append(
-                HTTPFile(
-                    filename=disp_params["filename"], body=value, content_type=ctype
-                )
+                HTTPFile(filename=filename, body=value, content_type=ctype)
             )
         else:
             arguments.setdefault(name, []).append(value)
 
 
 def format_timestamp(
-    ts: int | float | tuple | time.struct_time | datetime.datetime,
+    ts: int | float | tuple[int, ...] | time.struct_time | datetime.datetime,
 ) -> str:
     """Formats a timestamp in the format used by HTTP.
 
@@ -1195,6 +1216,9 @@ def parse_request_start_line(line: str) -> RequestStartLine:
         # invalid request-line SHOULD respond with a 400 (Bad Request)
         raise HTTPInputError("Malformed HTTP request line")
     r = RequestStartLine(match.group(1), match.group(2), match.group(3))
+    if "#" in r.path:
+        # A fragment is never part of a request target (RFC 9112 section 3.2).
+        raise HTTPInputError("Malformed HTTP request line")
     if not r.version.startswith("HTTP/1"):
         # HTTP/2 and above doesn't use parse_request_start_line.
         # This could be folded into the regex but we don't want to deviate
@@ -1263,10 +1287,12 @@ def _parseparam(s: str) -> Generator[str]:
         start = end
 
 
-def _parse_header(line: str) -> tuple[str, dict[str, str]]:
+def _parse_header(line: str) -> tuple[str, dict[str, str | None]]:
     r"""Parse a Content-type like header.
 
-    Return the main content-type and a dictionary of options.
+    Return the main content-type and a dictionary of options. Parameters
+    without a value (as used in websocket extension negotiation) map to None.
+    Raises `ValueError` for some malformed RFC 2231 parameters.
 
     >>> d = "form-data; foo=\"b\\\\a\\\"r\"; file*=utf-8''T%C3%A4st"
     >>> ct, d = _parse_header(d)
@@ -1276,29 +1302,43 @@ def _parse_header(line: str) -> tuple[str, dict[str, str]]:
     True
     >>> d['foo']
     'b\\a"r'
+    >>> _parse_header('permessage-deflate; client_no_context_takeover')
+    ('permessage-deflate', {'client_no_context_takeover': None})
     """
     parts = _parseparam(";" + line)
     key = next(parts)
     # decode_params treats first argument special, but we already stripped key
     params = [("Dummy", "value")]
+    valueless = []
     for p in parts:
         i = p.find("=")
         if i >= 0:
             name = p[:i].strip().lower()
             value = p[i + 1 :].strip()
             params.append((name, native_str(value)))
-    decoded_params = email.utils.decode_params(params)
+        elif p:
+            valueless.append(p.lower())
+    try:
+        decoded_params = email.utils.decode_params(params)
+    except TypeError:
+        # Before Python 3.13.5, decode_params fails this way when a parameter
+        # is given both with and without a continuation number (as in
+        # "name*=a; name*1=b"). Newer versions accept it.
+        raise ValueError("invalid RFC 2231 parameter continuation")
     decoded_params.pop(0)  # get rid of the dummy again
-    pdict = {}
+    pdict: dict[str, str | None] = {}
     for name, decoded_value in decoded_params:
         value = email.utils.collapse_rfc2231_value(decoded_value)
         if len(value) >= 2 and value[0] == '"' and value[-1] == '"':
             value = value[1:-1]
         pdict[name] = value
+    for name in valueless:
+        # A parameter given with a value takes precedence.
+        pdict.setdefault(name, None)
     return key, pdict
 
 
-def _encode_header(key: str, pdict: dict[str, str]) -> str:
+def _encode_header(key: str, pdict: dict[str, str | None]) -> str:
     """Inverse of _parse_header.
 
     >>> _encode_header('permessage-deflate',
@@ -1338,7 +1378,41 @@ def doctests() -> unittest.TestSuite:
     return doctest.DocTestSuite(optionflags=doctest.ELLIPSIS)
 
 
-_netloc_re = re.compile(r"^(.+):(\d+)$")
+_netloc_re = re.compile(r"^(.+):([0-9]+)$")
+
+
+def _url_to_ascii(url: str) -> str:
+    """Converts ``url`` to an ASCII URL that can be sent in a request.
+
+    A non-ASCII hostname is converted with IDNA (``café.example`` becomes
+    ``xn--caf-dma.example``) and all other non-ASCII characters are
+    percent-encoded as UTF-8, as browsers do. Other characters, including
+    existing percent-escapes, are left alone, so ASCII URLs are unchanged.
+
+    Raises `ValueError` if the hostname cannot be converted.
+    """
+    if url.isascii():
+        return url
+    netloc = urllib.parse.urlsplit(url).netloc
+    if not netloc.isascii():
+        userinfo, at, hostport = netloc.rpartition("@")
+        host, port = hostport, ""
+        match = re.fullmatch(r"(.*)(:[0-9]*)", hostport)
+        if match:
+            host, port = match.groups()
+        if not host.isascii():
+            try:
+                host = host.encode("idna").decode("ascii")
+            except UnicodeError as e:
+                raise ValueError("Invalid hostname %r: %s" % (host, e)) from e
+        # Replace the netloc in place rather than reassembling the URL with
+        # urlunsplit, which would drop an empty query or fragment.
+        start = url.find("//" + netloc)
+        if start < 0:
+            raise ValueError("Invalid URL %r" % url)
+        start += 2
+        url = url[:start] + userinfo + at + host + port + url[start + len(netloc) :]
+    return re.sub(r"[^\x00-\x7f]+", lambda m: urllib.parse.quote(m[0], safe=""), url)
 
 
 def split_host_and_port(netloc: str) -> tuple[str, int | None]:
@@ -1371,7 +1445,7 @@ def qs_to_qsl(qs: dict[str, list[AnyStr]]) -> Iterable[tuple[str, AnyStr]]:
 _unquote_sub = re.compile(r"\\(?:([0-3][0-7][0-7])|(.))").sub
 
 
-def _unquote_replace(m: re.Match) -> str:
+def _unquote_replace(m: re.Match[str]) -> str:
     if m[1]:
         return chr(int(m[1], 8))
     else:
