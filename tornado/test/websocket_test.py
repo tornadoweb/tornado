@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import datetime
 import functools
+import gc
 import socket
 import traceback
 import typing
@@ -1331,6 +1332,53 @@ class ServerPingTimeoutTest(WebSocketBaseTestCase):
 
         # client should have received a close operation
         self.assertEqual(ws.protocol.close_code, 1000)
+
+
+class UnawaitedWriteTest(WebSocketBaseTestCase):
+    # Awaiting the Future returned by write_message is optional, so a write
+    # that fails because the connection closed before it was sent must not
+    # be logged as an unretrieved exception if nobody awaits it.
+    def get_app(self):
+        test = self
+        self.handler_future: Future[WebSocketHandler] = Future()
+
+        class Handler(TestWebSocketHandler):
+            def open(self):
+                test.handler_future.set_result(self)
+
+        return Application([("/", Handler)])
+
+    def write_then_close(self, handler):
+        # Larger than the socket buffers, so part of it is still unsent
+        # (the client never reads) when the connection closes.
+        handler.write_message(b"x" * (16 << 20), binary=True)
+        handler.ws_connection.stream.close()
+
+    @gen_test
+    def test_unawaited_write_on_closed_connection(self):
+        errors = []
+        asyncio.get_running_loop().set_exception_handler(
+            lambda loop, context: errors.append(context)
+        )
+        ws = yield self.ws_connect("/")
+        handler = yield self.handler_future
+        self.write_then_close(handler)
+        yield ws.read_message()
+        for i in range(3):
+            yield gen.moment
+        gc.collect()
+        self.assertEqual(errors, [])
+
+    @gen_test
+    def test_awaited_write_on_closed_connection(self):
+        # Awaiting the Future still raises WebSocketClosedError.
+        ws = yield self.ws_connect("/")
+        handler = yield self.handler_future
+        fut = handler.write_message(b"x" * (16 << 20), binary=True)
+        handler.ws_connection.stream.close()
+        with self.assertRaises(WebSocketClosedError):
+            yield fut
+        yield ws.read_message()
 
 
 class FloodTest(WebSocketBaseTestCase):
