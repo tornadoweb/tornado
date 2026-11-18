@@ -11,10 +11,10 @@ import urllib.parse
 from collections.abc import Awaitable, Callable
 from io import BytesIO
 from types import TracebackType
-from typing import Any, Optional, Type
+from typing import Any, Optional, Type, cast
 
 from tornado import gen, httputil, version
-from tornado.escape import _unicode, utf8
+from tornado.escape import _unicode
 from tornado.http1connection import HTTP1Connection, HTTP1ConnectionParameters
 from tornado.httpclient import (
     AsyncHTTPClient,
@@ -31,6 +31,7 @@ from tornado.netutil import (
     OverrideResolver,
     Resolver,
     _client_ssl_defaults,
+    _client_ssl_noverify,
     is_valid_ip,
 )
 from tornado.tcpclient import TCPClient
@@ -39,18 +40,6 @@ from tornado.tcpclient import TCPClient
 # silently removes some of them (tabs and newlines), and the rest would be sent
 # as-is, producing a malformed request line.
 _FORBIDDEN_URL_CHARS_RE = re.compile(r"[\x00-\x20\x7f]")
-
-
-def _percent_encode_url(url: bytes) -> str:
-    """Percent-encodes spaces and non-ASCII bytes in ``url``.
-
-    Browsers (following the WHATWG URL spec) encode these before sending a
-    request; other characters, including existing percent-escapes, are left
-    alone.
-    """
-    return re.sub(
-        rb"[ \x80-\xff]+", lambda m: urllib.parse.quote_from_bytes(m[0]).encode(), url
-    ).decode("ascii")
 
 
 class HTTPTimeoutError(HTTPError):
@@ -302,6 +291,10 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             url = _unicode(self.request.url)
             if _FORBIDDEN_URL_CHARS_RE.search(url):
                 raise ValueError("Invalid character in url: %r" % url)
+            # Convert a non-ASCII hostname with IDNA here, so the resolver, the
+            # Host header, and TLS (SNI and certificate checks) all see the same
+            # ASCII name, and percent-encode the rest of the URL.
+            url = httputil._url_to_ascii(url)
             self.parsed = urllib.parse.urlsplit(url)
             if self.parsed.scheme not in ("http", "https"):
                 raise ValueError("Unsupported url scheme: %s" % self.request.url)
@@ -311,6 +304,11 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             if "@" in netloc:
                 userpass, _, netloc = netloc.rpartition("@")
             host, port = httputil.split_host_and_port(netloc)
+            if not host:
+                raise ValueError("No host in url: %s" % self.request.url)
+            if port is not None and port > 65535:
+                # getaddrinfo would quietly wrap the port around.
+                raise ValueError("Port out of range in url: %s" % self.request.url)
             if port is None:
                 port = 443 if self.parsed.scheme == "https" else 80
             if re.match(r"^\[.*\]$", host):
@@ -403,8 +401,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     self.request.headers["Host"] = self.parsed.netloc
             username, password = None, None
             if self.parsed.username is not None:
-                username = self.parsed.username
-                password = self.parsed.password or ""
+                username = urllib.parse.unquote(self.parsed.username)
+                password = urllib.parse.unquote(self.parsed.password or "")
             elif self.request.auth_username is not None:
                 username = self.request.auth_username
                 password = self.request.auth_password or ""
@@ -458,7 +456,6 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             req_path = (self.parsed.path or "/") + (
                 ("?" + self.parsed.query) if self.parsed.query else ""
             )
-            req_path = _percent_encode_url(utf8(req_path))
             self.connection = self._create_connection(stream)
             start_line = httputil.RequestStartLine(self.request.method, req_path, "")
             self.connection.write_headers(start_line, self.request.headers)
@@ -483,6 +480,13 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 and self.request.client_key is None
             ):
                 return _client_ssl_defaults()
+            if (
+                not self.request.validate_cert
+                and self.request.client_cert is None
+                and self.request.client_key is None
+            ):
+                # ca_certs is irrelevant when we're not validating.
+                return _client_ssl_noverify()
             ssl_ctx = ssl.create_default_context(
                 ssl.Purpose.SERVER_AUTH, cafile=self.request.ca_certs
             )
@@ -654,15 +658,36 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             assert isinstance(self.request, _RequestProxy)
             assert self.headers is not None
             new_request = copy.copy(self.request.request)
-            # Header values are decoded as latin1; recover the original bytes
-            # so that non-ASCII characters are encoded as they were sent
-            # (usually UTF-8). Spaces are encoded rather than rejected, as
-            # browsers and curl do for redirects.
-            location = _percent_encode_url(self.headers["Location"].encode("latin1"))
-            new_request.url = urllib.parse.urljoin(self.request.url, location)
+            # Header values are decoded as latin1; recover the original bytes.
+            # Like browsers, interpret them as UTF-8 and reject the redirect
+            # if they are not. Spaces are encoded rather than rejected, as
+            # browsers and curl do for redirects. The result is converted to
+            # an ASCII URL (with an IDNA hostname) as in run().
+            try:
+                location = (
+                    self.headers["Location"]
+                    .encode("latin1")
+                    .decode("utf-8")
+                    .replace(" ", "%20")
+                )
+                new_request.url = httputil._url_to_ascii(
+                    urllib.parse.urljoin(self.request.url, location)
+                )
+                parsed_new_url = urllib.parse.urlsplit(new_request.url)
+            except ValueError as e:
+                # Includes UnicodeDecodeError, invalid IDN hostnames, and URLs
+                # that urllib can't parse (such as "//x["). This is called from
+                # the connection's read loop, which only logs exceptions, so
+                # the error must go to _handle_exception.
+                self._handle_exception(type(e), e, e.__traceback__)
+                return
             new_request.headers = self.request.headers.copy()
-            parsed_orig_url = urllib.parse.urlsplit(original_request.url)
-            parsed_new_url = urllib.parse.urlsplit(new_request.url)
+            # Compare the ASCII forms, so that an IDN hostname written in
+            # Unicode in one URL and with IDNA in the other is the same host.
+            # The original URL was already converted successfully in run().
+            parsed_orig_url = urllib.parse.urlsplit(
+                httputil._url_to_ascii(original_request.url)
+            )
             if (
                 parsed_orig_url.scheme != parsed_new_url.scheme
                 or parsed_orig_url.netloc != parsed_new_url.netloc
@@ -684,11 +709,11 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 new_request.auth_username = None
                 new_request.auth_password = None
                 if "@" in parsed_new_url.netloc:
-                    if parsed_new_url.port is not None:
-                        new_netloc = f"{parsed_new_url.hostname}:{parsed_new_url.port}"
-                    else:
-                        assert parsed_new_url.hostname is not None
-                        new_netloc = parsed_new_url.hostname
+                    # Strip the userinfo. This keeps the rest of the netloc
+                    # as it was (unlike rebuilding it from the hostname and
+                    # port, which would drop an IPv6 address's brackets).
+                    # The port is checked when the new request starts.
+                    new_netloc = parsed_new_url.netloc.rpartition("@")[2]
                     parsed_new_url = parsed_new_url._replace(netloc=new_netloc)
                 new_request.url = urllib.parse.urlunsplit(parsed_new_url)
                 for h in ["Authorization", "Cookie"]:
@@ -724,12 +749,13 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     except KeyError:
                         pass
             new_request.original_request = original_request  # type: ignore
+            assert self.final_callback is not None
             final_callback = self.final_callback
             self.final_callback = None  # type: ignore
             self._release()
             assert self.client is not None
-            fut = self.client.fetch(new_request, raise_error=False)
-            fut.add_done_callback(lambda f: final_callback(f.result()))
+            request_proxy = _RequestProxy(new_request, self.client.defaults)
+            self.client.fetch_impl(cast(HTTPRequest, request_proxy), final_callback)
             self._on_end_request()
             return
         if self.request.streaming_callback:

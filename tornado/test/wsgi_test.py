@@ -26,6 +26,7 @@ class WSGIAppMixin:
         return RuleRouter(
             [
                 ("/simple", make_container(self.simple_wsgi_app)),
+                ("/host", make_container(self.host_wsgi_app)),
                 ("/barrier", make_container(self.barrier_wsgi_app)),
                 ("/streaming_barrier", make_container(self.streaming_barrier_wsgi_app)),
             ]
@@ -35,6 +36,10 @@ class WSGIAppMixin:
         status = "200 OK"
         response_headers = [("Content-Type", "text/plain")]
         start_response(status, response_headers)
+
+    def host_wsgi_app(self, environ, start_response):
+        self.respond_plain(start_response)
+        return [("%s %s" % (environ["SERVER_NAME"], environ["SERVER_PORT"])).encode()]
 
     def simple_wsgi_app(self, environ, start_response):
         self.respond_plain(start_response)
@@ -58,6 +63,24 @@ class WSGIAppMixin:
             yield b"broken barrier"
         else:
             yield b"%d" % n
+
+
+class WSGIContainerHostTest(WSGIAppMixin, AsyncHTTPTestCase):
+    def get_executor(self):
+        return None
+
+    def test_host_with_non_numeric_port(self):
+        response = self.fetch("/host", headers={"Host": "example.com:abc"})
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"example.com:abc 80")
+
+    def test_ipv6_host(self):
+        response = self.fetch("/host", headers={"Host": "[::1]:8000"})
+        self.assertEqual(response.body, b"[::1] 8000")
+
+    def test_ipv6_host_without_port(self):
+        response = self.fetch("/host", headers={"Host": "[::1]"})
+        self.assertEqual(response.body, b"[::1] 80")
 
 
 class WSGIContainerDummyExecutorTest(WSGIAppMixin, AsyncHTTPTestCase):

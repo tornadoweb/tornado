@@ -72,6 +72,7 @@ import os.path
 import re
 import socket
 import stat
+import string
 import sys
 import threading
 import time
@@ -1341,6 +1342,27 @@ class RequestHandler:
         # _ui_module closures to allow for faster GC on CPython.
         self.ui = None  # type: ignore
 
+    def _get_allowed_methods(self) -> list[str]:
+        """Returns the HTTP methods implemented by this handler.
+
+        A method is considered implemented if the handler subclass
+        overrides the corresponding method (``get``, ``post``, etc)
+        instead of inheriting the default implementation that raises
+        a 405 error. Used to generate the ``Allow`` header required
+        in 405 responses.
+        """
+        allowed = []
+        for method in self.SUPPORTED_METHODS:
+            handler_method = getattr(self, method.lower(), None)
+            if handler_method is None:
+                continue
+            # handler_method is a bound method; compare its underlying
+            # function against the base class's unimplemented stub.
+            func = getattr(handler_method, "__func__", handler_method)
+            if func is not RequestHandler._unimplemented_method:
+                allowed.append(method)
+        return allowed
+
     def send_error(self, status_code: int = 500, **kwargs: Any) -> None:
         """Sends the given HTTP error code to the browser.
 
@@ -1372,6 +1394,11 @@ class RequestHandler:
             if isinstance(exception, HTTPError) and exception.reason:
                 reason = exception.reason
         self.set_status(status_code, reason=reason)
+        if status_code == 405:
+            # RFC 9110 section 15.5.6 requires the Allow header in
+            # 405 responses, listing the methods supported by the
+            # target resource.
+            self.set_header("Allow", ", ".join(self._get_allowed_methods()))
         try:
             if status_code != 304:
                 self.write_error(status_code, **kwargs)
@@ -1751,7 +1778,11 @@ class RequestHandler:
                 return "Sec-Fetch-Site %s & origin %r not allowed" % (sfs, origin)
 
     def _origin_matches_host(self, origin: str) -> bool:
-        origin = urllib.parse.urlsplit(origin).netloc.lower()
+        try:
+            origin = urllib.parse.urlsplit(origin).netloc.lower()
+        except ValueError:
+            # A malformed origin (such as "http://[") matches nothing.
+            return False
         host = self.request.headers.get("Host", "").lower()
         if not origin or not host:
             # An opaque origin ("null") has no netloc, and HTTP/1.0 requests
@@ -2195,6 +2226,12 @@ def removeslash(
         if self.request.path.endswith("/"):
             if self.request.method in ("GET", "HEAD"):
                 uri = self.request.path.rstrip("/")
+                if _is_protocol_relative(uri):
+                    # A path like //example.com// would otherwise redirect
+                    # to another host.
+                    raise HTTPError(
+                        403, "cannot redirect path with two initial slashes"
+                    )
                 if uri:  # don't try to redirect '/' to ''
                     if self.request.query:
                         uri += "?" + self.request.query
@@ -2224,6 +2261,12 @@ def addslash(
         if not self.request.path.endswith("/"):
             if self.request.method in ("GET", "HEAD"):
                 uri = self.request.path + "/"
+                if _is_protocol_relative(uri):
+                    # A path like //example.com would otherwise redirect to
+                    # another host.
+                    raise HTTPError(
+                        403, "cannot redirect path with two initial slashes"
+                    )
                 if self.request.query:
                     uri += "?" + self.request.query
                 self.redirect(uri, permanent=True)
@@ -2858,23 +2901,40 @@ class RedirectHandler(RequestHandler):
     def get(self, *args: Any, **kwargs: Any) -> None:
         to_url = self._url.format(*args, **kwargs)
         # The scheme and netloc of the redirect must come from the template, not
-        # from the request. Find out what they are by formatting the template
-        # with a placeholder that cannot extend a scheme or netloc.
-        expected_url = self._url.format(
-            *("/" for _ in args), **{k: "/" for k in kwargs}
-        )
+        # from the request. Find out what they are from the part of the template
+        # before the first substitution. (Formatting the whole template with a
+        # placeholder doesn't work: whatever the placeholder is, it can turn the
+        # template into a URL with a different netloc, as "/" does for "/{0}/b".)
+        prefix = ""
+        has_substitution = False
+        for literal, field, _, _ in string.Formatter().parse(self._url):
+            prefix += literal
+            if field is not None:
+                has_substitution = True
+                break
         try:
-            unchanged = _scheme_and_netloc(to_url) == _scheme_and_netloc(expected_url)
+            if self.request.query_arguments:
+                # Query arguments are added before the check because url_concat
+                # can change the rest of the URL.
+                # TODO: figure out typing for the next line.
+                to_url = httputil.url_concat(
+                    to_url,
+                    list(httputil.qs_to_qsl(self.request.query_arguments)),  # type: ignore
+                )
+            scheme, netloc = _scheme_and_netloc(prefix)
+            unchanged = _scheme_and_netloc(to_url) == (scheme, netloc)
+            if has_substitution and scheme in ("http", "https") and not netloc:
+                # The host would come entirely from a substitution (or a
+                # browser would find one where urlsplit doesn't, as in
+                # "https:///host").
+                unchanged = False
         except ValueError:
             unchanged = False
         if not unchanged:
             raise HTTPError(400, "Redirect URL cannot change the scheme or netloc")
-        if self.request.query_arguments:
-            # TODO: figure out typing for the next line.
-            to_url = httputil.url_concat(
-                to_url,
-                list(httputil.qs_to_qsl(self.request.query_arguments)),  # type: ignore
-            )
+        if httputil._FORBIDDEN_HEADER_CHARS_RE.search(to_url):
+            # Let this be a 400 rather than a 500 from set_header.
+            raise HTTPError(400, "Redirect URL contains invalid characters")
         self.redirect(to_url, permanent=self._permanent)
 
 
@@ -3037,6 +3097,9 @@ class StaticFileHandler(RequestHandler):
 
         request_range = None
         range_header = self.request.headers.get("Range")
+        if range_header and not self._if_range_matches():
+            # RFC 9110 13.1.5: the whole file is sent when If-Range does not match.
+            range_header = None
         if range_header:
             # As per RFC 2616 14.16, if an invalid Range header is specified,
             # the request will be treated as if the header didn't exist.
@@ -3174,6 +3237,26 @@ class StaticFileHandler(RequestHandler):
                 return True
 
         return False
+
+    def _if_range_matches(self) -> bool:
+        """Returns False if an If-Range header does not match the current file.
+
+        If-Range holds either an entity tag, which must match the ETag with
+        the strong comparison, or a date, which must match Last-Modified exactly.
+        """
+        if_range = self.request.headers.get("If-Range")
+        if if_range is None:
+            return True
+        if if_range.startswith(('"', "W/")):
+            etag = self._headers.get("Etag")
+            return not if_range.startswith("W/") and if_range == etag
+        try:
+            date = email.utils.parsedate_to_datetime(if_range)
+        except Exception:
+            return False
+        if date.tzinfo is None:
+            date = date.replace(tzinfo=datetime.UTC)
+        return date == self.modified
 
     @classmethod
     def get_absolute_path(cls, root: str, path: str) -> str:
@@ -3323,6 +3406,16 @@ class StaticFileHandler(RequestHandler):
         # the requested path so a request to root/ will match.
         if not (absolute_path + os.path.sep).startswith(root):
             raise HTTPError(403, "%s is not in root static directory", path_message)
+        if os.name == "nt" and ":" in absolute_path[len(root) :]:
+            # On Windows, "file.txt:name" names the NTFS alternate data
+            # stream "name" of file.txt. abspath, stat and open all accept
+            # this syntax, so without this check the stream (which may
+            # hold data such as the Zone.Identifier recorded for downloaded
+            # files) would be served as if it were a file in the static
+            # directory. A colon can never appear in an ordinary Windows
+            # file name, so rejecting it anywhere below the root (the root
+            # itself contains the drive letter's colon) loses nothing.
+            raise HTTPError(403, "%s is not a file", path_message)
         return root
 
     @staticmethod
@@ -3740,14 +3833,17 @@ class GZipContentEncoding(OutputTransform):
         finishing: bool,
     ) -> tuple[int, httputil.HTTPHeaders, bytes]:
         # TODO: can/should this type be inherited from the superclass?
-        if "Vary" in headers:
-            headers["Vary"] += ", Accept-Encoding"
-        else:
-            headers["Vary"] = "Accept-Encoding"
+        ctype = _unicode(headers.get("Content-Type", "")).split(";")[0]
+        compressible = self._compressible_type(ctype)
+        # Only a type that may be compressed depends on Accept-Encoding.
+        if compressible:
+            if "Vary" in headers:
+                headers["Vary"] += ", Accept-Encoding"
+            else:
+                headers["Vary"] = "Accept-Encoding"
         if self._gzipping:
-            ctype = _unicode(headers.get("Content-Type", "")).split(";")[0]
             self._gzipping = (
-                self._compressible_type(ctype)
+                compressible
                 and (not finishing or len(chunk) >= self.MIN_LENGTH)
                 and ("Content-Encoding" not in headers)
             )
@@ -4268,5 +4364,10 @@ def _scheme_and_netloc(url: str) -> tuple[str, str]:
     Both are empty for a relative URL. Raises `ValueError` for some malformed
     URLs.
     """
-    parts = urllib.parse.urlsplit(_normalize_url_like_browser(url))
+    url = _normalize_url_like_browser(url)
+    # urlsplit follows RFC 3986, in which "///example.com" has an empty netloc,
+    # but browsers resolving it against an http or https URL skip any number of
+    # slashes before the host. Collapse them so urlsplit sees the same host.
+    url = re.sub(r"^//+", "//", url)
+    parts = urllib.parse.urlsplit(url)
     return parts.scheme.lower(), parts.netloc.lower()

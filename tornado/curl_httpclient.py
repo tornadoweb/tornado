@@ -453,7 +453,9 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             curl.setopt(pycurl.PROTOCOLS, pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS)
             curl.setopt(pycurl.REDIR_PROTOCOLS, pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS)
 
-        curl.setopt(pycurl.URL, native_str(request.url))
+        # libcurl only accepts ASCII URLs (and only converts IDN hostnames when
+        # it is built with IDN support), so do the conversion ourselves.
+        curl.setopt(pycurl.URL, httputil._url_to_ascii(native_str(request.url)))
 
         # libcurl's magic "Expect: 100-continue" behavior causes delays
         # with servers that don't support it (which include, among others,
@@ -462,8 +464,11 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         # (https://sourceforge.net/tracker/?func=detail&atid=100976&aid=3039744&group_id=976),
         # which increases the delays.  It's more trouble than it's worth,
         # so just turn off the feature (yes, setting Expect: to an empty
-        # value is the official way to disable this)
-        if "Expect" not in request.headers:
+        # value is the official way to disable this) unless the caller asked
+        # for it.
+        if request.expect_100_continue:
+            request.headers["Expect"] = "100-continue"
+        elif "Expect" not in request.headers:
             request.headers["Expect"] = ""
 
         # libcurl adds Pragma: no-cache by default; disable that too

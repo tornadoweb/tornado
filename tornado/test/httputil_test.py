@@ -12,6 +12,7 @@ from tornado.httputil import (
     HTTPInputError,
     HTTPServerRequest,
     ParseMultipartConfig,
+    ParseUrlEncodedConfig,
     RequestStartLine,
     _DEFAULT_PARSE_BODY_CONFIG,
     _parse_header,
@@ -23,6 +24,7 @@ from tornado.httputil import (
     qs_to_qsl,
     split_host_and_port,
     url_concat,
+    _url_to_ascii,
 )
 from tornado.log import gen_log
 from tornado.test.util import (
@@ -132,6 +134,47 @@ class UrlEncodedDataTest(TestCase):
         with self.assertRaises(HTTPInputError) as cm:
             parse_body_arguments("application/x-www-form-urlencoded", data, args, files)
         self.assertIn("Max number of fields exceeded", str(cm.exception))
+
+    @skipNotCPython
+    def test_memory_budget(self):
+        # Large bodies use a few bytes of memory per input byte: up to about
+        # 8 for lone % signs (see EscapeTestCase.test_unquote_memory_budget)
+        # and about 2 for many long fields, as of 2026-11.
+        n = ParseUrlEncodedConfig().max_arguments - 1
+        for name, body in [
+            ("lone %", b"a=" + b"%" * 900_000),
+            (
+                "escaped keys",
+                b"&".join(b"%d" % i + b"%41" * 333 + b"=" for i in range(n)),
+            ),
+            ("long values", b"&".join(b"a=" + b"x" * 1000 for i in range(n))),
+        ]:
+            with self.subTest(name):
+                args, files = form_data_args()
+                with assert_memory_budget(
+                    len(body),
+                    max_ratio=12,
+                    msg="urlencoded body parsing uses too much memory",
+                ):
+                    parse_body_arguments(
+                        "application/x-www-form-urlencoded", body, args, files
+                    )
+
+    @skipNotCPython
+    def test_memory_budget_many_fields(self):
+        # Each field costs a fixed amount (about 250 bytes as of 2026-11), so
+        # many short fields use about 50 bytes per input byte. max_arguments
+        # bounds the total, so the budget is per field rather than per byte.
+        max_arguments = ParseUrlEncodedConfig().max_arguments
+        body = b"".join(b"%d=&" % i for i in range(max_arguments - 1))
+        args, files = form_data_args()
+        with assert_memory_budget(
+            max_arguments,
+            max_ratio=500,
+            msg="urlencoded body parsing uses too much memory per field",
+        ):
+            parse_body_arguments("application/x-www-form-urlencoded", body, args, files)
+        self.assertEqual(len(args), max_arguments - 1)
 
 
 class MultipartFormDataTest(TestCase):
@@ -784,6 +827,37 @@ class SplitHostAndPortTest(TestCase):
             split_host_and_port("example.com:\u0668\u0660"),
             ("example.com:\u0668\u0660", None),
         )
+
+
+class URLToASCIITest(TestCase):
+    def test_url_to_ascii(self):
+        for url, expected in [
+            # ASCII URLs are unchanged, even if they are unusual.
+            ("http://example.com/a b%41?#", "http://example.com/a b%41?#"),
+            ("http://caf\u00e9.example/", "http://xn--caf-dma.example/"),
+            (
+                "https://u\u00e9:p\u00e9@caf\u00e9.example:8080/\u00e9?\u00e9=1#\u00e9",
+                "https://u%C3%A9:p%C3%A9@xn--caf-dma.example:8080/%C3%A9?%C3%A9=1#%C3%A9",
+            ),
+            # Empty queries and fragments are kept.
+            ("http://caf\u00e9.example/?", "http://xn--caf-dma.example/?"),
+            ("http://caf\u00e9.example#", "http://xn--caf-dma.example#"),
+            ("http://[::1]:80/\u00e9", "http://[::1]:80/%C3%A9"),
+            ("//caf\u00e9.example/x", "//xn--caf-dma.example/x"),
+            ("/\u00e9", "/%C3%A9"),
+            (
+                "http://\uff4c\uff4f\uff43\uff41\uff4c\uff48\uff4f\uff53\uff54/",
+                "http://localhost/",
+            ),
+        ]:
+            with self.subTest(url=url):
+                self.assertEqual(_url_to_ascii(url), expected)
+
+    def test_invalid_hostname(self):
+        for url in ["http://a..b\u00e9/", "http://" + "\u00e9" * 64 + ".example/"]:
+            with self.subTest(url=url):
+                with self.assertRaises(ValueError):
+                    _url_to_ascii(url)
 
 
 class ParseCookieTest(TestCase):

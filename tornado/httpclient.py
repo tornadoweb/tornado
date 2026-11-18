@@ -479,8 +479,9 @@ class HTTPRequest:
         :arg bool allow_ipv6: Use IPv6 when available?  Default is True.
         :arg bool expect_100_continue: If true, send the
            ``Expect: 100-continue`` header and wait for a continue response
-           before sending the request body.  Only supported with
-           ``simple_httpclient``.
+           before sending the request body.  With ``curl_httpclient``,
+           libcurl sends the body anyway if no response arrives within
+           one second.
 
         .. note::
 
@@ -510,6 +511,9 @@ class HTTPRequest:
            With ``simple_httpclient``, ``streaming_callback`` may be a
            coroutine; the next chunk is not read until it completes. This
            is not supported by ``curl_httpclient``.
+
+        .. versionchanged:: 6.7
+           ``expect_100_continue`` is now supported by ``curl_httpclient``.
         """
         # Note that some of these attributes go through property setters
         # defined below.

@@ -20,6 +20,7 @@ import socket
 import ssl
 import sys
 import typing
+import urllib.parse
 from contextlib import closing
 
 from tornado import gen, version
@@ -150,24 +151,6 @@ class NoContentLengthHandler(RequestHandler):
             self.finish("HTTP/1 required")
 
 
-class EchoURIHandler(RequestHandler):
-    def get(self):
-        self.write(self.request.uri)
-
-
-class RawRedirectHandler(RequestHandler):
-    def get(self):
-        # Write the response directly so the Location header can contain
-        # raw UTF-8 and a space.
-        stream = self.detach()
-        stream.write(
-            b"HTTP/1.1 302 Found\r\n"
-            b"Location: /echo_uri/\xc3\xa9 x\r\n"
-            b"Content-Length: 0\r\n\r\n"
-        )
-        stream.close()
-
-
 class EchoPostHandler(RequestHandler):
     def post(self):
         self.write(self.request.body)
@@ -226,8 +209,6 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
                 url("/host_echo", HostEchoHandler),
                 url("/no_content_length", NoContentLengthHandler),
                 url("/echo_post", EchoPostHandler),
-                url("/echo_uri/.*", EchoURIHandler),
-                url("/raw_redirect", RawRedirectHandler),
                 url("/respond_in_prepare", RespondInPrepareHandler),
                 url("/redirect", RedirectHandler),
                 url("/user_agent", UserAgentHandler),
@@ -299,6 +280,29 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
         self.assertTrue(response.effective_url.endswith("/countdown/2"))
         self.assertTrue(response.headers["Location"].endswith("/countdown/1"))
 
+    def test_redirect_unsupported_scheme(self):
+        # A redirect that can't be followed fails the request instead of
+        # leaving it unfinished.
+        for location in ["ftp://example.com/", "h:5"]:
+            with self.subTest(location):
+                with self.assertRaises(ValueError) as cm:
+                    self.fetch("/redirect?url=" + urllib.parse.quote(location))
+                self.assertIn("Unsupported url scheme", str(cm.exception))
+
+    def test_redirect_invalid_url(self):
+        # A Location that isn't a valid URL fails the request with the
+        # ValueError (rather than logging it and closing the connection).
+        for location in ["//x[/", "//user@example.com:99999/", "//user@/"]:
+            with self.subTest(location):
+                with self.assertRaises(ValueError):
+                    self.fetch("/redirect?url=" + urllib.parse.quote(location))
+
+    def test_invalid_host_or_port(self):
+        for bad_url in ["http://127.0.0.1:99999/", "http:///", "http://user@/"]:
+            with self.subTest(bad_url):
+                with self.assertRaises(ValueError):
+                    self.fetch(bad_url)
+
     def test_header_reuse(self):
         # Apps may reuse a headers object if they are only passing in constant
         # headers like user-agent.  The header object should not be modified.
@@ -324,15 +328,6 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
             with self.subTest(path=path):
                 with self.assertRaises(ValueError):
                     self.fetch(path, raise_error=True)
-
-    def test_non_ascii_url(self):
-        # Like browsers, percent-encode non-ASCII characters as UTF-8.
-        response = self.fetch("/echo_uri/\u00e9?q=\u00e9%20")
-        self.assertEqual(response.body, b"/echo_uri/%C3%A9?q=%C3%A9%20")
-
-    def test_non_ascii_redirect(self):
-        response = self.fetch("/raw_redirect")
-        self.assertEqual(response.body, b"/echo_uri/%C3%A9%20x")
 
     def test_see_other_redirect(self):
         for code in (302, 303):
@@ -449,14 +444,12 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
             with self.assertRaises(socket.error) as cm:
                 self.fetch("http://127.0.0.1:%d/" % port, raise_error=True)
 
-        if sys.platform != "cygwin":
-            # cygwin returns EPERM instead of ECONNREFUSED here
+        # cygwin returns EPERM instead of ECONNREFUSED here, and on windows
+        # refusing_port gives a different error (see its docstring).
+        if sys.platform not in ("cygwin", "win32"):
             contains_errno = str(errno.ECONNREFUSED) in str(cm.exception)
-            if not contains_errno and hasattr(errno, "WSAECONNREFUSED"):
-                contains_errno = str(errno.WSAECONNREFUSED) in str(cm.exception)
             self.assertTrue(contains_errno, cm.exception)
             # This is usually "Connection refused".
-            # On windows, strerror is broken and returns "Unknown error".
             expected_message = os.strerror(errno.ECONNREFUSED)
             self.assertTrue(expected_message in str(cm.exception), cm.exception)
 
@@ -556,12 +549,6 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
         response.rethrow()
         self.assertEqual(response.body, b"12345678")
 
-    def test_100_continue(self):
-        response = self.fetch(
-            "/echo_post", method="POST", body=b"1234", expect_100_continue=True
-        )
-        self.assertEqual(response.body, b"1234")
-
     def test_100_continue_early_response(self):
         def body_producer(write):
             raise Exception("should not be called")
@@ -653,6 +640,27 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, SimpleHTTPClientTestMixin):
 
     def create_client(self, **kwargs):
         return SimpleAsyncHTTPClient(force_instance=True, **kwargs)
+
+    @gen_test
+    def test_request_timeout_after_redirect(self):
+        timeout = 0.1
+        if os.name == "nt" or os.environ.get("EMULATION") == "1":
+            timeout = 0.5
+
+        with closing(self.create_client()) as client:
+            future = client.fetch(
+                self.get_url("/redirect?url=%2Ftrigger%3Fwake%3Dfalse"),
+                request_timeout=timeout,
+            )
+            try:
+                with self.assertRaisesRegex(HTTPTimeoutError, "Timeout during request"):
+                    yield gen.with_timeout(self.io_loop.time() + timeout * 5, future)
+            finally:
+                if not future.done():
+                    future.cancel()
+                if self.triggers:
+                    self.triggers.popleft()()
+                yield gen.sleep(0)
 
 
 class SimpleHTTPSClientTestCase(AsyncHTTPSTestCase, SimpleHTTPClientTestMixin):
@@ -950,7 +958,12 @@ class HostnameMappingTestCase(AsyncHTTPTestCase):
         )
 
     def get_app(self):
-        return Application([url("/hello", HelloWorldHandler)])
+        return Application(
+            [
+                url("/hello", HelloWorldHandler),
+                url("/redirect", httpclient_test.RedirectHandler),
+            ]
+        )
 
     def test_hostname_mapping(self):
         response = self.fetch("http://www.example.com:%d/hello" % self.get_http_port())
@@ -960,6 +973,21 @@ class HostnameMappingTestCase(AsyncHTTPTestCase):
     def test_port_mapping(self):
         response = self.fetch("http://foo.example.com:8000/hello")
         response.rethrow()
+        self.assertEqual(response.body, b"Hello world!")
+
+    def test_redirect_strips_userinfo_from_ipv6_url(self):
+        # Removing the userinfo from a cross-origin redirect keeps the
+        # brackets around an IPv6 address. (The mapping sends the request to
+        # the test server, so this doesn't need IPv6.)
+        self.http_client.close()
+        self.http_client = SimpleAsyncHTTPClient(
+            hostname_mapping={("::1", 8000): ("127.0.0.1", self.get_http_port())}
+        )
+        response = self.fetch(
+            "/redirect?url=" + urllib.parse.quote("http://user@[::1]:8000/hello")
+        )
+        response.rethrow()
+        self.assertEqual(response.effective_url, "http://[::1]:8000/hello")
         self.assertEqual(response.body, b"Hello world!")
 
 

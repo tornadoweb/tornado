@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import gzip
 import logging
@@ -44,6 +45,7 @@ from tornado.test.util import (
     TestCase,
     abstract_base_test,
     assert_memory_budget,
+    curl_uses_schannel,
     skipNotCPython,
 )
 from tornado.testing import ExpectLog, gen_test
@@ -178,7 +180,15 @@ class SSLClientCertificateTest(AsyncHTTPSTestCase):
         options.update(cert_reqs=ssl.CERT_OPTIONAL, ca_certs=options["certfile"])
         return options
 
+    def skip_if_client_cert_unsupported(self):
+        if curl_uses_schannel():
+            from tornado.curl_httpclient import CurlAsyncHTTPClient
+
+            if isinstance(self.http_client, CurlAsyncHTTPClient):
+                self.skipTest("schannel cannot load PEM client certificates from files")
+
     def test_get_ssl_certificate(self):
+        self.skip_if_client_cert_unsupported()
         options = self.get_ssl_options()
         for path in ["/", "/?binary_form=false"]:
             with self.subTest(path=path):
@@ -197,6 +207,7 @@ class SSLClientCertificateTest(AsyncHTTPSTestCase):
                 )
 
     def test_get_ssl_certificate_binary(self):
+        self.skip_if_client_cert_unsupported()
         options = self.get_ssl_options()
         response = self.fetch(
             "/?binary_form=true",
@@ -727,6 +738,25 @@ ok
                 lambda: read_stream_body(self.stream)
             )
         self.assertEqual(400, start_line.code)
+
+    @gen_test
+    def test_content_length_list_whitespace(self):
+        # A list of identical Content-Lengths is allowed, but only HTTP
+        # whitespace (space and tab) may follow the commas, not other
+        # characters that Python considers whitespace.
+        for sep in [b"\xa0", b"\x85"]:
+            with self.subTest(sep=sep), closing(IOStream(socket.socket())) as stream:
+                with ExpectLog(
+                    gen_log, ".*Multiple unequal Content-Lengths", level=logging.INFO
+                ):
+                    yield stream.connect(("127.0.0.1", self.get_http_port()))
+                    stream.write(
+                        b"POST /echo HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                        b"Content-Length: 5," + sep + b"5\r\n"
+                        b"Connection: close\r\n\r\nhello"
+                    )
+                    start_line, headers, response = yield read_stream_body(stream)
+                    self.assertEqual(400, start_line.code)
 
     @gen_test
     def test_invalid_content_length(self):
@@ -1579,6 +1609,59 @@ class IdleTimeoutTest(AsyncHTTPTestCase):
 
         # Now let the timeout trigger and close the connection.
         yield event.wait()
+
+
+class HeaderTimeoutTest(AsyncHTTPTestCase):
+    # A connection can wait a long time (idle_connection_timeout) for a
+    # request to start, but once it starts, its headers must arrive within
+    # header_timeout.
+    def get_app(self):
+        return Application([("/", HelloWorldRequestHandler)])
+
+    def get_httpserver_options(self):
+        return dict(idle_connection_timeout=10, header_timeout=0.1)
+
+    async def connect(self) -> IOStream:
+        stream = IOStream(socket.socket())
+        self.addCleanup(stream.close)
+        await stream.connect(("127.0.0.1", self.get_http_port()))
+        return stream
+
+    async def get(self, stream: IOStream) -> None:
+        await stream.write(b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+        await stream.read_until(b"\r\n\r\n")
+        self.assertEqual(await stream.read_bytes(11), b"Hello world")
+
+    @gen_test
+    async def test_idle_longer_than_header_timeout(self):
+        # Waiting longer than header_timeout before a request, on a new or a
+        # kept-alive connection, is fine.
+        stream = await self.connect()
+        for i in range(2):
+            await asyncio.sleep(0.3)
+            await self.get(stream)
+
+    @gen_test
+    async def test_slow_headers(self):
+        stream = await self.connect()
+        await stream.write(b"GET / HTTP/1.1\r\n")
+        # The server closes the connection (or this times out).
+        await asyncio.wait_for(stream.read_until_close(), 5)
+
+    @gen_test
+    async def test_slow_headers_after_idle(self):
+        # The header timeout starts with the request's first byte, not when
+        # the connection starts waiting for it.
+        stream = await self.connect()
+        await self.get(stream)
+        await asyncio.sleep(0.3)
+        await stream.write(b"GET / HTTP/1.1\r\n")
+        await asyncio.sleep(0.05)
+        await stream.write(b"Host: 127.0.0.1\r\n\r\n")
+        await stream.read_until(b"\r\n\r\n")
+        self.assertEqual(await stream.read_bytes(11), b"Hello world")
+        await stream.write(b"GET / HTTP/1.1\r\n")
+        await asyncio.wait_for(stream.read_until_close(), 5)
 
 
 class BodyLimitsTest(AsyncHTTPTestCase):

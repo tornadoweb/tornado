@@ -173,6 +173,8 @@ class CircleRefsTest(TestCase):
             await client.fetch(f"http://127.0.0.1:{port}/", **fetch_kwargs)
         client.close()
         server.stop()
+        await server.close_all_connections()
+        self.assertFalse(server._connections)
         socket.close()
 
     def test_sync_handler(self):
