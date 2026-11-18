@@ -578,6 +578,12 @@ Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 
 class ParseHeaderTest(TestCase):
+    def test_content_type_is_case_insensitive(self):
+        self.assertEqual(
+            _parse_header("TEXT/PLAIN; charset=UTF-8"),
+            ("text/plain", {"charset": "UTF-8"}),
+        )
+
     def test_mixed_rfc2231_continuations(self):
         # See MultipartFormDataTest.test_mixed_rfc2231_continuations.
         for header in [
