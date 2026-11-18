@@ -66,7 +66,11 @@ async def handle(data: bytes) -> None:
         await client_stream.write(data)
         # Half-close so that the server sees the end of the input.
         client.shutdown(socket.SHUT_WR)
-        await asyncio.wait_for(client_stream.read_until_close(), 5)
+        # No timeout of our own: libFuzzer's -timeout reports an input that
+        # hangs or is too slow. A fixed wall-clock limit here made slow
+        # builds (OSS-Fuzz's sanitizer builds of Python) report long inputs
+        # that take linear time as crashes.
+        await client_stream.read_until_close()
     finally:
         client_stream.close()
         server_stream.close()
