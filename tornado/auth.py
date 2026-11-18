@@ -650,7 +650,7 @@ class OAuth2Mixin:
 
         Example usage:
 
-        ..testcode::
+        .. testcode::
 
             class MainHandler(tornado.web.RequestHandler,
                               tornado.auth.FacebookGraphMixin):
@@ -669,7 +669,7 @@ class OAuth2Mixin:
 
         .. versionadded:: 4.3
 
-        .. versionchanged::: 6.0
+        .. versionchanged:: 6.0
 
            The ``callback`` argument was removed. Use the returned awaitable object instead.
         """
