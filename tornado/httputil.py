@@ -34,6 +34,7 @@ import unicodedata
 from functools import lru_cache
 from http.client import responses as responses  # noqa: F401
 from ssl import SSLError
+import urllib.parse
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 import warnings
 
@@ -1155,7 +1156,10 @@ def parse_multipart_form_data(
             raise HTTPInputError("multipart/form-data part header too large")
         headers = HTTPHeaders.parse(part[:eoh].decode("utf-8"), _chars_are_bytes=False)
         disp_header = headers.get("Content-Disposition", "")
-        disposition, disp_params = _parse_header(disp_header)
+        try:
+            disposition, disp_params = _parse_header(disp_header)
+        except ValueError as e:
+            raise HTTPInputError("Invalid multipart/form-data: %s" % e) from e
         if disposition != "form-data" or not part.endswith(b"\r\n"):
             raise HTTPInputError("Invalid multipart/form-data")
         value = part[eoh + 4 : -2]
@@ -1292,6 +1296,7 @@ def _parse_header(line: str) -> tuple[str, dict[str, str | None]]:
 
     Return the main content-type and a dictionary of options. Parameters
     without a value (as used in websocket extension negotiation) map to None.
+    Raises `ValueError` for some malformed RFC 2231 parameters.
 
     >>> d = "form-data; foo=\"b\\\\a\\\"r\"; file*=utf-8''T%C3%A4st"
     >>> ct, d = _parse_header(d)
@@ -1317,7 +1322,13 @@ def _parse_header(line: str) -> tuple[str, dict[str, str | None]]:
             params.append((name, native_str(value)))
         elif p:
             valueless.append(p.lower())
-    decoded_params = email.utils.decode_params(params)
+    try:
+        decoded_params = email.utils.decode_params(params)
+    except TypeError:
+        # Before Python 3.13.5, decode_params fails this way when a parameter
+        # is given both with and without a continuation number (as in
+        # "name*=a; name*1=b"). Newer versions accept it.
+        raise ValueError("invalid RFC 2231 parameter continuation")
     decoded_params.pop(0)  # get rid of the dummy again
     pdict: dict[str, str | None] = {}
     for name, decoded_value in decoded_params:
@@ -1372,6 +1383,40 @@ def doctests() -> unittest.TestSuite:
 
 
 _netloc_re = re.compile(r"^(.+):([0-9]+)$")
+
+
+def _url_to_ascii(url: str) -> str:
+    """Converts ``url`` to an ASCII URL that can be sent in a request.
+
+    A non-ASCII hostname is converted with IDNA (``café.example`` becomes
+    ``xn--caf-dma.example``) and all other non-ASCII characters are
+    percent-encoded as UTF-8, as browsers do. Other characters, including
+    existing percent-escapes, are left alone, so ASCII URLs are unchanged.
+
+    Raises `ValueError` if the hostname cannot be converted.
+    """
+    if url.isascii():
+        return url
+    netloc = urllib.parse.urlsplit(url).netloc
+    if not netloc.isascii():
+        userinfo, at, hostport = netloc.rpartition("@")
+        host, port = hostport, ""
+        match = re.fullmatch(r"(.*)(:[0-9]*)", hostport)
+        if match:
+            host, port = match.groups()
+        if not host.isascii():
+            try:
+                host = host.encode("idna").decode("ascii")
+            except UnicodeError as e:
+                raise ValueError("Invalid hostname %r: %s" % (host, e)) from e
+        # Replace the netloc in place rather than reassembling the URL with
+        # urlunsplit, which would drop an empty query or fragment.
+        start = url.find("//" + netloc)
+        if start < 0:
+            raise ValueError("Invalid URL %r" % url)
+        start += 2
+        url = url[:start] + userinfo + at + host + port + url[start + len(netloc) :]
+    return re.sub(r"[^\x00-\x7f]+", lambda m: urllib.parse.quote(m[0], safe=""), url)
 
 
 def split_host_and_port(netloc: str) -> tuple[str, int | None]:

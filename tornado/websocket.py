@@ -963,7 +963,14 @@ class WebSocketProtocol13(WebSocketProtocol):
             assert self.selected_subprotocol in subprotocols
             handler.set_header("Sec-WebSocket-Protocol", self.selected_subprotocol)
 
-        extensions = self._parse_extensions_header(handler.request.headers)
+        try:
+            extensions = self._parse_extensions_header(handler.request.headers)
+        except ValueError:
+            # Decline all extensions if the header can't be parsed (for
+            # example, an RFC 2231 parameter with a charset that can't
+            # decode it), as we decline individual offers we can't accept.
+            gen_log.debug("Declining malformed websocket extensions", exc_info=True)
+            extensions = []
         for ext in extensions:
             if ext[0] == "permessage-deflate" and self._compression_options is not None:
                 # TODO: negotiate parameters if compression_options

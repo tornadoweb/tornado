@@ -23,9 +23,10 @@ from tornado.test.util import (
     abstract_base_test,
     assert_memory_budget,
     ignore_deprecation,
+    refusing_port,
     skipNotCPython,
 )
-from tornado.testing import ExpectLog, bind_unused_port, gen_test
+from tornado.testing import ExpectLog, gen_test
 from tornado.web import Application, RequestHandler
 
 try:
@@ -472,8 +473,8 @@ class WebSocketTest(WebSocketBaseTestCase):
 
     @gen_test
     def test_websocket_network_fail(self):
-        sock, port = bind_unused_port()
-        sock.close()
+        cleanup_func, port = refusing_port()
+        self.addCleanup(cleanup_func)
         with self.assertRaises(IOError):
             with ExpectLog(gen_log, ".*", required=False):
                 yield websocket_connect(
@@ -1091,6 +1092,24 @@ class InvalidCompressionOfferTest(WebSocketBaseTestCase):
         ]:
             with self.subTest(params[:40]):
                 headers = await self.handshake("permessage-deflate; " + params)
+                self.assertNotIn("Sec-WebSocket-Extensions", headers)
+
+    @gen_test
+    async def test_malformed_extensions_header(self):
+        # Headers that _parse_header rejects with ValueError used to become a
+        # 500 response and an error log. Now all extensions are declined, so
+        # the handshake succeeds without them. The mixed RFC 2231
+        # continuations only fail before Python 3.13.5, which accepts them
+        # (and then declines the unknown parameter).
+        for extensions in [
+            "permessage-deflate; a*=1; a*1=2",
+            "x; a*=1; a*1=2",
+            "permessage-deflate; a*=idna''%ff",
+            "x; a*=idna''%ff",
+            "permessage-deflate, x; a*=idna''%ff",
+        ]:
+            with self.subTest(extensions):
+                headers = await self.handshake(extensions)
                 self.assertNotIn("Sec-WebSocket-Extensions", headers)
 
     @gen_test

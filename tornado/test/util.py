@@ -85,6 +85,22 @@ skipNotCPython = unittest.skipIf(
 )
 
 
+def curl_uses_schannel() -> bool:
+    """Returns true if pycurl is available and uses the schannel TLS backend.
+
+    This is the case for the pycurl wheels on windows. Schannel can only load
+    client certificates from PKCS#12 files, not the PEM files used in our tests.
+    """
+    try:
+        import pycurl
+    except ImportError:
+        return False
+    # libcurl may be built with multiple TLS backends; all are listed here,
+    # with the inactive ones in parentheses, e.g. "(OpenSSL/3.6.5) Schannel".
+    ssl_version = pycurl.version_info()[5] or ""
+    return any(name.startswith("Schannel") for name in ssl_version.split())
+
+
 def _detect_ipv6():
     if not socket.has_ipv6:
         # socket.has_ipv6 check reports whether ipv6 was present at compile
@@ -106,11 +122,20 @@ skipIfNoIPv6 = unittest.skipIf(not _detect_ipv6(), "ipv6 support not present")
 
 
 def refusing_port():
-    """Returns a local port number that will refuse all connections.
+    """Returns a local port number that connections will fail to reach.
 
     Return value is (cleanup_func, port); the cleanup function
     must be called to free the port to be reused.
+
+    On most platforms, connections to this port are refused. On Windows,
+    a refused connection is reported only after the SYN has been
+    retransmitted twice (about two seconds, even on loopback), so instead
+    we return port 0, which fails immediately with a different error
+    (WSAEADDRNOTAVAIL). Tests using this function should therefore accept
+    any connection error on Windows.
     """
+    if sys.platform == "win32":
+        return (lambda: None, 0)
     # On travis-ci port numbers are reassigned frequently. To avoid
     # collisions with other tests, we use an open client-side socket's
     # ephemeral port number to ensure that nothing can listen on that

@@ -1342,6 +1342,27 @@ class RequestHandler:
         # _ui_module closures to allow for faster GC on CPython.
         self.ui = None  # type: ignore
 
+    def _get_allowed_methods(self) -> list[str]:
+        """Returns the HTTP methods implemented by this handler.
+
+        A method is considered implemented if the handler subclass
+        overrides the corresponding method (``get``, ``post``, etc)
+        instead of inheriting the default implementation that raises
+        a 405 error. Used to generate the ``Allow`` header required
+        in 405 responses.
+        """
+        allowed = []
+        for method in self.SUPPORTED_METHODS:
+            handler_method = getattr(self, method.lower(), None)
+            if handler_method is None:
+                continue
+            # handler_method is a bound method; compare its underlying
+            # function against the base class's unimplemented stub.
+            func = getattr(handler_method, "__func__", handler_method)
+            if func is not RequestHandler._unimplemented_method:
+                allowed.append(method)
+        return allowed
+
     def send_error(self, status_code: int = 500, **kwargs: Any) -> None:
         """Sends the given HTTP error code to the browser.
 
@@ -1373,6 +1394,11 @@ class RequestHandler:
             if isinstance(exception, HTTPError) and exception.reason:
                 reason = exception.reason
         self.set_status(status_code, reason=reason)
+        if status_code == 405:
+            # RFC 9110 section 15.5.6 requires the Allow header in
+            # 405 responses, listing the methods supported by the
+            # target resource.
+            self.set_header("Allow", ", ".join(self._get_allowed_methods()))
         try:
             if status_code != 304:
                 self.write_error(status_code, **kwargs)
@@ -1752,7 +1778,11 @@ class RequestHandler:
                 return "Sec-Fetch-Site %s & origin %r not allowed" % (sfs, origin)
 
     def _origin_matches_host(self, origin: str) -> bool:
-        origin = urllib.parse.urlsplit(origin).netloc.lower()
+        try:
+            origin = urllib.parse.urlsplit(origin).netloc.lower()
+        except ValueError:
+            # A malformed origin (such as "http://[") matches nothing.
+            return False
         host = self.request.headers.get("Host", "").lower()
         if not origin or not host:
             # An opaque origin ("null") has no netloc, and HTTP/1.0 requests
@@ -3067,6 +3097,9 @@ class StaticFileHandler(RequestHandler):
 
         request_range = None
         range_header = self.request.headers.get("Range")
+        if range_header and not self._if_range_matches():
+            # RFC 9110 13.1.5: the whole file is sent when If-Range does not match.
+            range_header = None
         if range_header:
             # As per RFC 2616 14.16, if an invalid Range header is specified,
             # the request will be treated as if the header didn't exist.
@@ -3204,6 +3237,26 @@ class StaticFileHandler(RequestHandler):
                 return True
 
         return False
+
+    def _if_range_matches(self) -> bool:
+        """Returns False if an If-Range header does not match the current file.
+
+        If-Range holds either an entity tag, which must match the ETag with
+        the strong comparison, or a date, which must match Last-Modified exactly.
+        """
+        if_range = self.request.headers.get("If-Range")
+        if if_range is None:
+            return True
+        if if_range.startswith(('"', "W/")):
+            etag = self._headers.get("Etag")
+            return not if_range.startswith("W/") and if_range == etag
+        try:
+            date = email.utils.parsedate_to_datetime(if_range)
+        except Exception:
+            return False
+        if date.tzinfo is None:
+            date = date.replace(tzinfo=datetime.UTC)
+        return date == self.modified
 
     @classmethod
     def get_absolute_path(cls, root: str, path: str) -> str:
@@ -3780,14 +3833,17 @@ class GZipContentEncoding(OutputTransform):
         finishing: bool,
     ) -> tuple[int, httputil.HTTPHeaders, bytes]:
         # TODO: can/should this type be inherited from the superclass?
-        if "Vary" in headers:
-            headers["Vary"] += ", Accept-Encoding"
-        else:
-            headers["Vary"] = "Accept-Encoding"
+        ctype = _unicode(headers.get("Content-Type", "")).split(";")[0]
+        compressible = self._compressible_type(ctype)
+        # Only a type that may be compressed depends on Accept-Encoding.
+        if compressible:
+            if "Vary" in headers:
+                headers["Vary"] += ", Accept-Encoding"
+            else:
+                headers["Vary"] = "Accept-Encoding"
         if self._gzipping:
-            ctype = _unicode(headers.get("Content-Type", "")).split(";")[0]
             self._gzipping = (
-                self._compressible_type(ctype)
+                compressible
                 and (not finishing or len(chunk) >= self.MIN_LENGTH)
                 and ("Content-Encoding" not in headers)
             )

@@ -66,6 +66,14 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
     argument.  These hosts will be skipped when parsing the ``X-Forwarded-For``
     header.
 
+    ``idle_connection_timeout`` (default one hour) is how long a connection
+    may wait for the first byte of a request, either when it is new or
+    between requests on a kept-alive connection. Once the first byte has
+    arrived, the rest of the headers must arrive within ``header_timeout``
+    (default 60 seconds), so a client that sends its headers slowly can't
+    hold a connection for as long as an idle one. ``body_timeout`` limits the
+    time to read the body (by default it is unlimited).
+
     To make this server serve SSL traffic, send the ``ssl_options`` keyword
     argument with an `ssl.SSLContext` object. For compatibility with older
     versions of Python ``ssl_options`` may also be a dictionary of keyword
@@ -146,6 +154,11 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
 
     .. versionchanged:: 5.0
        The ``io_loop`` argument has been removed.
+
+    .. versionchanged:: 6.7
+       Added the ``header_timeout`` argument. Previously,
+       ``idle_connection_timeout`` was the time limit for the whole header
+       block, so a request's headers could take up to an hour by default.
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -174,6 +187,7 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
         max_body_size: int | None = None,
         max_buffer_size: int | None = None,
         trusted_downstream: list[str] | None = None,
+        header_timeout: float | None = None,
     ) -> None:
         # This method's signature is not extracted with autodoc
         # because we want its arguments to appear on the class
@@ -186,7 +200,8 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
             decompress=decompress_request,
             chunk_size=chunk_size,
             max_header_size=max_header_size,
-            header_timeout=idle_connection_timeout or 3600,
+            idle_connection_timeout=idle_connection_timeout or 3600,
+            header_timeout=header_timeout or 60,
             max_body_size=max_body_size,
             body_timeout=body_timeout,
             no_keep_alive=no_keep_alive,

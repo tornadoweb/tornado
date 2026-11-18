@@ -1697,6 +1697,29 @@ class StaticFileTest(WebTestCase):
             utf8(response.headers["Etag"]), b'"' + self.robots_txt_hash + b'"'
         )
 
+    def test_static_range_if_range(self):
+        response1 = self.get_and_head("/static/robots.txt")
+        for if_range in (response1.headers["Etag"], response1.headers["Last-Modified"]):
+            response = self.get_and_head(
+                "/static/robots.txt",
+                headers={"Range": "bytes=1-4", "If-Range": if_range},
+            )
+            self.assertEqual(response.code, 206)
+            self.assertEqual(response.headers["Content-Range"], "bytes 1-4/26")
+
+        for if_range in (
+            '"stale"',
+            "W/" + response1.headers["Etag"],
+            "Thu, 01 Jan 1970 00:00:00 GMT",
+        ):
+            response = self.get_and_head(
+                "/static/robots.txt",
+                headers={"Range": "bytes=1-4", "If-Range": if_range},
+            )
+            self.assertEqual(response.code, 200)
+            self.assertNotIn("Content-Range", response.headers)
+            self.assertEqual(response.headers["Content-Length"], "26")
+
     def test_static_404(self):
         response = self.get_and_head("/static/blarg")
         self.assertEqual(response.code, 404)
@@ -2992,6 +3015,9 @@ class GzipTestCase(SimpleHandlerTestCase):
         def get(self):
             for v in self.get_arguments("vary"):
                 self.add_header("Vary", v)
+            content_type = self.get_argument("content_type", None)
+            if content_type is not None:
+                self.set_header("Content-Type", content_type)
             # Must write at least MIN_LENGTH bytes to activate compression.
             self.write("hello world" + ("!" * GZipContentEncoding.MIN_LENGTH))
 
@@ -3043,6 +3069,17 @@ class GzipTestCase(SimpleHandlerTestCase):
             [s.strip() for s in response.headers["Vary"].split(",")],
             ["Accept-Language", "Cookie", "Accept-Encoding"],
         )
+
+    def test_no_vary_for_incompressible_type(self):
+        # Regression test for https://github.com/tornadoweb/tornado/issues/1581
+        response = self.fetch("/?content_type=image/png")
+        self.assertNotIn("Content-Encoding", response.headers)
+        self.assertNotIn("Vary", response.headers)
+
+    def test_vary_from_handler_kept_for_incompressible_type(self):
+        response = self.fetch("/?content_type=image/png&vary=Accept-Language")
+        self.assertNotIn("Content-Encoding", response.headers)
+        self.assertEqual(response.headers["Vary"], "Accept-Language")
 
 
 class PathArgsInPrepareTest(WebTestCase):
@@ -3356,6 +3393,47 @@ class UnimplementedNonStandardMethodsTest(SimpleHandlerTestCase):
     def test_unimplemented_other(self):
         response = self.fetch("/", method="OTHER", allow_nonstandard_methods=True)
         self.assertEqual(response.code, 405)
+
+
+class AllowHeaderTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            self.write("get")
+
+        def post(self):
+            self.write("post")
+
+    def test_allow_header_unimplemented_method(self):
+        # RFC 9110 section 15.5.6: a 405 response must include an
+        # Allow header listing the supported methods.
+        response = self.fetch("/", method="DELETE")
+        self.assertEqual(response.code, 405)
+        self.assertEqual(response.headers["Allow"], "GET, POST")
+
+    def test_allow_header_unsupported_method(self):
+        response = self.fetch("/", method="OTHER", allow_nonstandard_methods=True)
+        self.assertEqual(response.code, 405)
+        self.assertEqual(response.headers["Allow"], "GET, POST")
+
+    def test_no_allow_header_on_success(self):
+        response = self.fetch("/")
+        self.assertEqual(response.code, 200)
+        self.assertNotIn("Allow", response.headers)
+
+    def test_no_allow_header_on_other_errors(self):
+        response = self.fetch("/nonexistent")
+        self.assertEqual(response.code, 404)
+        self.assertNotIn("Allow", response.headers)
+
+
+class AllowHeaderNoMethodsTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        pass
+
+    def test_allow_header_no_methods_implemented(self):
+        response = self.fetch("/", method="GET")
+        self.assertEqual(response.code, 405)
+        self.assertEqual(response.headers.get("Allow"), "")
 
 
 class AllHTTPMethodsTest(SimpleHandlerTestCase):
@@ -4405,6 +4483,15 @@ class CrossOriginProtectionTest(SimpleHandlerTestCase):
         # Origins are compared exactly; a trailing slash or a different scheme
         # does not match.
         for origin in ["https://trusted.example.com/", "http://trusted.example.com"]:
+            with self.subTest(origin=origin):
+                with ExpectLog(gen_log, ".*Origin .* not allowed"):
+                    response = self._post({"Origin": origin})
+                self.assertEqual(response.code, 403)
+
+    def test_fallback_malformed_origin(self):
+        # An origin that urlsplit rejects is not allowed (and is not an
+        # uncaught exception).
+        for origin in ["http://[", "http://a]", "http://[::1]x"]:
             with self.subTest(origin=origin):
                 with ExpectLog(gen_log, ".*Origin .* not allowed"):
                     response = self._post({"Origin": origin})
