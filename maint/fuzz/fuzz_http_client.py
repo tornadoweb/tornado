@@ -84,8 +84,16 @@ class LocalTCPClient(TCPClient):
 async def fetch(data: bytes) -> None:
     TCP_CLIENT.response = data
     try:
+        # No timeouts (0 turns them off): libFuzzer's -timeout reports a
+        # response that hangs or is too slow. With a timeout here, a slow
+        # input would raise HTTPTimeoutError, an expected HTTPClientError,
+        # and pass silently.
         await CLIENT.fetch(
-            URL, follow_redirects=True, max_redirects=1, request_timeout=5
+            URL,
+            follow_redirects=True,
+            max_redirects=1,
+            connect_timeout=0,
+            request_timeout=0,
         )
     except EXPECTED:
         pass
