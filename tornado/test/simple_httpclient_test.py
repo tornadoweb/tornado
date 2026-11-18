@@ -85,6 +85,20 @@ class TriggerHandler(RequestHandler):
         yield event.wait()
 
 
+class SlowCountdownHandler(RequestHandler):
+    # Like CountdownHandler, but waits before each redirect.
+    async def get(self, count):
+        count = int(count)
+        if count > 0:
+            delay = self.get_argument("delay")
+            await gen.sleep(float(delay))
+            self.redirect(
+                self.reverse_url("slow_countdown", count - 1) + "?delay=" + delay
+            )
+        else:
+            self.write("Zero")
+
+
 class ContentLengthHandler(RequestHandler):
     def get(self):
         self.stream = self.detach()
@@ -199,6 +213,11 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
                 ),
                 url("/chunk", ChunkHandler),
                 url("/countdown/([0-9]+)", CountdownHandler, name="countdown"),
+                url(
+                    "/slow_countdown/([0-9]+)",
+                    SlowCountdownHandler,
+                    name="slow_countdown",
+                ),
                 url("/hello", HelloWorldHandler),
                 url("/content_length", ContentLengthHandler),
                 url("/head", HeadHandler),
@@ -708,6 +727,66 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, SimpleHTTPClientTestMixin):
                 if self.triggers:
                     self.triggers.popleft()()
                 yield gen.sleep(0)
+
+    @gen_test
+    def test_request_timeout_covers_redirects(self):
+        # Each redirect takes less than the request_timeout, but the whole
+        # chain of three takes longer, so the fetch times out.
+        timeout = 0.5
+        if os.name == "nt" or os.environ.get("EMULATION") == "1":
+            timeout = 1.0
+        delay = timeout * 0.6
+
+        with closing(self.create_client()) as client:
+            with self.assertRaises(HTTPTimeoutError):
+                yield client.fetch(
+                    self.get_url("/slow_countdown/3?delay=%s" % delay),
+                    request_timeout=timeout,
+                )
+            # Let the handler that was interrupted finish.
+            yield gen.sleep(delay)
+
+    @gen_test
+    def test_request_timeout_covers_redirect_in_queue(self):
+        # A redirect that waits in the queue still times out at the
+        # request_timeout of the original request.
+        timeout, delay = 0.6, 0.4
+        if os.name == "nt" or os.environ.get("EMULATION") == "1":
+            timeout, delay = 1.2, 0.8
+
+        with closing(self.create_client(max_clients=1)) as client:
+            start = self.io_loop.time()
+            fut1 = client.fetch(
+                self.get_url("/slow_countdown/1?delay=%s" % delay),
+                request_timeout=timeout,
+            )
+            # This request gets the connection when the first one redirects,
+            # so the redirect has to wait in the queue.
+            fut2 = client.fetch(self.get_url("/trigger?wake=false"))
+            with self.assertRaises(HTTPTimeoutError) as cm:
+                yield fut1
+            self.assertEqual(str(cm.exception), "Timeout in request queue")
+            # Restarting the timer at the redirect would take timeout + delay.
+            self.assertLess(self.io_loop.time() - start, timeout + delay / 2)
+            while not self.triggers:
+                yield gen.sleep(0.01)
+            self.triggers.popleft()()
+            yield fut2
+
+    @gen_test
+    def test_connect_timeout_restarts_on_redirect(self):
+        # The redirect comes after more than the connect_timeout, but each
+        # connection gets its own connect_timeout.
+        timeout = 0.2
+        if os.name == "nt" or os.environ.get("EMULATION") == "1":
+            timeout = 0.5
+
+        with closing(self.create_client()) as client:
+            response = yield client.fetch(
+                self.get_url("/slow_countdown/1?delay=%s" % (timeout * 2)),
+                connect_timeout=timeout,
+            )
+            self.assertEqual(response.body, b"Zero")
 
 
 class SimpleHTTPSClientTestCase(AsyncHTTPSTestCase, SimpleHTTPClientTestMixin):

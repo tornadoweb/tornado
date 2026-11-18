@@ -120,7 +120,9 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         ``connect_timeout`` (as it had since Tornado 3.2), so a queued
         request with ``request_timeout=0`` can wait in the queue
         indefinitely. The ``request_timeout`` is also no longer restarted
-        when a request leaves the queue.
+        when a request leaves the queue or follows a redirect, so it covers
+        the whole chain of redirects, while each connection gets its own
+        ``connect_timeout``.
     """
 
     def initialize(  # type: ignore
@@ -172,7 +174,11 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self, request: HTTPRequest, callback: Callable[[HTTPResponse], None]
     ) -> None:
         key = object()
-        queue_start_time = self.io_loop.time()
+        # A redirect keeps the start time of the original request, so the
+        # request_timeout covers the whole chain of redirects.
+        queue_start_time: float | None = getattr(request, "_queue_start_time", None)
+        if queue_start_time is None:
+            queue_start_time = self.io_loop.time()
         self.queue.append((key, request, callback))
         assert request.request_timeout is not None
         timeout_handle = None
@@ -277,9 +283,10 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self.io_loop = IOLoop.current()
         self.start_time = self.io_loop.time()
         self.start_wall_time = time.time()
-        # When the request entered the client's queue. request_timeout is
-        # measured from here, while connect_timeout uses start_time.
-        self.queue_start_time = (
+        # When the request (or the original request, for a redirect) entered
+        # the client's queue. request_timeout is measured from here, while
+        # connect_timeout uses start_time.
+        self._queue_start_time = (
             self.start_time if queue_start_time is None else queue_start_time
         )
         self.client = client
@@ -352,7 +359,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             if self.request.connect_timeout:
                 deadlines.append(self.start_time + self.request.connect_timeout)
             if self.request.request_timeout:
-                deadlines.append(self.queue_start_time + self.request.request_timeout)
+                deadlines.append(self._queue_start_time + self.request.request_timeout)
             try:
                 stream = await self.tcp_client.connect(
                     host,
@@ -381,7 +388,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 return
             if self.request.request_timeout:
                 self._timeout = self.io_loop.add_timeout(
-                    self.queue_start_time + self.request.request_timeout,
+                    self._queue_start_time + self.request.request_timeout,
                     functools.partial(self._on_timeout, "during request"),
                 )
             if (
@@ -757,6 +764,9 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     except KeyError:
                         pass
             new_request.original_request = original_request  # type: ignore
+            # Carry the start time forward so that a redirect does not
+            # restart the request_timeout.
+            new_request._queue_start_time = self._queue_start_time  # type: ignore
             assert self.final_callback is not None
             final_callback = self.final_callback
             self.final_callback = None  # type: ignore
