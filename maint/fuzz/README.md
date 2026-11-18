@@ -19,6 +19,12 @@ Each one counts as a crash any exception other than the ones the code
 documents for bad input, and anything Tornado logs as an error (which is
 how it reports exceptions it catches, such as one in a request handler).
 
+None of them may use the network, not even 127.0.0.1: OSS-Fuzz runs them
+with the loopback interface down, so connecting fails with `ENETUNREACH`
+(listening still works, which hides the problem). The fuzzers that need a
+connection use `socket.socketpair()` instead. To check, run a fuzzer under
+`unshare -rn`, which gives it a network namespace with no interfaces up.
+
 ## Running
 
 From the root of the repo:
