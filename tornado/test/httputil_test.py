@@ -218,6 +218,24 @@ class MultipartFormDataTest(TestCase):
                         self.assertEqual(files["Files"][0].filename, "Report.TXT")
                         self.assertEqual(files["Files"][0].body, b"Hello")
 
+    def test_multipart_prefix_not_matched(self):
+        # A media type that merely shares the multipart/form-data prefix
+        # must be ignored (not parsed, and no error), consistent with how
+        # unrecognized urlencoded-like media types are treated.
+        data = (
+            b"--AaB03x\r\n"
+            b'Content-Disposition: form-data; name="a"\r\n'
+            b"\r\n1\r\n--AaB03x--\r\n"
+        )
+        for content_type in (
+            "multipart/form-dataxyz",
+            "multipart/form-data-garbage; boundary=AaB03x",
+        ):
+            args, files = form_data_args()
+            parse_body_arguments(content_type, data, args, files)
+            self.assertEqual(args, {})
+            self.assertEqual(files, {})
+
     def test_multiple_boundaries(self):
         data = (
             b"--1234\r\n"
