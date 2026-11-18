@@ -1357,7 +1357,7 @@ class UnawaitedWriteTest(WebSocketBaseTestCase):
     @gen_test
     def test_unawaited_write_on_closed_connection(self):
         errors = []
-        self.io_loop.asyncio_loop.set_exception_handler(
+        asyncio.get_running_loop().set_exception_handler(
             lambda loop, context: errors.append(context)
         )
         ws = yield self.ws_connect("/")
