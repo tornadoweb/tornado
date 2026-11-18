@@ -3041,6 +3041,10 @@ class GzipTestCase(SimpleHandlerTestCase):
         self.assert_compressed(response)
         self.assertEqual(response.headers["Vary"], "Accept-Encoding")
 
+    def test_gzip_content_type_parameters(self):
+        response = self.fetch("/?content_type=TEXT%2FPLAIN%20%3B%20charset%3DUTF-8")
+        self.assert_compressed(response)
+
     def test_gzip_static(self):
         # The streaming responses in StaticFileHandler have subtle
         # interactions with the gzip output so test this case separately.

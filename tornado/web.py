@@ -3823,6 +3823,7 @@ class GZipContentEncoding(OutputTransform):
         self._gzipping = "gzip" in request.headers.get("Accept-Encoding", "")
 
     def _compressible_type(self, ctype: str) -> bool:
+        ctype = httputil._parse_media_type(ctype)
         return ctype.startswith("text/") or ctype in self.CONTENT_TYPES
 
     def transform_first_chunk(
@@ -3833,7 +3834,7 @@ class GZipContentEncoding(OutputTransform):
         finishing: bool,
     ) -> tuple[int, httputil.HTTPHeaders, bytes]:
         # TODO: can/should this type be inherited from the superclass?
-        ctype = _unicode(headers.get("Content-Type", "")).split(";")[0]
+        ctype = headers.get("Content-Type", "")
         compressible = self._compressible_type(ctype)
         # Only a type that may be compressed depends on Accept-Encoding.
         if compressible:
