@@ -41,7 +41,7 @@ class ErrorLog(logging.Handler):
 def main(
     name: str,
     test_one_input: Callable[[bytes], None],
-    seeds: Callable[[], Iterable[bytes]] | Iterable[bytes],
+    seeds: Callable[[], Iterable[bytes]],
 ) -> None:
     """Runs the fuzzer, with libFuzzer's command line arguments.
 
@@ -52,8 +52,8 @@ def main(
     ``--write-seeds=DIR`` writes the seeds to DIR and exits, for OSS-Fuzz's
     build script.
 
-    ``seeds`` may be a function returning the seeds, which is only called
-    when they are needed, so that building them (which imports much of
+    ``seeds`` is a function returning the seeds, which is only called when
+    they are needed, so that building them (which may import much of
     tornado) doesn't slow down every process OSS-Fuzz starts.
     """
     argv = sys.argv
@@ -78,12 +78,8 @@ def main(
     atheris.Fuzz()
 
 
-def write_seeds(
-    directory: str, seeds: Callable[[], Iterable[bytes]] | Iterable[bytes]
-) -> None:
-    if callable(seeds):
-        seeds = seeds()
+def write_seeds(directory: str, seeds: Callable[[], Iterable[bytes]]) -> None:
     os.makedirs(directory, exist_ok=True)
-    for i, seed in enumerate(seeds):
+    for i, seed in enumerate(seeds()):
         with open(os.path.join(directory, f"seed{i:03d}"), "wb") as f:
             f.write(seed)

@@ -129,4 +129,4 @@ CLIENT.tcp_client.close()
 CLIENT.tcp_client = TCP_CLIENT
 
 if __name__ == "__main__":
-    common.main("http_client", test_one_input, seeds())
+    common.main("http_client", test_one_input, seeds)
