@@ -1164,7 +1164,13 @@ class WebSocketProtocol13(WebSocketProtocol):
             except StreamClosedError:
                 raise WebSocketClosedError()
 
-        return asyncio.ensure_future(wrapper())
+        task = asyncio.ensure_future(wrapper())
+        # Like IOStream.write, mark the exception as retrieved so that
+        # callers who don't await the result (which is optional) don't get
+        # "Task exception was never retrieved" logged when the connection
+        # closes before the message is sent.
+        task.add_done_callback(lambda f: f.cancelled() or f.exception())
+        return task
 
     def write_ping(self, data: bytes) -> None:
         """Send ping frame."""
