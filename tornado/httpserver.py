@@ -64,7 +64,8 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
     remote host IP address.  To select the next server in the chain, a list of
     trusted downstream hosts may be passed as the ``trusted_downstream``
     argument.  These hosts will be skipped when parsing the ``X-Forwarded-For``
-    header.
+    header.  IPv6 addresses in ``X-Real-Ip``, ``X-Forwarded-For`` and
+    ``trusted_downstream`` may be enclosed in square brackets.
 
     ``idle_connection_timeout`` (default one hour) is how long a connection
     may wait for the first byte of a request, either when it is new or
@@ -159,6 +160,9 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
        Added the ``header_timeout`` argument. Previously,
        ``idle_connection_timeout`` was the time limit for the whole header
        block, so a request's headers could take up to an hour by default.
+
+       IPv6 addresses in square brackets are now accepted when ``xheaders`` is
+       enabled and in ``trusted_downstream``.
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -307,6 +311,24 @@ class _CallableAdapter(httputil.HTTPMessageDelegate):
         del self._chunks
 
 
+def _strip_ipv6_brackets(ip: str) -> str:
+    """Removes the square brackets from an address like ``[2001:db8::1]``.
+
+    Some proxies put IPv6 addresses in brackets in the ``X-Forwarded-For``
+    and ``X-Real-Ip`` headers. Anything else is returned unchanged.
+    """
+    inner = ip[1:-1]
+    if (
+        ip.startswith("[")
+        and ip.endswith("]")
+        and ":" in inner
+        and "[" not in inner
+        and "]" not in inner
+    ):
+        return inner
+    return ip
+
+
 class _HTTPRequestContext:
     def __init__(
         self,
@@ -340,7 +362,9 @@ class _HTTPRequestContext:
             self.protocol = "http"
         self._orig_remote_ip = self.remote_ip
         self._orig_protocol = self.protocol
-        self.trusted_downstream = set(trusted_downstream or [])
+        self.trusted_downstream = {
+            _strip_ipv6_brackets(host) for host in trusted_downstream or []
+        }
 
     def __str__(self) -> str:
         if self.address_family in (socket.AF_INET, socket.AF_INET6):
@@ -358,10 +382,14 @@ class _HTTPRequestContext:
         # Squid uses X-Forwarded-For, others use X-Real-Ip
         ip = headers.get("X-Forwarded-For", self.remote_ip)
         # Skip trusted downstream hosts in X-Forwarded-For list
-        for ip in (cand.strip() for cand in reversed(ip.split(","))):
+        for ip in (
+            _strip_ipv6_brackets(cand.strip()) for cand in reversed(ip.split(","))
+        ):
             if ip not in self.trusted_downstream:
                 break
-        ip = headers.get("X-Real-Ip", ip)
+        real_ip = headers.get("X-Real-Ip")
+        if real_ip is not None:
+            ip = _strip_ipv6_brackets(real_ip)
         if netutil.is_valid_ip(ip):
             self.remote_ip = ip
         # AWS uses X-Forwarded-Proto
