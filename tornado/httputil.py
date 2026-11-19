@@ -1058,7 +1058,7 @@ def parse_body_arguments(
     if config is None:
         config = _DEFAULT_PARSE_BODY_CONFIG
     # Media types and parameter names are case-insensitive, but values may not be.
-    media_type, _ = _parse_header(content_type)
+    media_type = _parse_media_type(content_type)
     if media_type == "application/x-www-form-urlencoded":
         if headers and "Content-Encoding" in headers:
             raise HTTPInputError(
@@ -1333,6 +1333,21 @@ def _parse_header(line: str) -> tuple[str, dict[str, str | None]]:
         # A parameter given with a value takes precedence.
         pdict.setdefault(name, None)
     return key.lower(), pdict
+
+
+def _parse_media_type(line: str) -> str:
+    """Return the media type of a Content-Type-like header.
+
+    A non-raising wrapper around `_parse_header` for callers that
+    only need the media type: `_parse_header` raises `ValueError`
+    for malformed RFC 2231 parameters, so in that case fall back
+    to the part before the first ``;``.
+    """
+    try:
+        media_type, _ = _parse_header(line)
+    except ValueError:
+        media_type = line.split(";", 1)[0].strip().lower()
+    return media_type
 
 
 def _encode_header(key: str, pdict: dict[str, str | None]) -> str:

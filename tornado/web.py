@@ -3823,7 +3823,7 @@ class GZipContentEncoding(OutputTransform):
         self._gzipping = "gzip" in request.headers.get("Accept-Encoding", "")
 
     def _compressible_type(self, ctype: str) -> bool:
-        ctype, _ = httputil._parse_header(ctype)
+        ctype = httputil._parse_media_type(ctype)
         return ctype.startswith("text/") or ctype in self.CONTENT_TYPES
 
     def transform_first_chunk(

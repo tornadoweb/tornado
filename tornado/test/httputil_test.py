@@ -236,6 +236,23 @@ class MultipartFormDataTest(TestCase):
             self.assertEqual(args, {})
             self.assertEqual(files, {})
 
+    def test_multipart_malformed_rfc2231_params(self):
+        # A parameter given both with and without an RFC 2231
+        # continuation number ("name*=a; name*1=b") makes
+        # _parse_header raise ValueError on Python < 3.13.5. That
+        # error must not escape parse_body_arguments; the media type
+        # is recovered from the header prefix and nothing is parsed
+        # out of the (empty) body.
+        args, files = form_data_args()
+        parse_body_arguments(
+            "multipart/form-data; boundary=AaB03x; name*=a; name*1=b",
+            b"--AaB03x--\r\n",
+            args,
+            files,
+        )
+        self.assertEqual(args, {})
+        self.assertEqual(files, {})
+
     def test_multiple_boundaries(self):
         data = (
             b"--1234\r\n"
