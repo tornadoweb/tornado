@@ -4196,10 +4196,12 @@ def decode_signed_value(
         return None
     if version == 1:
         if isinstance(secret, dict):
-            # Version 1 values carry no key version, so a dict of keys
-            # cannot be used to verify them. Treat them as invalid, like
-            # any other value that fails to decode.
-            return None
+            # Version 1 values carry no key version. Verify them with key
+            # version 1, so v1 values keep working while key 1 is in the
+            # dict and stop working once it is rotated out.
+            if 1 not in secret:
+                return None
+            secret = secret[1]
         return _decode_signed_value_v1(secret, name, value, max_age_days, clock)
     elif version == 2:
         return _decode_signed_value_v2(secret, name, value, max_age_days, clock)

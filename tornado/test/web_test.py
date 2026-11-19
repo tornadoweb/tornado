@@ -4026,19 +4026,50 @@ class SignedValueTest(TestCase):
         )
         self.assertEqual(value, decoded)
 
-    def test_key_versioning_ignores_version1_value(self):
-        # Version 1 values have no key version. With a dict of keys they
-        # are invalid, and must not raise.
-        for value in (b"guest", b"abc|123|def", b"2", b"1|x"):
+    def test_key_versioning_version1_value(self):
+        # Version 1 values have no key version, so they are verified with
+        # key version 1. Bad values are invalid and must not raise.
+        signed = create_signed_value(
+            SignedValueTest.SECRET_DICT[1],
+            "key",
+            "value",
+            version=1,
+            clock=self.present,
+        )
+        self.assertEqual(
+            decode_signed_value(
+                SignedValueTest.SECRET_DICT, "key", signed, clock=self.present
+            ),
+            b"value",
+        )
+        newkeys = SignedValueTest.SECRET_DICT.copy()
+        newkeys.pop(1)
+        self.assertIsNone(
+            decode_signed_value(newkeys, "key", signed, clock=self.present)
+        )
+        with ExpectLog(gen_log, "Invalid cookie signature"):
+            other = create_signed_value(
+                SignedValueTest.SECRET_DICT[0],
+                "key",
+                "value",
+                version=1,
+                clock=self.present,
+            )
             self.assertIsNone(
                 decode_signed_value(
-                    SignedValueTest.SECRET_DICT,
-                    "key",
-                    value,
-                    clock=self.present,
-                    min_version=1,
+                    SignedValueTest.SECRET_DICT, "key", other, clock=self.present
                 )
             )
+            for value in (b"guest", b"abc|123|def", b"2", b"1|x"):
+                self.assertIsNone(
+                    decode_signed_value(
+                        SignedValueTest.SECRET_DICT,
+                        "key",
+                        value,
+                        clock=self.present,
+                        min_version=1,
+                    )
+                )
 
     def test_key_versioning_invalid_key(self):
         value = b"\xe9"
