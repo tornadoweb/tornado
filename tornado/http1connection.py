@@ -470,6 +470,32 @@ class HTTP1Connection(httputil.HTTPConnection):
         """
         self._max_body_size = max_body_size
 
+    def _validate_headers(
+        self,
+        start_line: httputil.RequestStartLine | httputil.ResponseStartLine,
+        headers: httputil.HTTPHeaders,
+    ) -> None:
+        if not self.is_client:
+            assert isinstance(start_line, httputil.ResponseStartLine)
+            if not isinstance(start_line[2], str) or not (
+                start_line[2] == ""
+                or httputil._ABNF.reason_phrase.fullmatch(start_line[2])
+            ):
+                raise ValueError(
+                    "Illegal characters in reason phrase: %r" % (start_line[2],)
+                )
+        for n, v in headers.get_all():
+            v_str = native_str(v).strip(httputil.HTTP_WHITESPACE)
+            if not httputil._ABNF.field_value.fullmatch(v_str):
+                raise ValueError("Illegal characters in header value %r: %r" % (n, v))
+        lines_to_check = [
+            native_str(start_line[2]) if not self.is_client else "",
+            *(native_str(n) + ": " + native_str(v) for n, v in headers.get_all()),
+        ]
+        for line in lines_to_check:
+            if CR_OR_LF_RE.search(utf8(line)):
+                raise ValueError("Illegal characters (CR or LF) in header: %r" % line)
+
     def write_headers(
         self,
         start_line: httputil.RequestStartLine | httputil.ResponseStartLine,
@@ -477,6 +503,44 @@ class HTTP1Connection(httputil.HTTPConnection):
         chunk: bytes | None = None,
     ) -> "Future[None]":
         """Implements `.HTTPConnection.write_headers`."""
+        if not self.is_client:
+            try:
+                self._validate_headers(start_line, headers)
+            except Exception:
+                gen_log.error("Exception in write_headers", exc_info=True)
+                if not self.stream.closed():
+                    self._disconnect_on_finish = True
+                    try:
+                        return self._write_headers(
+                            httputil.ResponseStartLine(
+                                "HTTP/1.1", 500, "Internal Server Error"
+                            ),
+                            httputil.HTTPHeaders(
+                                {
+                                    "Content-Length": "0",
+                                    "Connection": "close",
+                                }
+                            ),
+                            chunk=None,
+                        )
+                    except Exception:
+                        pass
+                self.close()
+                future = self._write_future = Future()
+                future.set_exception(iostream.StreamClosedError())
+                future.exception()
+                return future
+            return self._write_headers(start_line, headers, chunk)
+        else:
+            self._validate_headers(start_line, headers)
+            return self._write_headers(start_line, headers, chunk)
+
+    def _write_headers(
+        self,
+        start_line: httputil.RequestStartLine | httputil.ResponseStartLine,
+        headers: httputil.HTTPHeaders,
+        chunk: bytes | None = None,
+    ) -> "Future[None]":
         lines = []
         if self.is_client:
             assert isinstance(start_line, httputil.RequestStartLine)
@@ -494,6 +558,13 @@ class HTTP1Connection(httputil.HTTPConnection):
             assert self._request_start_line is not None
             assert self._request_headers is not None
             self._response_start_line = start_line
+            if not isinstance(start_line[2], str) or not (
+                start_line[2] == ""
+                or httputil._ABNF.reason_phrase.fullmatch(start_line[2])
+            ):
+                raise ValueError(
+                    "Illegal characters in reason phrase: %r" % (start_line[2],)
+                )
             lines.append(utf8("HTTP/1.1 %d %s" % (start_line[1], start_line[2])))
             self._chunking_output = (
                 # TODO: should this use
@@ -536,9 +607,12 @@ class HTTP1Connection(httputil.HTTPConnection):
         # TODO: headers are supposed to be of type str, but we still have some
         # cases that let bytes slip through. Remove these native_str calls when those
         # are fixed.
-        header_lines = (
-            native_str(n) + ": " + native_str(v) for n, v in headers.get_all()
-        )
+        header_lines = []
+        for n, v in headers.get_all():
+            v_str = native_str(v).strip(httputil.HTTP_WHITESPACE)
+            if not httputil._ABNF.field_value.fullmatch(v_str):
+                raise ValueError("Illegal characters in header value %r: %r" % (n, v))
+            header_lines.append(native_str(n) + ": " + v_str)
         lines.extend(line.encode("latin1") for line in header_lines)
         for line in lines:
             if CR_OR_LF_RE.search(line):

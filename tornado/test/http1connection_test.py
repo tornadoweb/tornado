@@ -1,7 +1,7 @@
 import logging
 import socket
 
-from tornado import gen
+from tornado import gen, httputil
 from tornado.http1connection import HTTP1Connection, HTTP1ServerConnection
 from tornado.httputil import HTTPMessageDelegate, HTTPServerConnectionDelegate
 from tornado.iostream import IOStream
@@ -21,6 +21,10 @@ class HTTP1ConnectionTest(AsyncTestCase):
 
     @gen_test
     def asyncSetUp(self):
+        yield self._make_streams()
+
+    @gen.coroutine
+    def _make_streams(self):
         listener, port = bind_unused_port()
         event = Event()
 
@@ -212,3 +216,112 @@ class HTTP1ConnectionTest(AsyncTestCase):
         yield server_conn._serving_future
         self.assertTrue(self.server_stream.closed())
         self.assertEqual(closed, [server_conn])
+
+    @gen_test
+    def test_write_headers_invalid_reason_phrase(self):
+        for i, invalid_reason in enumerate(
+            [
+                "Bad\x00Request",
+                "Bad\x07Request",
+                "Bad\rRequest",
+                "Bad\nRequest",
+                "Bad\r\nRequest",
+                "Bad\x1fRequest",
+            ]
+        ):
+            if i > 0:
+                yield self._make_streams()
+            with self.subTest(reason=invalid_reason):
+                conn = HTTP1Connection(self.server_stream, False)
+
+                class Delegate(HTTPMessageDelegate):
+                    def finish(self):
+                        start_line = httputil.ResponseStartLine(
+                            "HTTP/1.1", 400, invalid_reason
+                        )
+                        conn.write_headers(start_line, httputil.HTTPHeaders())
+                        conn.finish()
+
+                with ExpectLog(gen_log, "Exception in write_headers"):
+                    yield self.client_stream.write(b"GET / HTTP/1.1\r\n\r\n")
+                    yield conn.read_response(Delegate())
+                    resp = yield self.client_stream.read_until_regex(b"\r?\n\r?\n")
+                    self.assertIn(b"500 Internal Server Error", resp)
+
+    @gen_test
+    def test_write_headers_invalid_header_value_server(self):
+        start_line = httputil.ResponseStartLine("HTTP/1.1", 200, "OK")
+        for i, invalid_val in enumerate(
+            [
+                "bad\x00value",
+                "bad\x07value",
+                "bad\x1fvalue",
+                "bad\x7fvalue",
+                "bad\rvalue",
+                "bad\nvalue",
+            ]
+        ):
+            if i > 0:
+                yield self._make_streams()
+            with self.subTest(val=invalid_val):
+                conn = HTTP1Connection(self.server_stream, False)
+
+                class Delegate(HTTPMessageDelegate):
+                    def finish(self):
+                        headers = httputil.HTTPHeaders()
+                        headers._as_list["X-Test"] = [invalid_val]
+                        conn.write_headers(start_line, headers)
+                        conn.finish()
+
+                with ExpectLog(gen_log, "Exception in write_headers"):
+                    yield self.client_stream.write(b"GET / HTTP/1.1\r\n\r\n")
+                    yield conn.read_response(Delegate())
+                    resp = yield self.client_stream.read_until_regex(b"\r?\n\r?\n")
+                    self.assertIn(b"500 Internal Server Error", resp)
+
+    @gen_test
+    def test_write_headers_header_value_whitespace(self):
+        conn = HTTP1Connection(self.server_stream, False)
+        start_line = httputil.ResponseStartLine("HTTP/1.1", 200, "OK")
+
+        class Delegate(HTTPMessageDelegate):
+            def finish(self):
+                headers = httputil.HTTPHeaders({"X-Test": "  whitespace  "})
+                conn.write_headers(start_line, headers)
+                conn.finish()
+
+        yield self.client_stream.write(b"GET / HTTP/1.1\r\n\r\n")
+        yield conn.read_response(Delegate())
+        resp = yield self.client_stream.read_until_regex(b"\r?\n\r?\n")
+        self.assertIn(b"200 OK", resp)
+        self.assertIn(b"X-Test: whitespace", resp)
+
+    @gen_test
+    def test_write_headers_invalid_header_value_client(self):
+        client_conn = HTTP1Connection(self.client_stream, True)
+        start_line = httputil.RequestStartLine("GET", "/", "HTTP/1.1")
+
+        for invalid_val in [
+            "bad\x00value",
+            "bad\x07value",
+            "bad\x1fvalue",
+            "bad\x7fvalue",
+            "bad\rvalue",
+            "bad\nvalue",
+        ]:
+            with self.subTest(val=invalid_val):
+                headers = httputil.HTTPHeaders()
+                headers._as_list["X-Test"] = [invalid_val]
+                with self.assertRaises(ValueError):
+                    client_conn.write_headers(start_line, headers)
+
+        for valid_val in [
+            "",
+            "good-value",
+            "good value with spaces",
+            "caf\xe9",
+        ]:
+            with self.subTest(val=valid_val):
+                headers = httputil.HTTPHeaders({"X-Test": valid_val})
+                fut = client_conn.write_headers(start_line, headers)
+                yield fut
