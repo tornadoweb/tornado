@@ -1035,10 +1035,18 @@ class WebSocketProtocol13(WebSocketProtocol):
 
         'key' is the websocket handshake challenge/response key.
         """
-        assert headers["Upgrade"].lower() == "websocket"
-        assert headers["Connection"].lower() == "upgrade"
+        connection_tokens = [
+            token.strip().lower() for token in headers.get("Connection", "").split(",")
+        ]
+        if "upgrade" not in connection_tokens:
+            raise WebSocketError("Invalid Connection header in handshake response")
+        if headers.get("Upgrade", "").lower() != "websocket":
+            raise WebSocketError("Invalid Upgrade header in handshake response")
         accept = self.compute_accept_value(key)
-        assert headers["Sec-Websocket-Accept"] == accept
+        if headers.get("Sec-Websocket-Accept") != accept:
+            raise WebSocketError(
+                "Invalid Sec-WebSocket-Accept header in handshake response"
+            )
 
         extensions = self._parse_extensions_header(headers)
         for ext in extensions:
@@ -1623,7 +1631,18 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
 
         self.headers = headers
         self.protocol = self.get_websocket_protocol()
-        self.protocol._process_server_headers(self.key, self.headers)
+        try:
+            self.protocol._process_server_headers(self.key, self.headers)
+        except (WebSocketError, ValueError) as e:
+            if not isinstance(e, WebSocketError):
+                e = WebSocketError("Invalid WebSocket handshake response: %s" % e)
+            if not self.connect_future.done():
+                self.connect_future.set_exception(e)
+            # The HTTP connection, not the websocket protocol, owns the
+            # stream until the handshake succeeds.
+            self.connection.close()
+            self.protocol = None
+            return
         self.protocol.stream = self.connection.detach()
 
         IOLoop.current().add_callback(self.protocol._receive_frame_loop)

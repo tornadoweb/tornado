@@ -17,9 +17,11 @@ from tornado.locks import Event
 from tornado.log import app_log, gen_log
 from tornado.netutil import Resolver
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
+from tornado.tcpserver import TCPServer
 from tornado.template import DictLoader
 from tornado.test.util import (
     AsyncHTTPTestCase,
+    AsyncTestCase,
     TestCase,
     abstract_base_test,
     assert_memory_budget,
@@ -27,7 +29,7 @@ from tornado.test.util import (
     refusing_port,
     skipNotCPython,
 )
-from tornado.testing import ExpectLog, gen_test
+from tornado.testing import ExpectLog, bind_unused_port, gen_test
 from tornado.web import Application, RequestHandler
 
 try:
@@ -1532,3 +1534,109 @@ class MaxMessageSizeTest(WebSocketBaseTestCase):
         self.assertEqual(ws.close_reason, "message too big")
         # TODO: Needs tests of messages split over multiple
         # continuation frames.
+
+
+class FakeHandshakeServer(TCPServer):
+    """Answers a websocket handshake request with a fixed 101 response."""
+
+    def __init__(
+        self,
+        connection: bytes = b"Upgrade",
+        upgrade: bytes = b"websocket",
+        accept: bytes | None = None,
+        extra: bytes = b"",
+    ) -> None:
+        super().__init__()
+        self.connection = connection
+        self.upgrade = upgrade
+        self.accept = accept
+        self.extra = extra
+        # Set when the handler for the client connection has finished.
+        self.handler_future: Future[None] = Future()
+
+    async def handle_stream(self, stream: IOStream, address: typing.Any) -> None:
+        try:
+            request = await stream.read_until(b"\r\n\r\n")
+            key = b""
+            for line in request.split(b"\r\n"):
+                name, _, value = line.partition(b":")
+                if name.strip().lower() == b"sec-websocket-key":
+                    key = value.strip()
+            accept = self.accept
+            if accept is None:
+                from tornado.websocket import WebSocketProtocol13
+
+                accept = WebSocketProtocol13.compute_accept_value(key).encode()
+            stream.write(
+                b"HTTP/1.1 101 Switching Protocols\r\n"
+                b"Upgrade: " + self.upgrade + b"\r\n"
+                b"Connection: " + self.connection + b"\r\n"
+                b"Sec-WebSocket-Accept: " + accept + b"\r\n" + self.extra + b"\r\n"
+            )
+            await stream.read_until_close()
+        finally:
+            self.handler_future.set_result(None)
+
+
+class WebSocketClientHandshakeTest(AsyncTestCase):
+    def setUp(self):
+        super().setUp()
+        self.servers = []
+
+    def tearDown(self):
+        for server in self.servers:
+            server.stop()
+        super().tearDown()
+
+    def start_fake_server(
+        self, **kwargs: typing.Any
+    ) -> tuple[FakeHandshakeServer, int]:
+        server = FakeHandshakeServer(**kwargs)
+        sock, port = bind_unused_port()
+        server.add_socket(sock)
+        self.servers.append(server)
+        return server, port
+
+    @gen_test
+    def test_connection_header_token_list(self):
+        # RFC 6455 section 4.1: Connection is a comma-separated token list,
+        # so common values like "keep-alive, Upgrade" must be accepted.
+        server, port = self.start_fake_server(connection=b"keep-alive, Upgrade")
+        ws = yield websocket_connect("ws://127.0.0.1:%d/" % port)
+        self.assertEqual(ws.headers["Connection"], "keep-alive, Upgrade")
+        ws.close()
+        ws.stream.close()
+        yield server.handler_future
+
+    @gen_test
+    def test_upgrade_header_case_insensitive(self):
+        server, port = self.start_fake_server(upgrade=b"WebSocket")
+        ws = yield websocket_connect("ws://127.0.0.1:%d/" % port)
+        ws.close()
+        ws.stream.close()
+        yield server.handler_future
+
+    @gen_test
+    def test_connection_header_without_upgrade_token(self):
+        server, port = self.start_fake_server(connection=b"keep-alive")
+        with self.assertRaises(WebSocketError) as cm:
+            yield websocket_connect("ws://127.0.0.1:%d/" % port)
+        self.assertIn("Connection", str(cm.exception))
+        yield server.handler_future
+
+    @gen_test
+    def test_invalid_accept_header(self):
+        server, port = self.start_fake_server(accept=b"invalid")
+        with self.assertRaises(WebSocketError) as cm:
+            yield websocket_connect("ws://127.0.0.1:%d/" % port)
+        self.assertIn("Sec-WebSocket-Accept", str(cm.exception))
+        yield server.handler_future
+
+    @gen_test
+    def test_unsupported_extension(self):
+        server, port = self.start_fake_server(
+            extra=b"Sec-WebSocket-Extensions: x-unknown\r\n"
+        )
+        with self.assertRaises(WebSocketError):
+            yield websocket_connect("ws://127.0.0.1:%d/" % port)
+        yield server.handler_future
