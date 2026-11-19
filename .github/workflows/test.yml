@@ -53,9 +53,9 @@ jobs:
           #    configs  = []
           #    for minor in range(int(min_python_minor), int(max_python_minor) + 1):
           #      if minor == int(dev_python_minor):
-          #          # For python versions in development, use -dev syntax so setup-python
-          #          # installs the latest prerelease (or final version once available).
-          #          configs.append((f"3.{minor}-dev", f"py3{minor}"))
+          #          # For python versions in development, specify a hyphen range so we install
+          #          # a final version if available, otherwise a prerelease (starting from alpha).
+          #          configs.append((f"3.{minor}.0-alpha - 3.{minor}", f"py3{minor}"))
           #      else:
           #          configs.append((f"3.{minor}", f"py3{minor}-full"))
           #      if int(min_python_threaded_minor) <= minor <= int(max_python_threaded_minor):
@@ -101,7 +101,7 @@ jobs:
             tox_env: py315-full
           - python: '3.15t'
             tox_env: py315t
-          - python: '3.16-dev'
+          - python: '3.16.0-alpha - 3.16'
             tox_env: py316
           - python: '3.16t-dev'
             tox_env: py316t
