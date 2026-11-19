@@ -11,7 +11,7 @@ are up to you, or to OSS-Fuzz.
 
 | Fuzzer | What each input is | Speed |
 | --- | --- | --- |
-| `fuzz_httputil.py` | The input to one parser in `tornado.httputil` (header block, start line, cookie, header parameters, multipart or form body), picked by the first byte | ~10,000/s |
+| `fuzz_httputil_<parser>.py` | The input to one parser in `tornado.httputil`: `headers` (header block), `start_line`, `response_start_line`, `cookie`, `header_params`, `multipart` or `body` (Content-Type line, then a form body). The parsers are in `httputil_targets.py` | ~10,000/s |
 | `fuzz_http_server.py` | Everything a client sends on one connection to an `HTTPServer`, including websocket frames after a handshake | ~2,000/s |
 | `fuzz_http_client.py` | Everything a server sends in reply to a `SimpleAsyncHTTPClient` request | ~1,000/s |
 
@@ -56,3 +56,15 @@ report it privately as SECURITY.md describes rather than in a public issue
 or PR. Once it is fixed, add the input to
 `tornado/test/security_corpus_test.py` as well as to the unit tests, so that
 every later change, and the fuzzers' seeds, include it.
+
+## Writing a fuzzer
+
+Give each parser or entry point its own `fuzz_*.py` rather than picking one
+from the input. When OSS-Fuzz minimizes a crash it rejects any smaller input
+whose stack differs from the original, so a mutation that switches to a
+different target (even one with the same bug) makes minimization fail.
+
+Pass `common.main` a function that builds the seeds, not the seeds
+themselves, and import `tornado.test.security_corpus_test` inside it. It
+imports much of Tornado, and OSS-Fuzz starts a new process for every
+reproduction and every minimization step.

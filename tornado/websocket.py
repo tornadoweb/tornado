@@ -963,7 +963,14 @@ class WebSocketProtocol13(WebSocketProtocol):
             assert self.selected_subprotocol in subprotocols
             handler.set_header("Sec-WebSocket-Protocol", self.selected_subprotocol)
 
-        extensions = self._parse_extensions_header(handler.request.headers)
+        try:
+            extensions = self._parse_extensions_header(handler.request.headers)
+        except ValueError:
+            # Decline all extensions if the header can't be parsed (for
+            # example, an RFC 2231 parameter with a charset that can't
+            # decode it), as we decline individual offers we can't accept.
+            gen_log.debug("Declining malformed websocket extensions", exc_info=True)
+            extensions = []
         for ext in extensions:
             if ext[0] == "permessage-deflate" and self._compression_options is not None:
                 # TODO: negotiate parameters if compression_options
@@ -1157,7 +1164,13 @@ class WebSocketProtocol13(WebSocketProtocol):
             except StreamClosedError:
                 raise WebSocketClosedError()
 
-        return asyncio.ensure_future(wrapper())
+        task = asyncio.ensure_future(wrapper())
+        # Like IOStream.write, mark the exception as retrieved so that
+        # callers who don't await the result (which is optional) don't get
+        # "Task exception was never retrieved" logged when the connection
+        # closes before the message is sent.
+        task.add_done_callback(lambda f: f.cancelled() or f.exception())
+        return task
 
     def write_ping(self, data: bytes) -> None:
         """Send ping frame."""

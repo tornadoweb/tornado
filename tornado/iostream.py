@@ -1452,9 +1452,13 @@ class SSLIOStream(IOStream):
                     peer = self.socket.getpeername()
                 except Exception:
                     peer = "(not connected)"
-                gen_log.warning(
-                    "SSL Error on %s %s: %s", self.socket.fileno(), peer, err
-                )
+                # Client handshake failures are delivered through the Future
+                # returned by connect() or start_tls(). Let the caller decide
+                # whether to log them; the server has no such error consumer.
+                if self.socket.server_side or self._ssl_connect_future is None:
+                    gen_log.warning(
+                        "SSL Error on %s %s: %s", self.socket.fileno(), peer, err
+                    )
                 return self.close(exc_info=err)
             raise
         except OSError as err:

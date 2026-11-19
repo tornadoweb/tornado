@@ -1,12 +1,13 @@
-#!/usr/bin/env python
-# Fuzzes the parsers in tornado.httputil directly, which is much faster than
-# going through a server. The first byte of each input picks the parser and
-# the rest is its input. Each parser may reject its input with
-# HTTPInputError (parse_cookie never rejects); any other exception is a
-# crash.
+# The parsers in tornado.httputil, each fuzzed directly by its own
+# fuzz_httputil_<name>.py, which is much faster than going through a server.
+# Each parser may reject its input with HTTPInputError (parse_cookie never
+# rejects); any other exception is a crash.
 #
-# Usage (from the root of the repo; see README.md):
-#   PYTHONPATH=. python maint/fuzz/fuzz_httputil.py -max_total_time=600
+# Each parser is a separate fuzzer so that crash minimization can't wander
+# from one parser to another, which changes the crash's stack and makes
+# OSS-Fuzz discard the result.
+
+from collections.abc import Callable
 
 import atheris
 import common
@@ -14,7 +15,6 @@ import common
 with atheris.instrument_imports(include=["tornado"]):
     from tornado import httputil
     from tornado.httputil import HTTPInputError
-    from tornado.test import security_corpus_test
 
 
 def headers(data: bytes) -> None:
@@ -70,55 +70,57 @@ def body(data: bytes) -> None:
     httputil.parse_body_arguments(content_type.decode("latin1"), rest, args, files)
 
 
-TARGETS = [
-    headers,
-    start_line,
-    response_start_line,
-    cookie,
-    header_params,
-    multipart,
-    body,
-]
+def seeds() -> dict[Callable[[bytes], None], list[bytes]]:
+    """Seed inputs for each parser, from tornado's regression corpus."""
+    # Only needed for seeds, so it's imported here (and not instrumented)
+    # to keep it out of every fuzzer process's startup.
+    from tornado.test import security_corpus_test
 
-
-def test_one_input(data: bytes) -> None:
-    if not data:
-        return
-    target = TARGETS[data[0] % len(TARGETS)]
-    try:
-        target(data[1:])
-    except HTTPInputError:
-        pass
-
-
-def seeds() -> list[bytes]:
-    def seed(target: object, data: bytes) -> bytes:
-        return bytes([TARGETS.index(target)]) + data  # type: ignore[arg-type]
-
-    result = []
+    result: dict[Callable[[bytes], None], list[bytes]] = {
+        t: []
+        for t in [
+            headers,
+            start_line,
+            response_start_line,
+            cookie,
+            header_params,
+            multipart,
+            body,
+        ]
+    }
     requests = [c.request for c in security_corpus_test.CASES] + [
         s.build(n) for s in security_corpus_test.SCALING for n in (1, 10)
     ]
     for request in requests:
         head, _, rest = request.partition(b"\r\n\r\n")
         line, _, header_block = head.partition(b"\r\n")
-        result.append(seed(start_line, line))
-        result.append(seed(headers, header_block + b"\r\n"))
+        result[start_line].append(line)
+        result[headers].append(header_block + b"\r\n")
         h = httputil.HTTPHeaders.parse(header_block.decode("latin1") + "\r\n")
         for value in h.get_list("Cookie"):
-            result.append(seed(cookie, value.encode("latin1")))
+            result[cookie].append(value.encode("latin1"))
         if "Content-Type" in h:
             content_type = h["Content-Type"].encode("latin1")
-            result.append(seed(header_params, content_type))
-            result.append(seed(body, content_type + b"\n" + rest))
+            result[header_params].append(content_type)
+            result[body].append(content_type + b"\n" + rest)
             if content_type.startswith(b"multipart/"):
-                result.append(seed(multipart, rest))
-    result.append(seed(response_start_line, b"HTTP/1.1 200 OK"))
+                result[multipart].append(rest)
+    result[response_start_line].append(b"HTTP/1.1 200 OK")
     return result
 
 
 ERRORS = common.ErrorLog()
 ERRORS.install()
 
-if __name__ == "__main__":
-    common.main("httputil", test_one_input, seeds())
+
+def main(target: Callable[[bytes], None]) -> None:
+    """Runs the fuzzer for one parser (see common.main)."""
+    name = "httputil_" + target.__name__
+
+    def test_one_input(data: bytes) -> None:
+        try:
+            target(data)
+        except HTTPInputError:
+            pass
+
+    common.main(name, test_one_input, lambda: seeds()[target])

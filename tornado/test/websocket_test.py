@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import datetime
 import functools
+import gc
 import socket
 import traceback
 import typing
@@ -1095,6 +1096,24 @@ class InvalidCompressionOfferTest(WebSocketBaseTestCase):
                 self.assertNotIn("Sec-WebSocket-Extensions", headers)
 
     @gen_test
+    async def test_malformed_extensions_header(self):
+        # Headers that _parse_header rejects with ValueError used to become a
+        # 500 response and an error log. Now all extensions are declined, so
+        # the handshake succeeds without them. The mixed RFC 2231
+        # continuations only fail before Python 3.13.5, which accepts them
+        # (and then declines the unknown parameter).
+        for extensions in [
+            "permessage-deflate; a*=1; a*1=2",
+            "x; a*=1; a*1=2",
+            "permessage-deflate; a*=idna''%ff",
+            "x; a*=idna''%ff",
+            "permessage-deflate, x; a*=idna''%ff",
+        ]:
+            with self.subTest(extensions):
+                headers = await self.handshake(extensions)
+                self.assertNotIn("Sec-WebSocket-Extensions", headers)
+
+    @gen_test
     async def test_second_offer_accepted(self):
         headers = await self.handshake(
             "permessage-deflate; server_max_window_bits=abc, permessage-deflate"
@@ -1313,6 +1332,53 @@ class ServerPingTimeoutTest(WebSocketBaseTestCase):
 
         # client should have received a close operation
         self.assertEqual(ws.protocol.close_code, 1000)
+
+
+class UnawaitedWriteTest(WebSocketBaseTestCase):
+    # Awaiting the Future returned by write_message is optional, so a write
+    # that fails because the connection closed before it was sent must not
+    # be logged as an unretrieved exception if nobody awaits it.
+    def get_app(self):
+        test = self
+        self.handler_future: Future[WebSocketHandler] = Future()
+
+        class Handler(TestWebSocketHandler):
+            def open(self):
+                test.handler_future.set_result(self)
+
+        return Application([("/", Handler)])
+
+    def write_then_close(self, handler):
+        # Larger than the socket buffers, so part of it is still unsent
+        # (the client never reads) when the connection closes.
+        handler.write_message(b"x" * (16 << 20), binary=True)
+        handler.ws_connection.stream.close()
+
+    @gen_test
+    def test_unawaited_write_on_closed_connection(self):
+        errors = []
+        asyncio.get_running_loop().set_exception_handler(
+            lambda loop, context: errors.append(context)
+        )
+        ws = yield self.ws_connect("/")
+        handler = yield self.handler_future
+        self.write_then_close(handler)
+        yield ws.read_message()
+        for i in range(3):
+            yield gen.moment
+        gc.collect()
+        self.assertEqual(errors, [])
+
+    @gen_test
+    def test_awaited_write_on_closed_connection(self):
+        # Awaiting the Future still raises WebSocketClosedError.
+        ws = yield self.ws_connect("/")
+        handler = yield self.handler_future
+        fut = handler.write_message(b"x" * (16 << 20), binary=True)
+        handler.ws_connection.stream.close()
+        with self.assertRaises(WebSocketClosedError):
+            yield fut
+        yield ws.read_message()
 
 
 class FloodTest(WebSocketBaseTestCase):

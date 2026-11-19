@@ -2,6 +2,7 @@ import copy
 import datetime
 import logging
 import pickle
+import sys
 import time
 import urllib.parse
 
@@ -403,6 +404,51 @@ Foo
         self.assertEqual(file["filename"], "ab.txt")
         self.assertEqual(file["body"], b"Foo")
 
+    def test_mixed_rfc2231_continuations(self):
+        # A parameter given both with and without a continuation number
+        # made email.utils.decode_params raise TypeError before Python
+        # 3.13.5. It must be reported as bad input.
+        data = (
+            b"--1234\r\nContent-Disposition: form-data; name*=a; name*1=b\r\n"
+            b"\r\nFoo\r\n--1234--\r\n"
+        )
+        args, files = form_data_args()
+        if sys.version_info >= (3, 13, 5):
+            parse_multipart_form_data(b"1234", data, args, files)
+            self.assertEqual(args, {"ab": [b"Foo"]})
+        else:
+            with self.assertRaises(HTTPInputError):
+                parse_multipart_form_data(b"1234", data, args, files)
+
+    def test_undecodable_rfc2231_parameter(self):
+        # _parse_header raises ValueError (UnicodeError) for a charset that
+        # can't decode with errors="replace".
+        data = (
+            b"--1234\r\nContent-Disposition: form-data; name*=idna''%ff\r\n"
+            b"\r\nFoo\r\n--1234--\r\n"
+        )
+        args, files = form_data_args()
+        with self.assertRaises(HTTPInputError):
+            parse_multipart_form_data(b"1234", data, args, files)
+
+    def test_rfc2231_continuations(self):
+        # Correctly numbered continuations, alone or with an encoded first
+        # section, are joined.
+        for disposition, name in [
+            (b"name*0=a; name*1=b", "ab"),
+            (b"name*0*=utf-8''%C3%A4; name*1=b", "\u00e4b"),
+            (b"name*=utf-8''%C3%A4b", "\u00e4b"),
+        ]:
+            with self.subTest(disposition):
+                data = (
+                    b"--1234\r\nContent-Disposition: form-data; "
+                    + disposition
+                    + b"\r\n\r\nFoo\r\n--1234--\r\n"
+                )
+                args, files = form_data_args()
+                parse_multipart_form_data(b"1234", data, args, files)
+                self.assertEqual(args, {name: [b"Foo"]})
+
     def test_disposition_param_linear_performance(self):
         # This is a regression test for performance of parsing parameters
         # to the content-disposition header, specifically for semicolons within
@@ -489,6 +535,41 @@ Content-Disposition: form-data; name="files"; filename="ab.txt"
                 boundary, body, args, files, config=config_disabled
             )
         self.assertIn("multipart/form-data parsing is disabled", str(cm.exception))
+
+
+class ParseHeaderTest(TestCase):
+    def test_mixed_rfc2231_continuations(self):
+        # See MultipartFormDataTest.test_mixed_rfc2231_continuations.
+        for header in [
+            "form-data; name*=a; name*1=b",
+            "form-data; name*1=b; name*=a",
+            "permessage-deflate; a*=1; a*1=2",
+        ]:
+            with self.subTest(header):
+                if sys.version_info >= (3, 13, 5):
+                    _parse_header(header)
+                else:
+                    with self.assertRaises(ValueError):
+                        _parse_header(header)
+
+    def test_undecodable_rfc2231_parameter(self):
+        with self.assertRaises(ValueError):
+            _parse_header("form-data; name*=idna''%ff")
+
+    def test_valid_parameters(self):
+        # The parameter forms closest to the one above still work.
+        self.assertEqual(
+            _parse_header("form-data; name*0=a; name*1=b; filename*=utf-8''x%20y"),
+            ("form-data", {"name": "ab", "filename": "x y"}),
+        )
+        self.assertEqual(
+            _parse_header("form-data; name*0*=utf-8''%C3%A4; name*1=b"),
+            ("form-data", {"name": "\u00e4b"}),
+        )
+        self.assertEqual(
+            _parse_header("permessage-deflate; client_max_window_bits=10; x"),
+            ("permessage-deflate", {"client_max_window_bits": "10", "x": None}),
+        )
 
 
 class HTTPHeadersTest(TestCase):
