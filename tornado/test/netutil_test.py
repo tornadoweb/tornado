@@ -1,14 +1,19 @@
+import asyncio
 import errno
 import signal
 import socket
 import sys
+import threading
 import time
 import typing
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from subprocess import Popen
+from unittest import mock
 
 from tornado.netutil import (
     BlockingResolver,
+    DefaultLoopResolver,
     OverrideResolver,
     ThreadedResolver,
     bind_sockets,
@@ -18,6 +23,7 @@ from tornado.test.util import (
     AsyncTestCase,
     TestCase,
     abstract_base_test,
+    skipIfNoIPv6,
     skipIfNoNetwork,
 )
 from tornado.testing import bind_unused_port, gen_test
@@ -84,6 +90,120 @@ class BlockingResolverErrorTest(_ResolverErrorTestMixin):
     def tearDown(self):
         socket.getaddrinfo = self.real_getaddrinfo
         super().tearDown()
+
+
+@skipIfNoNetwork
+class DefaultLoopResolverTest(_ResolverTestMixin):
+    def setUp(self):
+        super().setUp()
+        self.resolver = DefaultLoopResolver()
+
+    async def check_numeric_host(self, host, families):
+        loop = asyncio.get_running_loop()
+        release = threading.Event()
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            loop.set_default_executor(executor)
+            blocker = loop.run_in_executor(None, release.wait)
+            try:
+                for family in families:
+                    with self.subTest(host=host, family=family):
+                        expected = [
+                            (fam, address)
+                            for fam, _, _, _, address in socket.getaddrinfo(
+                                host, 80, family, socket.SOCK_STREAM
+                            )
+                        ]
+                        resolution = asyncio.create_task(
+                            self.resolver.resolve(host, 80, family)
+                        )
+                        try:
+                            # Let the resolver run while the only executor thread
+                            # is occupied. Numeric addresses must not queue DNS work.
+                            await asyncio.sleep(0)
+                            self.assertTrue(resolution.done())
+                            self.assertEqual(resolution.result(), expected)
+                        finally:
+                            resolution.cancel()
+                            await asyncio.gather(resolution, return_exceptions=True)
+            finally:
+                release.set()
+                await blocker
+
+    @unittest.skipUnless(
+        hasattr(socket, "AI_NUMERICSERV"), "AI_NUMERICSERV unavailable"
+    )
+    @gen_test
+    async def test_numeric_ipv4(self):
+        await self.check_numeric_host("127.0.0.1", (socket.AF_UNSPEC, socket.AF_INET))
+
+    @skipIfNoIPv6
+    @unittest.skipUnless(
+        hasattr(socket, "AI_NUMERICSERV"), "AI_NUMERICSERV unavailable"
+    )
+    @gen_test
+    async def test_numeric_ipv6(self):
+        await self.check_numeric_host("::1", (socket.AF_UNSPEC, socket.AF_INET6))
+        await self.check_numeric_host("fe80::1%1", (socket.AF_INET6,))
+
+    @gen_test
+    async def test_no_numericserv(self):
+        loop = asyncio.get_running_loop()
+        addrinfo = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 80))]
+        numericserv = getattr(socket, "AI_NUMERICSERV", None)
+        if numericserv is not None:
+            del socket.AI_NUMERICSERV
+        try:
+            for host in ("127.0.0.1", "localhost"):
+                with self.subTest(host=host):
+                    with mock.patch.object(
+                        loop, "getaddrinfo", return_value=addrinfo
+                    ) as lookup:
+                        result = await self.resolver.resolve(host, 80, socket.AF_INET)
+                    self.assertEqual(result, [(socket.AF_INET, ("127.0.0.1", 80))])
+                    lookup.assert_awaited_once_with(
+                        host, 80, family=socket.AF_INET, type=socket.SOCK_STREAM
+                    )
+        finally:
+            if numericserv is not None:
+                setattr(socket, "AI_NUMERICSERV", numericserv)
+
+    @gen_test
+    async def test_service_name(self):
+        result = await self.resolver.resolve("127.0.0.1", "http", socket.AF_INET)
+        self.assertEqual(result, [(socket.AF_INET, ("127.0.0.1", 80))])
+
+    @gen_test
+    async def test_bad_family(self):
+        with self.assertRaises(socket.gaierror):
+            await self.resolver.resolve("::1", 80, socket.AF_INET)
+
+    @gen_test
+    async def test_fallback_error(self):
+        loop = asyncio.get_running_loop()
+        error = socket.gaierror(errno.EIO, "mock: lookup failed")
+        with mock.patch.object(loop, "getaddrinfo", side_effect=error) as lookup:
+            with self.assertRaises(socket.gaierror) as exc:
+                await self.resolver.resolve("localhost", 80, socket.AF_INET)
+        self.assertIs(exc.exception, error)
+        lookup.assert_awaited_once_with(
+            "localhost", 80, family=socket.AF_INET, type=socket.SOCK_STREAM
+        )
+
+    @gen_test
+    async def test_cancel_fallback(self):
+        loop = asyncio.get_running_loop()
+        pending = loop.create_future()
+
+        async def getaddrinfo(*args, **kwargs):
+            return await pending
+
+        with mock.patch.object(loop, "getaddrinfo", side_effect=getaddrinfo):
+            resolution = asyncio.create_task(self.resolver.resolve("localhost", 80))
+            await asyncio.sleep(0)
+            resolution.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await resolution
+        self.assertTrue(pending.cancelled())
 
 
 class OverrideResolverTest(_ResolverTestMixin):
