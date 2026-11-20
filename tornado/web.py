@@ -3226,13 +3226,14 @@ class StaticFileHandler(RequestHandler):
         # content has not been modified
         ims_value = self.request.headers.get("If-Modified-Since")
         if ims_value is not None:
+            if self.modified is None:
+                return False
             try:
                 if_since = email.utils.parsedate_to_datetime(ims_value)
             except Exception:
                 return False
             if if_since.tzinfo is None:
                 if_since = if_since.replace(tzinfo=datetime.UTC)
-            assert self.modified is not None
             if if_since >= self.modified:
                 return True
 
@@ -3256,7 +3257,7 @@ class StaticFileHandler(RequestHandler):
             return False
         if date.tzinfo is None:
             date = date.replace(tzinfo=datetime.UTC)
-        return date == self.modified
+        return self.modified is not None and date == self.modified
 
     @classmethod
     def get_absolute_path(cls, root: str, path: str) -> str:
