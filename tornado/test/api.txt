@@ -138,11 +138,12 @@ tornado.http1connection.HTTP1Connection.stream: attribute
 tornado.http1connection.HTTP1Connection.write: method(self, chunk)
 tornado.http1connection.HTTP1Connection.write_headers: method(self, start_line, headers, chunk=None)
 tornado.http1connection.HTTP1ConnectionParameters: class()
-tornado.http1connection.HTTP1ConnectionParameters.__init__: method(self, no_keep_alive=False, chunk_size=None, max_header_size=None, header_timeout=None, max_body_size=None, body_timeout=None, decompress=False)
+tornado.http1connection.HTTP1ConnectionParameters.__init__: method(self, no_keep_alive=False, chunk_size=None, max_header_size=None, header_timeout=None, max_body_size=None, body_timeout=None, decompress=False, idle_connection_timeout=None)
 tornado.http1connection.HTTP1ConnectionParameters.body_timeout: attribute
 tornado.http1connection.HTTP1ConnectionParameters.chunk_size: attribute
 tornado.http1connection.HTTP1ConnectionParameters.decompress: attribute
 tornado.http1connection.HTTP1ConnectionParameters.header_timeout: attribute
+tornado.http1connection.HTTP1ConnectionParameters.idle_connection_timeout: attribute
 tornado.http1connection.HTTP1ConnectionParameters.max_body_size: attribute
 tornado.http1connection.HTTP1ConnectionParameters.max_header_size: attribute
 tornado.http1connection.HTTP1ConnectionParameters.no_keep_alive: attribute
@@ -176,6 +177,7 @@ tornado.httpclient.HTTPClient.close: method(self)
 tornado.httpclient.HTTPClient.fetch: method(self, request, **kwargs)
 tornado.httpclient.HTTPClientError: class(builtins.Exception)
 tornado.httpclient.HTTPClientError.__init__: method(self, code, message=None, response=None)
+tornado.httpclient.HTTPClientError.__reduce__: method(self)
 tornado.httpclient.HTTPClientError.__repr__: method(self)
 tornado.httpclient.HTTPClientError.__str__: method(self)
 tornado.httpclient.HTTPClientError.code: attribute
@@ -242,7 +244,7 @@ tornado.httpserver.HTTPServer.configurable_base: classmethod(cls)
 tornado.httpserver.HTTPServer.configurable_default: classmethod(cls)
 tornado.httpserver.HTTPServer.conn_params: attribute
 tornado.httpserver.HTTPServer.handle_stream: method(self, stream, address)
-tornado.httpserver.HTTPServer.initialize: method(self, request_callback, no_keep_alive=False, xheaders=False, ssl_options=None, protocol=None, decompress_request=False, chunk_size=None, max_header_size=None, idle_connection_timeout=None, body_timeout=None, max_body_size=None, max_buffer_size=None, trusted_downstream=None)
+tornado.httpserver.HTTPServer.initialize: method(self, request_callback, no_keep_alive=False, xheaders=False, ssl_options=None, protocol=None, decompress_request=False, chunk_size=None, max_header_size=None, idle_connection_timeout=None, body_timeout=None, max_body_size=None, max_buffer_size=None, trusted_downstream=None, header_timeout=None)
 tornado.httpserver.HTTPServer.on_close: method(self, server_conn)
 tornado.httpserver.HTTPServer.protocol: attribute
 tornado.httpserver.HTTPServer.request_callback: attribute
@@ -958,6 +960,7 @@ tornado.web.GZipContentEncoding.transform_chunk: method(self, chunk, finishing)
 tornado.web.GZipContentEncoding.transform_first_chunk: method(self, status_code, headers, chunk, finishing)
 tornado.web.HTTPError: class(builtins.Exception)
 tornado.web.HTTPError.__init__: method(self, status_code=500, log_message=None, *args, **kwargs)
+tornado.web.HTTPError.__reduce__: method(self)
 tornado.web.HTTPError.__str__: method(self)
 tornado.web.HTTPError.args: attribute
 tornado.web.HTTPError.get_message: method(self)

@@ -27,13 +27,15 @@ container.
 
 """
 
+import asyncio
 import concurrent.futures
+import contextvars
 import sys
 import typing
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Iterator
 from io import BytesIO
 from types import TracebackType
-from typing import Any
+from typing import Any, TypeVar
 
 import tornado
 from tornado import escape, httputil
@@ -43,6 +45,8 @@ from tornado.log import access_log
 
 if typing.TYPE_CHECKING:
     from _typeshed.wsgi import WSGIApplication as WSGIAppType
+
+_T = TypeVar("_T")
 
 
 # PEP 3333 specifies that WSGI on python 3 generally deals with byte strings
@@ -100,10 +104,9 @@ class WSGIContainer:
     If the ``executor`` argument is provided, the WSGI application will be executed
     on that executor. This must be an instance of `concurrent.futures.Executor`,
     typically a ``ThreadPoolExecutor`` (``ProcessPoolExecutor`` is not supported).
-    With an executor, each application call and the iteration and closing of its
-    response iterable run together in a single executor task. The response is buffered until that
-    task completes. Cancelling the request handler does not stop a running
-    executor task; it will still consume and close the iterable.
+    Application invocation and response iteration and cleanup share a single
+    `contextvars.Context` per request. Separate calls may run on different
+    threads within the executor.
     If no ``executor`` is given, the application will run on the event loop thread in
     Tornado 6.3; this will change to use an internal thread pool by default in
     Tornado 7.0.
@@ -155,60 +158,85 @@ class WSGIContainer:
             return response.append
 
         environ = self.environ(request)
+        context = (
+            None if self.executor is dummy_executor else contextvars.copy_context()
+        )
+        app_response: Iterable[bytes] | None = None
 
-        def run_application() -> None:
-            try:
-                app_response = self.wsgi_application(environ, start_response)
+        def call_application() -> Iterable[bytes]:
+            nonlocal app_response
+            app_response = self.wsgi_application(environ, start_response)
+            return app_response
+
+        def close_response() -> None:
+            nonlocal app_response
+            iterable, app_response = app_response, None
+            if iterable is not None and hasattr(iterable, "close"):
+                iterable.close()
+
+        async def run(
+            func: Callable[..., _T], *args: Any, cancel_pending: bool = True
+        ) -> _T:
+            def call() -> _T:
                 try:
-                    app_response_iter = iter(app_response)
-                    while True:
-                        try:
-                            chunk = next(app_response_iter)
-                        except StopIteration:
-                            break
-                        if chunk is None:
-                            break
-                        response.append(chunk)
-                finally:
-                    if hasattr(app_response, "close"):
-                        app_response.close()
-            except StopIteration as e:
-                # StopIteration cannot be transferred through an asyncio Future.
-                raise RuntimeError("WSGI application raised StopIteration") from e
+                    if context is None:
+                        return func(*args)
+                    return context.run(func, *args)
+                except StopIteration as exc:
+                    # StopIteration cannot cross an asyncio Future.
+                    raise RuntimeError("WSGI callback raised StopIteration") from exc
 
-        loop = IOLoop.current()
-        if self.executor is dummy_executor:
-            # Retain the synchronous default's existing scheduling.
-            app_response = await loop.run_in_executor(
-                self.executor,
-                self.wsgi_application,
-                environ,
-                start_response,
-            )
+            submitted = self.executor.submit(call)
+            future = asyncio.wrap_future(submitted)
             try:
-                app_response_iter = iter(app_response)
-
-                def next_chunk() -> bytes | None:
+                return await asyncio.shield(future)
+            except asyncio.CancelledError:
+                if cancel_pending and submitted.cancel():
+                    raise
+                # Cancellation cannot interrupt a callback that is already running.
+                # Wait even if cancelled again, so cleanup can safely use this context.
+                while not future.done():
                     try:
-                        return next(app_response_iter)
-                    except StopIteration:
-                        # StopIteration is special and is not allowed to pass through
-                        # coroutines normally.
-                        return None
-
-                while True:
-                    chunk = await loop.run_in_executor(self.executor, next_chunk)
-                    if chunk is None:
+                        await asyncio.shield(future)
+                    except asyncio.CancelledError:
+                        continue
+                    except Exception:
                         break
-                    response.append(chunk)
-            finally:
-                if hasattr(app_response, "close"):
-                    app_response.close()
-        else:
-            # Keep cleanup in the same job as the application and iteration. It
-            # must not queue behind an application waiting for resources it
-            # releases, or overlap iteration if the awaiting coroutine is cancelled.
-            await loop.run_in_executor(self.executor, run_application)
+                if not future.cancelled():
+                    future.exception()
+                raise
+
+        try:
+            iterable = await run(call_application)
+
+            def get_iterator() -> Iterator[bytes]:
+                try:
+                    return iter(iterable)
+                except BaseException:
+                    close_response()
+                    raise
+
+            iterator = await run(get_iterator)
+
+            def next_chunk() -> bytes | None:
+                try:
+                    chunk = next(iterator, None)
+                except BaseException:
+                    close_response()
+                    raise
+                if chunk is None:
+                    # Close before releasing the worker on exhaustion.
+                    close_response()
+                return chunk
+
+            while True:
+                chunk = await run(next_chunk)
+                if chunk is None:
+                    break
+                response.append(chunk)
+        finally:
+            if app_response is not None:
+                await run(close_response, cancel_pending=False)
         body = b"".join(response)
         if not data:
             raise Exception("WSGI app did not call start_response")
@@ -230,6 +258,11 @@ class WSGIContainer:
         header_obj = httputil.HTTPHeaders()
         for key, value in headers:
             header_obj.add(key, value)
+        if request.method == "HEAD":
+            # Like RequestHandler, send only the headers for HEAD requests.
+            # Many WSGI applications return the full body and leave it to
+            # the server to discard it.
+            body = b""
         assert request.connection is not None
         request.connection.write_headers(start_line, header_obj, chunk=body)
         request.connection.finish()
@@ -241,12 +274,8 @@ class WSGIContainer:
         .. versionchanged:: 6.3
            No longer a static method.
         """
-        hostport = request.host.split(":")
-        if len(hostport) == 2:
-            host = hostport[0]
-            port = int(hostport[1])
-        else:
-            host = request.host
+        host, port = httputil.split_host_and_port(request.host)
+        if port is None:
             port = 443 if request.protocol == "https" else 80
         environ = {
             "REQUEST_METHOD": request.method,

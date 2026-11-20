@@ -453,7 +453,9 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             curl.setopt(pycurl.PROTOCOLS, pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS)
             curl.setopt(pycurl.REDIR_PROTOCOLS, pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS)
 
-        curl.setopt(pycurl.URL, native_str(request.url))
+        # libcurl only accepts ASCII URLs (and only converts IDN hostnames when
+        # it is built with IDN support), so do the conversion ourselves.
+        curl.setopt(pycurl.URL, httputil._url_to_ascii(native_str(request.url)))
 
         # libcurl's magic "Expect: 100-continue" behavior causes delays
         # with servers that don't support it (which include, among others,
@@ -462,8 +464,11 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         # (https://sourceforge.net/tracker/?func=detail&atid=100976&aid=3039744&group_id=976),
         # which increases the delays.  It's more trouble than it's worth,
         # so just turn off the feature (yes, setting Expect: to an empty
-        # value is the official way to disable this)
-        if "Expect" not in request.headers:
+        # value is the official way to disable this) unless the caller asked
+        # for it.
+        if request.expect_100_continue:
+            request.headers["Expect"] = "100-continue"
+        elif "Expect" not in request.headers:
             request.headers["Expect"] = ""
 
         # libcurl adds Pragma: no-cache by default; disable that too
@@ -709,15 +714,19 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             return
         headers.parse_line(header_line)
 
-    def _curl_debug(self, debug_type: int, debug_msg: str) -> None:
+    def _curl_debug(self, debug_type: int, debug_msg: bytes) -> None:
         debug_types = ("I", "<", ">", "<", ">")
-        if debug_type == 0:
-            debug_msg = native_str(debug_msg)
-            curl_log.debug("%s", debug_msg.strip())
-        elif debug_type in (1, 2):
-            debug_msg = native_str(debug_msg)
-            for line in debug_msg.splitlines():
-                curl_log.debug("%s %s", debug_types[debug_type], line)
+        if debug_type in (0, 1, 2):
+            try:
+                message = native_str(debug_msg)
+            except UnicodeDecodeError:
+                # libcurl's debug messages are not necessarily UTF-8.
+                message = repr(debug_msg)
+            if debug_type == 0:
+                curl_log.debug("%s", message.strip())
+            else:
+                for line in message.splitlines():
+                    curl_log.debug("%s %s", debug_types[debug_type], line)
         elif debug_type == 4:
             curl_log.debug("%s %r", debug_types[debug_type], debug_msg)
 

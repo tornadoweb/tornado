@@ -13,6 +13,9 @@ Tornado uses GitHub's security advisory functionality for private vulnerability
 reports. To make a private report, use the "Report a vulnerability" button on
 https://github.com/tornadoweb/tornado/security/advisories
 
+Vulnerability reports are also accepted via email to python.tornado.security@gmail.com.
+The GitHub security advisory feature is the preferred method when possible.
+
 ## Denial of service
 
 Any server spends CPU time processing the requests it receives, so the fact
@@ -27,3 +30,16 @@ A report of a denial-of-service vulnerability should demonstrate either an
 input that costs substantially more CPU per byte than this baseline, or one
 that blocks the event loop (stalling all other connections) for substantially
 longer than this.
+
+## Tests for security fixes
+
+A security fix should have the unit tests appropriate to the code it
+changes, and also a test in `tornado/test/security_corpus_test.py`. That
+file sends the trigger input of each past vulnerability to a real server
+(or explains where the tests are for fixes that can't be reached that
+way), and checks only what a client can see, so that its tests keep
+working when the code they cover is rewritten.
+
+Security changes should generally have both positive and negative test 
+cases. The tests should show both that the change blocks or mitigates the
+vulnerability, and also that it does not negatively impact harmless traffic.

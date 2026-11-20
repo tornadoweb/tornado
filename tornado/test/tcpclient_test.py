@@ -14,10 +14,12 @@
 # under the License.
 import asyncio
 import getpass
+import os
 import socket
 import ssl
 import typing
 from contextlib import closing
+from unittest import mock
 
 from tornado.concurrent import Future
 from tornado.iostream import IOStream
@@ -40,8 +42,8 @@ AF1, AF2 = 1, 2
 
 
 class TestTCPServer(TCPServer):
-    def __init__(self, family):
-        super().__init__()
+    def __init__(self, family, ssl_options=None):
+        super().__init__(ssl_options=ssl_options)
         self.streams: list[IOStream] = []
         self.queue: Queue[IOStream] = Queue()
         sockets = bind_sockets(0, "localhost", family)
@@ -64,8 +66,8 @@ class TCPClientTest(AsyncTestCase):
         self.server = None
         self.client = TCPClient()
 
-    def start_server(self, family):
-        self.server = TestTCPServer(family)
+    def start_server(self, family, ssl_options=None):
+        self.server = TestTCPServer(family, ssl_options=ssl_options)
         return self.server.port
 
     def stop_server(self):
@@ -190,6 +192,68 @@ class TCPClientTest(AsyncTestCase):
     async def test_connect_tls_cancel_with_timeout_closes_stream(self):
         # A timeout is set but the caller cancels first.
         await self.do_test_connect_tls_cancel(timeout=3600)
+
+    async def do_test_connect_completed_cancel(self, tls, timeout):
+        server_ssl_options = None
+        if tls:
+            server_ssl_options = dict(
+                certfile=os.path.join(os.path.dirname(__file__), "test.crt"),
+                keyfile=os.path.join(os.path.dirname(__file__), "test.key"),
+            )
+        port = self.start_server(socket.AF_INET, ssl_options=server_ssl_options)
+        target, method = (IOStream, "start_tls") if tls else (_Connector, "start")
+        original = getattr(target, method)
+        completed_streams = []
+
+        def cancel_after_completion(future):
+            if not future.cancelled() and future.exception() is None:
+                result = future.result()
+                completed_streams.append(result if tls else result[2])
+                connect_future.cancel()
+
+        def start(*args, **kwargs):
+            future = original(*args, **kwargs)
+            # The real connection completes, then the caller is cancelled
+            # before TCPClient.connect can take ownership of its result.
+            future.add_done_callback(cancel_after_completion)
+            return future
+
+        try:
+            with mock.patch.object(target, method, start):
+                connect_future = asyncio.ensure_future(
+                    self.client.connect(
+                        "127.0.0.1",
+                        port,
+                        ssl_options=self.tls_context() if tls else None,
+                        timeout=timeout,
+                    )
+                )
+                with self.assertRaises(asyncio.CancelledError):
+                    await connect_future
+            self.assertEqual(len(completed_streams), 1)
+            self.assertTrue(completed_streams[0].closed())
+            assert self.server is not None
+            server_stream = await self.server.queue.get()
+            await server_stream.read_until_close()
+        finally:
+            for stream in completed_streams:
+                stream.close()
+
+    @gen_test
+    async def test_connect_completed_cancel_closes_stream(self):
+        await self.do_test_connect_completed_cancel(tls=False, timeout=None)
+
+    @gen_test
+    async def test_connect_completed_cancel_with_timeout_closes_stream(self):
+        await self.do_test_connect_completed_cancel(tls=False, timeout=3600)
+
+    @gen_test
+    async def test_connect_tls_completed_cancel_closes_stream(self):
+        await self.do_test_connect_completed_cancel(tls=True, timeout=None)
+
+    @gen_test
+    async def test_connect_tls_completed_cancel_with_timeout_closes_stream(self):
+        await self.do_test_connect_completed_cancel(tls=True, timeout=3600)
 
     def test_source_ip_fail(self):
         """Fail when trying to use the source IP Address '8.8.8.8'."""

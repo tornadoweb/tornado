@@ -53,7 +53,7 @@ from tornado.concurrent import (
 )
 from tornado.escape import native_str, utf8
 from tornado.ioloop import IOLoop
-from tornado.util import Configurable
+from tornado.util import Configurable, _restore_exception
 
 
 class HTTPClient:
@@ -479,8 +479,9 @@ class HTTPRequest:
         :arg bool allow_ipv6: Use IPv6 when available?  Default is True.
         :arg bool expect_100_continue: If true, send the
            ``Expect: 100-continue`` header and wait for a continue response
-           before sending the request body.  Only supported with
-           ``simple_httpclient``.
+           before sending the request body.  With ``curl_httpclient``,
+           libcurl sends the body anyway if no response arrives within
+           one second.
 
         .. note::
 
@@ -510,6 +511,9 @@ class HTTPRequest:
            With ``simple_httpclient``, ``streaming_callback`` may be a
            coroutine; the next chunk is not read until it completes. This
            is not supported by ``curl_httpclient``.
+
+        .. versionchanged:: 6.7
+           ``expect_100_continue`` is now supported by ``curl_httpclient``.
         """
         # Note that some of these attributes go through property setters
         # defined below.
@@ -726,6 +730,12 @@ class HTTPClientError(Exception):
 
     def __str__(self) -> str:
         return "HTTP %d: %s" % (self.code, self.message)
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        # Subclasses (such as simple_httpclient.HTTPTimeoutError) have
+        # constructors that don't accept self.args, so the default
+        # implementation can't unpickle them.
+        return (_restore_exception, (type(self), self.args, self.__dict__))
 
     # There is a cyclic reference between self and self.response,
     # which breaks the default __repr__ implementation.

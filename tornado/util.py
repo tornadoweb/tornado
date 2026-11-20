@@ -501,6 +501,21 @@ class ArgReplacer:
         return old_value, args, kwargs
 
 
+def _restore_exception(
+    cls: type[BaseException], args: tuple[Any, ...], state: dict[str, Any]
+) -> BaseException:
+    """Unpickle an exception without calling its ``__init__``.
+
+    Used by ``__reduce__`` methods of exception classes whose constructor
+    signatures don't match their ``args`` (which is what the default
+    `BaseException.__reduce__` passes to the constructor).
+    """
+    e = cls.__new__(cls, *args)
+    e.args = args
+    e.__dict__.update(state)
+    return e
+
+
 def timedelta_to_seconds(td: datetime.timedelta) -> float:
     """Equivalent to ``td.total_seconds()`` (introduced in Python 2.7)."""
     return td.total_seconds()

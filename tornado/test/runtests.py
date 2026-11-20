@@ -44,6 +44,7 @@ TEST_MODULES = [
     "tornado.test.property_test",
     "tornado.test.queues_test",
     "tornado.test.routing_test",
+    "tornado.test.security_corpus_test",
     "tornado.test.simple_httpclient_test",
     "tornado.test.tcpclient_test",
     "tornado.test.tcpserver_test",

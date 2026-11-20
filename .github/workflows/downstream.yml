@@ -14,14 +14,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build:
+    name: Build wheel
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          # [[[cog cog.outl(f"python-version: '3.{default_python_minor}'")]]]
+          python-version: '3.13'
+          # [[[end]]]
+      - name: Build wheel
+        env:
+          # Fail instead of silently building a wheel without the extension.
+          TORNADO_EXTENSION: "1"
+        run: python -m pip wheel --no-deps -w dist . && ls -l dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tornado-dist
+          path: ./dist/tornado-*.whl
+
   downstream:
     name: Downstream testbed
-    if: github.repository == 'tornadoweb/tornado'
+    needs: build
     uses: tornadoweb/tornado-testbed/.github/workflows/testbed.yml@main
     with:
-      # Pin to the pushed commit, not the branch name, so a later push
-      # can't change what this run tests.
-      tornado_spec: git+https://github.com/tornadoweb/tornado.git@${{ github.sha }}
+      # The testbed shares this workflow run, so it downloads the wheel
+      # built above. That tests exactly this commit, and needs no access to
+      # this repository (which may be private).
+      tornado_artifact: tornado-dist
       # [[[cog cog.outl(f"python_version: '3.{default_python_minor}'")]]]
       python_version: '3.13'
       # [[[end]]]

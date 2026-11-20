@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import gzip
 import logging
@@ -33,7 +34,7 @@ from tornado.httputil import (
     HTTPServerConnectionDelegate,
     ResponseStartLine,
 )
-from tornado.iostream import IOStream
+from tornado.iostream import IOStream, StreamClosedError
 from tornado.locks import Event
 from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
@@ -44,6 +45,7 @@ from tornado.test.util import (
     TestCase,
     abstract_base_test,
     assert_memory_budget,
+    curl_uses_schannel,
     skipNotCPython,
 )
 from tornado.testing import ExpectLog, gen_test
@@ -129,14 +131,100 @@ class SSLTest(AsyncHTTPSTestCase):
                         raise_error=True,
                     )
 
-    def test_error_logging(self):
+    @gen_test
+    async def test_error_logging(self):
         # No stack traces are logged for SSL errors.
+        #
+        # Send plaintext over a raw stream and wait for the server to close
+        # the connection. The server logs the error before it closes, so the
+        # close guarantees the message has been logged. This test used to use
+        # self.fetch, but the client's error is not a reliable signal that the
+        # server has handled the bad handshake: in particular, fetch's own
+        # timeout raises TimeoutError, which is an IOError, so a slow exchange
+        # passed the assertRaises and then failed in ExpectLog with no
+        # indication of what had happened.
         with ExpectLog(gen_log, "SSL Error") as expect_log:
-            with self.assertRaises((IOError, HTTPError)):
-                self.fetch(
-                    self.get_url("/").replace("https:", "http:"), raise_error=True
-                )
+            stream = IOStream(socket.socket())
+            with closing(stream):
+                await stream.connect(("127.0.0.1", self.get_http_port()))
+                await stream.write(b"GET / HTTP/1.0\r\n\r\n")
+                try:
+                    await stream.read_until_close()
+                except StreamClosedError:
+                    # The server may reset the connection instead of closing
+                    # it cleanly, since it does not read the whole request.
+                    pass
         self.assertFalse(expect_log.logged_stack)
+
+
+class SSLClientCertificateTest(AsyncHTTPSTestCase):
+    def get_app(self):
+        class CertificateHandler(RequestHandler):
+            def get(self):
+                binary_form = self.get_argument("binary_form", None)
+                if binary_form is None:
+                    certificate = self.request.get_ssl_certificate()
+                else:
+                    certificate = self.request.get_ssl_certificate(
+                        binary_form=binary_form == "true"
+                    )
+                if certificate is None:
+                    self.set_status(204)
+                else:
+                    self.write(certificate)
+
+        return Application([("/", CertificateHandler)])
+
+    def get_ssl_options(self):
+        options = super().get_ssl_options()
+        options.update(cert_reqs=ssl.CERT_OPTIONAL, ca_certs=options["certfile"])
+        return options
+
+    def skip_if_client_cert_unsupported(self):
+        if curl_uses_schannel():
+            from tornado.curl_httpclient import CurlAsyncHTTPClient
+
+            if isinstance(self.http_client, CurlAsyncHTTPClient):
+                self.skipTest("schannel cannot load PEM client certificates from files")
+
+    def test_get_ssl_certificate(self):
+        self.skip_if_client_cert_unsupported()
+        options = self.get_ssl_options()
+        for path in ["/", "/?binary_form=false"]:
+            with self.subTest(path=path):
+                response = self.fetch(
+                    path,
+                    client_cert=options["certfile"],
+                    client_key=options["keyfile"],
+                    raise_error=True,
+                )
+                certificate = json_decode(response.body)
+                self.assertEqual(
+                    certificate["subject"], [[["commonName", "foo.example.com"]]]
+                )
+                self.assertEqual(
+                    certificate["subjectAltName"], [["DNS", "foo.example.com"]]
+                )
+
+    def test_get_ssl_certificate_binary(self):
+        self.skip_if_client_cert_unsupported()
+        options = self.get_ssl_options()
+        response = self.fetch(
+            "/?binary_form=true",
+            client_cert=options["certfile"],
+            client_key=options["keyfile"],
+            raise_error=True,
+        )
+        with open(options["certfile"], encoding="ascii") as cert_file:
+            expected = ssl.PEM_cert_to_DER_cert(cert_file.read())
+        self.assertEqual(response.body, expected)
+
+    def test_no_client_certificate(self):
+        for path in ["/", "/?binary_form=false", "/?binary_form=true"]:
+            with self.subTest(path=path):
+                response = self.fetch(path, raise_error=True)
+                self.assertEqual(response.code, 204)
+                self.assertEqual(response.body, b"")
 
 
 class BadSSLOptionsTest(TestCase):
@@ -194,6 +282,34 @@ class MultipartTestHandler(RequestHandler):
 
 # This test is also called from wsgi_test
 class HTTPConnectionTest(AsyncHTTPTestCase):
+    def test_multipart_content_type_case(self):
+        body = (
+            b"--AaB03x\r\n"
+            b'Content-Disposition: form-data; name="argument"\r\n\r\nValue\r\n'
+            b"--AaB03x\r\n"
+            b'Content-Disposition: form-data; name="files"; filename="Report.TXT"\r\n'
+            b"\r\nHello\r\n--AaB03x--\r\n"
+        )
+        response = self.fetch(
+            "/multipart",
+            method="POST",
+            headers={
+                "Content-Type": 'Multipart/Form-Data; BOUNDARY="AaB03x"',
+                "X-Header-Encoding-Test": "Header",
+            },
+            body=body,
+        )
+        self.assertEqual(response.code, 200)
+        self.assertEqual(
+            json_decode(response.body),
+            {
+                "header": "Header",
+                "argument": "Value",
+                "filename": "Report.TXT",
+                "filebody": "Hello",
+            },
+        )
+
     def get_handlers(self):
         return [
             ("/multipart", MultipartTestHandler),
@@ -348,6 +464,16 @@ class PostEchoGBKHandler(PostEchoHandler):
 
 
 class HTTPServerTest(AsyncHTTPTestCase):
+    def test_post_content_type_case(self):
+        response = self.fetch(
+            "/echo",
+            method="POST",
+            headers={"Content-Type": "Application/X-WWW-Form-Urlencoded"},
+            body="Name=Value&Name=Other",
+        )
+        self.assertEqual(response.code, 200)
+        self.assertEqual(json_decode(response.body), {"Name": ["Value", "Other"]})
+
     def get_app(self):
         return Application(
             [
@@ -471,6 +597,19 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
             self.assertEqual("HTTP/1.1", start_line.version)
             self.assertEqual(400, start_line.code)
             self.assertEqual("Bad Request", start_line.reason)
+
+    def test_invalid_host_header_with_huge_port(self):
+        # More digits than int() accepts by default (sys.get_int_max_str_digits).
+        with ExpectLog(
+            gen_log, ".*Malformed HTTP message.*Invalid Host header", level=logging.INFO
+        ):
+            self.stream.write(
+                b"GET / HTTP/1.0\r\nHost: foo:" + b"1" * 5000 + b"\r\n\r\n"
+            )
+            start_line, headers, response = self.io_loop.run_sync(
+                lambda: read_stream_body(self.stream)
+            )
+            self.assertEqual(400, start_line.code)
 
     def test_chunked_request_body(self):
         # Chunked requests are not widely supported and we don't have a way
@@ -601,6 +740,25 @@ ok
         self.assertEqual(400, start_line.code)
 
     @gen_test
+    def test_content_length_list_whitespace(self):
+        # A list of identical Content-Lengths is allowed, but only HTTP
+        # whitespace (space and tab) may follow the commas, not other
+        # characters that Python considers whitespace.
+        for sep in [b"\xa0", b"\x85"]:
+            with self.subTest(sep=sep), closing(IOStream(socket.socket())) as stream:
+                with ExpectLog(
+                    gen_log, ".*Multiple unequal Content-Lengths", level=logging.INFO
+                ):
+                    yield stream.connect(("127.0.0.1", self.get_http_port()))
+                    stream.write(
+                        b"POST /echo HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                        b"Content-Length: 5," + sep + b"5\r\n"
+                        b"Connection: close\r\n\r\nhello"
+                    )
+                    start_line, headers, response = yield read_stream_body(stream)
+                    self.assertEqual(400, start_line.code)
+
+    @gen_test
     def test_invalid_content_length(self):
         # HTTP only allows decimal digits in content-length. Make sure we don't
         # accept anything else, with special attention to things accepted by the
@@ -673,7 +831,14 @@ class XHeaderTest(HandlerBaseTestCase):
             )
 
     def get_httpserver_options(self):
-        return dict(xheaders=True, trusted_downstream=["5.5.5.5"])
+        return dict(
+            xheaders=True,
+            trusted_downstream=[
+                "5.5.5.5",
+                "2620:0:1cfe:face:b00c::5",
+                "[2620:0:1cfe:face:b00c::6]",
+            ],
+        )
 
     def test_ip_headers(self):
         self.assertEqual(self.fetch_json("/")["remote_ip"], "127.0.0.1")
@@ -700,6 +865,35 @@ class XHeaderTest(HandlerBaseTestCase):
             "2620:0:1cfe:face:b00c::3",
         )
 
+        bracketed_ipv6 = {"X-Real-IP": "[2620:0:1cfe:face:b00c::3]"}
+        self.assertEqual(
+            self.fetch_json("/", headers=bracketed_ipv6)["remote_ip"],
+            "2620:0:1cfe:face:b00c::3",
+        )
+
+        bracketed_ipv6_list = {"X-Forwarded-For": "::1, [2620:0:1cfe:face:b00c::3]"}
+        self.assertEqual(
+            self.fetch_json("/", headers=bracketed_ipv6_list)["remote_ip"],
+            "2620:0:1cfe:face:b00c::3",
+        )
+
+        # Only a bare IPv6 address may be bracketed.
+        for invalid_bracketed in (
+            "[4.4.4.4]",
+            "[www.google.com]",
+            "[]",
+            "[[::1]]",
+            "[::1]]",
+        ):
+            with self.subTest(invalid_bracketed):
+                for header in ("X-Forwarded-For", "X-Real-IP"):
+                    self.assertEqual(
+                        self.fetch_json("/", headers={header: invalid_bracketed})[
+                            "remote_ip"
+                        ],
+                        "127.0.0.1",
+                    )
+
         invalid_chars = {"X-Real-IP": "4.4.4.4<script>"}
         self.assertEqual(
             self.fetch_json("/", headers=invalid_chars)["remote_ip"], "127.0.0.1"
@@ -724,6 +918,18 @@ class XHeaderTest(HandlerBaseTestCase):
             self.skipTest("requires HTTP/1.x")
         result = json_decode(resp.body)
         self.assertEqual(result["remote_ip"], "4.4.4.4")
+
+        for trusted_ipv6 in (
+            "2620:0:1cfe:face:b00c::5",
+            "[2620:0:1cfe:face:b00c::5]",
+            "2620:0:1cfe:face:b00c::6",
+            "[2620:0:1cfe:face:b00c::6]",
+        ):
+            with self.subTest(trusted_ipv6):
+                headers = {"X-Forwarded-For": f"127.0.0.1, 4.4.4.4, {trusted_ipv6}"}
+                self.assertEqual(
+                    self.fetch_json("/", headers=headers)["remote_ip"], "4.4.4.4"
+                )
 
     def test_scheme_headers(self):
         self.assertEqual(self.fetch_json("/")["remote_protocol"], "http")
@@ -1403,6 +1609,59 @@ class IdleTimeoutTest(AsyncHTTPTestCase):
 
         # Now let the timeout trigger and close the connection.
         yield event.wait()
+
+
+class HeaderTimeoutTest(AsyncHTTPTestCase):
+    # A connection can wait a long time (idle_connection_timeout) for a
+    # request to start, but once it starts, its headers must arrive within
+    # header_timeout.
+    def get_app(self):
+        return Application([("/", HelloWorldRequestHandler)])
+
+    def get_httpserver_options(self):
+        return dict(idle_connection_timeout=10, header_timeout=0.1)
+
+    async def connect(self) -> IOStream:
+        stream = IOStream(socket.socket())
+        self.addCleanup(stream.close)
+        await stream.connect(("127.0.0.1", self.get_http_port()))
+        return stream
+
+    async def get(self, stream: IOStream) -> None:
+        await stream.write(b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+        await stream.read_until(b"\r\n\r\n")
+        self.assertEqual(await stream.read_bytes(11), b"Hello world")
+
+    @gen_test
+    async def test_idle_longer_than_header_timeout(self):
+        # Waiting longer than header_timeout before a request, on a new or a
+        # kept-alive connection, is fine.
+        stream = await self.connect()
+        for i in range(2):
+            await asyncio.sleep(0.3)
+            await self.get(stream)
+
+    @gen_test
+    async def test_slow_headers(self):
+        stream = await self.connect()
+        await stream.write(b"GET / HTTP/1.1\r\n")
+        # The server closes the connection (or this times out).
+        await asyncio.wait_for(stream.read_until_close(), 5)
+
+    @gen_test
+    async def test_slow_headers_after_idle(self):
+        # The header timeout starts with the request's first byte, not when
+        # the connection starts waiting for it.
+        stream = await self.connect()
+        await self.get(stream)
+        await asyncio.sleep(0.3)
+        await stream.write(b"GET / HTTP/1.1\r\n")
+        await asyncio.sleep(0.05)
+        await stream.write(b"Host: 127.0.0.1\r\n\r\n")
+        await stream.read_until(b"\r\n\r\n")
+        self.assertEqual(await stream.read_bytes(11), b"Hello world")
+        await stream.write(b"GET / HTTP/1.1\r\n")
+        await asyncio.wait_for(stream.read_until_close(), 5)
 
 
 class BodyLimitsTest(AsyncHTTPTestCase):

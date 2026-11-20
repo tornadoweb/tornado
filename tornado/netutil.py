@@ -51,6 +51,22 @@ def _client_ssl_defaults() -> ssl.SSLContext:
 
 
 @functools.lru_cache(maxsize=1)
+def _client_ssl_noverify() -> ssl.SSLContext:
+    # The context used for client connections with validate_cert=False.
+    # Creating a context is surprisingly expensive because
+    # create_default_context loads the platform's CA certificates (even though
+    # we will not use them here). This takes a few milliseconds on Linux and
+    # tens of milliseconds on Windows, so we cache the context instead of
+    # making a new one for every request.
+    ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    if hasattr(ssl, "OP_NO_COMPRESSION"):
+        ctx.options |= ssl.OP_NO_COMPRESSION
+    return ctx
+
+
+@functools.lru_cache(maxsize=1)
 def _server_ssl_defaults() -> ssl.SSLContext:
     ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     if hasattr(ssl, "OP_NO_COMPRESSION"):

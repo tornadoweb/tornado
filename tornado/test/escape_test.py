@@ -1,9 +1,14 @@
+from collections.abc import Callable
 from typing import Any
+
+import urllib.parse
 
 import tornado
 from tornado.escape import (
+    _unquote_to_bytes,
     json_decode,
     json_encode,
+    parse_qs_bytes,
     recursive_unicode,
     squeeze,
     to_unicode,
@@ -209,7 +214,7 @@ linkify_tests: list[tuple[str | bytes, dict[str, Any], str]] = [
 ]
 
 
-from tornado.test.util import TestCase
+from tornado.test.util import TestCase, assert_memory_budget, skipNotCPython
 
 
 class EscapeTestCase(TestCase):
@@ -231,6 +236,26 @@ class EscapeTestCase(TestCase):
         for unescaped, escaped in tests:
             self.assertEqual(utf8(xhtml_escape(unescaped)), utf8(escaped))
             self.assertEqual(utf8(unescaped), utf8(xhtml_unescape(escaped)))
+
+    @skipNotCPython
+    def test_memory_budget(self):
+        # Worst cases found as of 2026-10 are about 20 bytes per input byte:
+        # many short links, many unknown entities, and non-ASCII text in
+        # url_escape (each character becomes six). Applications may pass
+        # these functions arbitrarily large user input, so the point is a
+        # fixed ratio rather than an absolute bound.
+        cases: list[tuple[str, Callable[[str], object], str]] = [
+            ("xhtml_escape", xhtml_escape, "<" * 60_000),
+            ("xhtml_unescape", xhtml_unescape, "&a;" * 20_000),
+            ("linkify", tornado.escape.linkify, "www.a " * 10_000),
+            ("url_escape", url_escape, "\u00e9<" * 30_000),
+        ]
+        for name, func, data in cases:
+            with self.subTest(name):
+                with assert_memory_budget(
+                    len(data), max_ratio=30, msg=f"{name} uses too much memory"
+                ):
+                    func(data)
 
     def test_xhtml_unescape_numeric(self):
         tests = [
@@ -318,3 +343,51 @@ class EscapeTestCase(TestCase):
         self.assertEqual(recursive_unicode(tests["list"]), ["foo", "bar"])
         self.assertEqual(recursive_unicode(tests["tuple"]), ("foo", "bar"))
         self.assertEqual(recursive_unicode(tests["bytes"]), "foo")
+
+    def test_unquote_to_bytes(self):
+        # Cases where binascii.a2b_qp, which _unquote_to_bytes uses, differs
+        # from percent-decoding.
+        for data in [
+            b"",
+            b"a=b",
+            b"%41%3d%3D%25",
+            b"%%41",
+            b"%%%",
+            b"%zz%4",
+            b"%",
+            b"a%",
+            b"%\r\nb",
+            b"%\rb\nc",
+            b"%\n",
+            b"=%41=",
+            b"a \r\n%20\t",
+            bytes(range(256)),
+        ]:
+            with self.subTest(data):
+                self.assertEqual(
+                    _unquote_to_bytes(data), urllib.parse.unquote_to_bytes(data)
+                )
+
+    def test_parse_qs_bytes(self):
+        self.assertEqual(
+            parse_qs_bytes(b"a=1&b=%41+%2B&a=2&&c&d=", keep_blank_values=True),
+            {"a": [b"1", b"2"], "b": [b"A +"], "c": [b""], "d": [b""]},
+        )
+        self.assertEqual(parse_qs_bytes("%E9=%E9"), {"\xe9": [b"\xe9"]})
+        self.assertEqual(parse_qs_bytes(b"c&d=", keep_blank_values=False), {})
+        with self.assertRaises(ValueError):
+            parse_qs_bytes(b"a=1&&b=2", strict_parsing=True)
+        with self.assertRaises(ValueError):
+            parse_qs_bytes(b"a=1&b=2", max_num_fields=1)
+
+    @skipNotCPython
+    def test_unquote_memory_budget(self):
+        # The standard library's unquote creates an object per %, about 20
+        # bytes per input byte (more on Python 3.11). Lone % signs are the
+        # worst case here (about 8 as of 2026-10).
+        for data in [b"%41" * 100_000, b"%" * 300_000]:
+            with self.subTest(data[:3]):
+                with assert_memory_budget(
+                    len(data), max_ratio=12, msg="unquote uses too much memory"
+                ):
+                    parse_qs_bytes(b"a=" + data)
