@@ -523,11 +523,28 @@ class BaseIOStream:
            no bytes read).
         """
         # Trigger the first read synchronously so that an inline read
-        # error (for example from a closed stream whose read buffer is
-        # empty, or from a test that patches _try_inline_read) is raised
-        # from read_until_close() itself rather than from the returned
-        # future. This matches the historical behavior of this method.
-        pending = self.read_bytes(self.max_buffer_size, partial=True)
+        # error (for example from a test that patches _try_inline_read
+        # to raise IOError) is raised from read_until_close() itself
+        # rather than from the returned future. This matches the
+        # historical behavior of this method.
+        try:
+            pending = self.read_bytes(self.max_buffer_size, partial=True)
+        except StreamClosedError as e:
+            # The stream was already closed before we could issue the
+            # first read, and its read buffer was empty (otherwise
+            # read_bytes would have returned a future resolved with
+            # those bytes instead of raising from _check_closed). The
+            # historical behavior of read_until_close on an
+            # already-closed-and-drained stream was to resolve to b""
+            # rather than raise, so mirror the loop's connreset/clean
+            # close branch here. A real underlying error recorded via
+            # close(exc_info=...) still propagates synchronously, which
+            # also matches read_bytes on the same stream.
+            if e.real_error is None or self._is_connreset(e.real_error):
+                fut: "Future[bytes]" = Future()
+                fut.set_result(b"")
+                return fut
+            raise
         return asyncio.ensure_future(self._read_until_close_loop(pending))
 
     async def _read_until_close_loop(self, pending: Awaitable[bytes]) -> bytes:

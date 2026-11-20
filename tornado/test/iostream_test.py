@@ -1102,6 +1102,41 @@ class TestIOStreamMixin(TestReadWriteMixin):
             server.close()
             client.close()
 
+    @gen_test
+    def test_read_until_close_already_closed(self):
+        # read_until_close on a stream that is already closed with an
+        # empty read buffer must resolve to b"" rather than raising. On
+        # Windows SSL streams this surfaces as a synchronous
+        # StreamClosedError out of the initial read_bytes call (via
+        # _try_inline_read -> _check_closed) — the Linux close path hits
+        # the same branch deterministically.
+        server, client = yield self.make_iostream_pair()
+        try:
+            client.close()
+            self.assertTrue(client.closed())
+            data = yield client.read_until_close()
+            self.assertEqual(data, b"")
+        finally:
+            server.close()
+            client.close()
+
+    @gen_test
+    def test_read_until_close_already_error_closed(self):
+        # If the stream was already closed with a real error (via
+        # close(exc_info=...)) before read_until_close is called, the
+        # error must propagate — matching read_bytes on the same stream
+        # and the loop's error-close branch.
+        server, client = yield self.make_iostream_pair()
+        try:
+            client.close(exc_info=IOError("boom"))
+            self.assertTrue(client.closed())
+            with self.assertRaises(StreamClosedError) as cm:
+                yield client.read_until_close()
+            self.assertIsInstance(cm.exception.real_error, IOError)
+        finally:
+            server.close()
+            client.close()
+
     @skipIfNonUnix
     @gen_test
     def test_inline_read_error(self):
