@@ -17,8 +17,10 @@ import gc
 import io
 import logging
 import socket
+import sys
 import threading
 import time
+import unittest
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 
@@ -403,6 +405,10 @@ class SelectorThreadTest(TestCase):
         self.assertEqual(waker.sends, 1)
 
 
+@unittest.skipIf(
+    sys.version_info >= (3, 16),
+    "event loop policies removed in Python 3.16",
+)
 class AnyThreadEventLoopPolicyTest(TestCase):
     def setUp(self):
         setup_with_context_manager(self, ignore_deprecation())
