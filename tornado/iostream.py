@@ -1452,6 +1452,13 @@ class SSLIOStream(IOStream):
                     peer = self.socket.getpeername()
                 except Exception:
                     peer = "(not connected)"
+                if self.socket.server_side and self._is_tls_alert(err):
+                    # TLS alerts (such as client certificate verification
+                    # failures) do not indicate a server-side problem.
+                    gen_log.debug(
+                        "SSL Error on %s %s: %s", self.socket.fileno(), peer, err
+                    )
+                    return self.close(exc_info=err)
                 # Client handshake failures are delivered through the Future
                 # returned by connect() or start_tls(). Let the caller decide
                 # whether to log them; the server has no such error consumer.
@@ -1637,6 +1644,14 @@ class SSLIOStream(IOStream):
         if isinstance(e, ssl.SSLError) and e.args[0] == ssl.SSL_ERROR_EOF:
             return True
         return super()._is_connreset(e)
+
+    def _is_tls_alert(self, err: BaseException) -> bool:
+        if isinstance(err, ssl.SSLError):
+            reason = getattr(err, "reason", None)
+            if reason and "ALERT" in reason.upper():
+                return True
+            return "alert" in str(err).lower()
+        return False
 
 
 class PipeIOStream(BaseIOStream):

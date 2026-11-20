@@ -1316,31 +1316,25 @@ class TestIOStreamStartTLS(AsyncTestCase):
     def test_handshake_fail(self):
         server_future = self.server_start_tls(_server_ssl_options())
         # Certificates are verified with the default configuration.
-        # The client reports its error through the Future. Depending on the
-        # platform, the server may see a TLS alert or only a connection reset.
-        with ExpectLog(gen_log, "SSL Error", required=False):
-            client_future = self.client_start_tls(server_hostname="localhost")
-            with self.assertRaises(ssl.SSLError):
-                yield client_future
-            with self.assertRaises((ssl.SSLError, socket.error)):
-                yield server_future
+        client_future = self.client_start_tls(server_hostname="localhost")
+        with self.assertRaises(ssl.SSLError):
+            yield client_future
+        with self.assertRaises((ssl.SSLError, socket.error)):
+            yield server_future
 
     @gen_test
     def test_check_hostname(self):
         # Test that server_hostname parameter to start_tls is being used.
         server_future = self.server_start_tls(_server_ssl_options())
-        # The client reports its error through the Future. Depending on the
-        # platform, the server may see a TLS alert or only a connection reset.
-        with ExpectLog(gen_log, "SSL Error", required=False):
-            client_future = self.client_start_tls(
-                ssl.create_default_context(), server_hostname="127.0.0.1"
-            )
-            with self.assertRaises(ssl.SSLError):
-                # The client fails to connect with an SSL error.
-                yield client_future
-            with self.assertRaises(Exception):
-                # The server fails to connect, but the exact error is unspecified.
-                yield server_future
+        client_future = self.client_start_tls(
+            ssl.create_default_context(), server_hostname="127.0.0.1"
+        )
+        with self.assertRaises(ssl.SSLError):
+            # The client fails to connect with an SSL error.
+            yield client_future
+        with self.assertRaises(Exception):
+            # The server fails to connect, but the exact error is unspecified.
+            yield server_future
 
     @gen_test
     def test_start_tls_cancellation(self):
@@ -1493,23 +1487,30 @@ class TestIOStreamCheckHostname(AsyncTestCase):
     @gen_test
     async def test_no_match(self):
         stream = SSLIOStream(socket.socket(), ssl_options=self.client_ssl_ctx)
-        # The exact error strings depend on the TLS implementation: OpenSSL
-        # spells them out in prose while AWS-LC (and BoringSSL) use the
-        # uppercase name of the error reason.
+        with self.assertRaises(ssl.SSLCertVerificationError):
+            await stream.connect(
+                ("127.0.0.1", self.port),
+                server_hostname="bar.example.com",
+            )
+        if platform.system() != "Windows":
+            await asyncio.sleep(0.1)
+
+    @gen_test
+    async def test_server_tls_alert_logging(self):
+        # When a client rejects the server certificate, the server receives
+        # a TLS alert. This should be logged at DEBUG, not WARNING.
+        stream = SSLIOStream(socket.socket(), ssl_options=ssl.create_default_context())
         with ExpectLog(
             gen_log,
-            ".*(alert bad certificate|SSLV3_ALERT_BAD_CERTIFICATE)",
-            level=logging.WARNING,
+            ".*(alert unknown ca|TLSV1_ALERT_UNKNOWN_CA)",
+            level=logging.DEBUG,
             required=platform.system() != "Windows",
         ):
             with self.assertRaises(ssl.SSLCertVerificationError):
                 await stream.connect(
                     ("127.0.0.1", self.port),
-                    server_hostname="bar.example.com",
+                    server_hostname="foo.example.com",
                 )
-            # The server logs a warning while cleaning up the failed connection.
-            # Unfortunately there's no good hook to wait for this logging.
-            # It doesn't seem to happen on windows; I'm not sure why.
             if platform.system() != "Windows":
                 await asyncio.sleep(0.1)
 
@@ -1535,19 +1536,14 @@ class TestIOStreamCheckHostname(AsyncTestCase):
         record_filter = RecordFilter()
         gen_log.addFilter(record_filter)
         try:
-            # A TLS alert on the server side is independent of the client
-            # exception and may be logged while the failed socket is closed.
-            with ExpectLog(gen_log, "SSL Error", required=False):
-                with self.assertRaises(ssl.SSLCertVerificationError):
-                    if start_tls:
-                        await stream.start_tls(
-                            False, ssl_context, server_hostname=hostname
-                        )
-                    else:
-                        await stream.connect(
-                            ("127.0.0.1", self.port), server_hostname=hostname
-                        )
-                await asyncio.sleep(0.1)
+            with self.assertRaises(ssl.SSLCertVerificationError):
+                if start_tls:
+                    await stream.start_tls(False, ssl_context, server_hostname=hostname)
+                else:
+                    await stream.connect(
+                        ("127.0.0.1", self.port), server_hostname=hostname
+                    )
+            await asyncio.sleep(0.1)
             if not start_tls:
                 self.assertTrue(stream.closed())
             self.assertFalse(
