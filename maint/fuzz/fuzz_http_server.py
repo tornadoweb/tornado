@@ -23,7 +23,7 @@ import common
 
 with atheris.instrument_imports(include=["tornado"]):
     from tornado.httpserver import HTTPServer
-    from tornado.iostream import IOStream
+    from tornado.iostream import IOStream, StreamClosedError
     from tornado.web import Application, RequestHandler
     from tornado.websocket import WebSocketClosedError, WebSocketHandler
 
@@ -63,14 +63,22 @@ async def handle(data: bytes) -> None:
     client_stream = IOStream(client)
     try:
         SERVER.handle_stream(server_stream, ("127.0.0.1", 1234))
-        await client_stream.write(data)
-        # Half-close so that the server sees the end of the input.
-        client.shutdown(socket.SHUT_WR)
-        # No timeout of our own: libFuzzer's -timeout reports an input that
-        # hangs or is too slow. A fixed wall-clock limit here made slow
-        # builds (OSS-Fuzz's sanitizer builds of Python) report long inputs
-        # that take linear time as crashes.
-        await client_stream.read_until_close()
+        try:
+            await client_stream.write(data)
+        except StreamClosedError:
+            # The server may stop reading and close the connection before
+            # the end of the input (after a 400 response, or a request with
+            # "Connection: close"). An input longer than the socket buffer
+            # then fails to write with a broken pipe, which is not a bug.
+            pass
+        else:
+            # Half-close so that the server sees the end of the input.
+            client.shutdown(socket.SHUT_WR)
+            # No timeout of our own: libFuzzer's -timeout reports an input
+            # that hangs or is too slow. A fixed wall-clock limit here made
+            # slow builds (OSS-Fuzz's sanitizer builds of Python) report long
+            # inputs that take linear time as crashes.
+            await client_stream.read_until_close()
     finally:
         client_stream.close()
         server_stream.close()
