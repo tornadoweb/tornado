@@ -1335,19 +1335,16 @@ def _parse_header(line: str) -> tuple[str, dict[str, str | None]]:
     return key.lower(), pdict
 
 
-def _parse_media_type(line: str) -> str:
-    """Return the media type of a Content-Type-like header.
+def _parse_media_type(content_type: str) -> str:
+    """Extracts the media type from a ``Content-Type`` header value.
 
-    A non-raising wrapper around `_parse_header` for callers that
-    only need the media type: `_parse_header` raises `ValueError`
-    for malformed RFC 2231 parameters, so in that case fall back
-    to the part before the first ``;``.
+    Returns the part of the value before the first ``;`` (so parameters
+    such as ``charset`` and ``boundary`` are discarded), stripped of
+    surrounding whitespace and lowercased, since media types are
+    case-insensitive. A value that is not a recognized media type simply
+    matches nothing the caller looks for.
     """
-    try:
-        media_type, _ = _parse_header(line)
-    except ValueError:
-        media_type = line.split(";", 1)[0].strip().lower()
-    return media_type
+    return content_type.split(";", 1)[0].strip().lower()
 
 
 def _encode_header(key: str, pdict: dict[str, str | None]) -> str:
