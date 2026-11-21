@@ -590,6 +590,31 @@ class HTTPHeadersTest(TestCase):
             else:
                 self.assertRaises(HTTPInputError, HTTPHeaders.parse, data)
 
+    def test_setitem_validates_name_and_value(self):
+        headers = HTTPHeaders()
+        with self.assertRaises(HTTPInputError):
+            headers["Foo Bar"] = "baz"
+        with self.assertRaises(HTTPInputError):
+            headers["Foo"] = "bar\rbaz"
+        with self.assertRaises(HTTPInputError):
+            headers["Foo"] = "bar\x00baz"
+        # obs-text is allowed in a header value.
+        headers["Foo"] = "b\u00e1r"
+        self.assertEqual(headers["Foo"], "b\u00e1r")
+
+    def test_update_and_initialization_validate(self):
+        with self.assertRaises(HTTPInputError):
+            HTTPHeaders({"Foo": "bar\rbaz"})
+        headers = HTTPHeaders()
+        with self.assertRaises(HTTPInputError):
+            headers.update({"Foo": "bar\rbaz"})
+        self.assertEqual(list(headers.get_all()), [])
+
+    def test_loose_multipart_validation_is_not_reapplied(self):
+        headers = HTTPHeaders()
+        headers.add("X-Filename", "\u20ac", _chars_are_bytes=False)
+        self.assertEqual(headers["X-Filename"], "\u20ac")
+
     def test_unicode_newlines(self):
         # Ensure that only \r\n is recognized as a header separator, and not
         # the other newline-like unicode characters.
@@ -854,7 +879,7 @@ class HTTPServerRequestTest(TestCase):
     def test_repr_does_not_contain_headers(self):
         request = HTTPServerRequest(
             start_line=RequestStartLine("GET", "/", "HTTP/1.0"),
-            headers=HTTPHeaders({"Canary": ["Coal Mine"]}),
+            headers=HTTPHeaders({"Canary": "Coal Mine"}),
         )
         self.assertNotIn("Canary", repr(request))
 

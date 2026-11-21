@@ -48,7 +48,7 @@ from tornado.httpclient import (
     _RequestProxy,
 )
 from tornado.httpserver import HTTPServer
-from tornado.httputil import HTTPHeaders, format_timestamp
+from tornado.httputil import HTTPHeaders, HTTPInputError, format_timestamp
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado.log import app_log, gen_log
@@ -1248,10 +1248,10 @@ X-XSS-Protection: 1;
             ("foo\r\nbar:", "crlf"),
         ]:
             with self.subTest(name=name, position="value"):
-                with self.assertRaises(ValueError):
+                with self.assertRaises(HTTPInputError):
                     self.fetch("/hello", headers={"foo": header})
             with self.subTest(name=name, position="key"):
-                with self.assertRaises(ValueError):
+                with self.assertRaises(HTTPInputError):
                     self.fetch("/hello", headers={header: "foo"})
 
     def test_strip_headers_on_redirect(self):

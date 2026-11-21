@@ -159,10 +159,6 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
     """
 
     @typing.overload
-    def __init__(self, __arg: Mapping[str, list[str]]) -> None:
-        pass
-
-    @typing.overload
     def __init__(self, __arg: Mapping[str, str]) -> None:
         pass
 
@@ -193,8 +189,9 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
 
     # new public methods
 
-    def add(self, name: str, value: str, *, _chars_are_bytes: bool = True) -> None:
-        """Adds a new value for the given key."""
+    def _check_header(
+        self, name: str, value: str, *, _chars_are_bytes: bool = True
+    ) -> None:
         if not _ABNF.field_name.fullmatch(name):
             raise HTTPInputError("Invalid header name %r" % name)
         if _chars_are_bytes:
@@ -205,12 +202,19 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
         else:
             if _FORBIDDEN_HEADER_CHARS_RE.search(value):
                 raise HTTPInputError("Invalid header value %r" % value)
+
+    def add(self, name: str, value: str, *, _chars_are_bytes: bool = True) -> None:
+        """Adds a new value for the given key."""
+        self._check_header(name, value, _chars_are_bytes=_chars_are_bytes)
         norm_name = _normalize_header(name)
-        if norm_name in self:
-            self._combined_cache.pop(norm_name, None)
+        self._combined_cache.pop(norm_name, None)
+        if norm_name in self._as_list:
             self._as_list[norm_name].append(value)
         else:
-            self[norm_name] = value
+            # Match __setitem__'s single-value cache so byte-string values
+            # keep working as they did before.
+            self._as_list[norm_name] = [value]
+            self._combined_cache[norm_name] = value
 
     def get_list(self, name: str) -> list[str]:
         """Returns all values for the given header as a list."""
@@ -318,6 +322,13 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
     # MutableMapping abstract method implementations.
 
     def __setitem__(self, name: str, value: str) -> None:
+        """Sets the value for the given key.
+
+        .. versionchanged:: 6.7
+           The name and value are validated like `add`; invalid headers raise
+           `HTTPInputError` instead of being stored unchecked.
+        """
+        self._check_header(name, value)
         norm_name = _normalize_header(name)
         self._combined_cache[norm_name] = value
         self._as_list[norm_name] = [value]
