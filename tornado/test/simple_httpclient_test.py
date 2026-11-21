@@ -85,6 +85,20 @@ class TriggerHandler(RequestHandler):
         yield event.wait()
 
 
+class SlowCountdownHandler(RequestHandler):
+    # Like CountdownHandler, but waits before each redirect.
+    async def get(self, count):
+        count = int(count)
+        if count > 0:
+            delay = self.get_argument("delay")
+            await gen.sleep(float(delay))
+            self.redirect(
+                self.reverse_url("slow_countdown", count - 1) + "?delay=" + delay
+            )
+        else:
+            self.write("Zero")
+
+
 class ContentLengthHandler(RequestHandler):
     def get(self):
         self.stream = self.detach()
@@ -199,6 +213,11 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
                 ),
                 url("/chunk", ChunkHandler),
                 url("/countdown/([0-9]+)", CountdownHandler, name="countdown"),
+                url(
+                    "/slow_countdown/([0-9]+)",
+                    SlowCountdownHandler,
+                    name="slow_countdown",
+                ),
                 url("/hello", HelloWorldHandler),
                 url("/content_length", ContentLengthHandler),
                 url("/head", HeadHandler),
@@ -461,13 +480,60 @@ class SimpleHTTPClientTestMixin(AsyncTestCase):
             with self.assertRaises(HTTPTimeoutError) as cm:
                 self.io_loop.run_sync(
                     lambda: client.fetch(
-                        self.get_url("/hello"), connect_timeout=0.1, raise_error=True
+                        self.get_url("/hello"), request_timeout=0.1, raise_error=True
                     )
                 )
 
             self.assertEqual(str(cm.exception), "Timeout in request queue")
             self.triggers.popleft()()
             self.io_loop.run_sync(lambda: fut1)
+
+    @gen_test
+    def test_queue_time_counts_against_request_timeout(self):
+        # The request_timeout covers the whole fetch, so it is not restarted
+        # when the request leaves the queue.
+        timeout = 0.5
+        if os.name == "nt" or os.environ.get("EMULATION") == "1":
+            timeout = 1.0
+
+        with closing(self.create_client(max_clients=1)) as client:
+            fut1 = client.fetch(self.get_url("/trigger?wake=false"))
+            while not self.triggers:
+                yield gen.sleep(0.01)
+            start = self.io_loop.time()
+            fut2 = client.fetch(
+                self.get_url("/trigger?wake=false"), request_timeout=timeout
+            )
+            # Spend half of the timeout in the queue, then let the second
+            # request through to a handler that never finishes.
+            yield gen.sleep(timeout / 2)
+            self.triggers.popleft()()
+            yield fut1
+            with self.assertRaises(HTTPTimeoutError) as cm:
+                yield fut2
+            self.assertEqual(str(cm.exception), "Timeout during request")
+            # Restarting the timer would take about 1.5 * timeout.
+            self.assertLess(self.io_loop.time() - start, timeout * 1.4)
+            self.triggers.popleft()()
+            yield gen.sleep(0)
+
+    @gen_test
+    def test_queue_time_does_not_count_against_connect_timeout(self):
+        timeout = 0.2
+        if os.name == "nt" or os.environ.get("EMULATION") == "1":
+            timeout = 0.5
+
+        with closing(self.create_client(max_clients=1)) as client:
+            fut1 = client.fetch(self.get_url("/trigger?wake=false"))
+            while not self.triggers:
+                yield gen.sleep(0.01)
+            fut2 = client.fetch(self.get_url("/hello"), connect_timeout=timeout)
+            # Wait in the queue for longer than the connect_timeout.
+            yield gen.sleep(timeout * 2)
+            self.triggers.popleft()()
+            yield fut1
+            response = yield fut2
+            self.assertEqual(response.body, b"Hello world!")
 
     def test_no_content_length(self):
         response = self.fetch("/no_content_length")
@@ -661,6 +727,66 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, SimpleHTTPClientTestMixin):
                 if self.triggers:
                     self.triggers.popleft()()
                 yield gen.sleep(0)
+
+    @gen_test
+    def test_request_timeout_covers_redirects(self):
+        # Each redirect takes less than the request_timeout, but the whole
+        # chain of three takes longer, so the fetch times out.
+        timeout = 0.5
+        if os.name == "nt" or os.environ.get("EMULATION") == "1":
+            timeout = 1.0
+        delay = timeout * 0.6
+
+        with closing(self.create_client()) as client:
+            with self.assertRaises(HTTPTimeoutError):
+                yield client.fetch(
+                    self.get_url("/slow_countdown/3?delay=%s" % delay),
+                    request_timeout=timeout,
+                )
+            # Let the handler that was interrupted finish.
+            yield gen.sleep(delay)
+
+    @gen_test
+    def test_request_timeout_covers_redirect_in_queue(self):
+        # A redirect that waits in the queue still times out at the
+        # request_timeout of the original request.
+        timeout, delay = 0.6, 0.4
+        if os.name == "nt" or os.environ.get("EMULATION") == "1":
+            timeout, delay = 1.2, 0.8
+
+        with closing(self.create_client(max_clients=1)) as client:
+            start = self.io_loop.time()
+            fut1 = client.fetch(
+                self.get_url("/slow_countdown/1?delay=%s" % delay),
+                request_timeout=timeout,
+            )
+            # This request gets the connection when the first one redirects,
+            # so the redirect has to wait in the queue.
+            fut2 = client.fetch(self.get_url("/trigger?wake=false"))
+            with self.assertRaises(HTTPTimeoutError) as cm:
+                yield fut1
+            self.assertEqual(str(cm.exception), "Timeout in request queue")
+            # Restarting the timer at the redirect would take timeout + delay.
+            self.assertLess(self.io_loop.time() - start, timeout + delay / 2)
+            while not self.triggers:
+                yield gen.sleep(0.01)
+            self.triggers.popleft()()
+            yield fut2
+
+    @gen_test
+    def test_connect_timeout_restarts_on_redirect(self):
+        # The redirect comes after more than the connect_timeout, but each
+        # connection gets its own connect_timeout.
+        timeout = 0.2
+        if os.name == "nt" or os.environ.get("EMULATION") == "1":
+            timeout = 0.5
+
+        with closing(self.create_client()) as client:
+            response = yield client.fetch(
+                self.get_url("/slow_countdown/1?delay=%s" % (timeout * 2)),
+                connect_timeout=timeout,
+            )
+            self.assertEqual(response.body, b"Zero")
 
 
 class SimpleHTTPSClientTestCase(AsyncHTTPSTestCase, SimpleHTTPClientTestMixin):
