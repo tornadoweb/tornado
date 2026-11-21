@@ -1365,6 +1365,10 @@ class StaticFileTest(WebTestCase):
                     file.write(b"-grew")
                 return size
 
+        class NoMtimeStaticFileHandler(StaticFileHandler):
+            def get_modified_time(self):
+                return None
+
         return [
             ("/static_url/(.*)", StaticUrlHandler),
             ("/abs_static_url/(.*)", AbsoluteStaticUrlHandler),
@@ -1373,6 +1377,11 @@ class StaticFileTest(WebTestCase):
                 "/growing_static/(.*)",
                 GrowingStaticFileHandler,
                 dict(path=self.temp_dir.name),
+            ),
+            (
+                "/no_mtime_static/(.*)",
+                NoMtimeStaticFileHandler,
+                dict(path=self.static_dir),
             ),
             ("/root_static/(.*)", StaticFileHandler, dict(path="/")),
         ]
@@ -1719,6 +1728,38 @@ class StaticFileTest(WebTestCase):
             self.assertEqual(response.code, 200)
             self.assertNotIn("Content-Range", response.headers)
             self.assertEqual(response.headers["Content-Length"], "26")
+
+    def test_static_without_modified_time(self):
+        response = self.get_and_head("/no_mtime_static/robots.txt")
+        self.assertEqual(response.code, 200)
+        self.assertNotIn("Last-Modified", response.headers)
+
+        response = self.get_and_head(
+            "/no_mtime_static/robots.txt",
+            headers={"If-Modified-Since": "Fri, 20 Nov 2026 00:00:00 GMT"},
+        )
+        self.assertEqual(response.code, 200)
+
+        response = self.get_and_head(
+            "/no_mtime_static/robots.txt",
+            headers={
+                "Range": "bytes=1-4",
+                "If-Range": "Fri, 20 Nov 2026 00:00:00 GMT",
+            },
+        )
+        self.assertEqual(response.code, 200)
+        self.assertNotIn("Content-Range", response.headers)
+
+        etag = response.headers["Etag"]
+        response = self.get_and_head(
+            "/no_mtime_static/robots.txt",
+            headers={
+                "Range": "bytes=1-4",
+                "If-Range": etag,
+            },
+        )
+        self.assertEqual(response.code, 206)
+        self.assertEqual(response.headers["Content-Range"], "bytes 1-4/26")
 
     def test_static_404(self):
         response = self.get_and_head("/static/blarg")
