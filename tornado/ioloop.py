@@ -710,9 +710,14 @@ class IOLoop(Configurable):
             # Wrap the callback in self._run_callback so we control
             # the error logging (i.e. it goes to tornado.log.app_log
             # instead of asyncio's log).
-            future.add_done_callback(
-                lambda f: self._run_callback(functools.partial(callback, f))
-            )
+            def run_callback(f: Future[_T]) -> None:
+                try:
+                    self._run_callback(functools.partial(callback, f))
+                finally:
+                    # A handled exception can retain this frame in its traceback.
+                    del f
+
+            future.add_done_callback(run_callback)
         else:
             assert is_future(future)
             # For concurrent futures, we use self.add_callback, so
@@ -783,6 +788,9 @@ class IOLoop(Configurable):
             pass
         except Exception:
             app_log.error("Exception in callback %r", callback, exc_info=True)
+        finally:
+            # The callback may hold a Future whose exception retains this frame.
+            del callback
 
     def _discard_future_result(self, future: Future[Any]) -> None:
         """Avoid unhandled-exception warnings from spawned coroutines."""
