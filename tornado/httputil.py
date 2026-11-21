@@ -1069,8 +1069,8 @@ def parse_body_arguments(
     if config is None:
         config = _DEFAULT_PARSE_BODY_CONFIG
     # Media types and parameter names are case-insensitive, but values may not be.
-    content_type_lower = content_type.lower()
-    if content_type_lower.startswith("application/x-www-form-urlencoded"):
+    media_type = _parse_media_type(content_type)
+    if media_type == "application/x-www-form-urlencoded":
         if headers and "Content-Encoding" in headers:
             raise HTTPInputError(
                 "Unsupported Content-Encoding: %s" % headers["Content-Encoding"]
@@ -1087,16 +1087,13 @@ def parse_body_arguments(
         for name, values in uri_arguments.items():
             if values:
                 arguments.setdefault(name, []).extend(values)
-    elif content_type_lower.startswith("multipart/form-data"):
+    elif media_type == "multipart/form-data":
         if headers and "Content-Encoding" in headers:
             raise HTTPInputError(
                 "Unsupported Content-Encoding: %s" % headers["Content-Encoding"]
             )
         try:
             fields = content_type.split(";")
-            if fields[0].strip().lower() != "multipart/form-data":
-                # This catches "Content-Type: multipart/form-dataxyz"
-                raise HTTPInputError("Invalid content type")
             boundaries = []
             for field in fields[1:]:
                 k, sep, v = field.strip().partition("=")
@@ -1346,7 +1343,19 @@ def _parse_header(line: str) -> tuple[str, dict[str, str | None]]:
     for name in valueless:
         # A parameter given with a value takes precedence.
         pdict.setdefault(name, None)
-    return key, pdict
+    return key.lower(), pdict
+
+
+def _parse_media_type(content_type: str) -> str:
+    """Extracts the media type from a ``Content-Type`` header value.
+
+    Returns the part of the value before the first ``;`` (so parameters
+    such as ``charset`` and ``boundary`` are discarded), stripped of
+    surrounding whitespace and lowercased, since media types are
+    case-insensitive. A value that is not a recognized media type simply
+    matches nothing the caller looks for.
+    """
+    return content_type.split(";", 1)[0].strip().lower()
 
 
 def _encode_header(key: str, pdict: dict[str, str | None]) -> str:

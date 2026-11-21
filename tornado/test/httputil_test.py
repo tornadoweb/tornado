@@ -136,6 +136,28 @@ class UrlEncodedDataTest(TestCase):
             parse_body_arguments("application/x-www-form-urlencoded", data, args, files)
         self.assertIn("Max number of fields exceeded", str(cm.exception))
 
+    def test_urlencoded_prefix_not_matched(self):
+        # A media type that merely shares the urlencoded prefix must not be
+        # parsed as form data.
+        data = b"a=1&b=2"
+        for content_type in (
+            "application/x-www-form-urlencoded-garbage",
+            "application/x-www-form-urlencoded2",
+        ):
+            args, files = form_data_args()
+            parse_body_arguments(content_type, data, args, files)
+            self.assertEqual(args, {})
+            self.assertEqual(files, {})
+        # The real media type, with and without parameters, still parses.
+        for content_type in (
+            "application/x-www-form-urlencoded",
+            "application/x-www-form-urlencoded; charset=utf-8",
+        ):
+            args, files = form_data_args()
+            parse_body_arguments(content_type, data, args, files)
+            self.assertEqual(args["a"], [b"1"])
+            self.assertEqual(args["b"], [b"2"])
+
     @skipNotCPython
     def test_memory_budget(self):
         # Large bodies use a few bytes of memory per input byte: up to about
@@ -195,6 +217,41 @@ class MultipartFormDataTest(TestCase):
                         self.assertEqual(args, {})
                         self.assertEqual(files["Files"][0].filename, "Report.TXT")
                         self.assertEqual(files["Files"][0].body, b"Hello")
+
+    def test_multipart_prefix_not_matched(self):
+        # A media type that merely shares the multipart/form-data prefix
+        # must be ignored (not parsed, and no error), consistent with how
+        # unrecognized urlencoded-like media types are treated.
+        data = (
+            b"--AaB03x\r\n"
+            b'Content-Disposition: form-data; name="a"\r\n'
+            b"\r\n1\r\n--AaB03x--\r\n"
+        )
+        for content_type in (
+            "multipart/form-dataxyz",
+            "multipart/form-data-garbage; boundary=AaB03x",
+        ):
+            args, files = form_data_args()
+            parse_body_arguments(content_type, data, args, files)
+            self.assertEqual(args, {})
+            self.assertEqual(files, {})
+
+    def test_multipart_malformed_rfc2231_params(self):
+        # A parameter given both with and without an RFC 2231
+        # continuation number ("name*=a; name*1=b") makes
+        # _parse_header raise ValueError on Python < 3.13.5. That
+        # error must not escape parse_body_arguments; the media type
+        # is recovered from the header prefix and nothing is parsed
+        # out of the (empty) body.
+        args, files = form_data_args()
+        parse_body_arguments(
+            "multipart/form-data; boundary=AaB03x; name*=a; name*1=b",
+            b"--AaB03x--\r\n",
+            args,
+            files,
+        )
+        self.assertEqual(args, {})
+        self.assertEqual(files, {})
 
     def test_multiple_boundaries(self):
         data = (
@@ -538,6 +595,12 @@ Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 
 class ParseHeaderTest(TestCase):
+    def test_content_type_is_case_insensitive(self):
+        self.assertEqual(
+            _parse_header("TEXT/PLAIN; charset=UTF-8"),
+            ("text/plain", {"charset": "UTF-8"}),
+        )
+
     def test_mixed_rfc2231_continuations(self):
         # See MultipartFormDataTest.test_mixed_rfc2231_continuations.
         for header in [
