@@ -1923,9 +1923,19 @@ class RequestHandler:
                 "application to use %s" % (name, feature)
             )
 
-    def reverse_url(self, name: str, *args: Any) -> str:
-        """Alias for `Application.reverse_url`."""
-        return self.application.reverse_url(name, *args)
+    def reverse_url(self, name: str, *args: Any, include_host: bool = False) -> str:
+        """Returns a URL for the named handler, using `Application.reverse_url`.
+
+        By default, returns a URL path. If ``include_host`` is true, returns
+        an absolute URL with the current request's protocol and host.
+
+        .. versionchanged:: 6.7
+           Added the ``include_host`` argument.
+        """
+        url = self.application.reverse_url(name, *args)
+        if include_host:
+            return self.request.protocol + "://" + self.request.host + url
+        return url
 
     def compute_etag(self) -> str | None:
         """Computes the etag header to be used for this request.
