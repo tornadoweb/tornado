@@ -27,13 +27,15 @@ container.
 
 """
 
+import asyncio
 import concurrent.futures
+import contextvars
 import sys
 import typing
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Iterator
 from io import BytesIO
 from types import TracebackType
-from typing import Any
+from typing import Any, TypeVar
 
 import tornado
 from tornado import escape, httputil
@@ -43,6 +45,8 @@ from tornado.log import access_log
 
 if typing.TYPE_CHECKING:
     from _typeshed.wsgi import WSGIApplication as WSGIAppType
+
+_T = TypeVar("_T")
 
 
 # PEP 3333 specifies that WSGI on python 3 generally deals with byte strings
@@ -100,6 +104,9 @@ class WSGIContainer:
     If the ``executor`` argument is provided, the WSGI application will be executed
     on that executor. This must be an instance of `concurrent.futures.Executor`,
     typically a ``ThreadPoolExecutor`` (``ProcessPoolExecutor`` is not supported).
+    Application invocation and response iteration and cleanup share a single
+    `contextvars.Context` per request. Separate calls may run on different
+    threads within the executor.
     If no ``executor`` is given, the application will run on the event loop thread in
     Tornado 6.3; this will change to use an internal thread pool by default in
     Tornado 7.0.
@@ -150,32 +157,86 @@ class WSGIContainer:
             data["headers"] = headers
             return response.append
 
-        loop = IOLoop.current()
-        app_response = await loop.run_in_executor(
-            self.executor,
-            self.wsgi_application,
-            self.environ(request),
-            start_response,
+        environ = self.environ(request)
+        context = (
+            None if self.executor is dummy_executor else contextvars.copy_context()
         )
+        app_response: Iterable[bytes] | None = None
+
+        def call_application() -> Iterable[bytes]:
+            nonlocal app_response
+            app_response = self.wsgi_application(environ, start_response)
+            return app_response
+
+        def close_response() -> None:
+            nonlocal app_response
+            iterable, app_response = app_response, None
+            if iterable is not None and hasattr(iterable, "close"):
+                iterable.close()
+
+        async def run(
+            func: Callable[..., _T], *args: Any, cancel_pending: bool = True
+        ) -> _T:
+            def call() -> _T:
+                try:
+                    if context is None:
+                        return func(*args)
+                    return context.run(func, *args)
+                except StopIteration as exc:
+                    # StopIteration cannot cross an asyncio Future.
+                    raise RuntimeError("WSGI callback raised StopIteration") from exc
+
+            submitted = self.executor.submit(call)
+            future = asyncio.wrap_future(submitted)
+            try:
+                return await asyncio.shield(future)
+            except asyncio.CancelledError:
+                if cancel_pending and submitted.cancel():
+                    raise
+                # Cancellation cannot interrupt a callback that is already running.
+                # Wait even if cancelled again, so cleanup can safely use this context.
+                while not future.done():
+                    try:
+                        await asyncio.shield(future)
+                    except asyncio.CancelledError:
+                        continue
+                    except Exception:
+                        break
+                if not future.cancelled():
+                    future.exception()
+                raise
+
         try:
-            app_response_iter = iter(app_response)
+            iterable = await run(call_application)
+
+            def get_iterator() -> Iterator[bytes]:
+                try:
+                    return iter(iterable)
+                except BaseException:
+                    close_response()
+                    raise
+
+            iterator = await run(get_iterator)
 
             def next_chunk() -> bytes | None:
                 try:
-                    return next(app_response_iter)
-                except StopIteration:
-                    # StopIteration is special and is not allowed to pass through
-                    # coroutines normally.
-                    return None
+                    chunk = next(iterator, None)
+                except BaseException:
+                    close_response()
+                    raise
+                if chunk is None:
+                    # Close before releasing the worker on exhaustion.
+                    close_response()
+                return chunk
 
             while True:
-                chunk = await loop.run_in_executor(self.executor, next_chunk)
+                chunk = await run(next_chunk)
                 if chunk is None:
                     break
                 response.append(chunk)
         finally:
-            if hasattr(app_response, "close"):
-                app_response.close()
+            if app_response is not None:
+                await run(close_response, cancel_pending=False)
         body = b"".join(response)
         if not data:
             raise Exception("WSGI app did not call start_response")

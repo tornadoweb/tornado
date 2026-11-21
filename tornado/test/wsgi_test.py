@@ -1,8 +1,10 @@
 import asyncio
 import concurrent.futures
+import contextvars
 import threading
 from wsgiref.validate import validator
 
+from tornado.httputil import HTTPHeaders, HTTPServerRequest, RequestStartLine
 from tornado.routing import RuleRouter
 from tornado.test.util import AsyncHTTPTestCase
 from tornado.testing import gen_test
@@ -143,3 +145,133 @@ class WSGIContainerThreadPoolTest(WSGIAppMixin, AsyncHTTPTestCase):
             self.http_client.fetch(self.get_url("/streaming_barrier")),
         )
         self.assertEqual([b"ok 0", b"ok 1"], sorted([resp.body for resp in resps]))
+
+
+class WSGIResponseLifecycleTest(AsyncHTTPTestCase):
+    def get_app(self):
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+        self.addCleanup(self.executor.shutdown)
+        return WSGIContainer(self.application, executor=self.executor)
+
+    def application(self, environ, start_response):
+        return self.wsgi_app(environ, start_response)
+
+    def test_executor_callbacks_share_context(self):
+        phase = contextvars.ContextVar("phase", default="unset")
+        calls = []
+
+        def record(name):
+            calls.append((name, phase.get(), threading.get_ident()))
+            phase.set(name)
+
+        class Response:
+            def __iter__(self):
+                record("iter")
+                return self.chunks()
+
+            def chunks(self):
+                record("first")
+                yield b"first"
+                record("second")
+                yield b"second"
+
+            def close(self):
+                record("close")
+
+        def app(environ, start_response):
+            record("app")
+            start_response("200 OK", [])
+            return Response()
+
+        self.wsgi_app = app
+        self.assertEqual(self.fetch("/").body, b"firstsecond")
+        self.assertEqual(
+            [(name, previous) for name, previous, _ in calls],
+            [
+                ("app", "unset"),
+                ("iter", "app"),
+                ("first", "iter"),
+                ("second", "first"),
+                ("close", "second"),
+            ],
+        )
+        self.assertTrue(all(thread != threading.get_ident() for _, _, thread in calls))
+
+    @gen_test
+    async def test_cancellation_waits_for_next_before_closing(self):
+        loop = asyncio.get_running_loop()
+        entered = asyncio.Event()
+        release = threading.Event()
+        calls = []
+
+        class Response:
+            def __iter__(self):
+                loop.call_soon_threadsafe(entered.set)
+                if not release.wait(2):
+                    raise RuntimeError("test did not release the iterator")
+                calls.append("next finished")
+                yield b"first"
+                calls.append("extra next")
+
+            def close(self):
+                calls.append("closed")
+
+        def app(environ, start_response):
+            start_response("200 OK", [])
+            return Response()
+
+        self.wsgi_app = app
+        container = WSGIContainer(self.wsgi_app, executor=self.executor)
+        request = HTTPServerRequest(
+            start_line=RequestStartLine("GET", "/", "HTTP/1.1"),
+            headers=HTTPHeaders({"Host": "localhost"}),
+        )
+        task = asyncio.create_task(container.handle_request(request))
+        try:
+            await entered.wait()
+            task.cancel()
+            await asyncio.sleep(0)
+            task.cancel()
+        finally:
+            release.set()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertEqual(calls, ["next finished", "closed"])
+
+    @gen_test
+    async def test_cancellation_skips_queued_application(self):
+        submitted = asyncio.Event()
+        release = threading.Event()
+        called = threading.Event()
+
+        class NotifyingPool(concurrent.futures.ThreadPoolExecutor):
+            def submit(self, fn, /, *args, **kwargs):
+                future = super().submit(fn, *args, **kwargs)
+                submitted.set()
+                return future
+
+        def app(environ, start_response):
+            called.set()
+            start_response("200 OK", [])
+            return []
+
+        pool = NotifyingPool(max_workers=1)
+        self.addCleanup(pool.shutdown)
+        concurrent.futures.ThreadPoolExecutor.submit(pool, release.wait, 2)
+        request = HTTPServerRequest(
+            start_line=RequestStartLine("GET", "/", "HTTP/1.1"),
+            headers=HTTPHeaders({"Host": "localhost"}),
+        )
+        task = asyncio.create_task(
+            WSGIContainer(app, executor=pool).handle_request(request)
+        )
+        try:
+            await submitted.wait()
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await asyncio.wait_for(asyncio.shield(task), timeout=1)
+        finally:
+            release.set()
+            await asyncio.gather(task, return_exceptions=True)
+        pool.shutdown()
+        self.assertFalse(called.is_set())
