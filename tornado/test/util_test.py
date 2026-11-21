@@ -88,6 +88,25 @@ class GzipDecompressorTest(TestCase):
         decompressor = GzipDecompressor()
         self.assertEqual(decompressor.flush(), b"")
 
+    def test_empty_input_preserves_tail(self):
+        # Decompressing empty input is a no-op: it must not discard data
+        # buffered in unconsumed_tail.
+        data = gzip.compress(b"hello world" * 100)
+        decompressor = GzipDecompressor()
+        result = bytearray(decompressor.decompress(data, max_length=1))
+        tail = decompressor.unconsumed_tail
+        self.assertTrue(tail)
+        # Empty input produces no output and leaves the tail intact.
+        self.assertEqual(decompressor.decompress(b"", max_length=1), b"")
+        self.assertEqual(decompressor.unconsumed_tail, tail)
+        # The buffered data is still recoverable.
+        while decompressor.unconsumed_tail:
+            result += decompressor.decompress(
+                decompressor.unconsumed_tail, max_length=1024
+            )
+        self.assertEqual(bytes(result), b"hello world" * 100)
+        self.assertEqual(decompressor.flush(), b"")
+
     def test_trailing_data(self):
         data = gzip.compress(b"hello")
         for trailer in [b"\0", b"\0" * 16, b"\r\n", b"garbage", b"\x1f\x00"]:
