@@ -912,9 +912,9 @@ class PeriodicCallback:
         if isinstance(callback_time, datetime.timedelta):
             self.callback_time = callback_time / datetime.timedelta(milliseconds=1)
         else:
-            if callback_time <= 0:
-                raise ValueError("Periodic callback must have a positive callback_time")
             self.callback_time = callback_time
+        if self.callback_time <= 0:
+            raise ValueError("Periodic callback must have a positive callback_time")
         self.jitter = jitter
         self._running = False
         self._timeout: object = None

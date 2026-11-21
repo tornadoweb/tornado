@@ -713,6 +713,12 @@ class TestPeriodicCallbackMath(TestCase):
         expected_callback_time = 83000
         self.assertEqual(pc.callback_time, expected_callback_time)
 
+    def test_timedelta_non_positive(self):
+        with self.assertRaises(ValueError):
+            PeriodicCallback(lambda: None, datetime.timedelta(0))
+        with self.assertRaises(ValueError):
+            PeriodicCallback(lambda: None, datetime.timedelta(seconds=-1))
+
 
 class TestPeriodicCallbackAsync(AsyncTestCase):
     def test_periodic_plain(self):
