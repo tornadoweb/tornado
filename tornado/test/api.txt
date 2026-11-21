@@ -769,7 +769,7 @@ tornado.simple_httpclient.HTTPTimeoutError.__str__: method(self)
 tornado.simple_httpclient.SimpleAsyncHTTPClient: class(tornado.httpclient.AsyncHTTPClient)
 tornado.simple_httpclient.SimpleAsyncHTTPClient.active: attribute
 tornado.simple_httpclient.SimpleAsyncHTTPClient.close: method(self)
-tornado.simple_httpclient.SimpleAsyncHTTPClient.fetch_impl: method(self, request, callback)
+tornado.simple_httpclient.SimpleAsyncHTTPClient.fetch_impl: method(self, request, callback, *, queue_start_time=None)
 tornado.simple_httpclient.SimpleAsyncHTTPClient.initialize: method(self, max_clients=10, hostname_mapping=None, max_buffer_size=104857600, resolver=None, defaults=None, max_header_size=None, max_body_size=None)
 tornado.simple_httpclient.SimpleAsyncHTTPClient.max_body_size: attribute
 tornado.simple_httpclient.SimpleAsyncHTTPClient.max_buffer_size: attribute

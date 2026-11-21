@@ -171,12 +171,15 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.tcp_client.close()
 
     def fetch_impl(
-        self, request: HTTPRequest, callback: Callable[[HTTPResponse], None]
+        self,
+        request: HTTPRequest,
+        callback: Callable[[HTTPResponse], None],
+        *,
+        queue_start_time: float | None = None,
     ) -> None:
         key = object()
-        # A redirect keeps the start time of the original request, so the
+        # A redirect passes the start time of the original request, so the
         # request_timeout covers the whole chain of redirects.
-        queue_start_time: float | None = getattr(request, "_queue_start_time", None)
         if queue_start_time is None:
             queue_start_time = self.io_loop.time()
         self.queue.append((key, request, callback))
@@ -764,16 +767,19 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     except KeyError:
                         pass
             new_request.original_request = original_request  # type: ignore
-            # Carry the start time forward so that a redirect does not
-            # restart the request_timeout.
-            new_request._queue_start_time = self._queue_start_time  # type: ignore
             assert self.final_callback is not None
             final_callback = self.final_callback
             self.final_callback = None  # type: ignore
             self._release()
             assert self.client is not None
             request_proxy = _RequestProxy(new_request, self.client.defaults)
-            self.client.fetch_impl(cast(HTTPRequest, request_proxy), final_callback)
+            # Pass the original start time so that a redirect does not
+            # restart the request_timeout.
+            self.client.fetch_impl(
+                cast(HTTPRequest, request_proxy),
+                final_callback,
+                queue_start_time=self._queue_start_time,
+            )
             self._on_end_request()
             return
         if self.request.streaming_callback:
