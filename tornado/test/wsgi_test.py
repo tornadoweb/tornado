@@ -1,11 +1,13 @@
 import asyncio
 import concurrent.futures
 import threading
+import unittest.mock as mock
 from wsgiref.validate import validator
 
+from tornado.log import app_log, gen_log
 from tornado.routing import RuleRouter
 from tornado.test.util import AsyncHTTPTestCase
-from tornado.testing import gen_test
+from tornado.testing import ExpectLog, gen_test
 from tornado.wsgi import WSGIContainer
 
 
@@ -143,3 +145,66 @@ class WSGIContainerThreadPoolTest(WSGIAppMixin, AsyncHTTPTestCase):
             self.http_client.fetch(self.get_url("/streaming_barrier")),
         )
         self.assertEqual([b"ok 0", b"ok 1"], sorted([resp.body for resp in resps]))
+
+
+class WSGIValidationTest(AsyncHTTPTestCase):
+    def get_app(self):
+        def wsgi_app(environ, start_response):
+            path = environ.get("PATH_INFO", "")
+            if path == "/bad_reason":
+                start_response("400 Bad\x00Request", [("Content-Type", "text/plain")])
+                return [b"Error\n"]
+            elif path == "/bad_header":
+                start_response(
+                    "200 OK",
+                    [("Content-Type", "text/plain"), ("X-Bad", "bad\x00header")],
+                )
+                return [b"Error\n"]
+            elif path == "/whitespace_header":
+                start_response(
+                    "200 OK",
+                    [
+                        ("Content-Type", "text/plain"),
+                        ("X-Leading", "  leading"),
+                        ("X-Trailing", "trailing  "),
+                        ("X-Both", "  both  "),
+                    ],
+                )
+                return [b"ok\n"]
+            elif path == "/app_exception":
+                raise RuntimeError("crash before headers")
+            start_response("404 Not Found", [("Content-Type", "text/plain")])
+            return [b"Not Found\n"]
+
+        self.container = WSGIContainer(wsgi_app)
+        return self.container
+
+    def test_invalid_status_reason_rejected(self):
+        with ExpectLog(gen_log, "Exception in write_headers"):
+            response = self.fetch("/bad_reason")
+            self.assertEqual(response.code, 500)
+
+    def test_invalid_header_value_rejected(self):
+        with ExpectLog(app_log, "Exception in WSGIContainer"):
+            response = self.fetch("/bad_header")
+            self.assertEqual(response.code, 500)
+
+    def test_header_with_whitespace(self):
+        response = self.fetch("/whitespace_header")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.headers["X-Leading"], "leading")
+        self.assertEqual(response.headers["X-Trailing"], "trailing")
+        self.assertEqual(response.headers["X-Both"], "both")
+
+    def test_app_exception_returns_500(self):
+        with ExpectLog(app_log, "Exception in WSGIContainer"):
+            response = self.fetch("/app_exception")
+            self.assertEqual(response.code, 500)
+
+    def test_exception_after_headers_closes_connection(self):
+        with mock.patch.object(
+            self.container, "_log", side_effect=RuntimeError("log error")
+        ):
+            with ExpectLog(app_log, "Exception in WSGIContainer"):
+                response = self.fetch("/whitespace_header")
+                self.assertEqual(response.code, 200)

@@ -195,7 +195,9 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
         if not _ABNF.field_name.fullmatch(name):
             raise HTTPInputError("Invalid header name %r" % name)
         if _chars_are_bytes:
-            if not _ABNF.field_value.fullmatch(to_unicode(value)):
+            if not _ABNF.field_value.fullmatch(
+                to_unicode(value).strip(HTTP_WHITESPACE)
+            ):
                 # TODO: the fact we still support bytes here (contrary to type annotations)
                 # and still test for it should probably be changed.
                 raise HTTPInputError("Invalid header value %r" % value)
