@@ -517,11 +517,13 @@ class HTTP1Connection(httputil.HTTPConnection):
             ):
                 headers["Connection"] = "close"
             # If a 1.0 client asked for keep-alive, add the header.
-            if (
-                self._request_start_line.version == "HTTP/1.0"
-                and self._request_headers.get("Connection", "").lower() == "keep-alive"
-            ):
-                headers["Connection"] = "Keep-Alive"
+            if self._request_start_line.version == "HTTP/1.0":
+                connection_options = _connection_options(self._request_headers)
+                if (
+                    "keep-alive" in connection_options
+                    and "close" not in connection_options
+                ):
+                    headers["Connection"] = "Keep-Alive"
         if self._chunking_output:
             headers["Transfer-Encoding"] = "chunked"
         if not self.is_client and (
@@ -641,11 +643,9 @@ class HTTP1Connection(httputil.HTTPConnection):
     ) -> bool:
         if self.params.no_keep_alive:
             return False
-        connection_header = headers.get("Connection")
-        if connection_header is not None:
-            connection_header = connection_header.lower()
+        connection_options = _connection_options(headers)
         if start_line.version == "HTTP/1.1":
-            return connection_header != "close"
+            return "close" not in connection_options
         elif (
             "Content-Length" in headers
             or is_transfer_encoding_chunked(headers)
@@ -653,7 +653,9 @@ class HTTP1Connection(httputil.HTTPConnection):
         ):
             # start_line may be a request or response start line; only
             # the former has a method attribute.
-            return connection_header == "keep-alive"
+            return (
+                "keep-alive" in connection_options and "close" not in connection_options
+            )
         return False
 
     def _finish_request(self, future: "Optional[Future[None]]") -> None:
@@ -1024,6 +1026,18 @@ def parse_hex_int(s: str) -> int:
     if HEXDIGITS.fullmatch(s) is None:
         raise ValueError("not a hexadecimal integer: %r" % s)
     return int(s, 16)
+
+
+def _connection_options(headers: httputil.HTTPHeaders) -> set[str]:
+    """Returns the lowercased options in the Connection header.
+
+    Connection is a comma-separated list (RFC 9110 section 7.6.1), so
+    ``TE, close`` asks for the connection to be closed just like ``close``.
+    """
+    return {
+        option.strip(httputil.HTTP_WHITESPACE).lower()
+        for option in headers.get("Connection", "").split(",")
+    }
 
 
 def is_transfer_encoding_chunked(headers: httputil.HTTPHeaders) -> bool:
