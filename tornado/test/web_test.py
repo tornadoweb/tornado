@@ -834,6 +834,11 @@ class SetHeaderHandler(RequestHandler):
         # an empty header value is valid as well
         self.set_header("X-Foo", "")
 
+        # headers with leading/trailing whitespace are permitted (RFC 9112 OWS)
+        self.set_header("X-Leading", "  leading")
+        self.set_header("X-Trailing", "trailing  ")
+        self.set_header("X-Both", "  both  ")
+
         self.finish(b"ok")
 
 
@@ -1073,6 +1078,9 @@ js_embed()
     def test_set_header(self):
         response = self.fetch("/set_header")
         self.assertEqual(response.body, b"ok")
+        self.assertEqual(response.headers["X-Leading"], "leading")
+        self.assertEqual(response.headers["X-Trailing"], "trailing")
+        self.assertEqual(response.headers["X-Both"], "both")
 
     def test_get_argument(self):
         response = self.fetch("/get_argument?foo=bar")

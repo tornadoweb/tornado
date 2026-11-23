@@ -36,10 +36,10 @@ from types import TracebackType
 from typing import Any
 
 import tornado
-from tornado import escape, httputil
+from tornado import escape, httputil, iostream
 from tornado.concurrent import dummy_executor
 from tornado.ioloop import IOLoop
-from tornado.log import access_log
+from tornado.log import access_log, app_log
 
 if typing.TYPE_CHECKING:
     from _typeshed.wsgi import WSGIApplication as WSGIAppType
@@ -150,62 +150,95 @@ class WSGIContainer:
             data["headers"] = headers
             return response.append
 
-        loop = IOLoop.current()
-        app_response = await loop.run_in_executor(
-            self.executor,
-            self.wsgi_application,
-            self.environ(request),
-            start_response,
-        )
+        response_written = False
         try:
-            app_response_iter = iter(app_response)
+            loop = IOLoop.current()
+            app_response = await loop.run_in_executor(
+                self.executor,
+                self.wsgi_application,
+                self.environ(request),
+                start_response,
+            )
+            try:
+                app_response_iter = iter(app_response)
 
-            def next_chunk() -> bytes | None:
-                try:
-                    return next(app_response_iter)
-                except StopIteration:
-                    # StopIteration is special and is not allowed to pass through
-                    # coroutines normally.
-                    return None
+                def next_chunk() -> bytes | None:
+                    try:
+                        return next(app_response_iter)
+                    except StopIteration:
+                        # StopIteration is special and is not allowed to pass through
+                        # coroutines normally.
+                        return None
 
-            while True:
-                chunk = await loop.run_in_executor(self.executor, next_chunk)
-                if chunk is None:
-                    break
-                response.append(chunk)
-        finally:
-            if hasattr(app_response, "close"):
-                app_response.close()
-        body = b"".join(response)
-        if not data:
-            raise Exception("WSGI app did not call start_response")
+                while True:
+                    chunk = await loop.run_in_executor(self.executor, next_chunk)
+                    if chunk is None:
+                        break
+                    response.append(chunk)
+            finally:
+                if hasattr(app_response, "close"):
+                    app_response.close()
+            body = b"".join(response)
+            if not data:
+                raise Exception("WSGI app did not call start_response")
 
-        status_code_str, reason = data["status"].split(" ", 1)
-        status_code = int(status_code_str)
-        headers: list[tuple[str, str]] = data["headers"]
-        header_set = {k.lower() for (k, v) in headers}
-        body = escape.utf8(body)
-        if status_code != 304:
-            if "content-length" not in header_set:
-                headers.append(("Content-Length", str(len(body))))
-            if "content-type" not in header_set:
-                headers.append(("Content-Type", "text/html; charset=UTF-8"))
-        if "server" not in header_set:
-            headers.append(("Server", "TornadoServer/%s" % tornado.version))
+            status_code_str, reason = data["status"].split(" ", 1)
+            status_code = int(status_code_str)
+            headers: list[tuple[str, str]] = data["headers"]
+            header_set = {k.lower() for (k, v) in headers}
+            body = escape.utf8(body)
+            if status_code != 304:
+                if "content-length" not in header_set:
+                    headers.append(("Content-Length", str(len(body))))
+                if "content-type" not in header_set:
+                    headers.append(("Content-Type", "text/html; charset=UTF-8"))
+            if "server" not in header_set:
+                headers.append(("Server", "TornadoServer/%s" % tornado.version))
 
-        start_line = httputil.ResponseStartLine("HTTP/1.1", status_code, reason)
-        header_obj = httputil.HTTPHeaders()
-        for key, value in headers:
-            header_obj.add(key, value)
-        if request.method == "HEAD":
-            # Like RequestHandler, send only the headers for HEAD requests.
-            # Many WSGI applications return the full body and leave it to
-            # the server to discard it.
-            body = b""
-        assert request.connection is not None
-        request.connection.write_headers(start_line, header_obj, chunk=body)
-        request.connection.finish()
-        self._log(status_code, request)
+            start_line = httputil.ResponseStartLine("HTTP/1.1", status_code, reason)
+            header_obj = httputil.HTTPHeaders()
+            for key, value in headers:
+                header_obj.add(key, value)
+            if request.method == "HEAD":
+                # Like RequestHandler, send only the headers for HEAD requests.
+                # Many WSGI applications return the full body and leave it to
+                # the server to discard it.
+                body = b""
+            assert request.connection is not None
+            response_written = True
+            request.connection.write_headers(start_line, header_obj, chunk=body)
+            request.connection.finish()
+            self._log(status_code, request)
+        except iostream.StreamClosedError:
+            pass
+        except Exception:
+            app_log.error("Exception in WSGIContainer", exc_info=True)
+            if request.connection is not None:
+                close = getattr(request.connection, "close", None)
+                if response_written:
+                    if callable(close):
+                        close()
+                else:
+                    try:
+                        start_line = httputil.ResponseStartLine(
+                            "HTTP/1.1", 500, "Internal Server Error"
+                        )
+                        header_obj = httputil.HTTPHeaders(
+                            {
+                                "Content-Type": "text/html; charset=UTF-8",
+                                "Content-Length": "0",
+                                "Server": "TornadoServer/%s" % tornado.version,
+                            }
+                        )
+                        request.connection.write_headers(start_line, header_obj)
+                        request.connection.finish()
+                        self._log(500, request)
+                    except iostream.StreamClosedError:
+                        pass
+                    except Exception:
+                        app_log.error("Exception in WSGIContainer", exc_info=True)
+                        if callable(close):
+                            close()
 
     def environ(self, request: httputil.HTTPServerRequest) -> dict[str, Any]:
         """Converts a `tornado.httputil.HTTPServerRequest` to a WSGI environment.
