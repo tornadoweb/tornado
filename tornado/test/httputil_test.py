@@ -636,6 +636,105 @@ class ParseHeaderTest(TestCase):
 
 
 class HTTPHeadersTest(TestCase):
+    def test_bytes_parse_default_latin1_and_repeated_order(self):
+        headers = HTTPHeaders.parse(b"X: \xff\r\nX: second\r\n")
+        self.assertEqual(list(headers.get_all()), [("X", "\xff"), ("X", "second")])
+        self.assertEqual(headers["X"], "\xff,second")
+
+    def test_bytes_parse_line_and_explicit_encoding(self):
+        headers = HTTPHeaders()
+        headers.parse_line("X: 名\r\n".encode(), encoding="utf8", strict_http=False)
+        self.assertEqual(headers["X"], "名")
+        headers.parse_line(b"X: \xff\n")
+        self.assertEqual(headers.get_list("X"), ["名", "\xff"])
+        self.assertEqual(headers["X"], "名,\xff")
+
+    def test_encoding_does_not_choose_validation(self):
+        for operation in (HTTPHeaders.parse, HTTPHeaders().parse_line):
+            with self.subTest(operation=operation):
+                with self.assertRaises(HTTPInputError):
+                    operation("X: 名".encode(), encoding="utf8")
+                operation("X: 名".encode(), encoding="utf8", strict_http=False)
+                with self.assertRaises(HTTPInputError):
+                    operation(b"X: left\x00right", strict_http=False)
+                with self.assertRaises(HTTPInputError):
+                    operation("名: value".encode(), encoding="utf8", strict_http=False)
+
+    def test_byte_decode_errors_remain_strict(self):
+        for operation in (HTTPHeaders.parse, HTTPHeaders().parse_line):
+            with self.subTest(operation=operation):
+                with self.assertRaises(UnicodeDecodeError):
+                    operation(b"X: \xff", encoding="utf8", strict_http=False)
+                with self.assertRaises(LookupError):
+                    operation(b"X: value", encoding="not-a-codec")
+
+    def test_text_input_is_not_reencoded(self):
+        headers = HTTPHeaders.parse("X: 名", encoding="ascii", strict_http=False)
+        self.assertEqual(headers["X"], "名")
+        headers.parse_line("Y: 名", encoding="ascii", strict_http=False)
+        self.assertEqual(headers["Y"], "名")
+
+    def test_explicit_validation_overrides_compatibility_alias(self):
+        headers = HTTPHeaders.parse("X: 名", strict_http=False, _chars_are_bytes=True)
+        self.assertEqual(headers["X"], "名")
+        with self.assertRaises(HTTPInputError):
+            HTTPHeaders.parse("X: 名", strict_http=True, _chars_are_bytes=False)
+        headers = HTTPHeaders()
+        headers.add("X", "名", strict_http=False)
+        self.assertEqual(headers["X"], "名")
+        with self.assertRaises(HTTPInputError):
+            headers.add("Y", "名", strict_http=True, _chars_are_bytes=False)
+
+    def test_http_and_multipart_value_validation(self):
+        # Decoding and validation are separate: multipart permits Unicode
+        # outside the HTTP obs-text range but must still reject controls.
+        for chars_are_bytes in (True, False):
+            for codepoint in range(256):
+                value = "left" + chr(codepoint) + "right"
+                with self.subTest(chars_are_bytes=chars_are_bytes, codepoint=codepoint):
+                    if codepoint == 9 or (codepoint >= 32 and codepoint != 127):
+                        headers = HTTPHeaders.parse(
+                            "X: " + value, _chars_are_bytes=chars_are_bytes
+                        )
+                        self.assertEqual(headers["X"], value)
+                    else:
+                        with self.assertRaises(HTTPInputError):
+                            HTTPHeaders.parse(
+                                "X: " + value, _chars_are_bytes=chars_are_bytes
+                            )
+
+    def test_multipart_unicode_values_keep_separators_and_whitespace(self):
+        for char in ("名", "\u20ac", "\u2028", "\u2029", "\u0085", "\u00a0"):
+            with self.subTest(char=char):
+                value = char + "body" + char
+                headers = HTTPHeaders.parse("X: " + value, _chars_are_bytes=False)
+                self.assertEqual(list(headers.get_all()), [("X", value)])
+        for char in ("名", "\u20ac", "\u2028", "\u2029"):
+            with self.subTest(http_char=char):
+                with self.assertRaises(HTTPInputError):
+                    HTTPHeaders.parse("X: " + char)
+
+    def test_multipart_names_remain_http_tokens(self):
+        for name in ("bad name", "名", "", "x\x00"):
+            with self.subTest(name=name):
+                with self.assertRaises(HTTPInputError):
+                    HTTPHeaders.parse(name + ": value", _chars_are_bytes=False)
+
+    def test_http_utf8_octets_remain_latin1_not_unicode(self):
+        raw = "X: 名".encode("utf8")
+        headers = HTTPHeaders.parse(raw.decode("latin1"))
+        self.assertEqual(headers["X"].encode("latin1"), "名".encode("utf8"))
+        self.assertNotEqual(headers["X"], "名")
+
+    def test_multipart_line_structure_and_order(self):
+        headers = HTTPHeaders.parse("X: a\nX: b\r\n", _chars_are_bytes=False)
+        self.assertEqual(list(headers.get_all()), [("X", "a"), ("X", "b")])
+        self.assertEqual(headers["X"], "a,b")
+        for text in ("X: a\rY: b", " X: a", "X: a\r\n\tb", "no colon"):
+            with self.subTest(text=text):
+                with self.assertRaises(HTTPInputError):
+                    HTTPHeaders.parse(text, _chars_are_bytes=False)
+
     def test_folding_rejected(self):
         data = "Foo: bar\r\n\tasdf"
         with self.assertRaises(HTTPInputError):
