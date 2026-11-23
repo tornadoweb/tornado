@@ -16,3 +16,10 @@ Deprecation notices
 - `.BaseIOStream.read_until_close` is now implemented as a loop over `.BaseIOStream.read_bytes`
   with ``partial=True`` rather than through its own dedicated code path. Externally observable
   behavior is unchanged.
+
+`tornado.web`
+~~~~~~~~~~~~~~
+
+- `.StaticFileHandler` now reports gzip compression consistently between ``HEAD``
+  and ``GET`` responses. ``HEAD`` omits the compressed content length instead of
+  reporting the uncompressed file size.

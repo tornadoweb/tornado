@@ -19,6 +19,7 @@ import typing
 import unittest
 import urllib.parse
 from io import BytesIO
+from unittest import mock
 
 from tornado import gen, locale
 from tornado.concurrent import Future
@@ -3152,6 +3153,299 @@ class GzipTestCase(SimpleHandlerTestCase):
         response = self.fetch("/?content_type=image/png&vary=Accept-Language")
         self.assertNotIn("Content-Encoding", response.headers)
         self.assertEqual(response.headers["Vary"], "Accept-Language")
+
+
+class StaticFileGzipTest(WebTestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        super().setUp()
+
+    def get_handlers(self):
+        class NoEtagStaticFileHandler(StaticFileHandler):
+            def compute_etag(self):
+                return None
+
+        class HeadMetadataStaticFileHandler(StaticFileHandler):
+            async def head(self, path):
+                await super().head(path)
+                self.set_header("X-Head-Metadata", "present")
+                self.set_cookie("head_metadata", "present")
+                content_type = self.get_query_argument("content_type", None)
+                if content_type is not None:
+                    self.set_header("Content-Type", content_type)
+                content_encoding = self.get_query_argument("content_encoding", None)
+                if content_encoding is not None:
+                    self.set_header("Content-Encoding", content_encoding)
+                if self.get_query_argument("error", None):
+                    raise HTTPError(403)
+
+        class ReplacementStaticFileHandler(StaticFileHandler):
+            async def head(self, path):
+                await super().head(path)
+                replacement = self.get_query_argument("replacement")
+                if replacement == "error":
+                    raise HTTPError(403)
+                elif replacement == "redirect":
+                    self.clear()
+                    self.redirect("/elsewhere")
+                elif replacement == "empty":
+                    self.clear()
+                elif replacement == "range":
+                    self.set_status(416)
+                    self.set_header("Content-Length", 0)
+
+            def write_error(self, status_code, **kwargs):
+                self.set_header("Content-Type", "text/plain")
+                self.finish()
+
+        return [
+            (
+                "/replacement/(.*)",
+                ReplacementStaticFileHandler,
+                dict(path=self.temp_dir.name),
+            ),
+            (
+                "/metadata/(.*)",
+                HeadMetadataStaticFileHandler,
+                dict(path=self.temp_dir.name),
+            ),
+            ("/static/(.*)", StaticFileHandler, dict(path=self.temp_dir.name)),
+            ("/no_etag/(.*)", NoEtagStaticFileHandler, dict(path=self.temp_dir.name)),
+        ]
+
+    def get_app_kwargs(self):
+        return dict(compress_response=True)
+
+    def test_head_subclass_can_set_headers_and_cookies(self):
+        with open(os.path.join(self.temp_dir.name, "test.txt"), "wb") as file:
+            file.write(b"content")
+        for compress_response, encoding in (
+            (False, "gzip"),
+            (True, "identity"),
+            (True, "gzip"),
+        ):
+            with self.subTest(compress_response=compress_response, encoding=encoding):
+                self.app.transforms = [GZipContentEncoding] if compress_response else []
+                response = self.fetch(
+                    "/metadata/test.txt",
+                    method="HEAD",
+                    headers={"Accept-Encoding": encoding},
+                    decompress_response=False,
+                )
+                self.assertEqual(response.code, 200)
+                self.assertEqual(response.body, b"")
+                self.assertEqual(response.headers.get("X-Head-Metadata"), "present")
+                self.assertIn("head_metadata=present", response.headers["Set-Cookie"])
+                if compress_response and encoding == "gzip":
+                    self.assertEqual(response.headers.get("Content-Encoding"), "gzip")
+                    self.assertNotIn("Content-Length", response.headers)
+                else:
+                    self.assertNotIn("Content-Encoding", response.headers)
+                    self.assertEqual(response.headers["Content-Length"], "7")
+
+    def test_head_replacement_responses(self):
+        with open(os.path.join(self.temp_dir.name, "test.txt"), "wb") as file:
+            file.write(b"content")
+        for replacement, status in (
+            ("error", 403),
+            ("redirect", 302),
+            ("empty", 200),
+            ("range", 416),
+        ):
+            with self.subTest(replacement=replacement):
+                response = self.fetch(
+                    "/replacement/test.txt?replacement=" + replacement,
+                    method="HEAD",
+                    headers={"Accept-Encoding": "gzip"},
+                    decompress_response=False,
+                    follow_redirects=False,
+                )
+                self.assertEqual(response.code, status)
+                self.assertEqual(response.body, b"")
+                self.assertNotIn("Content-Encoding", response.headers)
+                self.assertNotIn("Transfer-Encoding", response.headers)
+                self.assertEqual(response.headers["Content-Length"], "0")
+                if replacement == "redirect":
+                    self.assertEqual(response.headers["Location"], "/elsewhere")
+
+    def test_head_subclass_final_representation_headers(self):
+        with open(os.path.join(self.temp_dir.name, "test.txt"), "wb") as file:
+            file.write(b"content")
+        for query, content_type, content_encoding in (
+            ("content_type=image/png", "image/png", None),
+            ("content_encoding=identity", "text/plain", "identity"),
+        ):
+            with self.subTest(query=query):
+                response = self.fetch(
+                    "/metadata/test.txt?" + query,
+                    method="HEAD",
+                    headers={"Accept-Encoding": "gzip"},
+                    decompress_response=False,
+                )
+                self.assertEqual(response.code, 200)
+                self.assertEqual(response.body, b"")
+                self.assertEqual(response.headers["Content-Type"], content_type)
+                self.assertEqual(
+                    response.headers.get("Content-Encoding"), content_encoding
+                )
+                self.assertEqual(response.headers["Content-Length"], "7")
+                self.assertEqual(response.headers["X-Head-Metadata"], "present")
+                self.assertIn("head_metadata=present", response.headers["Set-Cookie"])
+
+    def test_conditional_head(self):
+        with open(os.path.join(self.temp_dir.name, "test.txt"), "wb") as file:
+            file.write(b"content")
+        response = self.fetch("/static/test.txt")
+        for header, value in (
+            ("If-None-Match", response.headers["Etag"]),
+            ("If-Modified-Since", response.headers["Last-Modified"]),
+        ):
+            with self.subTest(header=header):
+                result = self.fetch(
+                    "/static/test.txt",
+                    method="HEAD",
+                    headers={"Accept-Encoding": "gzip", header: value},
+                    decompress_response=False,
+                )
+                self.assertEqual(result.code, 304)
+                self.assertEqual(result.body, b"")
+                for name in ("Content-Encoding", "Content-Length", "Transfer-Encoding"):
+                    self.assertNotIn(name, result.headers)
+
+    def test_head_errors(self):
+        with open(os.path.join(self.temp_dir.name, "test.txt"), "wb") as file:
+            file.write(b"content")
+        for path, extra_headers, status in (
+            ("/static/test.txt", {"Range": "bytes=100-"}, 416),
+            ("/static/missing.txt", {}, 404),
+            ("/metadata/test.txt?error=1", {}, 403),
+        ):
+            with self.subTest(status=status):
+                response = self.fetch(
+                    path,
+                    method="HEAD",
+                    headers={"Accept-Encoding": "gzip", **extra_headers},
+                    decompress_response=False,
+                )
+                self.assertEqual(response.code, status)
+                self.assertEqual(response.body, b"")
+                self.assertNotIn("Content-Encoding", response.headers)
+                self.assertNotIn("Transfer-Encoding", response.headers)
+                if status == 416:
+                    self.assertEqual(response.headers["Content-Range"], "bytes */7")
+                    self.assertEqual(response.headers["Content-Length"], "0")
+
+    def test_head_compression_metadata(self):
+        sizes = (
+            0,
+            GZipContentEncoding.MIN_LENGTH - 1,
+            GZipContentEncoding.MIN_LENGTH,
+            GZipContentEncoding.MIN_LENGTH + 1,
+            128 * 1024 + 1,
+        )
+        for size, extension, encoding in itertools.product(
+            sizes, ("txt", "png"), ("gzip", "identity")
+        ):
+            with self.subTest(size=size, extension=extension, encoding=encoding):
+                filename = "%s.%s" % (size, extension)
+                content = b"x" * size
+                with open(os.path.join(self.temp_dir.name, filename), "wb") as file:
+                    file.write(content)
+                headers = {"Accept-Encoding": encoding}
+                get_response = self.fetch(
+                    "/static/" + filename,
+                    headers=headers,
+                    decompress_response=False,
+                )
+                # GET primes the content hash used by the default ETag implementation.
+                with mock.patch.object(
+                    StaticFileHandler,
+                    "get_content",
+                    side_effect=AssertionError("HEAD read the file body"),
+                ):
+                    head_response = self.fetch(
+                        "/static/" + filename,
+                        method="HEAD",
+                        headers=headers,
+                        decompress_response=False,
+                    )
+                self.assertEqual(get_response.code, 200)
+                self.assertEqual(head_response.code, 200)
+                self.assertEqual(head_response.body, b"")
+                compressed = size > 0 and extension == "txt" and encoding == "gzip"
+                expected_encoding = "gzip" if compressed else None
+                self.assertEqual(
+                    get_response.headers.get("Content-Encoding"), expected_encoding
+                )
+                self.assertEqual(
+                    head_response.headers.get("Content-Encoding"), expected_encoding
+                )
+                self.assertEqual(
+                    head_response.headers.get("Content-Type"),
+                    get_response.headers.get("Content-Type"),
+                )
+                self.assertEqual(
+                    head_response.headers.get("Vary"),
+                    get_response.headers.get("Vary"),
+                )
+                if compressed:
+                    self.assertEqual(gzip.decompress(get_response.body), content)
+                    self.assertNotIn("Content-Length", head_response.headers)
+                else:
+                    self.assertEqual(get_response.body, content)
+                    self.assertEqual(head_response.headers["Content-Length"], str(size))
+
+    def test_head_without_cached_etag_does_not_read_body(self):
+        with open(os.path.join(self.temp_dir.name, "test.txt"), "wb") as file:
+            file.write(b"x" * GZipContentEncoding.MIN_LENGTH)
+        for encoding in ("gzip", "identity"):
+            with self.subTest(encoding=encoding):
+                with (
+                    mock.patch.object(
+                        StaticFileHandler,
+                        "get_content",
+                        side_effect=AssertionError("HEAD read the file body"),
+                    ) as get_content,
+                    mock.patch(
+                        "tornado.web.gzip.GzipFile",
+                        side_effect=AssertionError("HEAD initialized a compressor"),
+                    ) as gzip_file,
+                ):
+                    response = self.fetch(
+                        "/no_etag/test.txt",
+                        method="HEAD",
+                        headers={"Accept-Encoding": encoding},
+                        decompress_response=False,
+                    )
+                self.assertEqual(response.code, 200)
+                self.assertEqual(response.body, b"")
+                get_content.assert_not_called()
+                gzip_file.assert_not_called()
+                self.assertEqual(
+                    response.headers.get("Content-Encoding"),
+                    "gzip" if encoding == "gzip" else None,
+                )
+
+    def test_head_range_compression(self):
+        with open(os.path.join(self.temp_dir.name, "test.txt"), "wb") as file:
+            file.write(b"0123456789")
+        headers = {"Accept-Encoding": "gzip", "Range": "bytes=1-4"}
+        get_response = self.fetch(
+            "/static/test.txt", headers=headers, decompress_response=False
+        )
+        head_response = self.fetch(
+            "/static/test.txt",
+            method="HEAD",
+            headers=headers,
+            decompress_response=False,
+        )
+        self.assertEqual(gzip.decompress(get_response.body), b"1234")
+        self.assertEqual(head_response.code, 206)
+        self.assertEqual(head_response.headers["Content-Range"], "bytes 1-4/10")
+        self.assertEqual(head_response.headers.get("Content-Encoding"), "gzip")
+        self.assertNotIn("Content-Length", head_response.headers)
+        self.assertEqual(head_response.body, b"")
 
 
 class PathArgsInPrepareTest(WebTestCase):

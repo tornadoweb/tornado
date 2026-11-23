@@ -3171,6 +3171,17 @@ class StaticFileHandler(RequestHandler):
                     return
         else:
             assert self.request.method == "HEAD"
+            # GET streams nonempty files, including those below MIN_LENGTH.
+            # Associate that decision with this representation, so replacing the
+            # response before finalization does not inherit its compression.
+            if content_length:
+                for transform in self._transforms:
+                    if isinstance(transform, GZipContentEncoding):
+                        transform._head_representation = (
+                            self._status_code,
+                            self._headers,
+                            str(content_length),
+                        )
 
     def compute_etag(self) -> str | None:
         """Sets the ``Etag`` header based on static url version.
@@ -3831,6 +3842,7 @@ class GZipContentEncoding(OutputTransform):
 
     def __init__(self, request: httputil.HTTPServerRequest) -> None:
         self._gzipping = "gzip" in request.headers.get("Accept-Encoding", "")
+        self._head_representation: tuple[int, httputil.HTTPHeaders, str] | None = None
 
     def _compressible_type(self, ctype: str) -> bool:
         ctype = httputil._parse_media_type(ctype)
@@ -3852,14 +3864,29 @@ class GZipContentEncoding(OutputTransform):
                 headers["Vary"] += ", Accept-Encoding"
             else:
                 headers["Vary"] = "Accept-Encoding"
+        head_only = False
+        if self._head_representation is not None:
+            original_status, original_headers, original_length = (
+                self._head_representation
+            )
+            head_only = (
+                not chunk
+                and status_code == original_status
+                and headers is original_headers
+                and headers.get("Content-Length") == original_length
+            )
         if self._gzipping:
             self._gzipping = (
                 compressible
-                and (not finishing or len(chunk) >= self.MIN_LENGTH)
+                and (head_only or not finishing or len(chunk) >= self.MIN_LENGTH)
                 and ("Content-Encoding" not in headers)
             )
         if self._gzipping:
             headers["Content-Encoding"] = "gzip"
+            if head_only:
+                headers.pop("Content-Length", None)
+                self._gzipping = False
+                return status_code, headers, chunk
             self._gzip_value = BytesIO()
             self._gzip_file = gzip.GzipFile(
                 mode="w", fileobj=self._gzip_value, compresslevel=self.GZIP_LEVEL
