@@ -1,9 +1,12 @@
 import asyncio
 import concurrent.futures
+import socket
 import threading
 import unittest.mock as mock
 from wsgiref.validate import validator
 
+from tornado.httputil import HTTPHeaders
+from tornado.iostream import IOStream, StreamClosedError
 from tornado.log import app_log, gen_log
 from tornado.routing import RuleRouter
 from tornado.test.util import AsyncHTTPTestCase
@@ -171,6 +174,9 @@ class WSGIValidationTest(AsyncHTTPTestCase):
                     ],
                 )
                 return [b"ok\n"]
+            elif path == "/odd_reason":
+                start_response("200 A <b>reason</b>", [("Content-Length", "2")])
+                return [b"ok"]
             elif path == "/app_exception":
                 raise RuntimeError("crash before headers")
             start_response("404 Not Found", [("Content-Type", "text/plain")])
@@ -192,6 +198,51 @@ class WSGIValidationTest(AsyncHTTPTestCase):
         with ExpectLog(app_log, "Exception in WSGIContainer"):
             response = self.fetch("/bad_header")
             self.assertEqual(response.code, 500)
+
+    def test_unusual_reason_phrase_allowed(self):
+        # "<" is valid in a reason phrase. Only
+        # RequestHandler.set_status rejects "<", to protect its HTML error
+        # page; WSGIContainer passes the app's reason through.
+        response = self.fetch("/odd_reason")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.reason, "A <b>reason</b>")
+        self.assertEqual(response.body, b"ok")
+
+    @gen_test
+    async def test_keep_alive_after_error(self):
+        # An error that WSGIContainer catches before sending anything gets a
+        # clean 500 and leaves the connection usable. An invalid reason
+        # phrase is only caught by write_headers, which closes the
+        # connection after its 500.
+        stream = IOStream(socket.socket())
+        await stream.connect(("127.0.0.1", self.get_http_port()))
+        self.addCleanup(stream.close)
+
+        async def get(path):
+            await stream.write(b"GET %s HTTP/1.1\r\nHost: x\r\n\r\n" % path)
+            header_data = await stream.read_until(b"\r\n\r\n")
+            start_line, header_block = header_data.decode("latin1").split("\r\n", 1)
+            headers = HTTPHeaders.parse(header_block)
+            body = await stream.read_bytes(int(headers["Content-Length"]))
+            return start_line, headers, body
+
+        with ExpectLog(app_log, "Exception in WSGIContainer"):
+            start_line, headers, _ = await get(b"/bad_header")
+        self.assertEqual(start_line, "HTTP/1.1 500 Internal Server Error")
+        self.assertNotIn("Connection", headers)
+        with ExpectLog(app_log, "Exception in WSGIContainer"):
+            start_line, _, _ = await get(b"/app_exception")
+        self.assertEqual(start_line, "HTTP/1.1 500 Internal Server Error")
+        start_line, _, body = await get(b"/whitespace_header")
+        self.assertEqual(start_line, "HTTP/1.1 200 OK")
+        self.assertEqual(body, b"ok\n")
+
+        with ExpectLog(gen_log, "Exception in write_headers"):
+            start_line, headers, _ = await get(b"/bad_reason")
+        self.assertEqual(start_line, "HTTP/1.1 500 Internal Server Error")
+        self.assertEqual(headers["Connection"], "close")
+        with self.assertRaises(StreamClosedError):
+            await stream.read_bytes(1)
 
     def test_header_with_whitespace(self):
         response = self.fetch("/whitespace_header")

@@ -838,6 +838,7 @@ class SetHeaderHandler(RequestHandler):
         self.set_header("X-Leading", "  leading")
         self.set_header("X-Trailing", "trailing  ")
         self.set_header("X-Both", "  both  ")
+        self.add_header("X-Added", "  added  ")
 
         self.finish(b"ok")
 
@@ -1081,6 +1082,7 @@ js_embed()
         self.assertEqual(response.headers["X-Leading"], "leading")
         self.assertEqual(response.headers["X-Trailing"], "trailing")
         self.assertEqual(response.headers["X-Both"], "both")
+        self.assertEqual(response.headers["X-Added"], "added")
 
     def test_get_argument(self):
         response = self.fetch("/get_argument?foo=bar")

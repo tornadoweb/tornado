@@ -673,6 +673,29 @@ class HTTPHeadersTest(TestCase):
             headers.update({"Foo": "bar\rbaz"})
         self.assertEqual(list(headers.get_all()), [])
 
+    def test_surrounding_whitespace_allowed(self):
+        # Leading and trailing whitespace is optional whitespace around the
+        # field value (RFC 9110 section 5.5), not part of it, so it is
+        # accepted when building headers. (#3902 briefly rejected it.)
+        for value in [" lead", "trail ", "  both  ", "\tlead", "trail\t", " ", "\t"]:
+            with self.subTest(value=value):
+                headers = HTTPHeaders({"X-Foo": value})
+                self.assertEqual(headers["X-Foo"], value)
+                headers = HTTPHeaders()
+                headers["X-Foo"] = value
+                self.assertEqual(headers["X-Foo"], value)
+                headers = HTTPHeaders()
+                headers.add("X-Foo", value)
+                headers.add("X-Foo", value)
+                self.assertEqual(headers.get_list("X-Foo"), [value, value])
+        # Whitespace doesn't hide invalid characters.
+        for value in [" \r\n", "\t\x00", " a\rb ", "\n ", " \x7f"]:
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    HTTPHeaders({"X-Foo": value})
+                with self.assertRaises(ValueError):
+                    HTTPHeaders().add("X-Foo", value)
+
     def test_loose_multipart_validation_is_not_reapplied(self):
         headers = HTTPHeaders()
         headers.add("X-Filename", "\u20ac", _chars_are_bytes=False)

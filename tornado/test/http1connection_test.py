@@ -315,6 +315,34 @@ class HTTP1ConnectionTest(AsyncTestCase):
                     )
 
     @gen_test
+    def test_write_headers_valid_reason_phrase(self):
+        # The reason phrase grammar (RFC 9112 section 4) allows spaces,
+        # tabs, VCHAR and obs-text, and it may be empty. "<" is allowed here
+        # even though RequestHandler.set_status rejects it.
+        for i, reason in enumerate(
+            ["", "OK", "Not Found", "Tab\there", "A <b>tag</b>"]
+        ):
+            if i > 0:
+                yield self._make_streams()
+            with self.subTest(reason=reason):
+                conn = HTTP1Connection(self.server_stream, False)
+                start_line = httputil.ResponseStartLine("HTTP/1.1", 200, reason)
+
+                class Delegate(HTTPMessageDelegate):
+                    def finish(self):
+                        conn.write_headers(
+                            start_line, httputil.HTTPHeaders({"Content-Length": "0"})
+                        )
+                        conn.finish()
+
+                yield self.client_stream.write(b"GET / HTTP/1.1\r\n\r\n")
+                yield conn.read_response(Delegate())
+                resp = yield self.client_stream.read_until(b"\r\n")
+                self.assertEqual(
+                    resp, b"HTTP/1.1 200 " + reason.encode("latin1") + b"\r\n"
+                )
+
+    @gen_test
     def test_write_headers_header_value_whitespace(self):
         conn = HTTP1Connection(self.server_stream, False)
         start_line = httputil.ResponseStartLine("HTTP/1.1", 200, "OK")
