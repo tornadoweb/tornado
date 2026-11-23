@@ -1765,6 +1765,25 @@ class StaticFileTest(WebTestCase):
         response = self.get_and_head("/static/blarg")
         self.assertEqual(response.code, 404)
 
+    def test_static_null_byte(self):
+        # A null byte is a 404 like any other missing file, not a 500
+        # from the ValueError that os.path.realpath and os.stat raise.
+        # Cover a file that exists without the null byte, a directory,
+        # and a missing file, since each takes a different path through
+        # validate_absolute_path.
+        for path in [
+            "/static/robots.txt%00",
+            "/static/robots%00.txt",
+            "/static/dir%00/index.html",
+            "/static/%00",
+            "/static/blarg%00",
+        ]:
+            with self.subTest(path=path):
+                response = self.get_and_head(path)
+                self.assertEqual(response.code, 404)
+        # The same file is still served without the null byte.
+        self.assertEqual(self.get_and_head("/static/robots.txt").code, 200)
+
     def test_static_directory_without_default_filename(self):
         # Without a default_filename, a directory is not servable. This
         # shares the stat() that validate_absolute_path performs, so it is
@@ -1919,6 +1938,14 @@ class StaticFileSymlinkTest(WebTestCase):
         response = self.fetch("/default_filename/")
         self.assertEqual(response.code, 200)
         self.assertEqual(response.body, b"root index")
+
+    def test_default_filename_null_byte(self):
+        # With default_filename set, a null byte is still a 404, not a
+        # 500 or a redirect to a directory.
+        for path in ["/default_filename/%00", "/default_filename/%00/"]:
+            with self.subTest(path=path):
+                response = self.fetch(path, follow_redirects=False)
+                self.assertEqual(response.code, 404)
 
     def test_symlinked_default_filename(self):
         # The default filename is appended after the directory has been
