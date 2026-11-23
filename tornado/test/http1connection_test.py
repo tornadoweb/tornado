@@ -388,6 +388,47 @@ class HTTP1ConnectionTest(AsyncTestCase):
                 yield fut
 
     @gen_test
+    def test_write_headers_invalid_1xx_then_final_response(self):
+        # If an informational response is replaced with a 500, the final
+        # response that follows must not be sent after it.
+        conn = HTTP1Connection(self.server_stream, False)
+        futures = []
+
+        class Delegate(HTTPMessageDelegate):
+            def finish(self):
+                headers = httputil.HTTPHeaders()
+                headers._as_list["Link"] = ["bad\rvalue"]
+                conn.write_headers(
+                    httputil.ResponseStartLine("HTTP/1.1", 103, "Early Hints"),
+                    headers,
+                )
+                futures.append(
+                    conn.write_headers(
+                        httputil.ResponseStartLine("HTTP/1.1", 200, "OK"),
+                        httputil.HTTPHeaders(
+                            {"Content-Length": "5", "X-Smuggled": "yes"}
+                        ),
+                        b"hello",
+                    )
+                )
+                conn.finish()
+
+        with ExpectLog(
+            gen_log, "Exception in write_headers; sending 500 instead of 103"
+        ):
+            yield self.client_stream.write(b"GET / HTTP/1.1\r\n\r\n")
+            yield conn.read_response(Delegate())
+            resp = yield self.client_stream.read_until(b"\r\n\r\n")
+        self.assertEqual(
+            resp,
+            b"HTTP/1.1 500 Internal Server Error\r\n"
+            b"Content-Length: 0\r\nConnection: close\r\n\r\n",
+        )
+        with self.assertRaises(StreamClosedError):
+            yield self.client_stream.read_bytes(1)
+        self.assertIsInstance(futures[0].exception(), StreamClosedError)
+
+    @gen_test
     def test_write_headers_invalid_then_write_body(self):
         # A streaming response whose headers are invalid: the 500 replaces
         # it, the body writes that follow report StreamClosedError (as if

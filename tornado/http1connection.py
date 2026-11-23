@@ -508,6 +508,15 @@ class HTTP1Connection(httputil.HTTPConnection):
     ) -> "Future[None]":
         """Implements `.HTTPConnection.write_headers`."""
         if not self.is_client:
+            if self._response_replaced:
+                # A 500 has already been sent in place of an invalid response
+                # (possibly a 1xx). Anything the caller sends now belongs to
+                # the response that was replaced, and must not follow the 500
+                # onto the wire.
+                future = self._write_future = Future()
+                future.set_exception(iostream.StreamClosedError())
+                future.exception()
+                return future
             try:
                 self._validate_headers(start_line, headers)
             except Exception:
