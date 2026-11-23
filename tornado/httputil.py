@@ -192,21 +192,30 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
     def _check_header(
         self, name: str, value: str, *, _chars_are_bytes: bool = True
     ) -> None:
+        # Raises ValueError, not HTTPInputError: this is called for headers the
+        # application is building as well as ones parsed from the network.
+        # parse_line converts the error to HTTPInputError for parsed headers.
         if not _ABNF.field_name.fullmatch(name):
-            raise HTTPInputError("Invalid header name %r" % name)
+            raise ValueError("Invalid header name %r" % name)
         if _chars_are_bytes:
             if not _ABNF.field_value.fullmatch(
                 to_unicode(value).strip(HTTP_WHITESPACE)
             ):
                 # TODO: the fact we still support bytes here (contrary to type annotations)
                 # and still test for it should probably be changed.
-                raise HTTPInputError("Invalid header value %r" % value)
+                raise ValueError("Invalid header value %r" % value)
         else:
             if _FORBIDDEN_HEADER_CHARS_RE.search(value):
-                raise HTTPInputError("Invalid header value %r" % value)
+                raise ValueError("Invalid header value %r" % value)
 
     def add(self, name: str, value: str, *, _chars_are_bytes: bool = True) -> None:
-        """Adds a new value for the given key."""
+        """Adds a new value for the given key.
+
+        .. versionchanged:: 6.7
+           An invalid name or value raises `ValueError`. Tornado 6.5 and 6.6 raised
+           `HTTPInputError`, which is reserved for malformed input from the
+           network.
+        """
         self._check_header(name, value, _chars_are_bytes=_chars_are_bytes)
         norm_name = _normalize_header(name)
         self._combined_cache.pop(norm_name, None)
@@ -278,7 +287,13 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
             name, value = line.split(":", 1)
         except ValueError:
             raise HTTPInputError("no colon in header line")
-        self.add(name, value.strip(HTTP_WHITESPACE), _chars_are_bytes=_chars_are_bytes)
+        try:
+            self.add(
+                name, value.strip(HTTP_WHITESPACE), _chars_are_bytes=_chars_are_bytes
+            )
+        except ValueError as e:
+            # This header came from the network, so it's an input error.
+            raise HTTPInputError(str(e)) from e
 
     @classmethod
     def parse(cls, headers: str, *, _chars_are_bytes: bool = True) -> HTTPHeaders:
@@ -328,7 +343,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
 
         .. versionchanged:: 6.7
            The name and value are validated like `add`; invalid headers raise
-           `HTTPInputError` instead of being stored unchecked.
+           `ValueError` instead of being stored unchecked.
         """
         self._check_header(name, value)
         norm_name = _normalize_header(name)
@@ -681,6 +696,17 @@ class HTTPServerRequest:
 class HTTPInputError(Exception):
     """Exception class for malformed HTTP requests or responses
     from remote sources.
+
+    Raise this only for data that came from the other side of the
+    connection. Tornado treats it as the peer's fault: when it escapes from
+    an `HTTPMessageDelegate` on the server, it is logged at ``info`` level
+    without a traceback and the client gets a 400 Bad Request. An error in
+    data the application supplied (for example, an invalid header value
+    passed to `HTTPHeaders` or `.RequestHandler.set_header`) is a bug in
+    the application and must raise something else, usually `ValueError`,
+    so that it is logged as one. Functions that handle both kinds of data,
+    like `HTTPHeaders.add`, raise `ValueError`, and the parsing code that
+    calls them converts it to `HTTPInputError`.
 
     .. versionadded:: 4.0
     """

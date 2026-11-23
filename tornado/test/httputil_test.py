@@ -655,21 +655,21 @@ class HTTPHeadersTest(TestCase):
 
     def test_setitem_validates_name_and_value(self):
         headers = HTTPHeaders()
-        with self.assertRaises(HTTPInputError):
+        with self.assertRaises(ValueError):
             headers["Foo Bar"] = "baz"
-        with self.assertRaises(HTTPInputError):
+        with self.assertRaises(ValueError):
             headers["Foo"] = "bar\rbaz"
-        with self.assertRaises(HTTPInputError):
+        with self.assertRaises(ValueError):
             headers["Foo"] = "bar\x00baz"
         # obs-text is allowed in a header value.
         headers["Foo"] = "b\u00e1r"
         self.assertEqual(headers["Foo"], "b\u00e1r")
 
     def test_update_and_initialization_validate(self):
-        with self.assertRaises(HTTPInputError):
+        with self.assertRaises(ValueError):
             HTTPHeaders({"Foo": "bar\rbaz"})
         headers = HTTPHeaders()
-        with self.assertRaises(HTTPInputError):
+        with self.assertRaises(ValueError):
             headers.update({"Foo": "bar\rbaz"})
         self.assertEqual(list(headers.get_all()), [])
 
@@ -830,8 +830,11 @@ class HTTPHeadersTest(TestCase):
         ]
         for name in invalid_names:
             headers = HTTPHeaders()
-            with self.assertRaises(HTTPInputError):
+            with self.assertRaises(ValueError):
                 headers.add(name, "bar")
+            # The same name in a parsed header line is an input error.
+            with self.assertRaises(HTTPInputError):
+                HTTPHeaders.parse(f"{name}: bar\r\n")
 
     def test_linear_performance(self):
         def f(n):
