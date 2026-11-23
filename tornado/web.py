@@ -3306,11 +3306,14 @@ class StaticFileHandler(RequestHandler):
 
         .. versionadded:: 3.1
         """
-        if "\x00" in absolute_path:
+        if "\x00" in self.path or "\x00" in absolute_path:
             # A null byte (%00 in the URL) can never be part of a file
             # name. os.path.realpath and os.stat raise ValueError rather
             # than OSError for it, which would otherwise surface as a 500
-            # (with a logged traceback) instead of a 404.
+            # (with a logged traceback) instead of a 404. The request's
+            # path is checked as well as absolute_path because on Python
+            # 3.11.0 through 3.11.4, os.path.abspath silently truncates at
+            # the first null byte, so absolute_path names a different file.
             raise HTTPError(404)
         root = self._check_in_root(root, absolute_path, self.path)
         # Symlinks may point anywhere inside allowed_symlink_directory, which
