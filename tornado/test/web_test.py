@@ -3019,6 +3019,17 @@ class StatusReasonTest(SimpleHandlerTestCase):
         self.assertEqual(response.code, 682)
         self.assertEqual(response.reason, "Unknown")
 
+    def test_obs_text(self):
+        # Characters U+0080 to U+00FF are allowed in a reason phrase, and
+        # are sent as Latin-1 like header values.
+        response = self.fetch("/?code=400&reason=R%C3%A9ason")
+        self.assertEqual(response.code, 400)
+        self.assertEqual(response.reason, "R\xe9ason")
+        # Anything beyond that can't be sent.
+        response = self.fetch("/?code=400&reason=%E2%82%AC")
+        self.assertEqual(response.code, 400)
+        self.assertEqual(response.reason, "Unknown")
+
     def test_header_injection(self):
         response = self.fetch("/?code=200&reason=OK%0D%0AX-Injection:injected")
         self.assertEqual(response.code, 200)

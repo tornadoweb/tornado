@@ -175,7 +175,7 @@ class WSGIValidationTest(AsyncHTTPTestCase):
                 )
                 return [b"ok\n"]
             elif path == "/odd_reason":
-                start_response("200 A <b>reason</b>", [("Content-Length", "2")])
+                start_response("200 A <b>r\xe9ason</b>", [("Content-Length", "2")])
                 return [b"ok"]
             elif path == "/app_exception":
                 raise RuntimeError("crash before headers")
@@ -200,12 +200,13 @@ class WSGIValidationTest(AsyncHTTPTestCase):
             self.assertEqual(response.code, 500)
 
     def test_unusual_reason_phrase_allowed(self):
-        # "<" is valid in a reason phrase. Only
+        # obs-text and "<" are valid in a reason phrase. (PEP 3333 says the
+        # status is a Latin-1 string, and that's how it is sent.) Only
         # RequestHandler.set_status rejects "<", to protect its HTML error
         # page; WSGIContainer passes the app's reason through.
         response = self.fetch("/odd_reason")
         self.assertEqual(response.code, 200)
-        self.assertEqual(response.reason, "A <b>reason</b>")
+        self.assertEqual(response.reason, "A <b>r\xe9ason</b>")
         self.assertEqual(response.body, b"ok")
 
     @gen_test

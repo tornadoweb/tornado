@@ -567,7 +567,11 @@ class HTTP1Connection(httputil.HTTPConnection):
             assert self._request_start_line is not None
             assert self._request_headers is not None
             self._response_start_line = start_line
-            lines.append(utf8("HTTP/1.1 %d %s" % (start_line[1], start_line[2])))
+            # The reason phrase may contain obs-text (U+0080 to U+00FF), which,
+            # like header values, is sent as Latin-1.
+            lines.append(
+                ("HTTP/1.1 %d %s" % (start_line[1], start_line[2])).encode("latin1")
+            )
             self._chunking_output = (
                 # TODO: should this use
                 # self._request_start_line.version or

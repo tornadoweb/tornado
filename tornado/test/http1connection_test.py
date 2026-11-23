@@ -320,7 +320,7 @@ class HTTP1ConnectionTest(AsyncTestCase):
         # tabs, VCHAR and obs-text, and it may be empty. "<" is allowed here
         # even though RequestHandler.set_status rejects it.
         for i, reason in enumerate(
-            ["", "OK", "Not Found", "Tab\there", "A <b>tag</b>"]
+            ["", "OK", "Not Found", "Tab\there", "R\xe9ason", "A <b>tag</b>"]
         ):
             if i > 0:
                 yield self._make_streams()
