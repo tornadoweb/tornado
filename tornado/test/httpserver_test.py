@@ -1165,6 +1165,12 @@ class KeepAliveTest(AsyncHTTPTestCase):
         self.stream.close()
         del self.stream
 
+    def send_request(self, version, connection=None):
+        request = b"GET / " + version + b"\r\nHost:127.0.0.1\r\n"
+        if connection is not None:
+            request += b"Connection: " + connection + b"\r\n"
+        self.stream.write(request + b"\r\n")
+
     @gen_test
     def test_two_requests(self):
         yield self.connect()
@@ -1185,6 +1191,54 @@ class KeepAliveTest(AsyncHTTPTestCase):
         self.assertTrue(not data)
         self.assertEqual(self.headers["Connection"], "close")
         self.close()
+
+    # Connection is a list of options, so "close" and "keep-alive" count
+    # when they are not the only element.
+    @gen_test
+    def test_request_close_in_list(self):
+        for connection in [
+            b"TE, close",
+            b"close, TE",
+            b"TE,close",
+            b"te ,\tCLOSE",
+            b"close,",
+            b",close",
+            b"keep-alive, close",
+            b"TE\r\nConnection: close",
+        ]:
+            with self.subTest(connection=connection):
+                yield self.connect()
+                try:
+                    self.send_request(b"HTTP/1.1", connection)
+                    yield self.read_response()
+                    self.assertEqual(self.headers.get("Connection"), "close")
+                    data = yield self.stream.read_until_close()
+                    self.assertFalse(data)
+                finally:
+                    self.close()
+
+    @gen_test
+    def test_request_other_options_keepalive(self):
+        for connection in [
+            b"keep-alive",
+            b"TE",
+            b"Upgrade",
+            b"keep-alive, TE",
+            b"TE,",
+            b"closed",
+            b"nonclose",
+            b"TE\r\nConnection: keep-alive",
+        ]:
+            with self.subTest(connection=connection):
+                yield self.connect()
+                try:
+                    self.send_request(b"HTTP/1.1", connection)
+                    yield self.read_response()
+                    self.assertNotIn("Connection", self.headers)
+                    self.send_request(b"HTTP/1.1")
+                    yield self.read_response()
+                finally:
+                    self.close()
 
     # keepalive is supported for http 1.0 too, but it's opt-in
     @gen_test
@@ -1209,6 +1263,46 @@ class KeepAliveTest(AsyncHTTPTestCase):
         yield self.read_response()
         self.assertEqual(self.headers["Connection"], "Keep-Alive")
         self.close()
+
+    @gen_test
+    def test_http10_keepalive_in_list(self):
+        for connection in [
+            b"Keep-Alive, TE",
+            b"TE, KEEP-ALIVE",
+            b"TE,\tkeep-alive ,",
+            b"TE\r\nConnection: keep-alive",
+        ]:
+            with self.subTest(connection=connection):
+                yield self.connect()
+                try:
+                    self.send_request(b"HTTP/1.0", connection)
+                    yield self.read_response()
+                    self.assertEqual(self.headers.get("Connection"), "Keep-Alive")
+                    self.send_request(b"HTTP/1.0", connection)
+                    yield self.read_response()
+                    self.assertEqual(self.headers.get("Connection"), "Keep-Alive")
+                finally:
+                    self.close()
+
+    @gen_test
+    def test_http10_other_options_close(self):
+        for connection in [
+            b"TE",
+            b"close",
+            b"keepalive",
+            b"keep-alive, close",
+            b"TE, close",
+        ]:
+            with self.subTest(connection=connection):
+                yield self.connect()
+                try:
+                    self.send_request(b"HTTP/1.0", connection)
+                    yield self.read_response()
+                    self.assertNotIn("Connection", self.headers)
+                    data = yield self.stream.read_until_close()
+                    self.assertFalse(data)
+                finally:
+                    self.close()
 
     @gen_test
     def test_http10_keepalive_extra_crlf(self):
