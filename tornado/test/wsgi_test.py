@@ -34,6 +34,12 @@ class WSGIAppMixin:
                 ("/host", make_container(self.host_wsgi_app)),
                 ("/barrier", make_container(self.barrier_wsgi_app)),
                 ("/streaming_barrier", make_container(self.streaming_barrier_wsgi_app)),
+                ("/no_content", make_container(self.no_content_wsgi_app)),
+                ("/not_modified", make_container(self.not_modified_wsgi_app)),
+                (
+                    "/not_modified_with_content_length",
+                    make_container(self.not_modified_with_content_length_wsgi_app),
+                ),
             ]
         )
 
@@ -69,6 +75,18 @@ class WSGIAppMixin:
         else:
             yield b"%d" % n
 
+    def no_content_wsgi_app(self, environ, start_response):
+        start_response("204 No Content", [("Content-Length", "4")])
+        return [b"body"]
+
+    def not_modified_wsgi_app(self, environ, start_response):
+        start_response("304 Not Modified", [])
+        return [b"body"]
+
+    def not_modified_with_content_length_wsgi_app(self, environ, start_response):
+        start_response("304 Not Modified", [("Content-Length", "12")])
+        return [b"body"]
+
 
 class WSGIContainerHostTest(WSGIAppMixin, AsyncHTTPTestCase):
     def get_executor(self):
@@ -99,6 +117,25 @@ class WSGIContainerDummyExecutorTest(WSGIAppMixin, AsyncHTTPTestCase):
     def test_head(self):
         response = self.fetch("/simple", method="HEAD")
         self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"")
+        self.assertEqual(response.headers["Content-Length"], "12")
+
+    def test_no_content(self):
+        response = self.fetch("/no_content")
+        self.assertEqual(response.code, 204)
+        self.assertEqual(response.body, b"")
+        self.assertNotIn("Content-Length", response.headers)
+        self.assertNotIn("Content-Type", response.headers)
+
+    def test_not_modified(self):
+        response = self.fetch("/not_modified")
+        self.assertEqual(response.code, 304)
+        self.assertEqual(response.body, b"")
+        self.assertNotIn("Content-Length", response.headers)
+
+    def test_not_modified_with_content_length(self):
+        response = self.fetch("/not_modified_with_content_length")
+        self.assertEqual(response.code, 304)
         self.assertEqual(response.body, b"")
         self.assertEqual(response.headers["Content-Length"], "12")
 
