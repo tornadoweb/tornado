@@ -4,7 +4,7 @@ import socket
 from tornado import gen, httputil
 from tornado.http1connection import HTTP1Connection, HTTP1ServerConnection
 from tornado.httputil import HTTPMessageDelegate, HTTPServerConnectionDelegate
-from tornado.iostream import IOStream
+from tornado.iostream import IOStream, StreamClosedError
 from tornado.locks import Event
 from tornado.log import app_log, gen_log
 from tornado.netutil import add_accept_handler
@@ -358,3 +358,43 @@ class HTTP1ConnectionTest(AsyncTestCase):
                 headers = httputil.HTTPHeaders({"X-Test": valid_val})
                 fut = client_conn.write_headers(start_line, headers)
                 yield fut
+
+    @gen_test
+    def test_write_headers_invalid_then_write_body(self):
+        # A streaming response whose headers are invalid: the 500 replaces
+        # it, the body writes that follow report StreamClosedError (as if
+        # the client had gone away) instead of raising HTTPOutputError, and
+        # the connection is closed after the 500 even though the request
+        # asked for keep-alive.
+        conn = HTTP1Connection(self.server_stream, False)
+        start_line = httputil.ResponseStartLine("HTTP/1.1", 200, "OK")
+        write_futures = []
+
+        class Delegate(HTTPMessageDelegate):
+            def finish(self):
+                headers = httputil.HTTPHeaders()
+                headers._as_list["X-Test"] = ["bad\rvalue"]
+                conn.write_headers(start_line, headers)
+                write_futures.append(conn.write(b"first"))
+                write_futures.append(conn.write(b"second"))
+                conn.finish()
+
+        with ExpectLog(
+            gen_log, "Exception in write_headers; sending 500 instead of 200"
+        ):
+            yield self.client_stream.write(
+                b"GET / HTTP/1.1\r\nConnection: keep-alive\r\n\r\n"
+            )
+            yield conn.read_response(Delegate())
+            resp = yield self.client_stream.read_until(b"\r\n\r\n")
+        self.assertEqual(
+            resp,
+            b"HTTP/1.1 500 Internal Server Error\r\n"
+            b"Content-Length: 0\r\nConnection: close\r\n\r\n",
+        )
+        # Nothing follows the 500, and the server closes the connection.
+        with self.assertRaises(StreamClosedError):
+            yield self.client_stream.read_bytes(1)
+        self.assertEqual(len(write_futures), 2)
+        for f in write_futures:
+            self.assertIsInstance(f.exception(), StreamClosedError)

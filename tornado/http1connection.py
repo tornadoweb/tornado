@@ -190,6 +190,9 @@ class HTTP1Connection(httputil.HTTPConnection):
         # (after the response has been written in the server side,
         # and after it has been read in the client)
         self._disconnect_on_finish = False
+        # True if write_headers replaced an invalid response with a 500.
+        # Any further body writes for the original response are dropped.
+        self._response_replaced = False
         self._clear_callbacks()
         # Save the start lines after we read or write them; they
         # affect later processing (e.g. 304 responses and HEAD methods
@@ -508,7 +511,12 @@ class HTTP1Connection(httputil.HTTPConnection):
             try:
                 self._validate_headers(start_line, headers)
             except Exception:
-                gen_log.error("Exception in write_headers", exc_info=True)
+                gen_log.error(
+                    "Exception in write_headers; sending 500 instead of %s",
+                    getattr(start_line, "code", None),
+                    exc_info=True,
+                )
+                self._response_replaced = True
                 if not self.stream.closed():
                     self._disconnect_on_finish = True
                     try:
@@ -650,7 +658,11 @@ class HTTP1Connection(httputil.HTTPConnection):
         pre-encoded header block.
         """
         future = None
-        if self.stream.closed():
+        if self.stream.closed() or self._response_replaced:
+            # If the response was replaced with a 500, the body belongs to a
+            # response that was never sent, and the connection will be closed
+            # when the 500 is finished. Report it the same way as a closed
+            # connection, so a streaming handler stops writing.
             future = self._write_future = Future()
             self._write_future.set_exception(iostream.StreamClosedError())
             self._write_future.exception()
