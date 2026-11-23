@@ -18,6 +18,7 @@ import tempfile
 import typing
 import unittest
 import urllib.parse
+import warnings
 from io import BytesIO
 
 from tornado import gen, locale
@@ -45,7 +46,7 @@ from tornado.test.util import (
     ignore_deprecation,
     skipNotCPython,
 )
-from tornado.testing import ExpectLog, gen_test
+from tornado.testing import ExpectLog, gen_test, setup_with_context_manager
 from tornado.util import ObjectDict, unicode_type
 from tornado.web import (
     Application,
@@ -135,6 +136,10 @@ class CookieTestRequestHandler(RequestHandler):
 
 # See SignedValueTest below for more.
 class SecureCookieV1Test(TestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        setup_with_context_manager(self, ignore_deprecation())
+
     def test_round_trip(self):
         handler = CookieTestRequestHandler()
         handler.set_signed_cookie("foo", b"bar", version=1)
@@ -3966,9 +3971,10 @@ class SignedValueTest(TestCase):
         return 1300000000
 
     def test_known_values(self):
-        signed_v1 = create_signed_value(
-            SignedValueTest.SECRET, "key", "value", version=1, clock=self.present
-        )
+        with ignore_deprecation():
+            signed_v1 = create_signed_value(
+                SignedValueTest.SECRET, "key", "value", version=1, clock=self.present
+            )
         self.assertEqual(
             signed_v1, b"dmFsdWU=|1300000000|31c934969f53e48164c50768b40cbd7e2daaaa4f"
         )
@@ -3996,6 +4002,29 @@ class SignedValueTest(TestCase):
             SignedValueTest.SECRET, "key", signed_v2, min_version=2, clock=self.present
         )
         self.assertEqual(decoded_v2, b"value")
+
+    def test_v1_deprecated(self):
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            create_signed_value(
+                SignedValueTest.SECRET, "key", "value", version=1, clock=self.present
+            )
+        self.assertEqual(len(w), 1)
+        self.assertIs(w[0].category, DeprecationWarning)
+        self.assertIn("Signed value version 1 is deprecated", str(w[0].message))
+        self.assertIn("Tornado 6.8", str(w[0].message))
+        self.assertIn("7.0", str(w[0].message))
+
+        # Version 2 (default and explicit) should not emit any warning
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            create_signed_value(
+                SignedValueTest.SECRET, "key", "value", version=2, clock=self.present
+            )
+            create_signed_value(
+                SignedValueTest.SECRET, "key", "value", clock=self.present
+            )
+        self.assertEqual(len(w), 0)
 
     def test_name_swap(self):
         signed1 = create_signed_value(
@@ -4109,13 +4138,14 @@ class SignedValueTest(TestCase):
     def test_key_versioning_version1_value(self):
         # Version 1 values have no key version, so they are verified with
         # key version 1. Bad values are invalid and must not raise.
-        signed = create_signed_value(
-            SignedValueTest.SECRET_DICT[1],
-            "key",
-            "value",
-            version=1,
-            clock=self.present,
-        )
+        with ignore_deprecation():
+            signed = create_signed_value(
+                SignedValueTest.SECRET_DICT[1],
+                "key",
+                "value",
+                version=1,
+                clock=self.present,
+            )
         self.assertEqual(
             decode_signed_value(
                 SignedValueTest.SECRET_DICT, "key", signed, clock=self.present
@@ -4128,13 +4158,14 @@ class SignedValueTest(TestCase):
             decode_signed_value(newkeys, "key", signed, clock=self.present)
         )
         with ExpectLog(gen_log, "Invalid cookie signature"):
-            other = create_signed_value(
-                SignedValueTest.SECRET_DICT[0],
-                "key",
-                "value",
-                version=1,
-                clock=self.present,
-            )
+            with ignore_deprecation():
+                other = create_signed_value(
+                    SignedValueTest.SECRET_DICT[0],
+                    "key",
+                    "value",
+                    version=1,
+                    clock=self.present,
+                )
             self.assertIsNone(
                 decode_signed_value(
                     SignedValueTest.SECRET_DICT, "key", other, clock=self.present
@@ -4212,9 +4243,10 @@ class SignedValueTest(TestCase):
         # is valid.
         payload = b"x" * 45_000
         for version in (1, 2):
-            signed = create_signed_value(
-                self.SECRET, "key", payload, version=version, clock=self.present
-            )
+            with ignore_deprecation():
+                signed = create_signed_value(
+                    self.SECRET, "key", payload, version=version, clock=self.present
+                )
             for valid, value in ((True, signed), (False, signed[:-1] + b"0")):
                 with self.subTest(version=version, valid=valid):
                     with ExpectLog(gen_log, "Invalid cookie signature", required=False):
