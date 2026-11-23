@@ -4,7 +4,7 @@ import socket
 from tornado import gen, httputil
 from tornado.http1connection import HTTP1Connection, HTTP1ServerConnection
 from tornado.httputil import HTTPMessageDelegate, HTTPServerConnectionDelegate
-from tornado.iostream import IOStream
+from tornado.iostream import IOStream, StreamClosedError
 from tornado.locks import Event
 from tornado.log import app_log, gen_log
 from tornado.netutil import add_accept_handler
@@ -251,14 +251,14 @@ class HTTP1ConnectionTest(AsyncTestCase):
     @gen_test
     def test_write_headers_invalid_header_value_server(self):
         start_line = httputil.ResponseStartLine("HTTP/1.1", 200, "OK")
+        # Other invalid characters are rejected by HTTPHeaders; write_headers
+        # only guards against what would corrupt the message framing.
         for i, invalid_val in enumerate(
             [
-                "bad\x00value",
-                "bad\x07value",
-                "bad\x1fvalue",
-                "bad\x7fvalue",
                 "bad\rvalue",
                 "bad\nvalue",
+                "bad\r\nX-Injected: 1",
+                "bad\u20acvalue",
             ]
         ):
             if i > 0:
@@ -278,6 +278,69 @@ class HTTP1ConnectionTest(AsyncTestCase):
                     yield conn.read_response(Delegate())
                     resp = yield self.client_stream.read_until_regex(b"\r?\n\r?\n")
                     self.assertIn(b"500 Internal Server Error", resp)
+
+    @gen_test
+    def test_write_headers_invalid_header_name(self):
+        # CR or LF in a header name (which HTTPHeaders would have rejected)
+        # gets the same treatment as in a value.
+        start_line = httputil.ResponseStartLine("HTTP/1.1", 200, "OK")
+        for i, invalid_name in enumerate(["X\rTest", "X\nTest", "X\r\nX-Injected"]):
+            if i > 0:
+                yield self._make_streams()
+            with self.subTest(name=invalid_name):
+                conn = HTTP1Connection(self.server_stream, False)
+
+                class Delegate(HTTPMessageDelegate):
+                    def finish(self):
+                        headers = httputil.HTTPHeaders()
+                        headers._as_list[invalid_name] = ["value"]
+                        conn.write_headers(start_line, headers)
+                        conn.finish()
+
+                with ExpectLog(gen_log, "Exception in write_headers"):
+                    yield self.client_stream.write(b"GET / HTTP/1.1\r\n\r\n")
+                    yield conn.read_response(Delegate())
+                    resp = yield self.client_stream.read_until_regex(b"\r?\n\r?\n")
+                    self.assertIn(b"500 Internal Server Error", resp)
+                    self.assertNotIn(b"Injected", resp)
+
+        client_conn = HTTP1Connection(self.client_stream, True)
+        for invalid_name in ["X\rTest", "X\nTest", "X\r\nX-Injected"]:
+            with self.subTest(name=invalid_name, side="client"):
+                headers = httputil.HTTPHeaders()
+                headers._as_list[invalid_name] = ["value"]
+                with self.assertRaises(ValueError):
+                    client_conn.write_headers(
+                        httputil.RequestStartLine("GET", "/", "HTTP/1.1"), headers
+                    )
+
+    @gen_test
+    def test_write_headers_valid_reason_phrase(self):
+        # The reason phrase grammar (RFC 9112 section 4) allows spaces,
+        # tabs, VCHAR and obs-text, and it may be empty. "<" is allowed here
+        # even though RequestHandler.set_status rejects it.
+        for i, reason in enumerate(
+            ["", "OK", "Not Found", "Tab\there", "R\xe9ason", "A <b>tag</b>"]
+        ):
+            if i > 0:
+                yield self._make_streams()
+            with self.subTest(reason=reason):
+                conn = HTTP1Connection(self.server_stream, False)
+                start_line = httputil.ResponseStartLine("HTTP/1.1", 200, reason)
+
+                class Delegate(HTTPMessageDelegate):
+                    def finish(self):
+                        conn.write_headers(
+                            start_line, httputil.HTTPHeaders({"Content-Length": "0"})
+                        )
+                        conn.finish()
+
+                yield self.client_stream.write(b"GET / HTTP/1.1\r\n\r\n")
+                yield conn.read_response(Delegate())
+                resp = yield self.client_stream.read_until(b"\r\n")
+                self.assertEqual(
+                    resp, b"HTTP/1.1 200 " + reason.encode("latin1") + b"\r\n"
+                )
 
     @gen_test
     def test_write_headers_header_value_whitespace(self):
@@ -302,12 +365,10 @@ class HTTP1ConnectionTest(AsyncTestCase):
         start_line = httputil.RequestStartLine("GET", "/", "HTTP/1.1")
 
         for invalid_val in [
-            "bad\x00value",
-            "bad\x07value",
-            "bad\x1fvalue",
-            "bad\x7fvalue",
             "bad\rvalue",
             "bad\nvalue",
+            "bad\r\nX-Injected: 1",
+            "bad\u20acvalue",
         ]:
             with self.subTest(val=invalid_val):
                 headers = httputil.HTTPHeaders()
@@ -325,3 +386,113 @@ class HTTP1ConnectionTest(AsyncTestCase):
                 headers = httputil.HTTPHeaders({"X-Test": valid_val})
                 fut = client_conn.write_headers(start_line, headers)
                 yield fut
+
+    @gen_test
+    def test_write_headers_invalid_1xx_then_final_response(self):
+        # If an informational response is replaced with a 500, the final
+        # response that follows must not be sent after it.
+        conn = HTTP1Connection(self.server_stream, False)
+        futures = []
+
+        class Delegate(HTTPMessageDelegate):
+            def finish(self):
+                headers = httputil.HTTPHeaders()
+                headers._as_list["Link"] = ["bad\rvalue"]
+                conn.write_headers(
+                    httputil.ResponseStartLine("HTTP/1.1", 103, "Early Hints"),
+                    headers,
+                )
+                futures.append(
+                    conn.write_headers(
+                        httputil.ResponseStartLine("HTTP/1.1", 200, "OK"),
+                        httputil.HTTPHeaders(
+                            {"Content-Length": "5", "X-Smuggled": "yes"}
+                        ),
+                        b"hello",
+                    )
+                )
+                conn.finish()
+
+        with ExpectLog(
+            gen_log, "Exception in write_headers; sending 500 instead of 103"
+        ):
+            yield self.client_stream.write(b"GET / HTTP/1.1\r\n\r\n")
+            yield conn.read_response(Delegate())
+            resp = yield self.client_stream.read_until(b"\r\n\r\n")
+        self.assertEqual(
+            resp,
+            b"HTTP/1.1 500 Internal Server Error\r\n"
+            b"Content-Length: 0\r\nConnection: close\r\n\r\n",
+        )
+        with self.assertRaises(StreamClosedError):
+            yield self.client_stream.read_bytes(1)
+        self.assertIsInstance(futures[0].exception(), StreamClosedError)
+
+    @gen_test
+    def test_write_headers_invalid_http10_keep_alive(self):
+        # The replacement 500 closes the connection, so it must not tell an
+        # HTTP/1.0 client that asked for keep-alive that it will stay open.
+        conn = HTTP1Connection(self.server_stream, False)
+
+        class Delegate(HTTPMessageDelegate):
+            def finish(self):
+                headers = httputil.HTTPHeaders()
+                headers._as_list["X-Test"] = ["bad\rvalue"]
+                conn.write_headers(
+                    httputil.ResponseStartLine("HTTP/1.1", 200, "OK"), headers
+                )
+                conn.finish()
+
+        with ExpectLog(gen_log, "Exception in write_headers"):
+            yield self.client_stream.write(
+                b"GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n"
+            )
+            yield conn.read_response(Delegate())
+            resp = yield self.client_stream.read_until(b"\r\n\r\n")
+        self.assertEqual(
+            resp,
+            b"HTTP/1.1 500 Internal Server Error\r\n"
+            b"Content-Length: 0\r\nConnection: close\r\n\r\n",
+        )
+        with self.assertRaises(StreamClosedError):
+            yield self.client_stream.read_bytes(1)
+
+    @gen_test
+    def test_write_headers_invalid_then_write_body(self):
+        # A streaming response whose headers are invalid: the 500 replaces
+        # it, the body writes that follow report StreamClosedError (as if
+        # the client had gone away) instead of raising HTTPOutputError, and
+        # the connection is closed after the 500 even though the request
+        # asked for keep-alive.
+        conn = HTTP1Connection(self.server_stream, False)
+        start_line = httputil.ResponseStartLine("HTTP/1.1", 200, "OK")
+        write_futures = []
+
+        class Delegate(HTTPMessageDelegate):
+            def finish(self):
+                headers = httputil.HTTPHeaders()
+                headers._as_list["X-Test"] = ["bad\rvalue"]
+                conn.write_headers(start_line, headers)
+                write_futures.append(conn.write(b"first"))
+                write_futures.append(conn.write(b"second"))
+                conn.finish()
+
+        with ExpectLog(
+            gen_log, "Exception in write_headers; sending 500 instead of 200"
+        ):
+            yield self.client_stream.write(
+                b"GET / HTTP/1.1\r\nConnection: keep-alive\r\n\r\n"
+            )
+            yield conn.read_response(Delegate())
+            resp = yield self.client_stream.read_until(b"\r\n\r\n")
+        self.assertEqual(
+            resp,
+            b"HTTP/1.1 500 Internal Server Error\r\n"
+            b"Content-Length: 0\r\nConnection: close\r\n\r\n",
+        )
+        # Nothing follows the 500, and the server closes the connection.
+        with self.assertRaises(StreamClosedError):
+            yield self.client_stream.read_bytes(1)
+        self.assertEqual(len(write_futures), 2)
+        for f in write_futures:
+            self.assertIsInstance(f.exception(), StreamClosedError)

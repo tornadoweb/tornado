@@ -190,6 +190,9 @@ class HTTP1Connection(httputil.HTTPConnection):
         # (after the response has been written in the server side,
         # and after it has been read in the client)
         self._disconnect_on_finish = False
+        # True if write_headers replaced an invalid response with a 500.
+        # Any further body writes for the original response are dropped.
+        self._response_replaced = False
         self._clear_callbacks()
         # Save the start lines after we read or write them; they
         # affect later processing (e.g. 304 responses and HEAD methods
@@ -484,16 +487,17 @@ class HTTP1Connection(httputil.HTTPConnection):
                 raise ValueError(
                     "Illegal characters in reason phrase: %r" % (start_line[2],)
                 )
+        # Header names and values are validated by HTTPHeaders, where the
+        # error points at the code that set them. This only protects what
+        # goes on the wire, for headers that got past HTTPHeaders some other
+        # way: no CR or LF (header injection), and nothing that can't be
+        # encoded as Latin-1 (which would fail in _write_headers, after
+        # the point where we can still send a 500 instead). The CR/LF check
+        # in _write_headers stays as a last line of defense that also
+        # covers the client's request line.
         for n, v in headers.get_all():
-            v_str = native_str(v).strip(httputil.HTTP_WHITESPACE)
-            if not httputil._ABNF.field_value.fullmatch(v_str):
-                raise ValueError("Illegal characters in header value %r: %r" % (n, v))
-        lines_to_check = [
-            native_str(start_line[2]) if not self.is_client else "",
-            *(native_str(n) + ": " + native_str(v) for n, v in headers.get_all()),
-        ]
-        for line in lines_to_check:
-            if CR_OR_LF_RE.search(utf8(line)):
+            line = native_str(n) + ": " + native_str(v)
+            if CR_OR_LF_RE.search(line.encode("latin1")):
                 raise ValueError("Illegal characters (CR or LF) in header: %r" % line)
 
     def write_headers(
@@ -504,10 +508,24 @@ class HTTP1Connection(httputil.HTTPConnection):
     ) -> "Future[None]":
         """Implements `.HTTPConnection.write_headers`."""
         if not self.is_client:
+            if self._response_replaced:
+                # A 500 has already been sent in place of an invalid response
+                # (possibly a 1xx). Anything the caller sends now belongs to
+                # the response that was replaced, and must not follow the 500
+                # onto the wire.
+                future = self._write_future = Future()
+                future.set_exception(iostream.StreamClosedError())
+                future.exception()
+                return future
             try:
                 self._validate_headers(start_line, headers)
             except Exception:
-                gen_log.error("Exception in write_headers", exc_info=True)
+                gen_log.error(
+                    "Exception in write_headers; sending 500 instead of %s",
+                    getattr(start_line, "code", None),
+                    exc_info=True,
+                )
+                self._response_replaced = True
                 if not self.stream.closed():
                     self._disconnect_on_finish = True
                     try:
@@ -558,14 +576,11 @@ class HTTP1Connection(httputil.HTTPConnection):
             assert self._request_start_line is not None
             assert self._request_headers is not None
             self._response_start_line = start_line
-            if not isinstance(start_line[2], str) or not (
-                start_line[2] == ""
-                or httputil._ABNF.reason_phrase.fullmatch(start_line[2])
-            ):
-                raise ValueError(
-                    "Illegal characters in reason phrase: %r" % (start_line[2],)
-                )
-            lines.append(utf8("HTTP/1.1 %d %s" % (start_line[1], start_line[2])))
+            # The reason phrase may contain obs-text (U+0080 to U+00FF), which,
+            # like header values, is sent as Latin-1.
+            lines.append(
+                ("HTTP/1.1 %d %s" % (start_line[1], start_line[2])).encode("latin1")
+            )
             self._chunking_output = (
                 # TODO: should this use
                 # self._request_start_line.version or
@@ -587,10 +602,12 @@ class HTTP1Connection(httputil.HTTPConnection):
                 and self._disconnect_on_finish
             ):
                 headers["Connection"] = "close"
-            # If a 1.0 client asked for keep-alive, add the header.
+            # If a 1.0 client asked for keep-alive, add the header (unless
+            # we already know the connection will be closed).
             if (
                 self._request_start_line.version == "HTTP/1.0"
                 and self._request_headers.get("Connection", "").lower() == "keep-alive"
+                and not self._disconnect_on_finish
             ):
                 headers["Connection"] = "Keep-Alive"
         if self._chunking_output:
@@ -607,12 +624,13 @@ class HTTP1Connection(httputil.HTTPConnection):
         # TODO: headers are supposed to be of type str, but we still have some
         # cases that let bytes slip through. Remove these native_str calls when those
         # are fixed.
-        header_lines = []
-        for n, v in headers.get_all():
-            v_str = native_str(v).strip(httputil.HTTP_WHITESPACE)
-            if not httputil._ABNF.field_value.fullmatch(v_str):
-                raise ValueError("Illegal characters in header value %r: %r" % (n, v))
-            header_lines.append(native_str(n) + ": " + v_str)
+        # Header lines were checked in _validate_headers. Leading and
+        # trailing whitespace is not part of the field value (RFC 9110
+        # section 5.5), so strip it here.
+        header_lines = [
+            native_str(n) + ": " + native_str(v).strip(httputil.HTTP_WHITESPACE)
+            for n, v in headers.get_all()
+        ]
         lines.extend(line.encode("latin1") for line in header_lines)
         for line in lines:
             if CR_OR_LF_RE.search(line):
@@ -655,7 +673,11 @@ class HTTP1Connection(httputil.HTTPConnection):
         pre-encoded header block.
         """
         future = None
-        if self.stream.closed():
+        if self.stream.closed() or self._response_replaced:
+            # If the response was replaced with a 500, the body belongs to a
+            # response that was never sent, and the connection will be closed
+            # when the 500 is finished. Report it the same way as a closed
+            # connection, so a streaming handler stops writing.
             future = self._write_future = Future()
             self._write_future.set_exception(iostream.StreamClosedError())
             self._write_future.exception()

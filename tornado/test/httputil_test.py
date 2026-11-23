@@ -655,23 +655,46 @@ class HTTPHeadersTest(TestCase):
 
     def test_setitem_validates_name_and_value(self):
         headers = HTTPHeaders()
-        with self.assertRaises(HTTPInputError):
+        with self.assertRaises(ValueError):
             headers["Foo Bar"] = "baz"
-        with self.assertRaises(HTTPInputError):
+        with self.assertRaises(ValueError):
             headers["Foo"] = "bar\rbaz"
-        with self.assertRaises(HTTPInputError):
+        with self.assertRaises(ValueError):
             headers["Foo"] = "bar\x00baz"
         # obs-text is allowed in a header value.
         headers["Foo"] = "b\u00e1r"
         self.assertEqual(headers["Foo"], "b\u00e1r")
 
     def test_update_and_initialization_validate(self):
-        with self.assertRaises(HTTPInputError):
+        with self.assertRaises(ValueError):
             HTTPHeaders({"Foo": "bar\rbaz"})
         headers = HTTPHeaders()
-        with self.assertRaises(HTTPInputError):
+        with self.assertRaises(ValueError):
             headers.update({"Foo": "bar\rbaz"})
         self.assertEqual(list(headers.get_all()), [])
+
+    def test_surrounding_whitespace_allowed(self):
+        # Leading and trailing whitespace is optional whitespace around the
+        # field value (RFC 9110 section 5.5), not part of it, so it is
+        # accepted when building headers. (#3902 briefly rejected it.)
+        for value in [" lead", "trail ", "  both  ", "\tlead", "trail\t", " ", "\t"]:
+            with self.subTest(value=value):
+                headers = HTTPHeaders({"X-Foo": value})
+                self.assertEqual(headers["X-Foo"], value)
+                headers = HTTPHeaders()
+                headers["X-Foo"] = value
+                self.assertEqual(headers["X-Foo"], value)
+                headers = HTTPHeaders()
+                headers.add("X-Foo", value)
+                headers.add("X-Foo", value)
+                self.assertEqual(headers.get_list("X-Foo"), [value, value])
+        # Whitespace doesn't hide invalid characters.
+        for value in [" \r\n", "\t\x00", " a\rb ", "\n ", " \x7f"]:
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    HTTPHeaders({"X-Foo": value})
+                with self.assertRaises(ValueError):
+                    HTTPHeaders().add("X-Foo", value)
 
     def test_loose_multipart_validation_is_not_reapplied(self):
         headers = HTTPHeaders()
@@ -830,8 +853,11 @@ class HTTPHeadersTest(TestCase):
         ]
         for name in invalid_names:
             headers = HTTPHeaders()
-            with self.assertRaises(HTTPInputError):
+            with self.assertRaises(ValueError):
                 headers.add(name, "bar")
+            # The same name in a parsed header line is an input error.
+            with self.assertRaises(HTTPInputError):
+                HTTPHeaders.parse(f"{name}: bar\r\n")
 
     def test_linear_performance(self):
         def f(n):

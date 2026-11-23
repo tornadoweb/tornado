@@ -843,6 +843,7 @@ class SetHeaderHandler(RequestHandler):
         self.set_header("X-Leading", "  leading")
         self.set_header("X-Trailing", "trailing  ")
         self.set_header("X-Both", "  both  ")
+        self.add_header("X-Added", "  added  ")
 
         self.finish(b"ok")
 
@@ -1086,6 +1087,7 @@ js_embed()
         self.assertEqual(response.headers["X-Leading"], "leading")
         self.assertEqual(response.headers["X-Trailing"], "trailing")
         self.assertEqual(response.headers["X-Both"], "both")
+        self.assertEqual(response.headers["X-Added"], "added")
 
     def test_get_argument(self):
         response = self.fetch("/get_argument?foo=bar")
@@ -3020,6 +3022,17 @@ class StatusReasonTest(SimpleHandlerTestCase):
         self.assertEqual(response.reason, "Bar")
         response = self.fetch("/?code=682")
         self.assertEqual(response.code, 682)
+        self.assertEqual(response.reason, "Unknown")
+
+    def test_obs_text(self):
+        # Characters U+0080 to U+00FF are allowed in a reason phrase, and
+        # are sent as Latin-1 like header values.
+        response = self.fetch("/?code=400&reason=R%C3%A9ason")
+        self.assertEqual(response.code, 400)
+        self.assertEqual(response.reason, "R\xe9ason")
+        # Anything beyond that can't be sent.
+        response = self.fetch("/?code=400&reason=%E2%82%AC")
+        self.assertEqual(response.code, 400)
         self.assertEqual(response.reason, "Unknown")
 
     def test_header_injection(self):
