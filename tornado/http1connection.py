@@ -484,16 +484,17 @@ class HTTP1Connection(httputil.HTTPConnection):
                 raise ValueError(
                     "Illegal characters in reason phrase: %r" % (start_line[2],)
                 )
+        # Header names and values are validated by HTTPHeaders, where the
+        # error points at the code that set them. This only protects what
+        # goes on the wire, for headers that got past HTTPHeaders some other
+        # way: no CR or LF (header injection), and nothing that can't be
+        # encoded as Latin-1 (which would fail in _write_headers, after
+        # the point where we can still send a 500 instead). The CR/LF check
+        # in _write_headers stays as a last line of defense that also
+        # covers the client's request line.
         for n, v in headers.get_all():
-            v_str = native_str(v).strip(httputil.HTTP_WHITESPACE)
-            if not httputil._ABNF.field_value.fullmatch(v_str):
-                raise ValueError("Illegal characters in header value %r: %r" % (n, v))
-        lines_to_check = [
-            native_str(start_line[2]) if not self.is_client else "",
-            *(native_str(n) + ": " + native_str(v) for n, v in headers.get_all()),
-        ]
-        for line in lines_to_check:
-            if CR_OR_LF_RE.search(utf8(line)):
+            line = native_str(n) + ": " + native_str(v)
+            if CR_OR_LF_RE.search(line.encode("latin1")):
                 raise ValueError("Illegal characters (CR or LF) in header: %r" % line)
 
     def write_headers(
@@ -558,13 +559,6 @@ class HTTP1Connection(httputil.HTTPConnection):
             assert self._request_start_line is not None
             assert self._request_headers is not None
             self._response_start_line = start_line
-            if not isinstance(start_line[2], str) or not (
-                start_line[2] == ""
-                or httputil._ABNF.reason_phrase.fullmatch(start_line[2])
-            ):
-                raise ValueError(
-                    "Illegal characters in reason phrase: %r" % (start_line[2],)
-                )
             lines.append(utf8("HTTP/1.1 %d %s" % (start_line[1], start_line[2])))
             self._chunking_output = (
                 # TODO: should this use
@@ -607,12 +601,13 @@ class HTTP1Connection(httputil.HTTPConnection):
         # TODO: headers are supposed to be of type str, but we still have some
         # cases that let bytes slip through. Remove these native_str calls when those
         # are fixed.
-        header_lines = []
-        for n, v in headers.get_all():
-            v_str = native_str(v).strip(httputil.HTTP_WHITESPACE)
-            if not httputil._ABNF.field_value.fullmatch(v_str):
-                raise ValueError("Illegal characters in header value %r: %r" % (n, v))
-            header_lines.append(native_str(n) + ": " + v_str)
+        # Header lines were checked in _validate_headers. Leading and
+        # trailing whitespace is not part of the field value (RFC 9110
+        # section 5.5), so strip it here.
+        header_lines = [
+            native_str(n) + ": " + native_str(v).strip(httputil.HTTP_WHITESPACE)
+            for n, v in headers.get_all()
+        ]
         lines.extend(line.encode("latin1") for line in header_lines)
         for line in lines:
             if CR_OR_LF_RE.search(line):

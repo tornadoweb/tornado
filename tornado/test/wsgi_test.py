@@ -185,6 +185,10 @@ class WSGIValidationTest(AsyncHTTPTestCase):
             self.assertEqual(response.code, 500)
 
     def test_invalid_header_value_rejected(self):
+        # HTTPHeaders rejects the value as WSGIContainer builds the
+        # response, before anything reaches HTTP1Connection.write_headers,
+        # so this exercises WSGIContainer's own error handling. The
+        # write_headers checks are covered in http1connection_test.
         with ExpectLog(app_log, "Exception in WSGIContainer"):
             response = self.fetch("/bad_header")
             self.assertEqual(response.code, 500)

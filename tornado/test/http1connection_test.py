@@ -251,14 +251,14 @@ class HTTP1ConnectionTest(AsyncTestCase):
     @gen_test
     def test_write_headers_invalid_header_value_server(self):
         start_line = httputil.ResponseStartLine("HTTP/1.1", 200, "OK")
+        # Other invalid characters are rejected by HTTPHeaders; write_headers
+        # only guards against what would corrupt the message framing.
         for i, invalid_val in enumerate(
             [
-                "bad\x00value",
-                "bad\x07value",
-                "bad\x1fvalue",
-                "bad\x7fvalue",
                 "bad\rvalue",
                 "bad\nvalue",
+                "bad\r\nX-Injected: 1",
+                "bad\u20acvalue",
             ]
         ):
             if i > 0:
@@ -278,6 +278,41 @@ class HTTP1ConnectionTest(AsyncTestCase):
                     yield conn.read_response(Delegate())
                     resp = yield self.client_stream.read_until_regex(b"\r?\n\r?\n")
                     self.assertIn(b"500 Internal Server Error", resp)
+
+    @gen_test
+    def test_write_headers_invalid_header_name(self):
+        # CR or LF in a header name (which HTTPHeaders would have rejected)
+        # gets the same treatment as in a value.
+        start_line = httputil.ResponseStartLine("HTTP/1.1", 200, "OK")
+        for i, invalid_name in enumerate(["X\rTest", "X\nTest", "X\r\nX-Injected"]):
+            if i > 0:
+                yield self._make_streams()
+            with self.subTest(name=invalid_name):
+                conn = HTTP1Connection(self.server_stream, False)
+
+                class Delegate(HTTPMessageDelegate):
+                    def finish(self):
+                        headers = httputil.HTTPHeaders()
+                        headers._as_list[invalid_name] = ["value"]
+                        conn.write_headers(start_line, headers)
+                        conn.finish()
+
+                with ExpectLog(gen_log, "Exception in write_headers"):
+                    yield self.client_stream.write(b"GET / HTTP/1.1\r\n\r\n")
+                    yield conn.read_response(Delegate())
+                    resp = yield self.client_stream.read_until_regex(b"\r?\n\r?\n")
+                    self.assertIn(b"500 Internal Server Error", resp)
+                    self.assertNotIn(b"Injected", resp)
+
+        client_conn = HTTP1Connection(self.client_stream, True)
+        for invalid_name in ["X\rTest", "X\nTest", "X\r\nX-Injected"]:
+            with self.subTest(name=invalid_name, side="client"):
+                headers = httputil.HTTPHeaders()
+                headers._as_list[invalid_name] = ["value"]
+                with self.assertRaises(ValueError):
+                    client_conn.write_headers(
+                        httputil.RequestStartLine("GET", "/", "HTTP/1.1"), headers
+                    )
 
     @gen_test
     def test_write_headers_header_value_whitespace(self):
@@ -302,12 +337,10 @@ class HTTP1ConnectionTest(AsyncTestCase):
         start_line = httputil.RequestStartLine("GET", "/", "HTTP/1.1")
 
         for invalid_val in [
-            "bad\x00value",
-            "bad\x07value",
-            "bad\x1fvalue",
-            "bad\x7fvalue",
             "bad\rvalue",
             "bad\nvalue",
+            "bad\r\nX-Injected: 1",
+            "bad\u20acvalue",
         ]:
             with self.subTest(val=invalid_val):
                 headers = httputil.HTTPHeaders()
