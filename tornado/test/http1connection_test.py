@@ -429,6 +429,35 @@ class HTTP1ConnectionTest(AsyncTestCase):
         self.assertIsInstance(futures[0].exception(), StreamClosedError)
 
     @gen_test
+    def test_write_headers_invalid_http10_keep_alive(self):
+        # The replacement 500 closes the connection, so it must not tell an
+        # HTTP/1.0 client that asked for keep-alive that it will stay open.
+        conn = HTTP1Connection(self.server_stream, False)
+
+        class Delegate(HTTPMessageDelegate):
+            def finish(self):
+                headers = httputil.HTTPHeaders()
+                headers._as_list["X-Test"] = ["bad\rvalue"]
+                conn.write_headers(
+                    httputil.ResponseStartLine("HTTP/1.1", 200, "OK"), headers
+                )
+                conn.finish()
+
+        with ExpectLog(gen_log, "Exception in write_headers"):
+            yield self.client_stream.write(
+                b"GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n"
+            )
+            yield conn.read_response(Delegate())
+            resp = yield self.client_stream.read_until(b"\r\n\r\n")
+        self.assertEqual(
+            resp,
+            b"HTTP/1.1 500 Internal Server Error\r\n"
+            b"Content-Length: 0\r\nConnection: close\r\n\r\n",
+        )
+        with self.assertRaises(StreamClosedError):
+            yield self.client_stream.read_bytes(1)
+
+    @gen_test
     def test_write_headers_invalid_then_write_body(self):
         # A streaming response whose headers are invalid: the 500 replaces
         # it, the body writes that follow report StreamClosedError (as if

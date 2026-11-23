@@ -602,10 +602,12 @@ class HTTP1Connection(httputil.HTTPConnection):
                 and self._disconnect_on_finish
             ):
                 headers["Connection"] = "close"
-            # If a 1.0 client asked for keep-alive, add the header.
+            # If a 1.0 client asked for keep-alive, add the header (unless
+            # we already know the connection will be closed).
             if (
                 self._request_start_line.version == "HTTP/1.0"
                 and self._request_headers.get("Connection", "").lower() == "keep-alive"
+                and not self._disconnect_on_finish
             ):
                 headers["Connection"] = "Keep-Alive"
         if self._chunking_output:
