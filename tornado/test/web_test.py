@@ -1671,6 +1671,20 @@ class StaticFileTest(WebTestCase):
         self.assertEqual(response.headers.get("Content-Range"), "bytes */26")
         self.assertEqual(response.code, 416)
 
+    def test_static_with_range_suffix_on_empty_file(self):
+        # A non-zero suffix range on a zero-length file is satisfiable
+        # (RFC 9110 14.1.1): the whole (empty) representation is returned.
+        response = self.get_and_head("/static/empty.txt", headers={"Range": "bytes=-5"})
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"")
+        self.assertEqual(response.headers.get("Content-Length"), "0")
+        self.assertIsNone(response.headers.get("Content-Range"))
+
+    def test_static_unsatisfiable_range_start_on_empty_file(self):
+        response = self.get_and_head("/static/empty.txt", headers={"Range": "bytes=0-"})
+        self.assertEqual(response.code, 416)
+        self.assertEqual(response.headers.get("Content-Range"), "bytes */0")
+
     def test_static_unsatisfiable_range_invalid_start(self):
         response = self.get_and_head(
             "/static/robots.txt", headers={"Range": "bytes=26"}
