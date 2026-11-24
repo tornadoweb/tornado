@@ -2,6 +2,7 @@ black
 coverage
 flake8
 hypothesis
+idna
 mypy>=0.941
 pip-tools
 sphinx

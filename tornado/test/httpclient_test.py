@@ -72,6 +72,11 @@ skipIfNoTracemalloc = unittest.skipIf(
     tracemalloc is None, "tracemalloc module not present"
 )
 
+try:
+    import idna
+except ImportError:
+    idna = None  # type: ignore[assignment]
+
 
 class HelloWorldHandler(RequestHandler):
     def get(self):
@@ -765,6 +770,7 @@ Transfer-Encoding: chunked
         if socket.AF_INET not in {addr[0] for addr in addrinfo}:
             self.skipTest("localhost does not resolve to ipv4")
 
+    @unittest.skipIf(idna is None, "idna module not present")
     def test_idn_hostname(self):
         # A non-ASCII hostname is converted with IDNA, for both name
         # resolution and the Host header.
@@ -831,6 +837,7 @@ Transfer-Encoding: chunked
         with self.assertRaises(ValueError):
             self.fetch_raw_redirect("location=" + location, raise_error=True)
 
+    @unittest.skipIf(idna is None, "idna module not present")
     def test_idn_redirect(self):
         # libcurl only converts IDN hostnames when it was built with IDN support.
         pycurl = self.curl_module()

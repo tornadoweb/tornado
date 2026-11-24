@@ -108,6 +108,10 @@ optional packages may be useful:
 * `pycares <https://pypi.org/project/pycares/>`_ is an alternative
   non-blocking DNS resolver that can be used when threads are not
   appropriate.
+* `idna <https://pypi.org/project/idna/>`_ is used by
+  ``tornado.httpclient`` to convert non-ASCII hostnames with UTS46, the
+  rules browsers implement. Without it, requests to non-ASCII hostnames
+  are rejected.
 
 **Platforms**: Tornado is designed for Unix-like platforms, with best
 performance and scalability on systems supporting ``epoll`` (Linux),
