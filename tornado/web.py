@@ -3133,7 +3133,7 @@ class StaticFileHandler(RequestHandler):
             # which is not past the end, so skip the start >= size test for
             # suffix ranges.
             is_suffix_range = start is not None and start < 0
-            if is_suffix_range:
+            if start is not None and start < 0:
                 start += size
                 if start < 0:
                     start = 0

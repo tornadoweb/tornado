@@ -99,6 +99,7 @@ setuptools.setup(
             "static/sample.xml.gz",
             "static/sample.xml.bz2",
             "static/dir/index.html",
+            "static/empty.txt",
             "static_foo.txt",
             "templates/utf8.html",
             "test.crt",
