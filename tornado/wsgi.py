@@ -188,12 +188,30 @@ class WSGIContainer:
             header_set = {k.lower() for (k, v) in headers}
             body = escape.utf8(body)
             # HEAD and 304 discard a body because they describe a GET or a
-            # cached 200. A body for 1xx or 204 is an application error, so it
-            # is not silently dropped.
-            if (status_code == 204 or 100 <= status_code < 200) and body:
-                raise ValueError(
-                    "WSGI application returned a body for a %d response" % status_code
-                )
+            # cached 200. A body, a non-zero Content-Length, or a
+            # Transfer-Encoding on 1xx or 204 is an application error, so it is
+            # not silently dropped.
+            if status_code == 204 or 100 <= status_code < 200:
+                if body:
+                    raise ValueError(
+                        "WSGI application returned a body for a %d response"
+                        % status_code
+                    )
+                if any(
+                    k.lower() == "content-length" and v.strip() != "0"
+                    for (k, v) in headers
+                ):
+                    raise ValueError(
+                        "WSGI application returned a non-zero Content-Length "
+                        "for a %d response" % status_code
+                    )
+                if any(
+                    k.lower() == "transfer-encoding" and v.strip() for (k, v) in headers
+                ):
+                    raise ValueError(
+                        "WSGI application returned a Transfer-Encoding for a "
+                        "%d response" % status_code
+                    )
             # 1xx, 204, and 304 responses have no body (RFC 9110 section 6.4.1).
             no_content = status_code in (204, 304) or 100 <= status_code < 200
             if not no_content:

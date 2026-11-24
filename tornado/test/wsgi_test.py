@@ -28,8 +28,9 @@ class WSGIAppMixin:
         def make_container(app):
             return WSGIContainer(validator(app), executor=executor)
 
-        # The validator requires a Content-Type on non-204/304 responses, so
-        # the 1xx body case bypasses it and exercises the container directly.
+        # The 1xx and illegal-header cases exercise the container directly: the
+        # validator rejects a 1xx without a Content-Type and has no opinion on
+        # the headers these cases send.
         def make_raw_container(app):
             return WSGIContainer(app, executor=executor)
 
@@ -43,6 +44,14 @@ class WSGIAppMixin:
                 (
                     "/no_content_with_body",
                     make_container(self.no_content_with_body_wsgi_app),
+                ),
+                (
+                    "/no_content_with_length",
+                    make_raw_container(self.no_content_with_length_wsgi_app),
+                ),
+                (
+                    "/no_content_with_transfer_encoding",
+                    make_raw_container(self.no_content_with_transfer_encoding_wsgi_app),
                 ),
                 (
                     "/early_hints_with_body",
@@ -89,7 +98,15 @@ class WSGIAppMixin:
             yield b"%d" % n
 
     def no_content_wsgi_app(self, environ, start_response):
+        start_response("204 No Content", [("Content-Length", "0")])
+        return []
+
+    def no_content_with_length_wsgi_app(self, environ, start_response):
         start_response("204 No Content", [("Content-Length", "4")])
+        return []
+
+    def no_content_with_transfer_encoding_wsgi_app(self, environ, start_response):
+        start_response("204 No Content", [("Transfer-Encoding", "chunked")])
         return []
 
     def no_content_with_body_wsgi_app(self, environ, start_response):
@@ -156,6 +173,16 @@ class WSGIContainerDummyExecutorTest(WSGIAppMixin, AsyncHTTPTestCase):
     def test_1xx_with_body_is_an_error(self):
         with ExpectLog(app_log, "Exception in WSGIContainer"):
             response = self.fetch("/early_hints_with_body")
+        self.assertEqual(response.code, 500)
+
+    def test_no_content_with_non_zero_length_is_an_error(self):
+        with ExpectLog(app_log, "Exception in WSGIContainer"):
+            response = self.fetch("/no_content_with_length")
+        self.assertEqual(response.code, 500)
+
+    def test_no_content_with_transfer_encoding_is_an_error(self):
+        with ExpectLog(app_log, "Exception in WSGIContainer"):
+            response = self.fetch("/no_content_with_transfer_encoding")
         self.assertEqual(response.code, 500)
 
     def test_not_modified(self):
