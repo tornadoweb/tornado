@@ -66,11 +66,13 @@ async def use_worker(w: Worker) -> str:
     return await w.compute(1)
 
 
-def parse_encoded_headers() -> None:
+def object_header_modes() -> None:
     from tornado.httputil import HTTPHeaders
 
-    headers = HTTPHeaders.parse(b"X: value", encoding="latin1", strict_http=True)
-    headers.parse_line(b"Y: value", encoding="utf8", strict_http=False)
-    headers.parse_line("Z: value", strict_http=True)
-    headers.add("X-Filename", "名", strict_http=False)
-    HTTPHeaders.parse("X: value", _chars_are_bytes=True)
+    headers = HTTPHeaders.with_parse_mode("multipart")
+    headers.add("X-Filename", "名")
+    headers["X-Description"] = "€"
+    headers.parse_line("Y: decoded")
+    HTTPHeaders.parse("Z: decoded", parse_mode="http")
+    HTTPHeaders.parse("Z: 名", parse_mode="multipart")
+    HTTPHeaders(parse_mode="header-value")
