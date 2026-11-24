@@ -28,6 +28,11 @@ class WSGIAppMixin:
         def make_container(app):
             return WSGIContainer(validator(app), executor=executor)
 
+        # The validator rejects the app before WSGIContainer can see its body,
+        # so the body-error cases use the container directly.
+        def make_raw_container(app):
+            return WSGIContainer(app, executor=executor)
+
         return RuleRouter(
             [
                 ("/simple", make_container(self.simple_wsgi_app)),
@@ -35,6 +40,14 @@ class WSGIAppMixin:
                 ("/barrier", make_container(self.barrier_wsgi_app)),
                 ("/streaming_barrier", make_container(self.streaming_barrier_wsgi_app)),
                 ("/no_content", make_container(self.no_content_wsgi_app)),
+                (
+                    "/no_content_with_body",
+                    make_raw_container(self.no_content_with_body_wsgi_app),
+                ),
+                (
+                    "/early_hints_with_body",
+                    make_raw_container(self.early_hints_with_body_wsgi_app),
+                ),
                 ("/not_modified", make_container(self.not_modified_wsgi_app)),
                 (
                     "/not_modified_with_content_length",
@@ -77,6 +90,14 @@ class WSGIAppMixin:
 
     def no_content_wsgi_app(self, environ, start_response):
         start_response("204 No Content", [("Content-Length", "4")])
+        return []
+
+    def no_content_with_body_wsgi_app(self, environ, start_response):
+        start_response("204 No Content", [])
+        return [b"body"]
+
+    def early_hints_with_body_wsgi_app(self, environ, start_response):
+        start_response("103 Early Hints", [])
         return [b"body"]
 
     def not_modified_wsgi_app(self, environ, start_response):
@@ -126,6 +147,16 @@ class WSGIContainerDummyExecutorTest(WSGIAppMixin, AsyncHTTPTestCase):
         self.assertEqual(response.body, b"")
         self.assertNotIn("Content-Length", response.headers)
         self.assertNotIn("Content-Type", response.headers)
+
+    def test_no_content_with_body_is_an_error(self):
+        with ExpectLog(app_log, "Exception in WSGIContainer"):
+            response = self.fetch("/no_content_with_body")
+        self.assertEqual(response.code, 500)
+
+    def test_1xx_with_body_is_an_error(self):
+        with ExpectLog(app_log, "Exception in WSGIContainer"):
+            response = self.fetch("/early_hints_with_body")
+        self.assertEqual(response.code, 500)
 
     def test_not_modified(self):
         response = self.fetch("/not_modified")
