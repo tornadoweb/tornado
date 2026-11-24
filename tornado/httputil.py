@@ -26,6 +26,7 @@ import collections.abc
 import copy
 import dataclasses
 import datetime
+import enum
 import email.utils
 import http.cookies
 import re
@@ -129,6 +130,20 @@ def _normalize_header(name: str) -> str:
     return "-".join([w.capitalize() for w in name.split("-")])
 
 
+class HTTPHeaderParseMode(enum.Enum):
+    """Value validation modes for `HTTPHeaders`.
+
+    Decoding is the caller's responsibility in both modes.
+
+    .. versionadded:: 6.7
+    """
+
+    #: HTTP field values, limited to the byte range.
+    HTTP = "http"
+    #: Multipart field values, allowing non-control Unicode.
+    MULTIPART = "multipart"
+
+
 class HTTPHeaders(collections.abc.MutableMapping[str, str]):
     """A dictionary that maintains ``Http-Header-Case`` for all keys.
 
@@ -177,7 +192,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
         # so we maintain a mapping from field name to a list of field lines in self._as_list.
         # self._combined_cache is a cache of the combined field values derived from self._as_list
         # on demand (and cleared whenever the list is modified).
-        self._parse_mode: typing.Literal["http", "multipart"] = "http"
+        self._parse_mode = HTTPHeaderParseMode.HTTP
         self._as_list: dict[str, list[str]] = {}
         self._combined_cache: dict[str, str] = {}
         if len(args) == 1 and len(kwargs) == 0 and isinstance(args[0], HTTPHeaders):
@@ -192,14 +207,13 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
     # new public methods
 
     @classmethod
-    def with_parse_mode(
-        cls, parse_mode: typing.Literal["http", "multipart"]
-    ) -> HTTPHeaders:
+    def with_parse_mode(cls, parse_mode: HTTPHeaderParseMode) -> HTTPHeaders:
         """Create an empty header dictionary with object-level value validation.
 
-        ``"http"`` (the default for ordinary construction) accepts HTTP byte-range
-        values, conventionally decoded by the caller with Latin-1. ``"multipart"``
-        accepts non-control Unicode values, conventionally decoded with UTF-8.
+        `HTTPHeaderParseMode.HTTP` (the default for ordinary construction) accepts
+        HTTP byte-range values, conventionally decoded by the caller with Latin-1.
+        `HTTPHeaderParseMode.MULTIPART` accepts non-control Unicode values,
+        conventionally decoded with UTF-8.
         Both modes require HTTP token names and reject forbidden control values.
         The mode applies to parsing, `add` and item assignment, and survives
         copying an `HTTPHeaders` object. Dict-style constructor keywords remain
@@ -207,7 +221,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
 
         .. versionadded:: 6.7
         """
-        if parse_mode not in ("http", "multipart"):
+        if not isinstance(parse_mode, HTTPHeaderParseMode):
             raise ValueError("unknown header parse mode")
         headers = cls()
         headers._parse_mode = parse_mode
@@ -219,7 +233,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
         # parse_line converts the error to HTTPInputError for parsed headers.
         if not _ABNF.field_name.fullmatch(name):
             raise ValueError("Invalid header name %r" % name)
-        if self._parse_mode == "http":
+        if self._parse_mode == HTTPHeaderParseMode.HTTP:
             if not _ABNF.field_value.fullmatch(
                 to_unicode(value).strip(HTTP_WHITESPACE)
             ):
@@ -317,7 +331,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
 
     @classmethod
     def parse(
-        cls, headers: str, *, parse_mode: typing.Literal["http", "multipart"] = "http"
+        cls, headers: str, *, parse_mode: HTTPHeaderParseMode = HTTPHeaderParseMode.HTTP
     ) -> HTTPHeaders:
         """Returns a dictionary from decoded header text.
 
@@ -1201,7 +1215,9 @@ def parse_multipart_form_data(
             raise HTTPInputError("multipart/form-data missing headers")
         if eoh > config.max_part_header_size:
             raise HTTPInputError("multipart/form-data part header too large")
-        headers = HTTPHeaders.parse(part[:eoh].decode("utf-8"), parse_mode="multipart")
+        headers = HTTPHeaders.parse(
+            part[:eoh].decode("utf-8"), parse_mode=HTTPHeaderParseMode.MULTIPART
+        )
         disp_header = headers.get("Content-Disposition", "")
         try:
             disposition, disp_params = _parse_header(disp_header)
