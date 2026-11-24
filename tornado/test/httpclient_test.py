@@ -58,6 +58,7 @@ from tornado.test.util import (
     abstract_base_test,
     ignore_deprecation,
     refusing_port,
+    skipIfNoSubprocess,
 )
 from tornado.testing import ExpectLog, bind_unused_port, gen_test
 from tornado.web import Application, RequestHandler, stream_request_body, url
@@ -1417,6 +1418,7 @@ class SyncHTTPClientTest(TestCase):
         self.assertEqual(assertion.exception.code, 404)
 
 
+@skipIfNoSubprocess
 class SyncHTTPClientSubprocessTest(TestCase):
     def test_destructor_log(self):
         # Regression test for

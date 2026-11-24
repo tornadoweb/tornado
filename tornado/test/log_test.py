@@ -35,7 +35,7 @@ def ignore_bytes_warning():
         yield
 
 
-from tornado.test.util import TestCase
+from tornado.test.util import TestCase, skipIfNoSubprocess
 
 
 class LogFormatterTest(TestCase):
@@ -183,6 +183,7 @@ class EnablePrettyLoggingTest(TestCase):
                 handler.close()
 
 
+@skipIfNoSubprocess
 class LoggingOptionTest(TestCase):
     """Test the ability to enable and disable Tornado's logging hooks."""
 

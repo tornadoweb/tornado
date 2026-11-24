@@ -3,6 +3,7 @@ import gc
 import os
 import platform
 import socket
+import subprocess
 import sys
 import sysconfig
 import textwrap
@@ -74,6 +75,14 @@ skipIfNoNetwork = unittest.skipIf("NO_NETWORK" in os.environ, "network access di
 # are unreliable under emulation
 skipIfEmulated = unittest.skipIf(
     "EMULATION" in os.environ, "test unreliable under emulation"
+)
+
+# Some platforms can't start a new Python interpreter in a subprocess.
+# subprocess._can_fork_exec (Python 3.13+) is False on iOS, Emscripten and WASI.
+# Android can fork, but apps can't execute the Python binary bundled with them.
+skipIfNoSubprocess = unittest.skipIf(
+    not getattr(subprocess, "_can_fork_exec", True) or sys.platform == "android",
+    "platform cannot start subprocesses",
 )
 
 skipNotCPython = unittest.skipIf(

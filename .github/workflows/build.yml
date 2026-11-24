@@ -101,9 +101,40 @@ jobs:
           name: artifacts-${{ matrix.os }}${{ matrix.name_suffix || '' }}
           path: ./wheelhouse/*.whl
 
+  build_mobile_wheels:
+    name: Build wheels for ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: iOS
+            os: macos-26
+            platform: ios
+          - name: Android
+            os: ubuntu-24.04
+            platform: android
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v4.3.5
+        env:
+          CIBW_PLATFORM: ${{ matrix.platform }}
+          CIBW_ARCHS: "all"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: artifacts-${{ matrix.platform }}
+          path: ./wheelhouse/*.whl
+
   upload_pypi_test:
     name: Upload to PyPI (test)
-    needs: [build_wheels, build_sdist]
+    needs: [build_wheels, build_mobile_wheels, build_sdist]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     if: github.repository == 'tornadoweb/tornado' && github.event_name == 'workflow_dispatch'
@@ -127,7 +158,7 @@ jobs:
 
   upload_pypi:
     name: Upload to PyPI (prod)
-    needs: [build_wheels, build_sdist]
+    needs: [build_wheels, build_mobile_wheels, build_sdist]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     if: github.repository == 'tornadoweb/tornado' && github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')

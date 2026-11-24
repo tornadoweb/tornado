@@ -8,9 +8,10 @@ from subprocess import Popen
 from tempfile import mkdtemp
 
 
-from tornado.test.util import TestCase
+from tornado.test.util import TestCase, skipIfNoSubprocess
 
 
+@skipIfNoSubprocess
 class AutoreloadTest(TestCase):
     def setUp(self):
         # When these tests fail the output sometimes exceeds the default maxDiff.

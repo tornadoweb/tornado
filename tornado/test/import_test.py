@@ -40,10 +40,11 @@ if "tornado.web" not in sys.modules:
 """
 
 
-from tornado.test.util import TestCase
+from tornado.test.util import TestCase, skipIfNoSubprocess
 
 
 class ImportTest(TestCase):
+    @skipIfNoSubprocess
     def test_import_everything(self):
         # Test that all Tornado modules can be imported without side effects,
         # specifically without initializing the default asyncio event loop.
@@ -53,6 +54,7 @@ class ImportTest(TestCase):
         proc.communicate(_import_everything)
         self.assertEqual(proc.returncode, 0)
 
+    @skipIfNoSubprocess
     def test_lazy_import(self):
         # Test that submodules can be referenced lazily after "import tornado"
         proc = subprocess.Popen([sys.executable], stdin=subprocess.PIPE)

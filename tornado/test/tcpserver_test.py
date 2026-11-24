@@ -8,7 +8,12 @@ from tornado import gen
 from tornado.iostream import IOStream
 from tornado.log import app_log
 from tornado.tcpserver import TCPServer
-from tornado.test.util import AsyncTestCase, TestCase, skipIfNonUnix
+from tornado.test.util import (
+    AsyncTestCase,
+    TestCase,
+    skipIfNonUnix,
+    skipIfNoSubprocess,
+)
 from tornado.testing import ExpectLog, bind_unused_port, gen_test
 
 
@@ -115,6 +120,7 @@ class TCPServerTest(AsyncTestCase):
 
 
 @skipIfNonUnix
+@skipIfNoSubprocess
 class TestMultiprocess(TestCase):
     # These tests verify that the two multiprocess examples from the
     # TCPServer docs work. Both tests start a server with three worker
