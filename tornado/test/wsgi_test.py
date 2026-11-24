@@ -28,8 +28,8 @@ class WSGIAppMixin:
         def make_container(app):
             return WSGIContainer(validator(app), executor=executor)
 
-        # The validator rejects the app before WSGIContainer can see its body,
-        # so the body-error cases use the container directly.
+        # The validator requires a Content-Type on non-204/304 responses, so
+        # the 1xx body case bypasses it and exercises the container directly.
         def make_raw_container(app):
             return WSGIContainer(app, executor=executor)
 
@@ -42,7 +42,7 @@ class WSGIAppMixin:
                 ("/no_content", make_container(self.no_content_wsgi_app)),
                 (
                     "/no_content_with_body",
-                    make_raw_container(self.no_content_with_body_wsgi_app),
+                    make_container(self.no_content_with_body_wsgi_app),
                 ),
                 (
                     "/early_hints_with_body",
