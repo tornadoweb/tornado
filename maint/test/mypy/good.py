@@ -67,12 +67,12 @@ async def use_worker(w: Worker) -> str:
 
 
 def object_header_modes() -> None:
-    from tornado.httputil import HTTPHeaders
+    from tornado.httputil import HTTPHeaders, HTTPHeaderParseMode
 
-    headers = HTTPHeaders.with_parse_mode("multipart")
+    headers = HTTPHeaders.with_parse_mode(HTTPHeaderParseMode.MULTIPART)
     headers.add("X-Filename", "名")
     headers["X-Description"] = "€"
     headers.parse_line("Y: decoded")
-    HTTPHeaders.parse("Z: decoded", parse_mode="http")
-    HTTPHeaders.parse("Z: 名", parse_mode="multipart")
+    HTTPHeaders.parse("Z: decoded", parse_mode=HTTPHeaderParseMode.HTTP)
+    HTTPHeaders.parse("Z: 名", parse_mode=HTTPHeaderParseMode.MULTIPART)
     HTTPHeaders(parse_mode="header-value")
