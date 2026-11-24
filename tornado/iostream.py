@@ -1456,9 +1456,14 @@ class SSLIOStream(IOStream):
                 # returned by connect() or start_tls(). Let the caller decide
                 # whether to log them; the server has no such error consumer.
                 if self.socket.server_side or self._ssl_connect_future is None:
-                    gen_log.warning(
-                        "SSL Error on %s %s: %s", self.socket.fileno(), peer, err
-                    )
+                    if isinstance(err, ssl.SSLSyscallError):
+                        gen_log.warning(
+                            "SSL Error on %s %s: %s", self.socket.fileno(), peer, err
+                        )
+                    else:
+                        gen_log.info(
+                            "SSL Error on %s %s: %s", self.socket.fileno(), peer, err
+                        )
                 return self.close(exc_info=err)
             raise
         except OSError as err:

@@ -121,7 +121,7 @@ class SSLTest(AsyncHTTPSTestCase):
         # Make sure the server closes the connection when it gets a non-ssl
         # connection, rather than waiting for a timeout or otherwise
         # misbehaving.
-        with ExpectLog(gen_log, "(SSL Error|uncaught exception)"):
+        with ExpectLog(gen_log, "(SSL Error|uncaught exception)", level=logging.INFO):
             with ExpectLog(gen_log, "Uncaught exception", required=False):
                 with self.assertRaises((IOError, HTTPError)):
                     self.fetch(
@@ -143,7 +143,7 @@ class SSLTest(AsyncHTTPSTestCase):
         # timeout raises TimeoutError, which is an IOError, so a slow exchange
         # passed the assertRaises and then failed in ExpectLog with no
         # indication of what had happened.
-        with ExpectLog(gen_log, "SSL Error") as expect_log:
+        with ExpectLog(gen_log, "SSL Error", level=logging.INFO) as expect_log:
             stream = IOStream(socket.socket())
             with closing(stream):
                 await stream.connect(("127.0.0.1", self.get_http_port()))
