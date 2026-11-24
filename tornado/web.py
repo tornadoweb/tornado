@@ -725,7 +725,7 @@ class RequestHandler:
             morsel["expires"] = httputil.format_timestamp(expires)
         if path:
             morsel["path"] = path
-        if max_age:
+        if max_age is not None:
             # Note change from _ to -.
             # Normalize through int() so that a non-int max_age (which could
             # smuggle extra cookie attributes past the attribute allowlist)
