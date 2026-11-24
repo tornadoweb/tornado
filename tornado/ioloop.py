@@ -376,6 +376,12 @@ class IOLoop(Configurable):
         Therefore the call to `close` will usually appear just after
         the call to `start` rather than near the call to `stop`.
 
+        If your application uses ``asyncio.run()``, asyncio owns the loop and
+        closes it when that call returns. Close application resources within
+        the main coroutine before returning. To have Tornado close all
+        registered file descriptors, manage the loop with Tornado methods
+        such as `IOLoop.run_sync` followed by ``IOLoop.close(all_fds=True)``.
+
         .. versionchanged:: 3.1
            If the `IOLoop` implementation supports non-integer objects
            for "file descriptors", those objects will have their
