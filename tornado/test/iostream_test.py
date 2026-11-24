@@ -1399,7 +1399,7 @@ class TestIOStreamStartTLS(AsyncTestCase):
         # Certificates are verified with the default configuration.
         # The client reports its error through the Future. Depending on the
         # platform, the server may see a TLS alert or only a connection reset.
-        with ExpectLog(gen_log, "SSL Error", required=False):
+        with ExpectLog(gen_log, "SSL Error", level=logging.INFO, required=False):
             client_future = self.client_start_tls(server_hostname="localhost")
             with self.assertRaises(ssl.SSLError):
                 yield client_future
@@ -1412,7 +1412,7 @@ class TestIOStreamStartTLS(AsyncTestCase):
         server_future = self.server_start_tls(_server_ssl_options())
         # The client reports its error through the Future. Depending on the
         # platform, the server may see a TLS alert or only a connection reset.
-        with ExpectLog(gen_log, "SSL Error", required=False):
+        with ExpectLog(gen_log, "SSL Error", level=logging.INFO, required=False):
             client_future = self.client_start_tls(
                 ssl.create_default_context(), server_hostname="127.0.0.1"
             )
@@ -1580,7 +1580,7 @@ class TestIOStreamCheckHostname(AsyncTestCase):
         with ExpectLog(
             gen_log,
             ".*(alert bad certificate|SSLV3_ALERT_BAD_CERTIFICATE)",
-            level=logging.WARNING,
+            level=logging.INFO,
             required=platform.system() != "Windows",
         ):
             with self.assertRaises(ssl.SSLCertVerificationError):
@@ -1588,7 +1588,7 @@ class TestIOStreamCheckHostname(AsyncTestCase):
                     ("127.0.0.1", self.port),
                     server_hostname="bar.example.com",
                 )
-            # The server logs a warning while cleaning up the failed connection.
+            # The server logs an info message while cleaning up the failed connection.
             # Unfortunately there's no good hook to wait for this logging.
             # It doesn't seem to happen on windows; I'm not sure why.
             if platform.system() != "Windows":
@@ -1618,7 +1618,7 @@ class TestIOStreamCheckHostname(AsyncTestCase):
         try:
             # A TLS alert on the server side is independent of the client
             # exception and may be logged while the failed socket is closed.
-            with ExpectLog(gen_log, "SSL Error", required=False):
+            with ExpectLog(gen_log, "SSL Error", level=logging.INFO, required=False):
                 with self.assertRaises(ssl.SSLCertVerificationError):
                     if start_tls:
                         await stream.start_tls(
