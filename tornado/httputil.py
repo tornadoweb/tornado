@@ -177,10 +177,12 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
         # so we maintain a mapping from field name to a list of field lines in self._as_list.
         # self._combined_cache is a cache of the combined field values derived from self._as_list
         # on demand (and cleared whenever the list is modified).
+        self._parse_mode: typing.Literal["http", "multipart"] = "http"
         self._as_list: dict[str, list[str]] = {}
         self._combined_cache: dict[str, str] = {}
         if len(args) == 1 and len(kwargs) == 0 and isinstance(args[0], HTTPHeaders):
             # Copy constructor
+            self._parse_mode = args[0]._parse_mode
             for k, v in args[0].get_all():
                 self.add(k, v)
         else:
@@ -189,15 +191,35 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
 
     # new public methods
 
-    def _check_header(
-        self, name: str, value: str, *, _chars_are_bytes: bool = True
-    ) -> None:
+    @classmethod
+    def with_parse_mode(
+        cls, parse_mode: typing.Literal["http", "multipart"]
+    ) -> HTTPHeaders:
+        """Create an empty header dictionary with object-level value validation.
+
+        ``"http"`` (the default for ordinary construction) accepts HTTP byte-range
+        values, conventionally decoded by the caller with Latin-1. ``"multipart"``
+        accepts non-control Unicode values, conventionally decoded with UTF-8.
+        Both modes require HTTP token names and reject forbidden control values.
+        The mode applies to parsing, `add` and item assignment, and survives
+        copying an `HTTPHeaders` object. Dict-style constructor keywords remain
+        header names, not configuration options.
+
+        .. versionadded:: 6.7
+        """
+        if parse_mode not in ("http", "multipart"):
+            raise ValueError("unknown header parse mode")
+        headers = cls()
+        headers._parse_mode = parse_mode
+        return headers
+
+    def _check_header(self, name: str, value: str) -> None:
         # Raises ValueError, not HTTPInputError: this is called for headers the
         # application is building as well as ones parsed from the network.
         # parse_line converts the error to HTTPInputError for parsed headers.
         if not _ABNF.field_name.fullmatch(name):
             raise ValueError("Invalid header name %r" % name)
-        if _chars_are_bytes:
+        if self._parse_mode == "http":
             if not _ABNF.field_value.fullmatch(
                 to_unicode(value).strip(HTTP_WHITESPACE)
             ):
@@ -208,7 +230,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
             if _FORBIDDEN_HEADER_CHARS_RE.search(value):
                 raise ValueError("Invalid header value %r" % value)
 
-    def add(self, name: str, value: str, *, _chars_are_bytes: bool = True) -> None:
+    def add(self, name: str, value: str) -> None:
         """Adds a new value for the given key.
 
         .. versionchanged:: 6.7
@@ -216,7 +238,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
            `HTTPInputError`, which is reserved for malformed input from the
            network.
         """
-        self._check_header(name, value, _chars_are_bytes=_chars_are_bytes)
+        self._check_header(name, value)
         norm_name = _normalize_header(name)
         self._combined_cache.pop(norm_name, None)
         if norm_name in self._as_list:
@@ -242,22 +264,8 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
             for value in values:
                 yield (name, value)
 
-    def parse_line(
-        self,
-        line: str | bytes,
-        *,
-        encoding: str = "latin1",
-        strict_http: bool | None = None,
-        _chars_are_bytes: bool = True,
-    ) -> None:
+    def parse_line(self, line: str) -> None:
         r"""Updates the dictionary with a single header line.
-
-        Byte input is decoded with ``encoding`` (Latin-1 by default); text input
-        is already decoded and is not re-encoded. Decoding errors are not
-        suppressed. ``strict_http=False`` permits non-control Unicode values
-        for multipart headers, independently of the selected encoding.
-        ``_chars_are_bytes`` remains a compatibility alias when ``strict_http``
-        is not specified.
 
         >>> h = HTTPHeaders()
         >>> h.parse_line("Content-Type: text/html")
@@ -285,10 +293,6 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
            Parsing of header lines terminated by LF without CR will be removed in Tornado 6.7
            instead of 7.0 as previously documented.
         """
-        if isinstance(line, bytes):
-            line = line.decode(encoding)
-        if strict_http is None:
-            strict_http = _chars_are_bytes
         if m := re.search(r"\r?\n$", line):
             # RFC 9112 section 2.2: a recipient MAY recognize a single LF as a line
             # terminator and ignore any preceding CR.
@@ -306,30 +310,23 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
         except ValueError:
             raise HTTPInputError("no colon in header line")
         try:
-            self.add(
-                name, value.strip(HTTP_WHITESPACE), _chars_are_bytes=_chars_are_bytes
-            )
+            self.add(name, value.strip(HTTP_WHITESPACE))
         except ValueError as e:
             # This header came from the network, so it's an input error.
             raise HTTPInputError(str(e)) from e
 
     @classmethod
     def parse(
-        cls,
-        headers: str | bytes,
-        *,
-        encoding: str = "latin1",
-        strict_http: bool | None = None,
-        _chars_are_bytes: bool = True,
+        cls, headers: str, *, parse_mode: typing.Literal["http", "multipart"] = "http"
     ) -> HTTPHeaders:
-        """Returns a dictionary from HTTP header text or bytes.
+        """Returns a dictionary from decoded header text.
 
-        Byte input is decoded with ``encoding`` (Latin-1 by default); text input
-        is used as-is. Validation is independent of decoding: HTTP headers use
-        strict byte-range values by default, while multipart headers may use
-        ``encoding="utf-8", strict_http=False`` for non-control Unicode values.
-        Names are always HTTP tokens. ``_chars_are_bytes`` remains a
-        compatibility alias when ``strict_http`` is not specified.
+        The caller decodes bytes before parsing. ``parse_mode`` chooses the
+        object-level validation described by `with_parse_mode`, independently
+        of decoding. The returned object retains this mode for later additions.
+
+        .. versionchanged:: 6.7
+           Added the ``parse_mode`` keyword argument.
 
         >>> h = HTTPHeaders.parse("Content-Type: text/html\\r\\nContent-Length: 42\\r\\n")
         >>> sorted(h.items())
@@ -341,21 +338,17 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
            mix of `KeyError`, and `ValueError`.
 
         """
-        if isinstance(headers, bytes):
-            headers = headers.decode(encoding)
-        if strict_http is None:
-            strict_http = _chars_are_bytes
-        h = cls()
+        h = cls.with_parse_mode(parse_mode)
 
         start = 0
         while True:
             lf = headers.find("\n", start)
             if lf == -1:
-                h.parse_line(headers[start:], strict_http=strict_http)
+                h.parse_line(headers[start:])
                 break
             line = headers[start : lf + 1]
             start = lf + 1
-            h.parse_line(line, strict_http=strict_http)
+            h.parse_line(line)
         return h
 
     # MutableMapping abstract method implementations.
@@ -1208,7 +1201,7 @@ def parse_multipart_form_data(
             raise HTTPInputError("multipart/form-data missing headers")
         if eoh > config.max_part_header_size:
             raise HTTPInputError("multipart/form-data part header too large")
-        headers = HTTPHeaders.parse(part[:eoh], encoding="utf-8", strict_http=False)
+        headers = HTTPHeaders.parse(part[:eoh].decode("utf-8"), parse_mode="multipart")
         disp_header = headers.get("Content-Disposition", "")
         try:
             disposition, disp_params = _parse_header(disp_header)
