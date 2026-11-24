@@ -845,6 +845,15 @@ class RequestHandler:
            Renamed from ``set_secure_cookie`` to ``set_signed_cookie`` to
            avoid confusion with other uses of "secure" in cookie attributes
            and prefixes. The old name remains as an alias.
+
+        .. deprecated:: 6.7
+
+           The ``version=1`` format is deprecated and will be disabled by
+           default in Tornado 6.8 and removed in 7.0. Applications setting
+           ``version=1`` should update their ``cookie_secret`` to use a dict of
+           keys instead of a single string (setting the previous secret value as
+           key version 1 to ensure a smooth transition for existing cookies)
+           and remove the ``version`` argument to use the default version 2 format.
         """
         self.set_cookie(
             name,
@@ -868,6 +877,12 @@ class RequestHandler:
 
            Added the ``version`` argument.  Introduced cookie version 2
            and made it the default.
+
+        .. deprecated:: 6.7
+
+           The ``version=1`` format is deprecated and will be disabled by
+           default in Tornado 6.8 and removed in 7.0. See `set_signed_cookie`
+           for migration guidance.
         """
         self.require_setting("cookie_secret", "secure cookies")
         secret = self.application.settings["cookie_secret"]
@@ -908,6 +923,10 @@ class RequestHandler:
            avoid confusion with other uses of "secure" in cookie attributes
            and prefixes. The old name remains as an alias.
 
+        .. versionchanged:: 6.7
+
+           Starting in Tornado 6.8, ``min_version`` will default to 2.
+           Version 1 cookies will be removed in Tornado 7.0.
         """
         self.require_setting("cookie_secret", "secure cookies")
         if value is None:
@@ -1746,7 +1765,7 @@ class RequestHandler:
 
         if self.application.settings.get("xsrf_cookies"):
             self.check_xsrf_cookie()
-        if self.application.settings.get("cross_origin_protection"):
+        if self.application.settings.get("cross_origin_protection", True):
             error = self._check_cross_origin(self.check_trusted_origin)
             if error is not None:
                 raise HTTPError(403, error)
@@ -4101,6 +4120,19 @@ def create_signed_value(
     clock: Callable[[], float] | None = None,
     key_version: int | None = None,
 ) -> bytes:
+    """Signs and timestamps a string so it cannot be forged.
+
+    Normally called via `RequestHandler.set_signed_cookie`, but provided as a
+    separate function for non-cookie uses.
+
+    .. deprecated:: 6.7
+
+       The ``version=1`` format is deprecated and will be disabled by default in
+       Tornado 6.8 and removed in 7.0. Anyone setting ``version=1`` should update
+       their ``cookie_secret`` to use a dict instead of a single string (setting
+       the previous secret value as key version 1 for a smooth transition), and
+       remove the ``version`` argument.
+    """
     if version is None:
         version = DEFAULT_SIGNED_VALUE_VERSION
     if clock is None:
@@ -4109,6 +4141,12 @@ def create_signed_value(
     timestamp = utf8(str(int(clock())))
     value = base64.b64encode(utf8(value))
     if version == 1:
+        warnings.warn(
+            "Signed value version 1 is deprecated, will be disabled by default in "
+            "Tornado 6.8 and removed in 7.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         assert not isinstance(secret, dict)
         signature = _create_signature_v1(secret, name, value, timestamp)
         value = b"|".join([value, timestamp, signature])
@@ -4191,6 +4229,16 @@ def decode_signed_value(
     clock: Callable[[], float] | None = None,
     min_version: int | None = None,
 ) -> bytes | None:
+    """Decodes and validates a signed value.
+
+    Normally called via `RequestHandler.get_signed_cookie`, but provided as a
+    separate function for non-cookie uses.
+
+    .. versionchanged:: 6.7
+
+       Starting in Tornado 6.8, ``min_version`` will default to 2.
+       Version 1 cookies will be removed in Tornado 7.0.
+    """
     if clock is None:
         clock = time.time
     if min_version is None:

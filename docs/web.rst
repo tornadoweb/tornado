@@ -139,6 +139,8 @@
       .. deprecated:: 6.3
 
    .. automethod:: RequestHandler.create_signed_value
+   .. autofunction:: create_signed_value
+   .. autofunction:: decode_signed_value
    .. autodata:: MIN_SUPPORTED_SIGNED_VALUE_VERSION
    .. autodata:: MAX_SUPPORTED_SIGNED_VALUE_VERSION
    .. autodata:: DEFAULT_SIGNED_VALUE_VERSION
