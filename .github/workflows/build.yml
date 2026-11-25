@@ -104,7 +104,7 @@ jobs:
   build_mobile_wheels:
     name: Build wheels for ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:

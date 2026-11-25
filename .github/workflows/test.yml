@@ -338,3 +338,32 @@ jobs:
         run: maint/scripts/runcog.sh
       - name: Check for changes
         run: git diff --exit-code
+
+  test_mobile:
+    name: Test ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: iOS
+            os: macos-26
+            platform: ios
+          - name: Android
+            os: ubuntu-24.04
+            platform: android
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v4.3.5
+        env:
+          CIBW_PLATFORM: ${{ matrix.platform }}
+          # Only test the wheels with a single Python
+          # [[[cog cog.outl(f"CIBW_BUILD: cp3{default_python_minor}-*")]]]
+          CIBW_BUILD: cp313-*
+          # [[[end]]]
