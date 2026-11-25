@@ -19,6 +19,7 @@ import gzip
 import logging
 import pickle
 import socket
+import ssl
 import subprocess
 import sys
 import threading
@@ -1032,6 +1033,32 @@ Transfer-Encoding: chunked
                 with self.assertRaises(ValueError):
                     self.http_client.__class__(force_instance=True, defaults=defaults)
 
+    @gen_test
+    def test_fetch_does_not_modify_request(self):
+        # fetch() adds headers such as Host and Authorization to its own
+        # copy of the request, not to the caller's request or headers.
+        for headers_type in [dict, HTTPHeaders]:
+            with self.subTest(headers_type=headers_type.__name__):
+                headers = headers_type({"X-Test": "1"})
+                request = HTTPRequest(
+                    self.get_url("/echo_headers"),
+                    headers=headers,
+                    auth_username="me",
+                    auth_password="secret",
+                )
+                response = yield self.http_client.fetch(request)
+                self.assertIn("Authorization", json_decode(response.body))
+                self.assertEqual(dict(headers), {"X-Test": "1"})
+                self.assertEqual(dict(request.headers), {"X-Test": "1"})
+                # Fetching the same request again without credentials
+                # doesn't send the ones from the first fetch.
+                request.auth_username = None
+                request.auth_password = None
+                response = yield self.http_client.fetch(request)
+                echoed_headers = json_decode(response.body)
+                self.assertNotIn("Authorization", echoed_headers)
+                self.assertEqual(echoed_headers["X-Test"], "1")
+
     def test_header_types(self):
         # Header values may be passed as character or utf8 byte strings,
         # in a plain dictionary or an HTTPHeaders object.
@@ -1515,13 +1542,25 @@ class SyncHTTPClientSubprocessTest(TestCase):
 
 class HTTPRequestTestCase(TestCase):
     def test_headers(self):
-        request = HTTPRequest("http://example.com", headers={"foo": "bar"})
-        self.assertEqual(request.headers, {"foo": "bar"})
+        headers = {"foo": "bar"}
+        request = HTTPRequest("http://example.com", headers=headers)
+        self.assertIsInstance(request.headers, HTTPHeaders)
+        self.assertEqual(dict(request.headers), {"Foo": "bar"})
+        # The caller's headers are copied, not used directly.
+        request.headers["baz"] = "qux"
+        self.assertEqual(headers, {"foo": "bar"})
 
     def test_headers_setter(self):
-        request = HTTPRequest("http://example.com")
-        request.headers = {"bar": "baz"}
-        self.assertEqual(request.headers, {"bar": "baz"})
+        for headers_type in [dict, HTTPHeaders]:
+            with self.subTest(headers_type=headers_type.__name__):
+                request = HTTPRequest("http://example.com")
+                headers = headers_type({"bar": "baz"})
+                request.headers = headers
+                self.assertIsInstance(request.headers, HTTPHeaders)
+                self.assertIsNot(request.headers, headers)
+                self.assertEqual(dict(request.headers), {"Bar": "baz"})
+                request.headers["qux"] = "1"
+                self.assertEqual(len(headers), 1)
 
     def test_null_headers_setter(self):
         request = HTTPRequest("http://example.com")
@@ -1543,6 +1582,54 @@ class HTTPRequestTestCase(TestCase):
         self.assertEqual(
             request.headers, {"If-Modified-Since": format_timestamp(http_date)}
         )
+
+    def test_if_modified_since_does_not_modify_headers(self):
+        http_date = datetime.datetime.now(datetime.UTC)
+        for headers_type in [dict, HTTPHeaders]:
+            with self.subTest(headers_type=headers_type.__name__):
+                headers = headers_type({"Foo": "bar"})
+                request = HTTPRequest(
+                    "http://example.com", headers=headers, if_modified_since=http_date
+                )
+                self.assertEqual(dict(headers), {"Foo": "bar"})
+                self.assertEqual(
+                    dict(request.headers),
+                    {"Foo": "bar", "If-Modified-Since": format_timestamp(http_date)},
+                )
+
+    def test_copy(self):
+        ssl_options = {"certfile": "a"}
+        callback = lambda chunk: None  # noqa: E731
+        for headers_type in [dict, HTTPHeaders]:
+            with self.subTest(headers_type=headers_type.__name__):
+                headers = headers_type({"Foo": "bar"})
+                request = HTTPRequest(
+                    "http://example.com",
+                    headers=headers,
+                    auth_username="me",
+                    ssl_options=ssl_options,
+                    streaming_callback=callback,
+                )
+                copied = request.copy()
+                self.assertIsNot(copied, request)
+                self.assertIsInstance(copied.headers, HTTPHeaders)
+                self.assertEqual(dict(copied.headers), {"Foo": "bar"})
+                self.assertEqual(copied.url, "http://example.com")
+                self.assertEqual(copied.auth_username, "me")
+                self.assertIs(copied.streaming_callback, callback)
+                self.assertEqual(copied.ssl_options, ssl_options)
+                copied.headers["Foo"] = "baz"
+                copied.ssl_options["certfile"] = "b"  # type: ignore
+                copied.auth_username = None
+                self.assertEqual(dict(request.headers), {"Foo": "bar"})
+                self.assertEqual(ssl_options, {"certfile": "a"})
+                self.assertEqual(request.auth_username, "me")
+
+    def test_copy_ssl_context(self):
+        # An SSLContext can't be copied; it is shared.
+        context = ssl.create_default_context()
+        request = HTTPRequest("https://example.com", ssl_options=context)
+        self.assertIs(request.copy().ssl_options, context)
 
     def test_if_modified_since_naive_deprecated(self):
         with ignore_deprecation():

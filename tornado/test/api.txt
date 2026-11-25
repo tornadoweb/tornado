@@ -197,6 +197,7 @@ tornado.httpclient.HTTPRequest.ca_certs: attribute
 tornado.httpclient.HTTPRequest.client_cert: attribute
 tornado.httpclient.HTTPRequest.client_key: attribute
 tornado.httpclient.HTTPRequest.connect_timeout: attribute
+tornado.httpclient.HTTPRequest.copy: method(self)
 tornado.httpclient.HTTPRequest.decompress_response: attribute
 tornado.httpclient.HTTPRequest.expect_100_continue: attribute
 tornado.httpclient.HTTPRequest.follow_redirects: attribute

@@ -1815,10 +1815,9 @@ def websocket_connect(
     """
     if isinstance(url, httpclient.HTTPRequest):
         assert connect_timeout is None
-        request = url
-        # Copy and convert the headers dict/object (see comments in
-        # AsyncHTTPClient.fetch)
-        request.headers = httputil.HTTPHeaders(request.headers)
+        # Copy the request so we don't modify the caller's object or its
+        # headers (see comments in AsyncHTTPClient.fetch)
+        request = url.copy()
     else:
         request = httpclient.HTTPRequest(url, connect_timeout=connect_timeout)
     request = cast(
