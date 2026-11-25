@@ -181,9 +181,10 @@ Type annotation changes
   ``simple_httpclient``) can now be pickled and unpickled correctly.
 - New method `.HTTPRequest.copy`, which copies the request's headers and ``ssl_options``
   dict along with it.
-- `.HTTPRequest` now copies the ``headers`` passed to it into a new `.HTTPHeaders` object.
-  Previously it used the caller's object directly (and modified it when
-  ``if_modified_since`` was used), so later changes to that object affected the request.
+- `.HTTPRequest` now copies ``headers`` (passed to the constructor or assigned to the
+  attribute) into a new `.HTTPHeaders` object. Previously it used the caller's object
+  directly (and modified it when ``if_modified_since`` was used), so later changes to that
+  object affected the request.
 
 ``tornado.http1connection``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

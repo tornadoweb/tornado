@@ -1551,9 +1551,16 @@ class HTTPRequestTestCase(TestCase):
         self.assertEqual(headers, {"foo": "bar"})
 
     def test_headers_setter(self):
-        request = HTTPRequest("http://example.com")
-        request.headers = {"bar": "baz"}
-        self.assertEqual(request.headers, {"bar": "baz"})
+        for headers_type in [dict, HTTPHeaders]:
+            with self.subTest(headers_type=headers_type.__name__):
+                request = HTTPRequest("http://example.com")
+                headers = headers_type({"bar": "baz"})
+                request.headers = headers
+                self.assertIsInstance(request.headers, HTTPHeaders)
+                self.assertIsNot(request.headers, headers)
+                self.assertEqual(dict(request.headers), {"Bar": "baz"})
+                request.headers["qux"] = "1"
+                self.assertEqual(len(headers), 1)
 
     def test_null_headers_setter(self):
         request = HTTPRequest("http://example.com")
