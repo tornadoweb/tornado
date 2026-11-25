@@ -249,7 +249,8 @@
          * ``cookie_secret``: Used by `RequestHandler.get_signed_cookie`
            and `.set_signed_cookie` to sign cookies.
          * ``cross_origin_protection``: If ``True``, :ref:`cross_origin_protection` is enabled.
-           New in Tornado 6.6.
+           New in Tornado 6.6. The default is ``True`` since Tornado 6.7 (it was
+           ``False`` in 6.6).
          * ``key_version``: Used by requestHandler `.set_signed_cookie`
            to sign cookies with a specific key when ``cookie_secret``
            is a key dictionary.

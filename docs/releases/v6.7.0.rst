@@ -4,6 +4,20 @@ What's new in Tornado 6.7.0
 In development
 --------------
 
+Feature highlights
+~~~~~~~~~~~~~~~~~~
+
+- :ref:`cross_origin_protection` is now enabled by default. State-changing requests
+  (such as ``POST``) that a browser sends from another origin are rejected with a
+  ``403 Forbidden`` unless the origin is listed in the ``trusted_origins`` application
+  setting or allowed by `.RequestHandler.check_trusted_origin`. Requests from
+  non-browser clients are not affected. Applications that accept requests from other
+  origins (including CORS-enabled APIs, sibling subdomains, and sign-in callbacks
+  that arrive as cross-site form posts) or that run behind a plain-HTTP proxy that
+  rewrites the ``Host`` header need to be configured; see
+  :ref:`cross_origin_deployment`. To restore the previous behavior, set
+  ``cross_origin_protection=False``.
+
 Deprecation notices
 ~~~~~~~~~~~~~~~~~~~
 
@@ -16,3 +30,10 @@ Deprecation notices
 - `.BaseIOStream.read_until_close` is now implemented as a loop over `.BaseIOStream.read_bytes`
   with ``partial=True`` rather than through its own dedicated code path. Externally observable
   behavior is unchanged.
+
+`tornado.web`
+~~~~~~~~~~~~~
+
+- The warning logged when :ref:`cross_origin_protection` rejects a request now includes the
+  ``Host`` header the ``Origin`` was compared with, and suggests the ``trusted_origins``
+  setting where that would help.
