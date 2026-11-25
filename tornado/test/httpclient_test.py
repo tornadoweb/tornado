@@ -18,6 +18,7 @@ import functools
 import gzip
 import logging
 import pickle
+import re
 import socket
 import ssl
 import subprocess
@@ -813,7 +814,10 @@ Transfer-Encoding: chunked
         # bytes as UTF-8 (and encode spaces).
         location = url_escape("/echo_uri/\u00e9 x")
         response = self.fetch_raw_redirect("location=" + location)
-        self.assertEqual(response.body, b"/echo_uri/%C3%A9%20x")
+        # Percent-encoding is case-insensitive, and some versions of libcurl
+        # (such as 8.5.0 in Ubuntu 24.04) use lowercase hex digits.
+        body = re.sub(rb"%[0-9a-f]{2}", lambda m: m.group().upper(), response.body)
+        self.assertEqual(body, b"/echo_uri/%C3%A9%20x")
 
     def curl_module(self):
         """Returns the pycurl module if the client in use is curl_httpclient.
