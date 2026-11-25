@@ -342,8 +342,9 @@ logger, with the ``Origin`` (and, when it was compared, the ``Host``) that cause
 
 * **Opaque origins.** Requests from sandboxed iframes, ``data:`` URLs, and pages with
   ``Referrer-Policy: no-referrer`` carry the header ``Origin: null``. This value is
-  shared by every such page, including pages controlled by an attacker, so do not add
-  ``"null"`` to ``trusted_origins``. If the provider in the previous item sends
+  shared by every such page, including pages controlled by an attacker, so
+  ``trusted_origins`` may not contain ``"null"`` (`.Application` raises a
+  `ValueError` if it does). If the provider in the previous item sends
   ``Origin: null``, the callback handler's ``check_trusted_origin`` must allow it
   without relying on the origin, and must verify the callback itself.
 

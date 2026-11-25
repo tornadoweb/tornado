@@ -2451,6 +2451,13 @@ class Application(ReversibleRouter):
             self.transforms = transforms
         self.default_host = default_host
         self.settings = settings
+        if any(o == "null" for o in settings.get("trusted_origins", [])):
+            # Any page can send "Origin: null" by submitting from a sandboxed
+            # iframe, so trusting it would trust every origin.
+            raise ValueError(
+                'trusted_origins must not contain "null"; see the '
+                "cross-origin protection documentation"
+            )
         self.ui_modules = {
             "linkify": _linkify,
             "xsrf_form_html": _xsrf_form_html,

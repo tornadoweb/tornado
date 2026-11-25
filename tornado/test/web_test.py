@@ -4667,6 +4667,11 @@ class CrossOriginProtectionTest(SimpleHandlerTestCase):
                     response = self._post(headers)
                 self.assertEqual(response.code, 403)
 
+    def test_null_trusted_origin_rejected(self):
+        # Trusting the opaque origin "null" would trust every origin.
+        with self.assertRaises(ValueError):
+            Application([], trusted_origins=["https://example.com", "null"])
+
     def test_sec_fetch_site_cross_site_no_origin(self):
         # trusted_origins can't help without an Origin, so don't suggest it.
         with ExpectLog(

@@ -37,3 +37,7 @@ Deprecation notices
 - The warning logged when :ref:`cross_origin_protection` rejects a request now includes the
   ``Host`` header the ``Origin`` was compared with, and suggests the ``trusted_origins``
   setting where that would help.
+- `.Application` now raises `ValueError` if the ``trusted_origins`` setting contains
+  ``"null"``. Any page can send ``Origin: null`` (for example, from a sandboxed iframe), so
+  trusting it would trust every origin. See :ref:`cross_origin_deployment` for handling
+  callbacks that arrive with ``Origin: null``.

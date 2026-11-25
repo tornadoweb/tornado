@@ -263,6 +263,7 @@
            implementation of `RequestHandler.check_trusted_origin`, for both
            ``cross_origin_protection`` and (via the default implementation of
            `.WebSocketHandler.check_origin`) websockets. New in Tornado 6.6.
+           Since Tornado 6.7, it may not contain ``"null"``.
          * ``xsrf_cookies``: If ``True``, :ref:`xsrf-cookies` will be enabled.
          * ``xsrf_cookie_version``: Controls the version of new XSRF
            cookies produced by this server.  Should generally be left
