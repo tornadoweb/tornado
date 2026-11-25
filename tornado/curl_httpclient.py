@@ -43,6 +43,20 @@ curl_log = logging.getLogger("tornado.curl_httpclient")
 
 CR_OR_LF_RE = re.compile(b"\r|\n")
 
+# The content-codings libcurl can decode, keyed by the name of the library
+# that implements each one as it appears in pycurl.version.
+_CURL_ENCODING_LIBRARIES = {
+    "gzip": "zlib",
+    "deflate": "zlib",
+    "br": "brotli",
+    "zstd": "zstd",
+}
+_CURL_SUPPORTED_ENCODINGS = frozenset(
+    encoding
+    for encoding, library in _CURL_ENCODING_LIBRARIES.items()
+    if re.search(r"(^|\s)%s/" % library, pycurl.version)
+)
+
 
 class _CurlStreamingBuffer:
     """Delivers response body chunks from libcurl to a ``streaming_callback``.
@@ -331,6 +345,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                     "buffer": BytesIO(),
                     "streaming_buffer": None,
                     "body_too_large": False,
+                    "unexpected_encoding": None,
                     "request": request,
                     "callback": callback,
                     "queue_start_time": queue_start_time,
@@ -387,6 +402,11 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             if body_too_large:
                 curl_message = "body exceeded max_body_size of %d bytes" % (
                     self.max_body_size,
+                )
+            elif info["unexpected_encoding"] is not None:
+                curl_message = (
+                    "Content-Encoding %r not enabled by decompress_response"
+                    % (info["unexpected_encoding"],)
                 )
             error: CurlError | None = CurlError(curl_error, curl_message)
             assert error is not None
@@ -485,10 +505,19 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 raise ValueError("Illegal characters in header (CR or LF): %r" % line)
         curl.setopt(pycurl.HTTPHEADER, encoded_headers)
 
+        decompress_encodings = httputil._decompress_encodings(
+            request.decompress_response,
+            {"gzip", "deflate"},
+            _CURL_SUPPORTED_ENCODINGS,
+        )
         curl.setopt(
             pycurl.HEADERFUNCTION,
             functools.partial(
-                self._curl_header_callback, headers, request.header_callback
+                self._curl_header_callback,
+                headers,
+                request.header_callback,
+                decompress_encodings,
+                curl.info,  # type: ignore
             ),
         )
         write_function: Callable[[bytes], int]
@@ -536,9 +565,10 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             curl.setopt(pycurl.USERAGENT, "Mozilla/5.0 (compatible; pycurl)")
         if request.network_interface:
             curl.setopt(pycurl.INTERFACE, request.network_interface)
-        if request.decompress_response:
-            curl.setopt(pycurl.ENCODING, "gzip,deflate")
+        if decompress_encodings:
+            curl.setopt(pycurl.ENCODING, ",".join(sorted(decompress_encodings)))
         else:
+            # With no ENCODING, libcurl ignores Content-Encoding entirely.
             curl.setopt(pycurl.ENCODING, None)
         if request.proxy_host and request.proxy_port:
             curl.setopt(pycurl.PROXY, request.proxy_host)
@@ -693,8 +723,10 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         self,
         headers: httputil.HTTPHeaders,
         header_callback: Callable[[str], None] | None,
+        decompress_encodings: frozenset[str],
+        info: dict[str, Any],
         header_line_bytes: bytes,
-    ) -> None:
+    ) -> int | None:
         header_line = native_str(header_line_bytes.decode("latin1"))
         if header_callback is not None:
             self.io_loop.add_callback(header_callback, header_line)
@@ -709,10 +741,23 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 )
                 header_line = "X-Http-Reason: %s" % reason
             except httputil.HTTPInputError:
-                return
+                return None
         if not header_line:
-            return
+            return None
         headers.parse_line(header_line)
+        if decompress_encodings and "Content-Encoding" in headers:
+            # Once decoding is enabled at all, libcurl decodes whichever
+            # encoding the response names, whether or not we asked for it.
+            # Refuse the response before any of its body reaches a decoder
+            # we did not choose to expose.
+            for encoding in headers["Content-Encoding"].split(","):
+                encoding = encoding.strip().lower()
+                if encoding not in decompress_encodings | {"", "identity"}:
+                    info["unexpected_encoding"] = encoding
+                    # Returning anything but the length of the line (or
+                    # None) makes libcurl fail the transfer.
+                    return 0
+        return None
 
     def _curl_debug(self, debug_type: int, debug_msg: bytes) -> None:
         debug_types = ("I", "<", ">", "<", ">")

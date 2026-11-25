@@ -1361,6 +1361,34 @@ class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
             self.post_gzip("x" * 101)
 
 
+class GzipCollectionTest(GzipBaseTest, AsyncHTTPTestCase):
+    def get_httpserver_options(self):
+        return dict(decompress_request={"GZIP", "no-such-encoding"})
+
+    def test_gzip(self):
+        response = self.post_gzip("foo=bar")
+        self.assertEqual(json_decode(response.body), {"foo": ["bar"]})
+
+
+class GzipNotEnabledTest(GzipBaseTest, AsyncHTTPTestCase):
+    def get_httpserver_options(self):
+        # gzip is not in the collection, so it is not decoded.
+        return dict(decompress_request={"no-such-encoding"})
+
+    def test_gzip(self):
+        # The body reaches the application still compressed, so it cannot
+        # be parsed as a form.
+        with ExpectLog(gen_log, ".*Unsupported Content-Encoding: gzip"):
+            response = self.post_gzip("foo=bar")
+        self.assertEqual(response.code, 400)
+
+
+class DecompressRequestStrTest(TestCase):
+    def test_str(self):
+        with self.assertRaises(TypeError):
+            HTTPServer(Application(), decompress_request="gzip")
+
+
 @skipNotCPython
 class GzipMemoryTest(AsyncHTTPTestCase):
     MAX_BODY_SIZE = 1024 * 1024
