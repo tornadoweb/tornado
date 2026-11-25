@@ -41,6 +41,7 @@ from tornado.escape import (
 from tornado import gen, netutil
 from tornado.locks import Event
 from tornado.httpclient import (
+    AsyncHTTPClient,
     HTTPClient,
     HTTPError,
     HTTPRequest,
@@ -54,6 +55,7 @@ from tornado.iostream import IOStream
 from tornado.log import app_log, gen_log
 from tornado.test.util import (
     AsyncHTTPTestCase,
+    AsyncTestCase,
     TestCase,
     abstract_base_test,
     ignore_deprecation,
@@ -980,6 +982,17 @@ Transfer-Encoding: chunked
         finally:
             client.close()
 
+    def test_configure_defaults_disallowed(self):
+        for defaults in [
+            dict(auth_username="me"),
+            dict(auth_password="secret"),
+            dict(auth_username="me", auth_password="secret"),
+            dict(headers={"Authorization": "secret"}),
+        ]:
+            with self.subTest(defaults=defaults):
+                with self.assertRaises(ValueError):
+                    self.http_client.__class__(force_instance=True, defaults=defaults)
+
     def test_header_types(self):
         # Header values may be passed as character or utf8 byte strings,
         # in a plain dictionary or an HTTPHeaders object.
@@ -1309,6 +1322,20 @@ X-XSS-Protection: 1;
                     self.assertTrue(
                         "Authorization" in echoed_headers or "Cookie" in echoed_headers
                     )
+
+
+class AsyncHTTPClientDefaultsTest(AsyncTestCase):
+    def test_disallowed_in_configure(self):
+        # With configure(), the error is raised when the shared instance
+        # is created, and the failed instance is not cached.
+        saved = AsyncHTTPClient._save_configuration()
+        try:
+            AsyncHTTPClient.configure(None, defaults=dict(auth_username="me"))
+            with self.assertRaises(ValueError):
+                AsyncHTTPClient()
+            self.assertNotIn(self.io_loop, AsyncHTTPClient._async_clients())
+        finally:
+            AsyncHTTPClient._restore_configuration(saved)
 
 
 class RequestProxyTest(TestCase):
