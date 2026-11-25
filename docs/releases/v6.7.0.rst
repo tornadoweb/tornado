@@ -294,6 +294,10 @@ Type annotation changes
 - Requests with ``validate_cert=False`` now reuse one `ssl.SSLContext` instead of creating a
   new one (and loading the system's CA certificates) for every request. This saves a few
   milliseconds per request on Linux and 20-40ms on Windows.
+- With ``expect_100_continue=True``, a server that sends more than one ``100 Continue``
+  response no longer makes the client send the request body again. Previously each
+  ``100 Continue`` re-ran the ``body_producer`` and wrote the body (and, for chunked
+  bodies, the final chunk) again; with a ``Content-Length`` the request failed instead.
 
 `tornado.tcpclient`
 ~~~~~~~~~~~~~~~~~~~

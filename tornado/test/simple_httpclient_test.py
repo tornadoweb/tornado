@@ -848,6 +848,142 @@ class HTTP1xxLimitTestCase(AsyncHTTPTestCase):
                 self.fetch("/?num=%d" % (_MAX_1XX_RESPONSES + 1), raise_error=True)
 
 
+class Repeated100ContinueTestCase(AsyncTestCase):
+    """A server may send more than one 1xx response before the real one,
+    including several 100 Continues (RFC 9110 section 15.2). With
+    expect_100_continue, the body must be sent exactly once.
+    """
+
+    BODY = b"0123456789"
+
+    def setUp(self):
+        super().setUp()
+        [listener] = bind_sockets(0, "127.0.0.1", socket.AF_INET)
+        self.port = listener.getsockname()[1]
+        self.received: Queue[bytes] = Queue()
+        test = self
+
+        class RawServer(TCPServer):
+            async def handle_stream(self, stream, address):
+                received = await stream.read_until(b"\r\n\r\n")
+                # Unless after_body is set, send every 1xx and the final
+                # response at once, so the client handles all of them
+                # before it reads the 200.
+                stream.write(test.interim)
+                if test.after_body:
+                    # Wait for the (chunked) body, then send more 1xx.
+                    received += await stream.read_until(b"0\r\n\r\n")
+                    stream.write(test.after_body)
+                stream.write(b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA")
+                received += await stream.read_until_close()
+                test.received.put(received)
+
+        self.server = RawServer()
+        self.server.add_sockets([listener])
+        self.client = SimpleAsyncHTTPClient(force_instance=True)
+
+    def tearDown(self):
+        self.client.close()
+        self.server.stop()
+        super().tearDown()
+
+    async def fetch(
+        self, interim: bytes, after_body: bytes = b"", **kwargs
+    ) -> tuple[HTTPResponse, bytes]:
+        self.interim = interim
+        self.after_body = after_body
+        response = await self.client.fetch(
+            "http://127.0.0.1:%d/" % self.port,
+            method="POST",
+            expect_100_continue=True,
+            raise_error=False,
+            **kwargs,
+        )
+        received = await self.received.get()
+        return response, received
+
+    def producer(self, calls):
+        async def body_producer(write):
+            calls.append(None)
+            await write(self.BODY)
+
+        return body_producer
+
+    async def check(
+        self, interim: bytes, expected_body: bytes, after_body: bytes = b"", **kwargs
+    ) -> None:
+        response, received = await self.fetch(interim, after_body, **kwargs)
+        response.rethrow()
+        self.assertEqual(response.body, b"A")
+        headers, _, body = received.partition(b"\r\n\r\n")
+        self.assertIn(b"\r\nExpect: 100-continue\r\n", headers + b"\r\n")
+        self.assertEqual(body, expected_body)
+
+    @gen_test
+    async def test_chunked_body_producer(self):
+        chunked = b"a\r\n" + self.BODY + b"\r\n0\r\n\r\n"
+        for num in (1, 2, _MAX_1XX_RESPONSES):
+            with self.subTest(num=num):
+                calls: list[None] = []
+                await self.check(
+                    b"HTTP/1.1 100 Continue\r\n\r\n" * num,
+                    chunked,
+                    body_producer=self.producer(calls),
+                )
+                self.assertEqual(len(calls), 1)
+
+    @gen_test
+    async def test_body_producer_with_content_length(self):
+        for num in (1, 2, _MAX_1XX_RESPONSES):
+            with self.subTest(num=num):
+                calls: list[None] = []
+                await self.check(
+                    b"HTTP/1.1 100 Continue\r\n\r\n" * num,
+                    self.BODY,
+                    body_producer=self.producer(calls),
+                    headers={"Content-Length": str(len(self.BODY))},
+                )
+                self.assertEqual(len(calls), 1)
+
+    @gen_test
+    async def test_body(self):
+        for num in (1, 2, _MAX_1XX_RESPONSES):
+            with self.subTest(num=num):
+                await self.check(
+                    b"HTTP/1.1 100 Continue\r\n\r\n" * num,
+                    self.BODY,
+                    body=self.BODY,
+                )
+
+    @gen_test
+    async def test_100_after_body(self):
+        # A second 100 Continue that arrives after the body has been sent
+        # is ignored too.
+        calls: list[None] = []
+        await self.check(
+            b"HTTP/1.1 100 Continue\r\n\r\n",
+            b"a\r\n" + self.BODY + b"\r\n0\r\n\r\n",
+            after_body=b"HTTP/1.1 100 Continue\r\n\r\n",
+            body_producer=self.producer(calls),
+        )
+        self.assertEqual(len(calls), 1)
+
+    @gen_test
+    async def test_other_1xx_mixed(self):
+        # Only a 100 releases the body; other 1xx responses are skipped,
+        # before or after it.
+        calls: list[None] = []
+        await self.check(
+            b"HTTP/1.1 103 Early Hints\r\nLink: </a>\r\n\r\n"
+            b"HTTP/1.1 100 Continue\r\n\r\n"
+            b"HTTP/1.1 103 Early Hints\r\n\r\n"
+            b"HTTP/1.1 100 Continue\r\n\r\n",
+            b"a\r\n" + self.BODY + b"\r\n0\r\n\r\n",
+            body_producer=self.producer(calls),
+        )
+        self.assertEqual(len(calls), 1)
+
+
 def gzip_members() -> list[bytes]:
     # Each member is bigger than the connection's chunk_size (64KB), so that
     # decompression goes through the max_length path of _GzipMessageDelegate.

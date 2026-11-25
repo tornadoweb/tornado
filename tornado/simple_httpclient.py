@@ -282,6 +282,10 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         # Timeout handle returned by IOLoop.add_timeout
         self._timeout: object = None
         self._sockaddr = None
+        # Set when the request body has been written. With
+        # expect_100_continue, the body is written in response to a
+        # 100 Continue, and the server may send more than one of those.
+        self._body_written = False
         IOLoop.current().add_future(
             gen.convert_yielded(self.run()), lambda f: f.result()
         )
@@ -544,6 +548,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         return connection
 
     async def _write_body(self, start_read: bool) -> None:
+        self._body_written = True
         if self.request.body is not None:
             self.connection.write(self.request.body)
         elif self.request.body_producer is not None:
@@ -628,7 +633,12 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
     ) -> None:
         assert isinstance(first_line, httputil.ResponseStartLine)
         if self.request.expect_100_continue and first_line.code == 100:
-            await self._write_body(False)
+            # A server may send several 1xx responses (RFC 9110 section 15.2),
+            # including more than one 100 Continue. Only the first one
+            # releases the body; writing it again would send a second copy
+            # of the body (and a second chunked terminator).
+            if not self._body_written:
+                await self._write_body(False)
             return
         self.code = first_line.code
         self.reason = first_line.reason
