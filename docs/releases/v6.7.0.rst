@@ -111,6 +111,8 @@ Backwards-incompatible changes
 Deprecation notices
 ~~~~~~~~~~~~~~~~~~~
 
+- Support for HTTP header lines terminated by LF without CR is still deprecated, but its
+  removal has been postponed back to Tornado 7.0 (Tornado 6.6.1 had moved it to 6.7).
 - `.BaseIOStream.read_until_close` is deprecated. Use `.BaseIOStream.read_bytes` with
   ``partial=True`` in a loop for finer flow control and clearer error reporting.
 - Version 1 of the signed value format (``version=1`` in `.RequestHandler.set_signed_cookie`,
