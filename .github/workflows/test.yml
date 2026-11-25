@@ -312,7 +312,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Run cibuildwheel
-        uses: pypa/cibuildwheel@v2.23
+        uses: pypa/cibuildwheel@v4.3.5
         env:
           # For speed, we only build one python version and one arch. We throw away the wheels
           # built here; the real build is defined in build.yml.
