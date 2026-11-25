@@ -270,6 +270,9 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
         .. versionchanged:: 6.6.1
            Parsing of header lines terminated by LF without CR will be removed in Tornado 6.7
            instead of 7.0 as previously documented.
+
+        .. versionchanged:: 6.7
+           The removal of LF-only line endings has been postponed back to Tornado 7.0.
         """
         if m := re.search(r"\r?\n$", line):
             # RFC 9112 section 2.2: a recipient MAY recognize a single LF as a line
