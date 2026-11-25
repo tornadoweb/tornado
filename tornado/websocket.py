@@ -924,7 +924,14 @@ class WebSocketProtocol13(WebSocketProtocol):
             return
         except ValueError:
             gen_log.debug("Malformed WebSocket request received", exc_info=True)
-            self._abort()
+            if self.stream is not None:
+                self._abort()
+            elif not handler._finished:
+                # The connection hasn't been upgraded yet (and _abort can't
+                # be used without a stream), so send an HTTP error instead.
+                handler.clear()
+                handler.set_status(400)
+                handler.finish("Malformed WebSocket request")
             return
 
     def _handle_websocket_headers(self, handler: WebSocketHandler) -> None:
