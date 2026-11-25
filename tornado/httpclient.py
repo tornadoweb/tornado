@@ -170,8 +170,20 @@ class AsyncHTTPClient(Configurable):
         client = AsyncHTTPClient(force_instance=True,
             defaults=dict(user_agent="MyUserAgent"))
 
+    ``auth_username``, ``auth_password``, and ``headers`` may not be set
+    in ``defaults``. Credentials set for the whole client would be sent
+    to every server it talks to, including any server a redirect leads
+    to; pass them with each request instead.
+
     .. versionchanged:: 5.0
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
+
+    .. versionchanged:: 6.7
+       ``auth_username``, ``auth_password``, and ``headers`` in ``defaults``
+       raise `ValueError`. Default headers were never applied (a request
+       always has its own headers object), and default credentials were
+       sent to every server, including the target of a cross-origin
+       redirect.
 
     """
 
@@ -217,6 +229,14 @@ class AsyncHTTPClient(Configurable):
         self.io_loop = IOLoop.current()
         self.defaults = dict(HTTPRequest._DEFAULTS)
         if defaults is not None:
+            disallowed = sorted(
+                {"auth_username", "auth_password", "headers"}.intersection(defaults)
+            )
+            if disallowed:
+                raise ValueError(
+                    "%s may not be set in AsyncHTTPClient defaults; "
+                    "pass them with each request instead" % ", ".join(disallowed)
+                )
             self.defaults.update(defaults)
         self._closed = False
 
