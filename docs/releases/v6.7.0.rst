@@ -4,6 +4,21 @@ What's new in Tornado 6.7.0
 In development
 --------------
 
+General changes
+~~~~~~~~~~~~~~~
+
+- Python 3.16 is now tested in CI, with preliminary support (it is still in development
+  upstream).
+- Performance on Windows is much better with the default ``ProactorEventLoop``. The
+  selector thread that Tornado uses on that event loop now makes far fewer round trips
+  between threads; a stream round trip went from about 208µs to 64µs and bulk transfers
+  are about twice as fast, which is close to ``SelectorEventLoop``.
+- Tornado is now type-checked with ``mypy --strict``, and many type annotations are more
+  precise (see "Type annotation changes" below).
+- Many problems with malformed input found by fuzzing (including OSS-Fuzz) have been fixed.
+  In most cases the symptom was an uncaught exception logged with a traceback (and sometimes
+  a 500 response or a request that never finished) instead of a clean error.
+
 Feature highlights
 ~~~~~~~~~~~~~~~~~~
 
@@ -17,12 +32,189 @@ Feature highlights
   rewrites the ``Host`` header need to be configured; see
   :ref:`cross_origin_deployment`. To restore the previous behavior, set
   ``cross_origin_protection=False``.
+- Both HTTP clients now support internationalized domain names (IDN) in URLs. Non-ASCII
+  hostnames are converted with IDNA and other non-ASCII characters are percent-encoded as
+  UTF-8, as browsers do.
+- `.HTTPServer` has a new ``header_timeout`` argument, which limits the time a client may
+  take to send a request's headers (default 60 seconds). ``idle_connection_timeout`` now
+  only limits how long an idle connection may wait for the first byte of a request.
+
+Backwards-incompatible changes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- ``cross_origin_protection`` is now on by default (see above). Some details that are easy
+  to miss when upgrading:
+
+  - Applications that use ``xsrf_cookies`` get both checks; enabling ``xsrf_cookies``
+    does not turn off ``cross_origin_protection``. Overriding
+    `.RequestHandler.check_xsrf_cookie` (for example, to accept token-authenticated API
+    requests without an XSRF cookie) does not affect the new check; override
+    `.RequestHandler.check_trusted_origin` too.
+  - Sending ``Access-Control-Allow-Origin`` headers (CORS) does not allow cross-origin
+    requests through this check. Endpoints that are meant to be called from any origin,
+    such as an unauthenticated API that sends ``Access-Control-Allow-Origin: *``, must
+    override `.RequestHandler.check_trusted_origin`.
+  - The check applies to applications wrapped in `.FallbackHandler` and `.WSGIContainer`.
+  - `.Application` raises `ValueError` if the ``trusted_origins`` setting contains
+    ``"null"``. Any page can send ``Origin: null`` (for example, from a sandboxed iframe),
+    so trusting it would trust every origin.
+
+- ``tornado.auth.OpenIdMixin`` has been removed (it was deprecated in Tornado 6.6).
+- `.HTTPServer`'s new ``header_timeout`` defaults to 60 seconds. Previously a client could
+  take up to ``idle_connection_timeout`` (one hour by default) to send its headers.
+  Applications that expect very slow clients can raise it.
+- `.HTTPHeaders` now validates header names and values on every way of setting them
+  (``__setitem__``, the constructor, ``update()``, and ``setdefault()``), not only in
+  ``add()``. Names that are not valid tokens and values containing control characters
+  (such as CR, LF, or NUL) raise `ValueError`. Previously these could be stored unchecked.
+  ``add()`` also raises `ValueError` now (in Tornado 6.5 and 6.6 it raised
+  `.HTTPInputError`, which is reserved for malformed input from the network), and no longer
+  rejects values with leading or trailing whitespace.
+- HTTP request targets containing ``#`` are now rejected with a 400 error. A fragment is
+  never part of an HTTP request (and browsers never send one); previously it was included
+  in the request's path or query.
+- A ``multipart/form-data`` request whose ``Content-Type`` has more than one ``boundary``
+  parameter is now rejected with a 400 error instead of using the first one.
+- ``simple_httpclient`` now raises `ValueError` for URLs that contain spaces or control
+  characters, as ``http.client`` and curl do. Previously some of these characters were
+  silently removed and others were sent as-is, producing a malformed request line.
+  Percent-encode them instead (``%20`` for a space).
+- ``simple_httpclient`` now percent-encodes non-ASCII characters in the path and query of a
+  URL (as UTF-8), instead of sending raw UTF-8 bytes. When following a redirect, a
+  ``Location`` header that is not valid UTF-8 is now an error.
+- ``curl_httpclient`` now converts non-ASCII hostnames to ASCII itself, with Python's
+  ``idna`` codec (IDNA 2003), instead of passing them to libcurl (which, when built with
+  libidn2, uses UTS #46 like browsers). The two differ for a few characters: for example,
+  ``straße.de`` is now sent to ``strasse.de``, a different domain, while browsers and
+  previous versions of Tornado use ``xn--strae-oqa.de``. ``simple_httpclient`` already
+  behaved this way (Python's socket and ssl modules apply the same codec), so both clients
+  now agree. Applications that need browser-compatible handling of these names should
+  convert the hostname themselves before making the request.
+- SSL errors on server connections (such as TLS alerts, plain-HTTP requests to an HTTPS
+  port, or unsupported protocol versions) are now logged at ``INFO`` instead of ``WARNING``,
+  except for ``ssl.SSLSyscallError``. Handshake failures on client connections are no
+  longer logged at all, since they are reported to the caller through the failed `.Future`.
+  Log-based monitoring that counted these warnings will see fewer of them.
+- `.websocket_connect` now fails with ``WebSocketError`` when the server's handshake
+  response is invalid (wrong ``Connection``, ``Upgrade``, or ``Sec-WebSocket-Accept``
+  headers, or an unsupported extension). Previously these were ``assert`` statements, which
+  surfaced as `.StreamClosedError` (or were skipped entirely under ``python -O``).
+- Templates loaded with an absolute path (inside the loader's root directory) now resolve
+  relative names in ``{% include %}`` and ``{% extends %}`` relative to their own directory,
+  as templates loaded with a relative path already did. Previously such names were resolved
+  relative to the loader's root.
+- `.PeriodicCallback` now raises `ValueError` for a zero or negative `datetime.timedelta`
+  ``callback_time``, as it already did for numbers.
+- On Python 3.16, which removes asyncio's event loop policy system, the deprecated
+  ``tornado.platform.asyncio.AnyThreadEventLoopPolicy`` raises an error when it is used.
 
 Deprecation notices
 ~~~~~~~~~~~~~~~~~~~
 
 - `.BaseIOStream.read_until_close` is deprecated. Use `.BaseIOStream.read_bytes` with
   ``partial=True`` in a loop for finer flow control and clearer error reporting.
+- Version 1 of the signed value format (``version=1`` in `.RequestHandler.set_signed_cookie`,
+  `.RequestHandler.create_signed_value`, and `tornado.web.create_signed_value`) is
+  deprecated and emits a `DeprecationWarning`. It will be disabled by default (``min_version``
+  will default to 2) in Tornado 6.8, and removed in Tornado 7.0. To migrate, change
+  ``cookie_secret`` to a dict of keys with the old secret as key version 1, and stop passing
+  ``version``; existing version 1 cookies continue to validate with key version 1 (see
+  below).
+
+Type annotation changes
+~~~~~~~~~~~~~~~~~~~~~~~
+
+- Constructors of `.Configurable` classes (such as ``IOLoop()`` and ``AsyncHTTPClient()``)
+  now return their class's type instead of ``Any``.
+- `.IOLoop.run_sync` now returns the result type of the function it runs.
+- `.run_on_executor` preserves the decorated method's signature and returns a `.Future` of
+  its result type.
+- `.WaitIterator`, `.PriorityQueue`, and `.LifoQueue` are now generic.
+- Iterating over `.HTTPHeaders` yields ``str``. The constructor no longer has an overload
+  accepting a mapping to lists of values (which was never handled correctly); use
+  `.HTTPHeaders.add` for multiple values.
+- ``gen.TimeoutError``, ``ioloop.TimeoutError``, ``web.URLSpec``, ``locale.LOCALE_NAMES``,
+  and ``httputil.responses`` are now explicitly re-exported, so applications type-checked
+  with ``mypy --strict`` can use them.
+- Many other uses of ``Any`` have been narrowed, and bare generic types now have type
+  arguments.
+
+``tornado``
+~~~~~~~~~~~
+
+- ``tornado.websocket`` and ``tornado.wsgi`` were missing from ``tornado.__all__``, so they
+  could not be accessed as attributes of the ``tornado`` package without an explicit import.
+
+`tornado.autoreload`
+~~~~~~~~~~~~~~~~~~~~
+
+- ``python -m tornado.autoreload -m module`` works again on Python 3.14 and later
+  (previously it raised `AttributeError` when the module exited).
+
+``tornado.curl_httpclient``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- The ``expect_100_continue`` request option is now supported. Previously it was ignored
+  and the request body was always sent immediately.
+- IDN hostnames are now supported (see "Backwards-incompatible changes" above for how they
+  are converted).
+- Debug messages from libcurl that are not valid UTF-8 no longer cause errors.
+
+`tornado.httpclient`
+~~~~~~~~~~~~~~~~~~~~
+
+- `.HTTPClientError` and its subclasses (such as the timeout error raised by
+  ``simple_httpclient``) can now be pickled and unpickled correctly.
+
+``tornado.http1connection``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- `.HTTP1Connection.write_headers` now validates the reason phrase and checks that header
+  lines contain no CR or LF characters and can be encoded as Latin-1, for every caller
+  (including `.WSGIContainer` and custom `.HTTPMessageDelegate` implementations). On the
+  server, an invalid response is replaced with an empty ``500 Internal Server Error``, the
+  error is logged, and the connection is closed; later writes for that request fail with
+  `.StreamClosedError`. On the client, an invalid request raises `ValueError`.
+- The reason phrase in the status line is now encoded as Latin-1 (like header values)
+  instead of UTF-8, so non-ASCII characters in the range U+0080 to U+00FF are received
+  correctly.
+- A response to an HTTP/1.0 keep-alive request no longer says ``Connection: Keep-Alive``
+  when the server is going to close the connection anyway.
+- Server connections are now closed when the server's request loop is cancelled (for
+  example, at shutdown) instead of being left open.
+
+`tornado.httpserver`
+~~~~~~~~~~~~~~~~~~~~
+
+- New argument ``header_timeout``; see "Feature highlights" above.
+- When ``xheaders`` is enabled, IPv6 addresses in square brackets (as sent in
+  ``X-Forwarded-For`` by some load balancers) are now accepted. Bracketed addresses are
+  also accepted in ``trusted_downstream``.
+- A ``Host`` header with a port number too long to convert to an integer is now a 400 error
+  instead of an uncaught exception.
+
+`tornado.httputil`
+~~~~~~~~~~~~~~~~~~
+
+- `.HTTPHeaders` validates names and values in more places, and raises `ValueError` instead
+  of `.HTTPInputError`; see "Backwards-incompatible changes" above.
+- Media types and parameter names in form ``Content-Type`` headers are now matched
+  case-insensitively.
+- A ``Content-Type`` that merely starts with ``application/x-www-form-urlencoded`` or
+  ``multipart/form-data`` (such as ``application/x-www-form-urlencodedfoo``) is no longer
+  treated as form data.
+- Header parameters without a value (such as ``server_no_context_takeover``) are parsed
+  again; they were dropped by the RFC 2231 support added in Tornado 5.1.
+- Malformed RFC 2231 parameters (such as a parameter given both with and without a
+  continuation number) are now reported as malformed input instead of raising unexpected
+  exceptions.
+- `.split_host_and_port` and other parsers now accept only ASCII digits in port numbers.
+
+`tornado.ioloop`
+~~~~~~~~~~~~~~~~
+
+- `.PeriodicCallback` now validates ``timedelta`` values; see "Backwards-incompatible
+  changes" above.
 
 `tornado.iostream`
 ~~~~~~~~~~~~~~~~~~
@@ -30,6 +222,70 @@ Deprecation notices
 - `.BaseIOStream.read_until_close` is now implemented as a loop over `.BaseIOStream.read_bytes`
   with ``partial=True`` rather than through its own dedicated code path. Externally observable
   behavior is unchanged.
+- SSL errors are logged at a lower level; see "Backwards-incompatible changes" above.
+
+`tornado.locale`
+~~~~~~~~~~~~~~~~
+
+- `.Locale.format_date` now handles timezone-aware datetimes in time zones other than UTC
+  correctly.
+- `.load_translations` now detects the encoding of each CSV file separately, instead of
+  using the encoding detected for the first file for all of them.
+
+`tornado.locks`
+~~~~~~~~~~~~~~~
+
+- When a task waiting to enter ``async with`` on a `.Semaphore` or `.Lock` is cancelled after
+  the lock has been handed to it, the lock is now released instead of being held forever.
+
+`tornado.platform.asyncio`
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- The selector thread used on Windows makes far fewer round trips between threads (see
+  "General changes" above).
+- An exception raised by an event callback no longer stops all further events from being
+  delivered by the selector thread.
+
+`tornado.routing`
+~~~~~~~~~~~~~~~~~
+
+- Reversing a URL (`.Application.reverse_url`, `.RequestHandler.reverse_url`) whose pattern
+  contains a literal ``%`` no longer fails or produces the wrong result.
+
+``tornado.simple_httpclient``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- IDN hostnames are now supported, and the IDNA form of the hostname is sent in the ``Host``
+  header (previously the raw hostname was sent, encoded as Latin-1).
+- Percent-encoded characters in the user name and password of a URL (such as ``%40`` for
+  ``@``) are now decoded before they are sent, as ``curl_httpclient`` already did. This
+  also applies to `.websocket_connect`.
+- A URL with a user name but no password no longer raises `AssertionError`.
+- Port numbers above 65535 are now an error. Previously they wrapped around to another port.
+- Stripping the credentials from a redirect to another host no longer drops the brackets
+  from an IPv6 address.
+- Redirects to a ``Location`` that cannot be parsed, or that has user info but no host, now
+  fail the request with a `ValueError`. Previously the request failed with a misleading
+  "Connection closed" error.
+- A timeout while following a redirect now fails the original request instead of leaving it
+  unresolved.
+- A stream error (such as an overlong chunk size line) now fails the request immediately
+  instead of when it times out.
+- Requests with ``validate_cert=False`` now reuse one `ssl.SSLContext` instead of creating a
+  new one (and loading the system's CA certificates) for every request. This saves a few
+  milliseconds per request on Linux and 20-40ms on Windows.
+
+`tornado.tcpclient`
+~~~~~~~~~~~~~~~~~~~
+
+- If the caller is cancelled just after a connection (or its TLS handshake) completes, the
+  stream is now closed instead of being leaked.
+
+`tornado.template`
+~~~~~~~~~~~~~~~~~~
+
+- Relative template names are resolved relative to templates loaded with an absolute path;
+  see "Backwards-incompatible changes" above.
 
 `tornado.web`
 ~~~~~~~~~~~~~
@@ -37,7 +293,61 @@ Deprecation notices
 - The warning logged when :ref:`cross_origin_protection` rejects a request now includes the
   ``Host`` header the ``Origin`` was compared with, and suggests the ``trusted_origins``
   setting where that would help.
-- `.Application` now raises `ValueError` if the ``trusted_origins`` setting contains
-  ``"null"``. Any page can send ``Origin: null`` (for example, from a sandboxed iframe), so
-  trusting it would trust every origin. See :ref:`cross_origin_deployment` for handling
-  callbacks that arrive with ``Origin: null``.
+- With ``cross_origin_protection`` enabled, a malformed ``Origin`` header is now rejected
+  with a 403 instead of causing a 500, and ``Origin: null`` no longer matches a request
+  with no ``Host`` header.
+- ``405 Method Not Allowed`` responses now include an ``Allow`` header listing the methods
+  the handler implements, as required by RFC 9110.
+- ``GZipContentEncoding`` now only adds ``Vary: Accept-Encoding`` to responses whose content
+  type it would compress.
+- `.RequestHandler.set_cookie` now accepts spaces and control characters in cookie
+  values; they are quoted by the standard library's cookie module.
+- When ``cookie_secret`` is a dict of keys, version 1 signed values are now verified with
+  key version 1. This allows applications to migrate from version 1 signed values; see
+  "Deprecation notices" above.
+- `tornado.web.HTTPError` can now be pickled and unpickled without losing its status code and log
+  message.
+- `.StaticFileHandler` changes:
+
+  - The ``If-Range`` request header is now honored: if it does not match the current file,
+    the whole file is sent instead of the requested range.
+  - If a file grows while it is being served, only the number of bytes given in the
+    ``Content-Length`` header is sent, instead of breaking the connection.
+  - ``If-Modified-Since`` is ignored when `~.StaticFileHandler.get_modified_time` returns
+    ``None``, instead of causing an error.
+  - A request path containing a null byte (such as ``/static/foo%00``) is now a 404 instead
+    of a 500 with a logged traceback (a regression in 6.5.9).
+
+`tornado.websocket`
+~~~~~~~~~~~~~~~~~~~
+
+- Failures of `.WebSocketHandler.write_message` (and the client's ``write_message``) whose
+  `.Future` is not awaited are no longer logged as "Task exception was never retrieved"
+  when the connection closes.
+- The client now accepts handshake responses with a ``Connection`` header containing other
+  tokens besides ``Upgrade`` (such as ``Connection: keep-alive, Upgrade``), and reports
+  invalid responses with ``WebSocketError``.
+- ``server_no_context_takeover`` and ``client_no_context_takeover`` in compression
+  negotiation are honored again. They had been silently ignored since Tornado 5.1, so the
+  client kept its compression context when the server asked it not to.
+- A ``Sec-WebSocket-Extensions`` header that cannot be parsed, or a ``permessage-deflate``
+  offer with unsupported parameters, is now declined (and the next offer considered) instead
+  of failing the handshake with a 500.
+- A compressed message that is not valid deflate data now closes the connection with code
+  1007 instead of logging an uncaught exception.
+- Control frames interleaved with the fragments of a compressed message no longer break
+  decompression.
+- A compression window of 8 bits is now rejected on every version of zlib. Older versions
+  silently used a 9-bit window instead, which the peer might not be able to decompress.
+- Masking and unmasking messages is much faster, in both the pure-Python implementation
+  (on CPython) and the C extension.
+
+`tornado.wsgi`
+~~~~~~~~~~~~~~
+
+- `.WSGIContainer` now discards the response body for ``HEAD`` requests. Previously a WSGI
+  application that returned a body for ``HEAD`` (such as Django) caused the connection to
+  fail.
+- `.WSGIContainer` now parses the ``Host`` header correctly for IPv6 addresses.
+- An invalid status line or header from a WSGI application now results in a
+  ``500 Internal Server Error`` instead of a malformed response.
