@@ -42,7 +42,14 @@ from tornado.escape import native_str, parse_qs_bytes, to_unicode, utf8
 from tornado.util import ObjectDict, unicode_type
 
 import typing
-from collections.abc import Awaitable, Generator, Iterable, Iterator, Mapping
+from collections.abc import (
+    Awaitable,
+    Collection,
+    Generator,
+    Iterable,
+    Iterator,
+    Mapping,
+)
 from typing import (
     AnyStr,
 )
@@ -1554,3 +1561,27 @@ def parse_cookie(cookie: str) -> dict[str, str]:
             # unquote using Python's algorithm.
             cookiedict[key] = _unquote_cookie(val)
     return cookiedict
+
+
+def _decompress_encodings(
+    decompress: bool | Collection[str] | None,
+    default: Collection[str],
+    supported: Collection[str],
+) -> frozenset[str]:
+    """Returns the set of content-codings to decode.
+
+    Interprets an option like ``HTTPRequest.decompress_response`` or
+    ``HTTPServer``'s ``decompress_request`` for an implementation that
+    decodes ``supported`` and enables ``default`` when the option is True.
+    """
+    if decompress is True:
+        encodings: Collection[str] = default
+    elif not decompress:
+        return frozenset()
+    elif isinstance(decompress, (str, bytes)):
+        raise TypeError(
+            "expected a bool or a collection of strings, not %r" % (decompress,)
+        )
+    else:
+        encodings = decompress
+    return frozenset(e.lower() for e in encodings) & frozenset(supported)

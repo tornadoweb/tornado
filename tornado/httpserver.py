@@ -28,7 +28,7 @@ class except to start a server at the beginning of the process
 import socket
 import ssl
 import typing
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection
 from typing import Any
 
 from tornado import httputil, iostream, netutil
@@ -74,6 +74,13 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
     (default 60 seconds), so a client that sends its headers slowly can't
     hold a connection for as long as an idle one. ``body_timeout`` limits the
     time to read the body (by default it is unlimited).
+
+    If ``decompress_request`` is ``True``, request bodies sent with
+    ``Content-Encoding: gzip`` are decompressed before they reach the
+    application. It may also be a collection of ``Content-Encoding`` names
+    to decode; ``gzip`` is currently the only one supported, and other
+    names are ignored. Bodies in an encoding that is not decoded are left
+    as they were received.
 
     To make this server serve SSL traffic, send the ``ssl_options`` keyword
     argument with an `ssl.SSLContext` object. For compatibility with older
@@ -163,6 +170,8 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
 
        IPv6 addresses in square brackets are now accepted when ``xheaders`` is
        enabled and in ``trusted_downstream``.
+
+       ``decompress_request`` may be a collection of encoding names.
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -183,7 +192,7 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
         xheaders: bool = False,
         ssl_options: dict[str, Any] | ssl.SSLContext | None = None,
         protocol: str | None = None,
-        decompress_request: bool = False,
+        decompress_request: bool | Collection[str] = False,
         chunk_size: int | None = None,
         max_header_size: int | None = None,
         idle_connection_timeout: float | None = None,

@@ -326,11 +326,11 @@ class GzipBombHandler(RequestHandler):
 
 
 class BrotliBombHandler(RequestHandler):
-    """Sends a brotli-encoded bomb that the client never asked for.
+    """Sends a brotli-encoded bomb, whether or not the client asked for it.
 
-    No client implementation requests brotli, but libcurl builds its decoder
-    from the ``Content-Encoding`` of the response without checking it against
-    what was requested, so ``curl_httpclient`` decodes this anyway.
+    libcurl builds its decoder from the ``Content-Encoding`` of the response
+    without checking it against what was requested, so ``curl_httpclient``
+    must refuse this itself unless brotli was enabled.
     """
 
     def get(self):
@@ -353,9 +353,8 @@ class LargeBodyHandler(RequestHandler):
 
 
 class HTTPClientCommonTestCase(AsyncHTTPTestCase):
-    # Set by subclasses whose client decodes ``Content-Encoding: br``. No
-    # implementation asks for brotli, so this is only true where the client
-    # decodes an encoding it did not request (see BrotliBombHandler).
+    # Set by subclasses whose client can decode ``Content-Encoding: br``
+    # when it is enabled with ``decompress_response``.
     decompresses_brotli = False
 
     def get_app(self):
@@ -495,13 +494,24 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         # was refused, not accumulated.
         self.assertLess(peak, UNBUFFERABLE_BOMB_SIZE // 2)
 
+    def test_unsolicited_brotli_not_decoded(self):
+        # brotli is not enabled by default, so a response that uses it
+        # anyway must never reach a brotli decoder. Clients may either
+        # refuse it or pass it through undecoded.
+        try:
+            response = self.fetch("/brotli_bomb", raise_error=True)
+        except HTTPError as e:
+            self.assertIn("Content-Encoding", str(e))
+        else:
+            self.assertEqual(response.headers["Content-Encoding"], "br")
+            self.assertEqual(response.body, BROTLI_BOMB)
+
     @skipIfNoTracemalloc
-    def test_streaming_unsolicited_brotli_bomb(self):
-        # A client that decodes an encoding it did not request can be
-        # reached by a codec whose expansion ratio is hundreds of times
-        # deflate's. The transfer need not survive -- libcurl aborts it once
-        # its own pause buffer cannot hold the expansion -- but either way
-        # the expansion must not be buffered.
+    def test_streaming_brotli_bomb(self):
+        # A codec whose expansion ratio is hundreds of times deflate's. The
+        # transfer need not survive -- libcurl aborts it once its own pause
+        # buffer cannot hold the expansion -- but either way the expansion
+        # must not be buffered.
         if not self.decompresses_brotli:
             self.skipTest("client does not decompress Content-Encoding: br")
         received = 0
@@ -514,7 +524,11 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         try:
             tracemalloc.reset_peak()
             try:
-                self.fetch("/brotli_bomb", streaming_callback=streaming_callback)
+                self.fetch(
+                    "/brotli_bomb",
+                    streaming_callback=streaming_callback,
+                    decompress_response={"gzip", "br"},
+                )
             except HTTPError:
                 pass
             peak = tracemalloc.get_traced_memory()[1]
@@ -522,7 +536,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
             tracemalloc.stop()
 
         # More than was sent on the wire, i.e. the response really was
-        # decoded with an encoding we never asked for.
+        # decoded.
         self.assertGreater(received, len(BROTLI_BOMB))
         self.assertLess(peak, 16 * 1024 * 1024)
 
@@ -907,6 +921,31 @@ Transfer-Encoding: chunked
         self.assertEqual(len(response.body), 34)
         f = gzip.GzipFile(mode="r", fileobj=response.buffer)
         self.assertEqual(f.read(), b"asdfqwer")
+
+    def test_decompress_response_collection(self):
+        response = self.fetch("/chunk", decompress_response={"GZIP"})
+        self.assertEqual(response.body, b"asdfqwer")
+
+        # An empty collection disables decompression, like False.
+        response = self.fetch(
+            "/chunk", decompress_response=set(), headers={"Accept-Encoding": "gzip"}
+        )
+        self.assertEqual(response.headers["Content-Encoding"], "gzip")
+        self.assertEqual(len(response.body), 34)
+
+    def test_decompress_response_accept_encoding(self):
+        # Encodings the client cannot decode are not requested.
+        response = self.fetch(
+            "/echo_headers", decompress_response={"gzip", "no-such-encoding"}
+        )
+        self.assertEqual(json_decode(response.body)["Accept-Encoding"], "gzip")
+
+        response = self.fetch("/echo_headers", decompress_response=False)
+        self.assertNotIn("Accept-Encoding", json_decode(response.body))
+
+    def test_decompress_response_str(self):
+        with self.assertRaises(TypeError):
+            HTTPRequest(self.get_url("/hello"), decompress_response="gzip")
 
     def test_invalid_gzip(self):
         # test if client hangs on tricky invalid gzip
