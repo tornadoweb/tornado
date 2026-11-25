@@ -343,6 +343,7 @@ jobs:
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
+    needs: test_quick
     strategy:
       fail-fast: false
       matrix:
