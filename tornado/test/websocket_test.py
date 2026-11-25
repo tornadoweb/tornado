@@ -602,6 +602,21 @@ class WebSocketTest(WebSocketBaseTestCase):
             self.assertEqual(response, "hello")
 
     @gen_test
+    def test_connect_does_not_modify_request(self):
+        # websocket_connect adds its own headers to a copy of the request,
+        # so the same request can be used to connect again.
+        url = "ws://127.0.0.1:%d/nodelay" % self.get_http_port()
+        headers = {"X-Test": "1"}
+        request = HTTPRequest(url, headers=headers)
+        for i in range(2):
+            with contextlib.closing((yield websocket_connect(request))) as ws:
+                response = yield ws.read_message()
+                self.assertEqual(response, "hello")
+            self.assertEqual(request.url, url)
+            self.assertIs(request.headers, headers)
+            self.assertEqual(headers, {"X-Test": "1"})
+
+    @gen_test
     def test_check_origin_valid_with_path(self):
         port = self.get_http_port()
 

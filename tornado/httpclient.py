@@ -36,6 +36,7 @@ To select ``curl_httpclient``, call `AsyncHTTPClient.configure` at startup::
     AsyncHTTPClient.configure("tornado.curl_httpclient.CurlAsyncHTTPClient")
 """
 
+import copy
 import datetime
 import functools
 import ssl
@@ -310,9 +311,10 @@ class AsyncHTTPClient(Configurable):
                     "kwargs can't be used if request is an HTTPRequest object"
                 )
         # We may modify this (to add Host, Accept-Encoding, etc),
-        # so make sure we don't modify the caller's object.  This is also
-        # where normal dicts get converted to HTTPHeaders objects.
-        request.headers = httputil.HTTPHeaders(request.headers)
+        # so make sure we don't modify the caller's object or its headers.
+        # This is also where normal dicts get converted to HTTPHeaders
+        # objects.
+        request = request.copy()
         request_proxy = _RequestProxy(request, self.defaults)
         future: Future[HTTPResponse] = Future()
 
@@ -537,11 +539,11 @@ class HTTPRequest:
         """
         # Note that some of these attributes go through property setters
         # defined below.
-        self.headers = headers  # type: ignore
         if if_modified_since:
-            self.headers["If-Modified-Since"] = httputil.format_timestamp(
-                if_modified_since
-            )
+            # Copy the headers so we don't modify the caller's object.
+            headers = httputil.HTTPHeaders(headers or {})
+            headers["If-Modified-Since"] = httputil.format_timestamp(if_modified_since)
+        self.headers = headers  # type: ignore
         self.proxy_host = proxy_host
         self.proxy_port = proxy_port
         self.proxy_username = proxy_username
@@ -576,6 +578,25 @@ class HTTPRequest:
         self.ssl_options = ssl_options
         self.expect_100_continue = expect_100_continue
         self.start_time = time.time()
+
+    def copy(self) -> "HTTPRequest":
+        """Returns a copy of this request.
+
+        The copy has its own headers (converted to `.HTTPHeaders` if they
+        were a plain `dict`) and its own copy of ``ssl_options`` if it is a
+        `dict`, so changes to either object's headers or ``ssl_options``
+        do not affect the other. Other attributes are shared.
+
+        `AsyncHTTPClient.fetch` uses this so that it does not modify the
+        caller's request.
+
+        .. versionadded:: 6.7
+        """
+        new = copy.copy(self)
+        new.headers = httputil.HTTPHeaders(self.headers)
+        if isinstance(self.ssl_options, dict):
+            new.ssl_options = dict(self.ssl_options)
+        return new
 
     @property
     def headers(self) -> httputil.HTTPHeaders:
