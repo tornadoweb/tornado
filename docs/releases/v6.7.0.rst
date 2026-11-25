@@ -75,6 +75,12 @@ Backwards-incompatible changes
   in the request's path or query.
 - A ``multipart/form-data`` request whose ``Content-Type`` has more than one ``boundary``
   parameter is now rejected with a 400 error instead of using the first one.
+- `.AsyncHTTPClient` now raises `ValueError` if ``auth_username``, ``auth_password``, or
+  ``headers`` is set in its ``defaults``. Default headers were never applied (every request
+  has its own headers object, so the default was silently ignored), and default credentials
+  were sent to every server the client talked to, including the target of a cross-origin
+  redirect. Pass credentials and headers with each request instead. Other defaults,
+  including client certificates, are still allowed.
 - ``simple_httpclient`` now raises `ValueError` for URLs that contain spaces or control
   characters, as ``http.client`` and curl do. Previously some of these characters were
   silently removed and others were sent as-is, producing a malformed request line.
