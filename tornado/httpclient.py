@@ -310,11 +310,9 @@ class AsyncHTTPClient(Configurable):
                 raise ValueError(
                     "kwargs can't be used if request is an HTTPRequest object"
                 )
-        # We may modify this (to add Host, Accept-Encoding, etc),
-        # so make sure we don't modify the caller's object or its headers.
-        # This is also where normal dicts get converted to HTTPHeaders
-        # objects.
-        request = request.copy()
+            # We may modify this (to add Host, Accept-Encoding, etc),
+            # so make sure we don't modify the caller's object or its headers.
+            request = request.copy()
         request_proxy = _RequestProxy(request, self.defaults)
         future: Future[HTTPResponse] = Future()
 
@@ -536,14 +534,18 @@ class HTTPRequest:
 
         .. versionchanged:: 6.7
            ``expect_100_continue`` is now supported by ``curl_httpclient``.
+
+           ``headers`` is copied into a new `.HTTPHeaders` object instead of
+           being used (and possibly modified) directly.
         """
         # Note that some of these attributes go through property setters
         # defined below.
+        # Copy the headers so we don't modify the caller's object.
+        self.headers = httputil.HTTPHeaders(headers or {})
         if if_modified_since:
-            # Copy the headers so we don't modify the caller's object.
-            headers = httputil.HTTPHeaders(headers or {})
-            headers["If-Modified-Since"] = httputil.format_timestamp(if_modified_since)
-        self.headers = headers  # type: ignore
+            self.headers["If-Modified-Since"] = httputil.format_timestamp(
+                if_modified_since
+            )
         self.proxy_host = proxy_host
         self.proxy_port = proxy_port
         self.proxy_username = proxy_username

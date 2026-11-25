@@ -86,7 +86,7 @@ Backwards-incompatible changes
   the request's headers and added ``Host``, ``Authorization``, ``User-Agent`` and others to
   them, so fetching the same request again (for example, after changing its URL or clearing
   its credentials) could send the previous request's ``Host`` and ``Authorization``.
-  `.HTTPResponse.request` is now that copy, not the caller's object.
+  ``HTTPResponse.request`` is now that copy, not the caller's object.
 - ``simple_httpclient`` now raises `ValueError` for URLs that contain spaces or control
   characters, as ``http.client`` and curl do. Previously some of these characters were
   silently removed and others were sent as-is, producing a malformed request line.
@@ -181,8 +181,9 @@ Type annotation changes
   ``simple_httpclient``) can now be pickled and unpickled correctly.
 - New method `.HTTPRequest.copy`, which copies the request's headers and ``ssl_options``
   dict along with it.
-- `.HTTPRequest` no longer modifies the ``headers`` passed to it when ``if_modified_since``
-  is used.
+- `.HTTPRequest` now copies the ``headers`` passed to it into a new `.HTTPHeaders` object.
+  Previously it used the caller's object directly (and modified it when
+  ``if_modified_since`` was used), so later changes to that object affected the request.
 
 ``tornado.http1connection``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

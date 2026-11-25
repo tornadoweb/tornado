@@ -613,7 +613,7 @@ class WebSocketTest(WebSocketBaseTestCase):
                 response = yield ws.read_message()
                 self.assertEqual(response, "hello")
             self.assertEqual(request.url, url)
-            self.assertIs(request.headers, headers)
+            self.assertEqual(dict(request.headers), {"X-Test": "1"})
             self.assertEqual(headers, {"X-Test": "1"})
 
     @gen_test

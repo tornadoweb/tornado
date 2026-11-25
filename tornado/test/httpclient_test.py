@@ -1009,7 +1009,7 @@ Transfer-Encoding: chunked
                 )
                 response = yield self.http_client.fetch(request)
                 self.assertIn("Authorization", json_decode(response.body))
-                self.assertIs(request.headers, headers)
+                self.assertEqual(dict(headers), {"X-Test": "1"})
                 self.assertEqual(dict(request.headers), {"X-Test": "1"})
                 # Fetching the same request again without credentials
                 # doesn't send the ones from the first fetch.
@@ -1503,8 +1503,13 @@ class SyncHTTPClientSubprocessTest(TestCase):
 
 class HTTPRequestTestCase(TestCase):
     def test_headers(self):
-        request = HTTPRequest("http://example.com", headers={"foo": "bar"})
-        self.assertEqual(request.headers, {"foo": "bar"})
+        headers = {"foo": "bar"}
+        request = HTTPRequest("http://example.com", headers=headers)
+        self.assertIsInstance(request.headers, HTTPHeaders)
+        self.assertEqual(dict(request.headers), {"Foo": "bar"})
+        # The caller's headers are copied, not used directly.
+        request.headers["baz"] = "qux"
+        self.assertEqual(headers, {"foo": "bar"})
 
     def test_headers_setter(self):
         request = HTTPRequest("http://example.com")
