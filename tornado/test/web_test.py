@@ -4602,7 +4602,15 @@ class CrossOriginProtectionTest(SimpleHandlerTestCase):
         self.assertEqual(response.code, 200)
 
     def test_fallback_fail(self):
-        with ExpectLog(gen_log, ".*Origin .* not allowed"):
+        # The log message names the Host it was compared with (which helps
+        # diagnose proxies that rewrite Host) and points to trusted_origins.
+        host = "127.0.0.1:%d" % self.get_http_port()
+        with ExpectLog(
+            gen_log,
+            ".*Origin 'https://evil.example.com' not allowed: it does not "
+            "match Host '%s'. To allow it, add it to the trusted_origins setting."
+            % re.escape(host),
+        ):
             response = self._post({"Origin": "https://evil.example.com"})
         self.assertEqual(response.code, 403)
 
@@ -4617,7 +4625,11 @@ class CrossOriginProtectionTest(SimpleHandlerTestCase):
 
     def test_sec_fetch_site_same_site(self):
         # Same-site (e.g. a sibling subdomain) is not the same origin.
-        with ExpectLog(gen_log, ".*Sec-Fetch-Site same-site .* not allowed"):
+        with ExpectLog(
+            gen_log,
+            ".*Sec-Fetch-Site same-site & origin 'https://other.example.com' not "
+            "allowed. To allow it, add it to the trusted_origins setting.",
+        ):
             response = self._post(
                 {
                     "Sec-Fetch-Site": "same-site",
@@ -4640,8 +4652,26 @@ class CrossOriginProtectionTest(SimpleHandlerTestCase):
         )
         self.assertEqual(response.code, 200)
 
+    def test_null_origin_no_trusted_origins_hint(self):
+        # The opaque origin "null" must not be suggested for trusted_origins.
+        for headers in [
+            {"Sec-Fetch-Site": "cross-site", "Origin": "null"},
+            {"Origin": "null"},
+        ]:
+            with self.subTest(headers=headers):
+                with ExpectLog(
+                    gen_log,
+                    r".*[Oo]rigin 'null' not allowed"
+                    r"(: it does not match Host '[^']*')?\.$",
+                ):
+                    response = self._post(headers)
+                self.assertEqual(response.code, 403)
+
     def test_sec_fetch_site_cross_site_no_origin(self):
-        with ExpectLog(gen_log, ".*Sec-Fetch-Site cross-site .* not allowed"):
+        # trusted_origins can't help without an Origin, so don't suggest it.
+        with ExpectLog(
+            gen_log, ".*Sec-Fetch-Site cross-site with no Origin not allowed$"
+        ):
             response = self._post({"Sec-Fetch-Site": "cross-site"})
         self.assertEqual(response.code, 403)
 
