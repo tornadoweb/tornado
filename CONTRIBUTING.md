@@ -1,7 +1,35 @@
 # Contributing to Tornado
 
+## How to help
+
+* The most valuable thing you have to contribute to the Tornado project is your experience
+  using Tornado to build applications. A clear bug report is very helpful even when it is
+  not accompanied by a fix.
+* Whether written by humans or AI, all pull requests are subject to a rigorous code review process.
+  Code review time is the most limited resource, and it's usually more efficient for a maintainer
+  to implement a fix using their own agent than to review a change from an outside contributor.
+* **Please open an issue before a pull request** (except for trivial changes like documentation
+  typos). In general, wait for a comment from a maintainer inviting you to submit a PR before
+  starting to work on the code.
+* Pull requests are welcome from contributors who have particular expertise in the change being
+  made, or who have an application or environment for testing their changes that a maintainer may
+  not be able to access.
+
+Pull requests that do not follow these guidelines may be closed without detailed review. This
+is not a judgment of your work, it is necessary to keep the review workload manageable. The
+closing comment on the issue will generally link to the corresponding issue if there wasn't
+one already.
+
+To report a security vulnerability, do not open an issue or pull request; follow the
+instructions in [SECURITY.md](SECURITY.md) instead.
+
+The rest of this document describes how to work on the code, whether for your own use or
+for a PR.
+
 ## The basics
 
+* Tornado is a mature project and backwards compatibility is always important. Consider backwards
+  compatibility when making or proposing any change.
 * We use `black` as code formatter and recommend configuring your editor to run this automatically
   (using the version specified in `requirements.txt`). Commits that are not properly formatted
   by `black` will be rejected in CI.
@@ -84,13 +112,6 @@
 
 We use Sphinx with the `autodoc` extension to build our docs. To build the docs run
 `tox -e docs` and find the output in `./.tox/docs/tmp/html/index.html`
-
-## AI policy
-
-Tornado has a neutral stance towards AI-generated code. All pull requests, whether human
-or machine-generated, are subject to strict code review standards. However, PRs that appear
-to be AI-generated *and* contain clear flaws (such as failing CI) may be closed without
-detailed review. 
 
 ## curl_httpclient notes
 
