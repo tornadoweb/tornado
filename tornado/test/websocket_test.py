@@ -1115,6 +1115,12 @@ class InvalidCompressionOfferTest(RawHandshakeMixin):
             "client_max_window_bits=7",
             "server_max_window_bits=" + "1" * 5000,
             "foo=1",
+            "server_max_window_bits=+15",
+            "server_max_window_bits=1_5",
+            "server_max_window_bits*=utf-8''15%0A",
+            "server_max_window_bits*=utf-8''15%0D%0AX-Injected:%20y",
+            "server_no_context_takeover=1",
+            "client_no_context_takeover*=utf-8''%0D%0AX-Injected:%20y",
         ]:
             with self.subTest(params[:40]):
                 headers = await self.handshake("permessage-deflate; " + params)
