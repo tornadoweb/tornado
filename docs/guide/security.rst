@@ -209,8 +209,9 @@ site can construct a request which a visitor's browser will submit to your appli
 along with the visitor's authentication cookies.
 
 Modern browsers send a header which the server can use to identify and block
-cross-site requests. Tornado from version 6.6 can check this for you, if you
-enable the application setting ``cross_origin_protection``:
+cross-site requests. Tornado checks this for you, as long as the application
+setting ``cross_origin_protection`` is enabled. It is enabled by default since
+Tornado 6.7; in Tornado 6.6 it must be enabled explicitly:
 
 .. testcode::
 
@@ -243,8 +244,11 @@ header is missing, it rejects these requests if the ``Origin`` and ``Host``
 headers do not match. You can allow specific additional origins with the
 ``trusted_origins`` application setting (a list).
 
-The ``cross_origin_protection`` setting was introduced in Tornado 6.6 and defaults
-to False. It is expected that in Tornado 6.7 it will be enabled by default.
+The ``cross_origin_protection`` setting was introduced in Tornado 6.6, where it
+defaulted to False. It is enabled by default since Tornado 6.7. Some deployments
+need to configure it, as described in :ref:`cross_origin_deployment` below.
+Applications can set it to False to disable it, but should then protect
+themselves from XSRF in some other way.
 
 .. note::
 
@@ -301,6 +305,68 @@ All major browsers have supported the ``Sec-Fetch-Site`` header since 2023, alth
 this header is only sent on HTTPS connections or to localhost. For older browsers or 
 unencrypted applications, we fall back to comparing the ``Origin`` and ``Host``
 headers.
+
+.. _cross_origin_deployment:
+
+Deployments that need configuration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Most applications need no configuration: requests from the application's own pages,
+and requests from clients that are not browsers (scripts, other servers, webhooks),
+are allowed. The following cases are rejected with a ``403 Forbidden`` unless they
+are configured. Each rejection is logged as a warning on the ``tornado.general``
+logger, with the ``Origin`` (and, when it was compared, the ``Host``) that caused it.
+
+* **Cross-origin JavaScript clients.** An application that is called by JavaScript on
+  other origins (that is, one that sends ``Access-Control-Allow-Origin`` headers for
+  CORS) must also allow those origins here. CORS preflight (``OPTIONS``) requests are
+  not checked, so the preflight succeeds and the ``POST`` that follows is rejected.
+  List the origins in ``trusted_origins``, or, for endpoints meant to be called from
+  any origin, override `.RequestHandler.check_trusted_origin` to return True. As
+  described there, such endpoints must not rely on cookies for authentication. This
+  applies even when the requests carry their own credentials, such as a token in an
+  ``Authorization`` header, because the check runs before the application
+  authenticates the request.
+
+* **Other origins on the same site.** Pages on ``https://www.example.com`` that submit
+  to ``https://api.example.com`` are on the same *site* but a different *origin*, so
+  they are rejected. Add each such origin to ``trusted_origins``.
+
+* **Cross-site form posts that are part of a protocol.** Some sign-in and payment
+  protocols send the user's browser back to the application with a form ``POST`` from
+  the provider's site. Examples are OpenID Connect with ``response_mode=form_post``,
+  the SAML HTTP-POST binding, and some 3-D Secure payment flows. Override
+  `.RequestHandler.check_trusted_origin` on the handler that receives the callback to
+  allow the provider's origin. That handler must then verify the callback itself (for
+  example, with the ``state`` parameter in OpenID Connect).
+
+* **Opaque origins.** Requests from sandboxed iframes, ``data:`` URLs, and pages with
+  ``Referrer-Policy: no-referrer`` carry the header ``Origin: null``. This value is
+  shared by every such page, including pages controlled by an attacker, so
+  ``trusted_origins`` may not contain ``"null"`` (`.Application` raises a
+  `ValueError` if it does). If the provider in the previous item sends
+  ``Origin: null``, the callback handler's ``check_trusted_origin`` must allow it
+  without relying on the origin, and must verify the callback itself.
+
+* **Reverse proxies that change the Host header on plain HTTP.** Browsers do not send
+  ``Sec-Fetch-Site`` to plain-HTTP sites (other than ``localhost``), so Tornado
+  compares the ``Origin`` header with the ``Host`` header instead. If a proxy replaces
+  ``Host`` with the address of the backend (for example, an nginx ``proxy_pass``
+  without ``proxy_set_header Host $host``), every form submission and ``fetch`` is
+  rejected. Configure the proxy to pass the original ``Host`` header through, or add
+  the public origin to ``trusted_origins``. Sites served over HTTPS are not affected in
+  current browsers, which send ``Sec-Fetch-Site`` to them, so the ``Host`` header is
+  not consulted.
+
+* **Applications behind** `.FallbackHandler`. The check applies to every
+  `.RequestHandler`, including `.FallbackHandler`, so a WSGI application served with
+  `.WSGIContainer` is protected (and affected) too. To leave the wrapped application's
+  own XSRF protection in charge, subclass `.FallbackHandler` and override
+  ``check_trusted_origin`` to return True.
+
+``trusted_origins`` and `.RequestHandler.check_trusted_origin` also apply to
+websocket connections (through the default implementation of
+`.WebSocketHandler.check_origin`), so allowing an origin for one allows it for both.
 
 .. _xsrf-cookies:
 

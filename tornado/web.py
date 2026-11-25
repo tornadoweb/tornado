@@ -1789,12 +1789,32 @@ class RequestHandler:
                     return None  # probably non-browser client
                 if self._origin_matches_host(origin) or check(origin):
                     return None
-                return "Origin %r not allowed" % origin
+                return "Origin %r not allowed: it does not match Host %r.%s" % (
+                    origin,
+                    self.request.headers.get("Host", ""),
+                    self._trusted_origins_hint(origin),
+                )
             case _:  # cross-site, same-site
                 origin = self.request.headers.get("origin")
                 if origin and check(origin):
                     return None
-                return "Sec-Fetch-Site %s & origin %r not allowed" % (sfs, origin)
+                if not origin:
+                    return "Sec-Fetch-Site %s with no Origin not allowed" % sfs
+                return "Sec-Fetch-Site %s & origin %r not allowed.%s" % (
+                    sfs,
+                    origin,
+                    self._trusted_origins_hint(origin),
+                )
+
+    @staticmethod
+    def _trusted_origins_hint(origin: str) -> str:
+        # Suggest trusted_origins in the log message, except for the opaque
+        # origin "null" (sent from sandboxed iframes, data: URLs and pages with
+        # Referrer-Policy: no-referrer). Trusting "null" would trust every
+        # such page, including ones an attacker controls.
+        if origin == "null":
+            return ""
+        return " To allow it, add it to the trusted_origins setting."
 
     def _origin_matches_host(self, origin: str) -> bool:
         try:
@@ -2431,6 +2451,13 @@ class Application(ReversibleRouter):
             self.transforms = transforms
         self.default_host = default_host
         self.settings = settings
+        if any(o == "null" for o in settings.get("trusted_origins", [])):
+            # Any page can send "Origin: null" by submitting from a sandboxed
+            # iframe, so trusting it would trust every origin.
+            raise ValueError(
+                'trusted_origins must not contain "null"; see the '
+                "cross-origin protection documentation"
+            )
         self.ui_modules = {
             "linkify": _linkify,
             "xsrf_form_html": _xsrf_form_html,
