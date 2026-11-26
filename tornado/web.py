@@ -3126,9 +3126,9 @@ class StaticFileHandler(RequestHandler):
 
         size = self.get_content_size()
         if request_range:
-        start, end = request_range
-        is_suffix = False
-        if start is not None and start < 0:
+            start, end = request_range
+            is_suffix = False
+            if start is not None and start < 0:
                 is_suffix = True
                 start += size
                 if start < 0:
