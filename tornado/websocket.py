@@ -18,6 +18,7 @@ import functools
 import hashlib
 import logging
 import os
+import ssl
 import struct
 import sys
 import warnings
@@ -632,6 +633,30 @@ class WebSocketHandler(tornado.web.RequestHandler):
                 compression_options=self.get_compression_options(),
             )
             return WebSocketProtocol13(self, False, params)
+        return None
+
+    def get_ssl_certificate(
+        self, binary_form: bool = False
+    ) -> None | dict[str, Any] | bytes:
+        """Returns the client's SSL certificate, if any.
+
+        See `.HTTPServerRequest.get_ssl_certificate`.
+
+        .. versionadded:: 6.7
+        """
+        cert = self.request.get_ssl_certificate(binary_form=binary_form)
+        if cert is not None:
+            return cert
+        if self.ws_connection is not None and self.ws_connection.stream is not None:
+            try:
+                socket = self.ws_connection.stream.socket
+                if socket is not None and hasattr(socket, "getpeercert"):
+                    return cast(
+                        None | dict[str, Any] | bytes,
+                        socket.getpeercert(binary_form=binary_form),
+                    )
+            except (ssl.SSLError, AttributeError):
+                return None
         return None
 
     def _detach_stream(self) -> IOStream:

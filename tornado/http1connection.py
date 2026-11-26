@@ -21,10 +21,11 @@
 import asyncio
 import logging
 import re
+import ssl
 import types
 import zlib
 from collections.abc import Awaitable, Callable, Collection
-from typing import Optional, Type, cast
+from typing import Any, Optional, Type, cast
 
 from tornado import gen, httputil, iostream
 from tornado.concurrent import (
@@ -171,6 +172,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         """
         self.is_client = is_client
         self.stream = stream
+        self._detached_stream: iostream.IOStream | None = None
         if params is None:
             params = HTTP1ConnectionParameters()
         self.params = params
@@ -461,10 +463,30 @@ class HTTP1Connection(httputil.HTTPConnection):
         """
         self._clear_callbacks()
         stream = self.stream
+        self._detached_stream = stream
         self.stream = None  # type: ignore
         if not self._finish_future.done():
             future_set_result_unless_cancelled(self._finish_future, None)
         return stream
+
+    def get_ssl_certificate(
+        self, binary_form: bool = False
+    ) -> None | dict[str, Any] | bytes:
+        """Returns the client's SSL certificate, if any."""
+        stream = self.stream if self.stream is not None else self._detached_stream
+        if (
+            stream is None
+            or stream.socket is None
+            or not hasattr(stream.socket, "getpeercert")
+        ):
+            return None
+        try:
+            return cast(
+                None | dict[str, Any] | bytes,
+                stream.socket.getpeercert(binary_form=binary_form),
+            )
+        except (ssl.SSLError, AttributeError):
+            return None
 
     def set_body_timeout(self, timeout: float) -> None:
         """Sets the body timeout for a single request.

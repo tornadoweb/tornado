@@ -4,11 +4,12 @@ import datetime
 import functools
 import gc
 import socket
+import ssl
 import traceback
 import typing
 import unittest
 
-from tornado import gen
+from tornado import escape, gen
 from tornado.concurrent import Future
 from tornado.httpclient import HTTPError, HTTPRequest
 from tornado.httputil import HTTPHeaders
@@ -21,6 +22,7 @@ from tornado.tcpserver import TCPServer
 from tornado.template import DictLoader
 from tornado.test.util import (
     AsyncHTTPTestCase,
+    AsyncHTTPSTestCase,
     AsyncTestCase,
     TestCase,
     abstract_base_test,
@@ -1655,3 +1657,106 @@ class WebSocketClientHandshakeTest(AsyncTestCase):
         with self.assertRaises(WebSocketError):
             yield websocket_connect("ws://127.0.0.1:%d/" % port)
         yield server.handler_future
+
+
+class WebSocketSSLClientCertificateTest(AsyncHTTPSTestCase):
+    def get_app(self):
+        class CertificateWebSocketHandler(WebSocketHandler):
+            def open(self):
+                req_cert = self.request.get_ssl_certificate()
+                handler_cert = self.get_ssl_certificate()
+                req_bin = self.request.get_ssl_certificate(binary_form=True)
+                handler_bin = self.get_ssl_certificate(binary_form=True)
+                self.write_message(
+                    {
+                        "req_cert": req_cert,
+                        "handler_cert": handler_cert,
+                        "has_bin": req_bin is not None and len(req_bin) > 0,
+                        "bin_match": req_bin == handler_bin,
+                    }
+                )
+
+        class PlainCertificateHandler(RequestHandler):
+            def get(self):
+                req_cert = self.request.get_ssl_certificate()
+                handler_cert = self.get_ssl_certificate()
+                self.write(
+                    {
+                        "req_cert": req_cert,
+                        "handler_cert": handler_cert,
+                    }
+                )
+
+        return Application(
+            [
+                ("/ws_cert", CertificateWebSocketHandler),
+                ("/http_cert", PlainCertificateHandler),
+            ]
+        )
+
+    def get_ssl_options(self):
+        options = super().get_ssl_options()
+        options.update(cert_reqs=ssl.CERT_OPTIONAL, ca_certs=options["certfile"])
+        return options
+
+    @gen_test
+    def test_websocket_ssl_certificate(self):
+        options = self.get_ssl_options()
+        request = HTTPRequest(
+            "wss://127.0.0.1:%d/ws_cert" % self.get_http_port(),
+            client_cert=options["certfile"],
+            client_key=options["keyfile"],
+            ca_certs=options["certfile"],
+            validate_cert=False,
+        )
+        ws = yield websocket_connect(request)
+        msg_str = yield ws.read_message()
+        msg = escape.json_decode(msg_str)
+        self.assertIsNotNone(msg["req_cert"])
+        self.assertIsNotNone(msg["handler_cert"])
+        self.assertEqual(
+            msg["req_cert"]["subject"], [[["commonName", "foo.example.com"]]]
+        )
+        self.assertEqual(
+            msg["handler_cert"]["subject"], [[["commonName", "foo.example.com"]]]
+        )
+        self.assertTrue(msg["has_bin"])
+        self.assertTrue(msg["bin_match"])
+        ws.close()
+
+    @gen_test
+    def test_websocket_ssl_no_client_certificate(self):
+        options = self.get_ssl_options()
+        request = HTTPRequest(
+            "wss://127.0.0.1:%d/ws_cert" % self.get_http_port(),
+            ca_certs=options["certfile"],
+            validate_cert=False,
+        )
+        ws = yield websocket_connect(request)
+        msg_str = yield ws.read_message()
+        msg = escape.json_decode(msg_str)
+        self.assertIsNone(msg["req_cert"])
+        self.assertIsNone(msg["handler_cert"])
+        self.assertFalse(msg["has_bin"])
+        ws.close()
+
+    @gen_test
+    def test_plain_request_handler_ssl_certificate(self):
+        options = self.get_ssl_options()
+        client = SimpleAsyncHTTPClient()
+        try:
+            response = yield client.fetch(
+                "https://127.0.0.1:%d/http_cert" % self.get_http_port(),
+                client_cert=options["certfile"],
+                client_key=options["keyfile"],
+                ca_certs=options["certfile"],
+                validate_cert=False,
+            )
+            msg = escape.json_decode(response.body)
+            self.assertIsNotNone(msg["req_cert"])
+            self.assertEqual(
+                msg["req_cert"]["subject"], [[["commonName", "foo.example.com"]]]
+            )
+            self.assertEqual(msg["req_cert"], msg["handler_cert"])
+        finally:
+            client.close()

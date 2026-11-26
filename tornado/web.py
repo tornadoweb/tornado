@@ -1356,6 +1356,17 @@ class RequestHandler:
         # TODO: add detach to HTTPConnection?
         return self.request.connection.detach()  # type: ignore
 
+    def get_ssl_certificate(
+        self, binary_form: bool = False
+    ) -> None | dict[str, Any] | bytes:
+        """Returns the client's SSL certificate, if any.
+
+        See `.HTTPServerRequest.get_ssl_certificate`.
+
+        .. versionadded:: 6.7
+        """
+        return self.request.get_ssl_certificate(binary_form=binary_form)
+
     def _break_cycles(self) -> None:
         # Break up a reference cycle between this handler and the
         # _ui_module closures to allow for faster GC on CPython.

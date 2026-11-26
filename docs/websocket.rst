@@ -37,6 +37,7 @@
 
    .. automethod:: WebSocketHandler.ping
    .. automethod:: WebSocketHandler.on_pong
+   .. automethod:: WebSocketHandler.get_ssl_certificate
    .. autoexception:: WebSocketClosedError
 
 

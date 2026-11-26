@@ -127,6 +127,7 @@ tornado.http1connection.HTTP1Connection.close: method(self)
 tornado.http1connection.HTTP1Connection.context: attribute
 tornado.http1connection.HTTP1Connection.detach: method(self)
 tornado.http1connection.HTTP1Connection.finish: method(self)
+tornado.http1connection.HTTP1Connection.get_ssl_certificate: method(self, binary_form=False)
 tornado.http1connection.HTTP1Connection.is_client: attribute
 tornado.http1connection.HTTP1Connection.no_keep_alive: attribute
 tornado.http1connection.HTTP1Connection.params: attribute
@@ -256,6 +257,7 @@ tornado.httpserver.HTTPServer.xheaders: attribute
 [tornado.httputil]
 tornado.httputil.HTTPConnection: class()
 tornado.httputil.HTTPConnection.finish: method(self)
+tornado.httputil.HTTPConnection.get_ssl_certificate: method(self, binary_form=False)
 tornado.httputil.HTTPConnection.write: method(self, chunk)
 tornado.httputil.HTTPConnection.write_headers: method(self, start_line, headers, chunk=None)
 tornado.httputil.HTTPFile: class(tornado.util.ObjectDict)
@@ -1018,6 +1020,7 @@ tornado.web.RequestHandler.get_secure_cookie: method(self, name, value=None, max
 tornado.web.RequestHandler.get_secure_cookie_key_version: method(self, name, value=None)
 tornado.web.RequestHandler.get_signed_cookie: method(self, name, value=None, max_age_days=31, min_version=None)
 tornado.web.RequestHandler.get_signed_cookie_key_version: method(self, name, value=None)
+tornado.web.RequestHandler.get_ssl_certificate: method(self, binary_form=False)
 tornado.web.RequestHandler.get_status: method(self)
 tornado.web.RequestHandler.get_template_namespace: method(self)
 tornado.web.RequestHandler.get_template_path: method(self)
@@ -1180,6 +1183,7 @@ tornado.websocket.WebSocketHandler.close_code: attribute
 tornado.websocket.WebSocketHandler.close_reason: attribute
 tornado.websocket.WebSocketHandler.get: method(self, *args, **kwargs)
 tornado.websocket.WebSocketHandler.get_compression_options: method(self)
+tornado.websocket.WebSocketHandler.get_ssl_certificate: method(self, binary_form=False)
 tornado.websocket.WebSocketHandler.get_websocket_protocol: method(self)
 tornado.websocket.WebSocketHandler.max_message_size: property
 tornado.websocket.WebSocketHandler.on_close: method(self)

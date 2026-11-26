@@ -678,11 +678,14 @@ class HTTPServerRequest:
         try:
             if self.connection is None:
                 return None
-            # TODO: add a method to HTTPConnection for this so it can work with HTTP/2
+            if hasattr(self.connection, "get_ssl_certificate"):
+                return self.connection.get_ssl_certificate(binary_form=binary_form)
+            if getattr(self.connection, "stream", None) is None:
+                return None
             return self.connection.stream.socket.getpeercert(  # type: ignore
                 binary_form=binary_form
             )
-        except SSLError:
+        except (SSLError, AttributeError):
             return None
 
     def _parse_body(self) -> None:
@@ -852,6 +855,12 @@ class HTTPConnection:
     def finish(self) -> None:
         """Indicates that the last body data has been written."""
         raise NotImplementedError()
+
+    def get_ssl_certificate(
+        self, binary_form: bool = False
+    ) -> None | dict[str, typing.Any] | bytes:
+        """Returns the client's SSL certificate, if any."""
+        return None
 
 
 def url_concat(
