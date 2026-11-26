@@ -203,6 +203,10 @@ server process, which means they should generally be controlled and
 deployed with the same security practices you would use for source code.
 
 Autoescaping is only performed when processing expressions using ``{{ }}``.
+When the active autoescape function is `~.escape.xhtml_escape` (the default),
+objects that define a callable ``__html__()`` method (such as MarkupSafe
+``Markup`` or WTForms fields) have ``__html__()`` called and are inserted
+without further escaping.
 Other template directives, including ``{% module %}`` do not perform
 autoescaping - it is the responsibility of the module to do its own
 escaping (which may be done automatically if the module uses ``render_string``
@@ -232,6 +236,33 @@ class _UnsetMarker:
 
 
 _UNSET = _UnsetMarker()
+
+
+def _tt_to_utf8(value: Any) -> bytes:
+    if isinstance(value, bytes):
+        return value
+    if isinstance(value, unicode_type):
+        return escape.utf8(value)
+    return escape.utf8(str(value))
+
+
+def _tt_escape(
+    value: Any,
+    autoescape_fn: Callable[[bytes], Any] | None = None,
+) -> bytes:
+    """Format and optionally autoescape a template expression value as UTF-8 bytes.
+
+    Objects implementing a callable ``__html__()`` method are treated as safe
+    HTML when ``xhtml_escape`` autoescaping is used or escaping is disabled.
+    """
+    if autoescape_fn is None or autoescape_fn is escape.xhtml_escape:
+        html_method = getattr(value, "__html__", None)
+        if callable(html_method):
+            return _tt_to_utf8(html_method())
+    raw_bytes = _tt_to_utf8(value)
+    if autoescape_fn is not None:
+        return _tt_to_utf8(autoescape_fn(raw_bytes))
+    return raw_bytes
 
 
 def filter_whitespace(mode: str, text: str) -> str:
@@ -355,6 +386,7 @@ class Template:
             "linkify": escape.linkify,
             "datetime": datetime,
             "_tt_utf8": escape.utf8,  # for internal use
+            "_tt_escape": _tt_escape,  # for internal use
             "_tt_string_types": (unicode_type, bytes),
             # __name__ and __loader__ allow the traceback mechanism to find
             # the generated source code.
@@ -670,19 +702,14 @@ class _Expression(_Node):
 
     def generate(self, writer: "_CodeWriter") -> None:
         writer.write_line("_tt_tmp = %s" % self.expression, self.line)
-        writer.write_line(
-            "if isinstance(_tt_tmp, _tt_string_types):" " _tt_tmp = _tt_utf8(_tt_tmp)",
-            self.line,
-        )
-        writer.write_line("else: _tt_tmp = _tt_utf8(str(_tt_tmp))", self.line)
         if not self.raw and writer.current_template.autoescape is not None:
-            # In python3 functions like xhtml_escape return unicode,
-            # so we have to convert to utf8 again.
             writer.write_line(
-                "_tt_tmp = _tt_utf8(%s(_tt_tmp))" % writer.current_template.autoescape,
+                "_tt_append(_tt_escape(_tt_tmp, %s))"
+                % writer.current_template.autoescape,
                 self.line,
             )
-        writer.write_line("_tt_append(_tt_tmp)", self.line)
+        else:
+            writer.write_line("_tt_append(_tt_escape(_tt_tmp))", self.line)
 
 
 class _Module(_Expression):

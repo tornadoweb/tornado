@@ -431,6 +431,85 @@ raw: {% raw name %}""",
             render("foo.py", ["not a string"]), b"""s = "['not a string']"\n"""
         )
 
+    def test_html_protocol(self):
+        class SafeString(str):
+            def __html__(self):
+                return self
+
+        class HtmlWidget:
+            def __html__(self):
+                return "<span>widget &amp; more</span>"
+
+            def __str__(self):
+                return "<HtmlWidget>"
+
+        class NonCallableHtml:
+            __html__ = "<not callable>"
+
+            def __str__(self):
+                return "<NonCallable>"
+
+        loader = DictLoader(
+            {
+                "default.html": "{{ val }}",
+                "escape_alias.html": "{% autoescape escape %}{{ val }}",
+                "unescaped.html": "{% autoescape None %}{{ val }}",
+                "raw.html": "{% raw val %}",
+                "custom.py": "{% autoescape py_escape %}{{ val }}",
+                "tuple.html": "{{ 'a', 'b' }}",
+            },
+            autoescape="xhtml_escape",
+        )
+
+        safe = SafeString("<b>bold</b>")
+        widget = HtmlWidget()
+
+        # Objects with __html__() bypass xhtml_escape (and escape alias)
+        self.assertEqual(loader.load("default.html").generate(val=safe), b"<b>bold</b>")
+        self.assertEqual(
+            loader.load("escape_alias.html").generate(val=safe), b"<b>bold</b>"
+        )
+        self.assertEqual(
+            loader.load("default.html").generate(val=widget),
+            b"<span>widget &amp; more</span>",
+        )
+        # Plain strings are still escaped
+        self.assertEqual(
+            loader.load("default.html").generate(val="<b>bold</b>"),
+            b"&lt;b&gt;bold&lt;/b&gt;",
+        )
+
+        # Also honored when escaping is off or using {% raw %}
+        self.assertEqual(
+            loader.load("unescaped.html").generate(val=widget),
+            b"<span>widget &amp; more</span>",
+        )
+        self.assertEqual(
+            loader.load("raw.html").generate(val=widget),
+            b"<span>widget &amp; more</span>",
+        )
+
+        # Custom non-HTML autoescape still receives bytes and escapes SafeString
+        def py_escape(s):
+            self.assertEqual(type(s), bytes)
+            return repr(native_str(s))
+
+        self.assertEqual(
+            loader.load("custom.py").generate(py_escape=py_escape, val=safe),
+            b"'<b>bold</b>'",
+        )
+
+        # Non-callable __html__ is ignored and escaped normally
+        self.assertEqual(
+            loader.load("default.html").generate(val=NonCallableHtml()),
+            b"&lt;NonCallable&gt;",
+        )
+
+        # Comma-separated tuple expressions continue to evaluate cleanly
+        self.assertEqual(
+            loader.load("tuple.html").generate(), b"(&#x27;a&#x27;, &#x27;b&#x27;)"
+        )
+
     def test_manual_minimize_whitespace(self):
         # Whitespace including newlines is allowed within template tags
         # and directives, and this is one way to avoid long lines while
