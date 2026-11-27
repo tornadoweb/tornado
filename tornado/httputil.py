@@ -26,6 +26,7 @@ import collections.abc
 import copy
 import dataclasses
 import datetime
+import enum
 import email.utils
 import http.cookies
 import re
@@ -136,6 +137,20 @@ def _normalize_header(name: str) -> str:
     return "-".join([w.capitalize() for w in name.split("-")])
 
 
+class HTTPHeaderParseMode(enum.Enum):
+    """Value validation modes for `HTTPHeaders`.
+
+    Decoding is the caller's responsibility in both modes.
+
+    .. versionadded:: 6.7
+    """
+
+    #: HTTP field values, limited to the byte range.
+    HTTP = "http"
+    #: Multipart field values, allowing non-control Unicode.
+    MULTIPART = "multipart"
+
+
 class HTTPHeaders(collections.abc.MutableMapping[str, str]):
     """A dictionary that maintains ``Http-Header-Case`` for all keys.
 
@@ -184,10 +199,12 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
         # so we maintain a mapping from field name to a list of field lines in self._as_list.
         # self._combined_cache is a cache of the combined field values derived from self._as_list
         # on demand (and cleared whenever the list is modified).
+        self._parse_mode = HTTPHeaderParseMode.HTTP
         self._as_list: dict[str, list[str]] = {}
         self._combined_cache: dict[str, str] = {}
         if len(args) == 1 and len(kwargs) == 0 and isinstance(args[0], HTTPHeaders):
             # Copy constructor
+            self._parse_mode = args[0]._parse_mode
             for k, v in args[0].get_all():
                 self.add(k, v)
         else:
@@ -196,15 +213,34 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
 
     # new public methods
 
-    def _check_header(
-        self, name: str, value: str, *, _chars_are_bytes: bool = True
-    ) -> None:
+    @classmethod
+    def with_parse_mode(cls, parse_mode: HTTPHeaderParseMode) -> HTTPHeaders:
+        """Create an empty header dictionary with object-level value validation.
+
+        `HTTPHeaderParseMode.HTTP` (the default for ordinary construction) accepts
+        HTTP byte-range values, conventionally decoded by the caller with Latin-1.
+        `HTTPHeaderParseMode.MULTIPART` accepts non-control Unicode values,
+        conventionally decoded with UTF-8.
+        Both modes require HTTP token names and reject forbidden control values.
+        The mode applies to parsing, `add` and item assignment, and survives
+        copying an `HTTPHeaders` object. Dict-style constructor keywords remain
+        header names, not configuration options.
+
+        .. versionadded:: 6.7
+        """
+        if not isinstance(parse_mode, HTTPHeaderParseMode):
+            raise ValueError("unknown header parse mode")
+        headers = cls()
+        headers._parse_mode = parse_mode
+        return headers
+
+    def _check_header(self, name: str, value: str) -> None:
         # Raises ValueError, not HTTPInputError: this is called for headers the
         # application is building as well as ones parsed from the network.
         # parse_line converts the error to HTTPInputError for parsed headers.
         if not _ABNF.field_name.fullmatch(name):
             raise ValueError("Invalid header name %r" % name)
-        if _chars_are_bytes:
+        if self._parse_mode == HTTPHeaderParseMode.HTTP:
             if not _ABNF.field_value.fullmatch(
                 to_unicode(value).strip(HTTP_WHITESPACE)
             ):
@@ -215,7 +251,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
             if _FORBIDDEN_HEADER_CHARS_RE.search(value):
                 raise ValueError("Invalid header value %r" % value)
 
-    def add(self, name: str, value: str, *, _chars_are_bytes: bool = True) -> None:
+    def add(self, name: str, value: str) -> None:
         """Adds a new value for the given key.
 
         .. versionchanged:: 6.7
@@ -223,7 +259,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
            `HTTPInputError`, which is reserved for malformed input from the
            network.
         """
-        self._check_header(name, value, _chars_are_bytes=_chars_are_bytes)
+        self._check_header(name, value)
         norm_name = _normalize_header(name)
         self._combined_cache.pop(norm_name, None)
         if norm_name in self._as_list:
@@ -249,7 +285,7 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
             for value in values:
                 yield (name, value)
 
-    def parse_line(self, line: str, *, _chars_are_bytes: bool = True) -> None:
+    def parse_line(self, line: str) -> None:
         r"""Updates the dictionary with a single header line.
 
         >>> h = HTTPHeaders()
@@ -298,16 +334,23 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
         except ValueError:
             raise HTTPInputError("no colon in header line")
         try:
-            self.add(
-                name, value.strip(HTTP_WHITESPACE), _chars_are_bytes=_chars_are_bytes
-            )
+            self.add(name, value.strip(HTTP_WHITESPACE))
         except ValueError as e:
             # This header came from the network, so it's an input error.
             raise HTTPInputError(str(e)) from e
 
     @classmethod
-    def parse(cls, headers: str, *, _chars_are_bytes: bool = True) -> HTTPHeaders:
-        """Returns a dictionary from HTTP header text.
+    def parse(
+        cls, headers: str, *, parse_mode: HTTPHeaderParseMode = HTTPHeaderParseMode.HTTP
+    ) -> HTTPHeaders:
+        """Returns a dictionary from decoded header text.
+
+        The caller decodes bytes before parsing. ``parse_mode`` chooses the
+        object-level validation described by `with_parse_mode`, independently
+        of decoding. The returned object retains this mode for later additions.
+
+        .. versionchanged:: 6.7
+           Added the ``parse_mode`` keyword argument.
 
         >>> h = HTTPHeaders.parse("Content-Type: text/html\\r\\nContent-Length: 42\\r\\n")
         >>> sorted(h.items())
@@ -319,31 +362,17 @@ class HTTPHeaders(collections.abc.MutableMapping[str, str]):
            mix of `KeyError`, and `ValueError`.
 
         """
-        # _chars_are_bytes is a hack. This method is used in two places, HTTP headers (in which
-        # non-ascii characters are to be interpreted as latin-1) and multipart/form-data (in which
-        # they are to be interpreted as utf-8). For historical reasons, this method handled this by
-        # expecting both callers to decode the headers to strings before parsing them. This wasn't a
-        # problem until we started doing stricter validation of the characters allowed in HTTP
-        # headers (using ABNF rules defined in terms of byte values), which inadvertently started
-        # disallowing non-latin1 characters in multipart/form-data filenames.
-        #
-        # This method should have accepted bytes and a desired encoding, but this change is being
-        # introduced in a patch release that shouldn't change the API. Instead, the _chars_are_bytes
-        # flag decides whether to use HTTP-style ABNF validation (treating the string as bytes
-        # smuggled through the latin1 encoding) or to accept any non-control unicode characters
-        # as required by multipart/form-data. This method will change to accept bytes in a future
-        # release.
-        h = cls()
+        h = cls.with_parse_mode(parse_mode)
 
         start = 0
         while True:
             lf = headers.find("\n", start)
             if lf == -1:
-                h.parse_line(headers[start:], _chars_are_bytes=_chars_are_bytes)
+                h.parse_line(headers[start:])
                 break
             line = headers[start : lf + 1]
             start = lf + 1
-            h.parse_line(line, _chars_are_bytes=_chars_are_bytes)
+            h.parse_line(line)
         return h
 
     # MutableMapping abstract method implementations.
@@ -1196,7 +1225,9 @@ def parse_multipart_form_data(
             raise HTTPInputError("multipart/form-data missing headers")
         if eoh > config.max_part_header_size:
             raise HTTPInputError("multipart/form-data part header too large")
-        headers = HTTPHeaders.parse(part[:eoh].decode("utf-8"), _chars_are_bytes=False)
+        headers = HTTPHeaders.parse(
+            part[:eoh].decode("utf-8"), parse_mode=HTTPHeaderParseMode.MULTIPART
+        )
         disp_header = headers.get("Content-Disposition", "")
         try:
             disposition, disp_params = _parse_header(disp_header)

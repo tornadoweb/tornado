@@ -10,6 +10,7 @@ from tornado.escape import native_str, utf8
 from tornado.httputil import (
     HTTPFile,
     HTTPHeaders,
+    HTTPHeaderParseMode,
     HTTPInputError,
     HTTPServerRequest,
     ParseMultipartConfig,
@@ -636,6 +637,147 @@ class ParseHeaderTest(TestCase):
 
 
 class HTTPHeadersTest(TestCase):
+    def test_latin1_values_allowed_in_both_parse_modes(self):
+        # HTTP obs-text remains valid in both modes, including the C1 range.
+        # Keep the entire Latin-1 non-ASCII range so neither mode can silently
+        # become ASCII-only or apply Unicode control-category filtering.
+        for mode in HTTPHeaderParseMode:
+            for codepoint in range(0x80, 0x100):
+                value = chr(codepoint) + "body" + chr(codepoint)
+                with self.subTest(mode=mode, codepoint=codepoint):
+                    parsed = HTTPHeaders.parse("X: " + value + "\r\n", parse_mode=mode)
+                    self.assertEqual(parsed["X"], value)
+                    for method in ("add", "set", "parse_line", "update", "setdefault"):
+                        headers = HTTPHeaders.with_parse_mode(mode)
+                        with self.subTest(method=method):
+                            if method == "add":
+                                headers.add("X", value)
+                            elif method == "set":
+                                headers["X"] = value
+                            elif method == "parse_line":
+                                headers.parse_line("X: " + value)
+                            elif method == "update":
+                                headers.update({"X": value})
+                            else:
+                                headers.setdefault("X", value)
+                            self.assertEqual(headers["X"], value)
+
+    def test_object_parse_modes_validate_all_mutations(self):
+        for mode in HTTPHeaderParseMode:
+            for method in ("add", "set", "parse_line", "update", "setdefault"):
+                headers = HTTPHeaders.with_parse_mode(mode)
+
+                def mutate(value):
+                    if method == "set":
+                        headers["X"] = value
+                    elif method == "parse_line":
+                        headers.parse_line("X: " + value)
+                    elif method == "update":
+                        headers.update({"X": value})
+                    elif method == "setdefault":
+                        headers.setdefault("X", value)
+                    else:
+                        headers.add("X", value)
+
+                with self.subTest(mode=mode, method=method):
+                    if mode == HTTPHeaderParseMode.MULTIPART:
+                        mutate("名")
+                        self.assertEqual(headers["X"], "名")
+                    else:
+                        with self.assertRaises(
+                            HTTPInputError if method == "parse_line" else ValueError
+                        ):
+                            mutate("名")
+                    headers.clear()
+                    with self.assertRaises(
+                        HTTPInputError if method == "parse_line" else ValueError
+                    ):
+                        mutate("bad\x00value")
+
+    def test_multipart_mode_survives_copy_and_cache_updates(self):
+        headers = HTTPHeaders.parse(
+            "X: 名\r\nX: €\r\n", parse_mode=HTTPHeaderParseMode.MULTIPART
+        )
+        self.assertEqual(headers["X"], "名,€")
+        for copied in (
+            HTTPHeaders(headers),
+            headers.copy(),
+            copy.copy(headers),
+            copy.deepcopy(headers),
+        ):
+            copied.add("X", "終")
+            copied["Y"] = "新"
+            copied.parse_line("Z: 後")
+            self.assertEqual(copied["X"], "名,€,終")
+            self.assertEqual(copied["Y"], "新")
+            self.assertEqual(copied["Z"], "後")
+        self.assertEqual(headers.get_list("X"), ["名", "€"])
+
+    def test_parse_mode_does_not_reserve_constructor_keywords(self):
+        headers = HTTPHeaders(
+            parse_mode="multipart", encoding="utf8", strict_http="False"
+        )
+        self.assertEqual(headers["Parse_mode"], "multipart")
+        with self.assertRaises(ValueError):
+            headers.add("X", "名")
+        for mode in ("http", "multipart", "unknown", "HTTP", "", None, 1):
+            with self.subTest(mode=mode):
+                with self.assertRaises(ValueError):
+                    HTTPHeaders.with_parse_mode(mode)  # type: ignore[arg-type]
+                with self.assertRaises(ValueError):
+                    HTTPHeaders.parse("X: value", parse_mode=mode)  # type: ignore[arg-type]
+
+    def test_mode_names_and_controls_remain_strict(self):
+        for mode in HTTPHeaderParseMode:
+            for codepoint in range(256):
+                value = "left" + chr(codepoint) + "right"
+                with self.subTest(mode=mode, codepoint=codepoint):
+                    if codepoint == 9 or (codepoint >= 32 and codepoint != 127):
+                        self.assertEqual(
+                            HTTPHeaders.parse("X: " + value, parse_mode=mode)["X"],
+                            value,
+                        )
+                    else:
+                        with self.assertRaises(HTTPInputError):
+                            HTTPHeaders.parse("X: " + value, parse_mode=mode)
+            for name in ("bad name", "名", "", "x\x00"):
+                with self.assertRaises(HTTPInputError):
+                    HTTPHeaders.parse(name + ": value", parse_mode=mode)
+
+    def test_str_input_keeps_caller_decoding(self):
+        raw = "X: 名".encode("utf8")
+        self.assertEqual(
+            HTTPHeaders.parse(raw.decode("latin1"))["X"],
+            "名".encode("utf8").decode("latin1"),
+        )
+        with self.assertRaises(HTTPInputError):
+            HTTPHeaders.parse(raw.decode("utf8"))
+        self.assertEqual(
+            HTTPHeaders.parse(
+                raw.decode("utf8"), parse_mode=HTTPHeaderParseMode.MULTIPART
+            )["X"],
+            "名",
+        )
+        for char in ("\u2028", "\u2029", "\u0085", "\u00a0"):
+            value = char + "body" + char
+            self.assertEqual(
+                HTTPHeaders.parse(
+                    "X: " + value, parse_mode=HTTPHeaderParseMode.MULTIPART
+                )["X"],
+                value,
+            )
+
+    def test_factory_uses_subclass_and_copy_constructor(self):
+        class Headers(HTTPHeaders):
+            pass
+
+        self.assertIsInstance(
+            Headers.with_parse_mode(HTTPHeaderParseMode.MULTIPART), Headers
+        )
+        headers = Headers.parse("X: 名", parse_mode=HTTPHeaderParseMode.MULTIPART)
+        self.assertIsInstance(headers, Headers)
+        self.assertEqual(Headers(headers)["X"], "名")
+
     def test_folding_rejected(self):
         data = "Foo: bar\r\n\tasdf"
         with self.assertRaises(HTTPInputError):
@@ -697,8 +839,8 @@ class HTTPHeadersTest(TestCase):
                     HTTPHeaders().add("X-Foo", value)
 
     def test_loose_multipart_validation_is_not_reapplied(self):
-        headers = HTTPHeaders()
-        headers.add("X-Filename", "\u20ac", _chars_are_bytes=False)
+        headers = HTTPHeaders.with_parse_mode(HTTPHeaderParseMode.MULTIPART)
+        headers.add("X-Filename", "\u20ac")
         self.assertEqual(headers["X-Filename"], "\u20ac")
 
     def test_unicode_newlines(self):

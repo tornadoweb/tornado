@@ -64,3 +64,15 @@ class Worker:
 async def use_worker(w: Worker) -> str:
     # run_on_executor keeps the signature and wraps the result in a Future.
     return await w.compute(1)
+
+
+def object_header_modes() -> None:
+    from tornado.httputil import HTTPHeaders, HTTPHeaderParseMode
+
+    headers = HTTPHeaders.with_parse_mode(HTTPHeaderParseMode.MULTIPART)
+    headers.add("X-Filename", "名")
+    headers["X-Description"] = "€"
+    headers.parse_line("Y: decoded")
+    HTTPHeaders.parse("Z: decoded", parse_mode=HTTPHeaderParseMode.HTTP)
+    HTTPHeaders.parse("Z: 名", parse_mode=HTTPHeaderParseMode.MULTIPART)
+    HTTPHeaders(parse_mode="header-value")

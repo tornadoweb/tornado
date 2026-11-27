@@ -262,6 +262,9 @@ tornado.httputil.HTTPFile: class(tornado.util.ObjectDict)
 tornado.httputil.HTTPFile.body: attribute
 tornado.httputil.HTTPFile.content_type: attribute
 tornado.httputil.HTTPFile.filename: attribute
+tornado.httputil.HTTPHeaderParseMode: class(enum.Enum)
+tornado.httputil.HTTPHeaderParseMode.HTTP: attribute
+tornado.httputil.HTTPHeaderParseMode.MULTIPART: attribute
 tornado.httputil.HTTPHeaders: class(collections.abc.MutableMapping)
 tornado.httputil.HTTPHeaders.__contains__: method(self, name)
 tornado.httputil.HTTPHeaders.__copy__: method(self)
@@ -273,12 +276,13 @@ tornado.httputil.HTTPHeaders.__len__: method(self)
 tornado.httputil.HTTPHeaders.__setitem__: method(self, name, value)
 tornado.httputil.HTTPHeaders.__str__: method(self)
 tornado.httputil.HTTPHeaders.__unicode__: method(self)
-tornado.httputil.HTTPHeaders.add: method(self, name, value, *, _chars_are_bytes=True)
+tornado.httputil.HTTPHeaders.add: method(self, name, value)
 tornado.httputil.HTTPHeaders.copy: method(self)
 tornado.httputil.HTTPHeaders.get_all: method(self)
 tornado.httputil.HTTPHeaders.get_list: method(self, name)
-tornado.httputil.HTTPHeaders.parse: classmethod(cls, headers, *, _chars_are_bytes=True)
-tornado.httputil.HTTPHeaders.parse_line: method(self, line, *, _chars_are_bytes=True)
+tornado.httputil.HTTPHeaders.parse: classmethod(cls, headers, *, parse_mode=...)
+tornado.httputil.HTTPHeaders.parse_line: method(self, line)
+tornado.httputil.HTTPHeaders.with_parse_mode: classmethod(cls, parse_mode)
 tornado.httputil.HTTPInputError: class(builtins.Exception)
 tornado.httputil.HTTPMessageDelegate: class()
 tornado.httputil.HTTPMessageDelegate.data_received: method(self, chunk)
