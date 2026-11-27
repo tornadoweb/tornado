@@ -1030,6 +1030,19 @@ class GzipResponseTestCase(AsyncHTTPTestCase):
         self.assertEqual(response.code, 200)
         self.assertEqual(response.body, b"")
 
+    def test_decompressed_content_length(self):
+        response = self.fetch("/concatenated")
+        self.assertNotIn("Content-Length", response.headers)
+        self.assertIn("X-Consumed-Content-Length", response.headers)
+        self.assertEqual(response.headers.get("X-Consumed-Content-Encoding"), "gzip")
+
+        response_raw = self.fetch("/concatenated", decompress_response=False)
+        self.assertEqual(
+            response_raw.headers.get("Content-Length"),
+            response.headers.get("X-Consumed-Content-Length"),
+        )
+        self.assertEqual(response_raw.headers.get("Content-Encoding"), "gzip")
+
     def test_invalid(self):
         for kind in ["trailing_nul", "trailing_garbage", "truncated"]:
             with self.subTest(kind=kind):
