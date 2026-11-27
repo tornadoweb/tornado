@@ -1076,16 +1076,15 @@ class DefaultCompressionTest(CompressionTestMixin):
         self.assertEqual(bytes_out, bytes_in + 12)
 
 
-class InvalidCompressionOfferTest(WebSocketBaseTestCase):
-    def get_app(self):
-        return Application([("/echo", EchoHandler, dict(compression_options={}))])
-
-    async def handshake(self, extensions: str) -> HTTPHeaders:
+class RawHandshakeMixin(WebSocketBaseTestCase):
+    async def raw_handshake(
+        self, extensions: str, path: str = "/echo"
+    ) -> tuple[str, HTTPHeaders]:
         stream = IOStream(socket.socket())
         self.conns_to_close.append(stream)
         await stream.connect(("127.0.0.1", self.get_http_port()))
         stream.write(
-            b"GET /echo HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+            b"GET " + path.encode() + b" HTTP/1.1\r\nHost: 127.0.0.1\r\n"
             b"Upgrade: websocket\r\nConnection: Upgrade\r\n"
             b"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
             b"Sec-WebSocket-Version: 13\r\n"
@@ -1093,8 +1092,17 @@ class InvalidCompressionOfferTest(WebSocketBaseTestCase):
         )
         data = await stream.read_until(b"\r\n\r\n")
         start_line, _, headers = data.decode().partition("\r\n")
+        return start_line, HTTPHeaders.parse(headers)
+
+    async def handshake(self, extensions: str) -> HTTPHeaders:
+        start_line, headers = await self.raw_handshake(extensions)
         self.assertEqual(start_line, "HTTP/1.1 101 Switching Protocols")
-        return HTTPHeaders.parse(headers)
+        return headers
+
+
+class InvalidCompressionOfferTest(RawHandshakeMixin):
+    def get_app(self):
+        return Application([("/echo", EchoHandler, dict(compression_options={}))])
 
     @gen_test
     async def test_invalid_offers(self):
@@ -1107,6 +1115,12 @@ class InvalidCompressionOfferTest(WebSocketBaseTestCase):
             "client_max_window_bits=7",
             "server_max_window_bits=" + "1" * 5000,
             "foo=1",
+            "server_max_window_bits=+15",
+            "server_max_window_bits=1_5",
+            "server_max_window_bits*=utf-8''15%0A",
+            "server_max_window_bits*=utf-8''15%0D%0AX-Injected:%20y",
+            "server_no_context_takeover=1",
+            "client_no_context_takeover*=utf-8''%0D%0AX-Injected:%20y",
         ]:
             with self.subTest(params[:40]):
                 headers = await self.handshake("permessage-deflate; " + params)
@@ -1147,6 +1161,27 @@ class InvalidCompressionOfferTest(WebSocketBaseTestCase):
             headers["Sec-WebSocket-Extensions"],
             "permessage-deflate; client_no_context_takeover; server_no_context_takeover",
         )
+
+
+class HandshakeValueErrorTest(RawHandshakeMixin):
+    def get_app(self):
+        class Handler(EchoHandler):
+            def set_header(self, name, value):
+                if name == "Sec-WebSocket-Extensions":
+                    raise ValueError("simulated invalid header")
+                super().set_header(name, value)
+
+        return Application([("/echo", Handler, dict(compression_options={}))])
+
+    @gen_test
+    async def test_value_error_before_upgrade(self):
+        # A ValueError raised before the connection is upgraded used to
+        # crash in _abort() (there is no stream yet), producing a 500 and
+        # an error log. Now it's a 400.
+        start_line, headers = await self.raw_handshake("permessage-deflate")
+        self.assertEqual(start_line, "HTTP/1.1 400 Bad Request")
+        self.assertNotIn("Upgrade", headers)
+        self.assertNotIn("Sec-WebSocket-Accept", headers)
 
 
 class ClientNoContextTakeoverTest(WebSocketBaseTestCase):

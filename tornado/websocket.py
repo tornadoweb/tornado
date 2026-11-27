@@ -924,7 +924,14 @@ class WebSocketProtocol13(WebSocketProtocol):
             return
         except ValueError:
             gen_log.debug("Malformed WebSocket request received", exc_info=True)
-            self._abort()
+            if self.stream is not None:
+                self._abort()
+            elif not handler._finished:
+                # The connection hasn't been upgraded yet (and _abort can't
+                # be used without a stream), so send an HTTP error instead.
+                handler.clear()
+                handler.set_status(400)
+                handler.finish("Malformed WebSocket request")
             return
 
     def _handle_websocket_headers(self, handler: WebSocketHandler) -> None:
@@ -1089,9 +1096,20 @@ class WebSocketProtocol13(WebSocketProtocol):
             "server_max_window_bits",
             "client_max_window_bits",
         }
-        for key in agreed_parameters:
+        for key, value in agreed_parameters.items():
             if key not in allowed_keys:
                 raise ValueError("unsupported compression parameter %r" % key)
+            # RFC 7692 section 7.1: the no_context_takeover parameters have
+            # no value, and the max_window_bits values are decimal integers.
+            # Checking this also keeps invalid values from being echoed in
+            # the response header.
+            if value is not None and (
+                key.endswith("_no_context_takeover")
+                or not (value.isascii() and value.isdigit())
+            ):
+                raise ValueError(
+                    "invalid value for compression parameter %r: %r" % (key, value)
+                )
         other_side = "client" if (side == "server") else "server"
         # Create both before assigning either, so a ValueError leaves
         # compression off.

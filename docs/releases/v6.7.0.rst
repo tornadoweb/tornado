@@ -355,8 +355,10 @@ Type annotation changes
   negotiation are honored again. They had been silently ignored since Tornado 5.1, so the
   client kept its compression context when the server asked it not to.
 - A ``Sec-WebSocket-Extensions`` header that cannot be parsed, or a ``permessage-deflate``
-  offer with unsupported parameters, is now declined (and the next offer considered) instead
-  of failing the handshake with a 500.
+  offer with unsupported parameters or invalid parameter values, is now declined (and the
+  next offer considered) instead of failing the handshake with a 500.
+- Other errors in a malformed handshake request now return a 400 instead of a 500 with
+  a logged ``AttributeError``.
 - A compressed message that is not valid deflate data now closes the connection with code
   1007 instead of logging an uncaught exception.
 - Control frames interleaved with the fragments of a compressed message no longer break
