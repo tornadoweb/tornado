@@ -3154,13 +3154,22 @@ class StaticFileHandler(RequestHandler):
         size = self.get_content_size()
         if request_range:
             start, end = request_range
+            # A suffix range is satisfiable even when it is longer than the
+            # representation (RFC 9110 14.1.1): the entire representation is
+            # used. For a zero-length representation the clamped start is 0,
+            # which is not past the end, so skip the start >= size test for
+            # suffix ranges.
+            is_suffix_range = start is not None and start < 0
             if start is not None and start < 0:
                 start += size
                 if start < 0:
                     start = 0
             if (
                 start is not None
-                and (start >= size or (end is not None and start >= end))
+                and (
+                    (start >= size and not is_suffix_range)
+                    or (end is not None and start >= end)
+                )
             ) or end == 0:
                 # As per RFC 2616 14.35.1, a range is not satisfiable only: if
                 # the first requested byte is equal to or greater than the
