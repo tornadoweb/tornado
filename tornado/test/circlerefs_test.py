@@ -208,6 +208,30 @@ class CircleRefsTest(TestCase):
 
         asyncio.run(self.run_handler(Handler))
 
+    def test_caught_coroutine_exception(self):
+        # From https://github.com/tornadoweb/tornado/issues/3346
+        @gen.coroutine
+        def fail():
+            yield
+            raise ValueError("caught")
+
+        @gen.coroutine
+        def catch(yield_after_catch):
+            try:
+                yield fail()
+            except ValueError:
+                pass
+            if yield_after_catch:
+                yield
+
+        async def main(yield_after_catch):
+            with assert_no_cycle_garbage():
+                await catch(yield_after_catch)
+
+        for yield_after_catch in (False, True):
+            with self.subTest(yield_after_catch=yield_after_catch):
+                asyncio.run(main(yield_after_catch))
+
     # The tests above vary the server-side handler against one client. These
     # vary the client instead: a streaming_callback takes a different path
     # through both client implementations than a buffered response does, and
