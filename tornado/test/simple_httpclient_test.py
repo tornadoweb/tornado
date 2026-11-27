@@ -17,6 +17,7 @@ import random
 import re
 import socket
 import ssl
+import struct
 import sys
 import typing
 import urllib.parse
@@ -1094,6 +1095,44 @@ class MaxBufferSizeTest(AsyncHTTPTestCase):
         response = self.fetch("/large")
         response.rethrow()
         self.assertEqual(response.body, b"a" * 1024 * 100)
+
+
+class ResetAfterHeadersTest(AsyncHTTPTestCase):
+    def get_app(self):
+        self.got_headers = Event()
+        got_headers = self.got_headers
+
+        class Handler(RequestHandler):
+            async def get(self):
+                stream = self.detach()
+                await stream.write(
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nhello"
+                )
+                await got_headers.wait()
+                # linger 0 -> close() sends RST instead of FIN
+                stream.socket.setsockopt(
+                    socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0)
+                )
+                stream.close()
+
+        return Application([("/", Handler)])
+
+    def get_http_client(self):
+        return SimpleAsyncHTTPClient()
+
+    def test_reset_after_headers(self):
+        # A reset after the response headers fails the request right away
+        # (not when the request times out). Backport of 858cf677 (#3822);
+        # see #3943. The test waits for header_callback before sending the
+        # reset; without that, the reset can arrive before the client has
+        # read the headers, which takes a different code path.
+        with self.assertRaises(ConnectionResetError):
+            self.fetch(
+                "/",
+                raise_error=True,
+                request_timeout=2,
+                header_callback=lambda line: self.got_headers.set(),
+            )
 
 
 class ChunkedWithContentLengthTest(AsyncHTTPTestCase):
