@@ -1054,6 +1054,11 @@ class UnixSocketTestFile(UnixSocketTest):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
         self.address = os.path.join(self.tmpdir, "test.sock")
+        # sun_path is limited to around 100 bytes, which a deeply nested
+        # temporary directory (e.g. an iOS simulator app container) exceeds.
+        if len(os.fsencode(self.address)) >= 104:
+            shutil.rmtree(self.tmpdir)
+            self.skipTest("temporary directory path too long for a unix socket")
         super().setUp()
 
     def tearDown(self):

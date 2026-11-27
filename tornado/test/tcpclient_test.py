@@ -13,7 +13,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 import asyncio
-import getpass
 import os
 import socket
 import ssl
@@ -293,7 +292,7 @@ class TCPClientTest(AsyncTestCase):
     @skipIfNonUnix
     def test_source_port_fail(self):
         """Fail when trying to use source port 1."""
-        if getpass.getuser() == "root":
+        if os.geteuid() == 0:
             # Root can use any port so we can't easily force this to fail.
             # This is mainly relevant for docker.
             self.skipTest("running as root")

@@ -20,7 +20,13 @@ from tornado.escape import native_str
 from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.log import app_log
 from tornado.platform.asyncio import BaseAsyncIOLoop
-from tornado.test.util import AsyncTestCase, TestCase, ignore_deprecation, skipIfNonUnix
+from tornado.test.util import (
+    AsyncTestCase,
+    TestCase,
+    ignore_deprecation,
+    skipIfNonUnix,
+    skipIfNoSubprocess,
+)
 from tornado.testing import (
     ExpectLog,
     bind_unused_port,
@@ -772,6 +778,7 @@ class TestPeriodicCallbackAsync(AsyncTestCase):
         self.assertEqual(counts[1], 3)
 
 
+@skipIfNoSubprocess
 class TestIOLoopConfiguration(TestCase):
     def run_python(self, *statements):
         stmt_list = [

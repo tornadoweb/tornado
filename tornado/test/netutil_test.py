@@ -19,6 +19,7 @@ from tornado.test.util import (
     TestCase,
     abstract_base_test,
     skipIfNoNetwork,
+    skipIfNoSubprocess,
 )
 from tornado.testing import bind_unused_port, gen_test
 
@@ -139,6 +140,7 @@ class ThreadedResolverErrorTest(_ResolverErrorTestMixin):
 
 @skipIfNoNetwork
 @unittest.skipIf(sys.platform == "win32", "preexec_fn not available on win32")
+@skipIfNoSubprocess
 class ThreadedResolverImportTest(TestCase):
     def test_import(self):
         TIMEOUT = 5

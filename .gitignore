@@ -5,6 +5,7 @@
 *~
 build/
 /dist/
+/wheelhouse/
 MANIFEST
 /tornado.egg-info/
 .tox/

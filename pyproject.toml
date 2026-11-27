@@ -22,6 +22,14 @@ test-command = "python -m tornado.test"
 [tool.cibuildwheel.macos]
 archs = "universal2"
 
+[tool.cibuildwheel.ios]
+build = "cp313* cp314* cp315*"
+# The C extension is built with setuptools and needs no other build tools.
+xbuild-tools = []
+
+[tool.cibuildwheel.android]
+build = "cp313* cp314* cp315*"
+
 [[tool.cibuildwheel.overrides]]
 select = "*{riscv64,ppc64le,s390x}*"
 # On emulated platforms, only run the websocket tests, since those are the ones that
