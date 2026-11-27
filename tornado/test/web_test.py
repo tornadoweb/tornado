@@ -1671,6 +1671,23 @@ class StaticFileTest(WebTestCase):
         self.assertEqual(response.headers.get("Content-Range"), "bytes */26")
         self.assertEqual(response.code, 416)
 
+    def test_static_range_zero_length_file(self):
+        static_dir = os.path.join(os.path.dirname(__file__), "static")
+        with tempfile.NamedTemporaryFile(dir=static_dir, delete=False) as f:
+            pass
+        try:
+            url = "/static/" + os.path.basename(f.name)
+            response = self.get_and_head(url, headers={"Range": "bytes=-5"})
+            self.assertEqual(response.code, 200)
+            self.assertEqual(response.body, b"")
+            self.assertIsNone(response.headers.get("Content-Range"))
+
+            response = self.get_and_head(url, headers={"Range": "bytes=0-"})
+            self.assertEqual(response.code, 416)
+            self.assertEqual(response.headers.get("Content-Range"), "bytes */0")
+        finally:
+            os.unlink(f.name)
+
     def test_static_unsatisfiable_range_invalid_start(self):
         response = self.get_and_head(
             "/static/robots.txt", headers={"Range": "bytes=26"}
