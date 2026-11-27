@@ -1044,7 +1044,7 @@ tornado.web.RequestHandler.render_linked_js: method(self, js_files)
 tornado.web.RequestHandler.render_string: method(self, template_name, **kwargs)
 tornado.web.RequestHandler.request: attribute
 tornado.web.RequestHandler.require_setting: method(self, name, feature='this feature')
-tornado.web.RequestHandler.reverse_url: method(self, name, *args)
+tornado.web.RequestHandler.reverse_url: method(self, name, *args, include_host=False)
 tornado.web.RequestHandler.send_error: method(self, status_code=500, **kwargs)
 tornado.web.RequestHandler.set_cookie: method(self, name, value, domain=None, expires=None, path='/', expires_days=None, *, max_age=None, httponly=False, secure=False, samesite=None, **kwargs)
 tornado.web.RequestHandler.set_default_headers: method(self)

@@ -39,6 +39,7 @@ from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.test.util import (
+    AsyncHTTPSTestCase,
     AsyncHTTPTestCase,
     AsyncTestCase,
     TestCase,
@@ -868,6 +869,48 @@ class GetArgumentsHandler(RequestHandler):
                 body=self.get_body_arguments("foo"),
             )
         )
+
+
+class ReverseURLTest(AsyncHTTPTestCase):
+    def get_app(self):
+        class Handler(RequestHandler):
+            include_host = True
+
+            def get(self):
+                kwargs = {}
+                include_host = self.get_argument("include_host", None)
+                if include_host is not None:
+                    kwargs["include_host"] = include_host == "true"
+                self.write(self.reverse_url("target", "caf\u00e9 +/", 42, **kwargs))
+
+        return Application(
+            [
+                ("/", Handler),
+                url("/target/(.*)/(.*)", RequestHandler, name="target"),
+            ]
+        )
+
+    def test_relative_url(self):
+        for query in ("", "?include_host=false"):
+            with self.subTest(query=query):
+                response = self.fetch("/" + query)
+                self.assertEqual(response.code, 200)
+                self.assertEqual(response.body, b"/target/caf%C3%A9%20%2B//42")
+
+    def test_include_host(self):
+        for host in ("example.com:8443", "[::1]:8443"):
+            with self.subTest(host=host):
+                response = self.fetch("/?include_host=true", headers={"Host": host})
+                self.assertEqual(response.code, 200)
+                self.assertEqual(
+                    response.body,
+                    utf8(self.get_protocol() + "://" + host)
+                    + b"/target/caf%C3%A9%20%2B//42",
+                )
+
+
+class ReverseURLHTTPSTest(AsyncHTTPSTestCase, ReverseURLTest):
+    pass
 
 
 # This test was shared with wsgi_test.py; now the name is meaningless.

@@ -23,6 +23,10 @@ async def fetch(url: str) -> bytes:
     return response.body
 
 
+def absolute_url(handler: RequestHandler) -> str:
+    return handler.reverse_url("item", 42, include_host=True)
+
+
 async def fetch_with_timeout(url: str) -> bytes | None:
     # Names that modules re-export must be usable under --strict.
     try:
