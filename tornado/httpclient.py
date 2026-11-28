@@ -23,7 +23,7 @@ to switch to ``curl_httpclient`` for reasons such as the following:
 Note that if you are using ``curl_httpclient``, it is highly
 recommended that you use a recent version of ``libcurl`` and
 ``pycurl``.  Currently the minimum supported version of libcurl is
-7.22.0, and the minimum version of pycurl is 7.18.2.  It is highly
+7.81.0, and the minimum version of pycurl is 7.44.1.  It is highly
 recommended that your ``libcurl`` installation is built with
 asynchronous DNS resolver (threaded or c-ares), otherwise you may
 encounter various problems with request timeouts (for more
@@ -36,12 +36,13 @@ To select ``curl_httpclient``, call `AsyncHTTPClient.configure` at startup::
     AsyncHTTPClient.configure("tornado.curl_httpclient.CurlAsyncHTTPClient")
 """
 
+import copy
 import datetime
 import functools
 import ssl
 import time
 import weakref
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection
 from io import BytesIO
 from typing import Any, Optional, Type, Union, cast
 
@@ -53,7 +54,7 @@ from tornado.concurrent import (
 )
 from tornado.escape import native_str, utf8
 from tornado.ioloop import IOLoop
-from tornado.util import Configurable
+from tornado.util import Configurable, _restore_exception
 
 
 class HTTPClient:
@@ -131,10 +132,9 @@ class HTTPClient:
         If an error occurs during the fetch, we raise an `HTTPError` unless
         the ``raise_error`` keyword argument is set to False.
         """
-        response = self._io_loop.run_sync(
+        return self._io_loop.run_sync(
             functools.partial(self._async_client.fetch, request, **kwargs)
         )
-        return response
 
 
 class AsyncHTTPClient(Configurable):
@@ -171,12 +171,24 @@ class AsyncHTTPClient(Configurable):
         client = AsyncHTTPClient(force_instance=True,
             defaults=dict(user_agent="MyUserAgent"))
 
+    ``auth_username``, ``auth_password``, and ``headers`` may not be set
+    in ``defaults``. Credentials set for the whole client would be sent
+    to every server it talks to, including any server a redirect leads
+    to; pass them with each request instead.
+
     .. versionchanged:: 5.0
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
 
+    .. versionchanged:: 6.7
+       ``auth_username``, ``auth_password``, and ``headers`` in ``defaults``
+       raise `ValueError`. Default headers were never applied (a request
+       always has its own headers object), and default credentials were
+       sent to every server, including the target of a cross-origin
+       redirect.
+
     """
 
-    _instance_cache: dict[IOLoop, "AsyncHTTPClient"]
+    _instance_cache: dict[IOLoop, "AsyncHTTPClient"] | None
 
     @classmethod
     def configurable_base(cls) -> type[Configurable]:
@@ -193,17 +205,18 @@ class AsyncHTTPClient(Configurable):
         attr_name = "_async_client_dict_" + cls.__name__
         if not hasattr(cls, attr_name):
             setattr(cls, attr_name, weakref.WeakKeyDictionary())
-        return getattr(cls, attr_name)
+        return cast(dict[IOLoop, AsyncHTTPClient], getattr(cls, attr_name))
 
     def __new__(cls, force_instance: bool = False, **kwargs: Any) -> "AsyncHTTPClient":
         io_loop = IOLoop.current()
+        instance_cache: dict[IOLoop, AsyncHTTPClient] | None
         if force_instance:
             instance_cache = None
         else:
             instance_cache = cls._async_clients()
         if instance_cache is not None and io_loop in instance_cache:
             return instance_cache[io_loop]
-        instance = super().__new__(cls, **kwargs)  # type: ignore
+        instance = super().__new__(cls, **kwargs)
         # Make sure the instance knows which cache to remove itself from.
         # It can't simply call _async_clients() because we may be in
         # __new__(AsyncHTTPClient) but instance.__class__ may be
@@ -217,6 +230,14 @@ class AsyncHTTPClient(Configurable):
         self.io_loop = IOLoop.current()
         self.defaults = dict(HTTPRequest._DEFAULTS)
         if defaults is not None:
+            disallowed = sorted(
+                {"auth_username", "auth_password", "headers"}.intersection(defaults)
+            )
+            if disallowed:
+                raise ValueError(
+                    "%s may not be set in AsyncHTTPClient defaults; "
+                    "pass them with each request instead" % ", ".join(disallowed)
+                )
             self.defaults.update(defaults)
         self._closed = False
 
@@ -289,10 +310,9 @@ class AsyncHTTPClient(Configurable):
                 raise ValueError(
                     "kwargs can't be used if request is an HTTPRequest object"
                 )
-        # We may modify this (to add Host, Accept-Encoding, etc),
-        # so make sure we don't modify the caller's object.  This is also
-        # where normal dicts get converted to HTTPHeaders objects.
-        request.headers = httputil.HTTPHeaders(request.headers)
+            # We may modify this (to add Host, Accept-Encoding, etc),
+            # so make sure we don't modify the caller's object or its headers.
+            request = request.copy()
         request_proxy = _RequestProxy(request, self.defaults)
         future: Future[HTTPResponse] = Future()
 
@@ -339,7 +359,7 @@ class AsyncHTTPClient(Configurable):
 class HTTPRequest:
     """HTTP client request object."""
 
-    _headers: dict[str, str] | httputil.HTTPHeaders
+    _headers: httputil.HTTPHeaders
 
     # Default values for HTTPRequest parameters.
     # Merged with the values on the request object by AsyncHTTPClient
@@ -390,7 +410,7 @@ class HTTPRequest:
             Callable[[Callable[[bytes], None]], "Future[None]"]
         ) = None,
         expect_100_continue: bool = False,
-        decompress_response: bool | None = None,
+        decompress_response: bool | Collection[str] | None = None,
         ssl_options: dict[str, Any] | ssl.SSLContext | None = None,
     ) -> None:
         r"""All parameters except ``url`` are optional.
@@ -430,9 +450,17 @@ class HTTPRequest:
            or return the 3xx response? Default True.
         :arg int max_redirects: Limit for ``follow_redirects``, default 5.
         :arg str user_agent: String to send as ``User-Agent`` header
-        :arg bool decompress_response: Request a compressed response from
-           the server and decompress it after downloading.  Default is True.
-           New in Tornado 4.0.
+        :arg decompress_response: Request a compressed response from
+           the server and decompress it after downloading.  Default is True,
+           which enables the client's default set of encodings (``gzip``
+           for ``simple_httpclient``; ``gzip`` and ``deflate`` for
+           ``curl_httpclient``). May also be a collection of
+           ``Content-Encoding`` names (such as ``{"gzip", "br"}``) to
+           enable exactly those; names the client cannot decode are
+           ignored. A false value or an empty collection disables
+           decompression. New in Tornado 4.0.
+        :type decompress_response: `bool` or `collections.abc.Collection`
+           of `str`
         :arg bool use_gzip: Deprecated alias for ``decompress_response``
            since Tornado 4.0.
         :arg str network_interface: Network interface or source IP to use for request.
@@ -479,8 +507,9 @@ class HTTPRequest:
         :arg bool allow_ipv6: Use IPv6 when available?  Default is True.
         :arg bool expect_100_continue: If true, send the
            ``Expect: 100-continue`` header and wait for a continue response
-           before sending the request body.  Only supported with
-           ``simple_httpclient``.
+           before sending the request body.  With ``curl_httpclient``,
+           libcurl sends the body anyway if no response arrives within
+           one second.
 
         .. note::
 
@@ -505,9 +534,27 @@ class HTTPRequest:
 
         .. versionadded:: 4.5
            The ``proxy_auth_mode`` argument.
+
+        .. versionchanged:: 6.6
+           With ``simple_httpclient``, ``streaming_callback`` may be a
+           coroutine; the next chunk is not read until it completes. This
+           is not supported by ``curl_httpclient``.
+
+        .. versionchanged:: 6.7
+           ``expect_100_continue`` is now supported by ``curl_httpclient``.
+
+           ``decompress_response`` may be a collection of encoding names.
+           ``curl_httpclient`` now fails a request whose response uses a
+           ``Content-Encoding`` that was not enabled, instead of decoding
+           every encoding that libcurl supports.
+
+           ``headers`` (whether passed to the constructor or assigned to
+           the attribute later) is copied into a new `.HTTPHeaders` object
+           instead of being used (and possibly modified) directly.
         """
         # Note that some of these attributes go through property setters
         # defined below.
+        # The setter copies the headers so we don't modify the caller's object.
         self.headers = headers  # type: ignore
         if if_modified_since:
             self.headers["If-Modified-Since"] = httputil.format_timestamp(
@@ -531,7 +578,16 @@ class HTTPRequest:
         self.max_redirects = max_redirects
         self.user_agent = user_agent
         if decompress_response is not None:
-            self.decompress_response: bool | None = decompress_response
+            if isinstance(decompress_response, (str, bytes)):
+                # A bare string would be treated as a collection of
+                # single-character encoding names.
+                raise TypeError(
+                    "decompress_response must be a bool or a collection of "
+                    "strings, not %r" % (decompress_response,)
+                )
+            self.decompress_response: bool | Collection[str] | None = (
+                decompress_response
+            )
         else:
             self.decompress_response = use_gzip
         self.network_interface = network_interface
@@ -548,19 +604,36 @@ class HTTPRequest:
         self.expect_100_continue = expect_100_continue
         self.start_time = time.time()
 
+    def copy(self) -> "HTTPRequest":
+        """Returns a copy of this request.
+
+        The copy has its own headers and its own copy of ``ssl_options``
+        if it is a `dict`, so changes to either object's headers or ``ssl_options``
+        do not affect the other. Other attributes are shared.
+
+        `AsyncHTTPClient.fetch` uses this so that it does not modify the
+        caller's request.
+
+        .. versionadded:: 6.7
+        """
+        new = copy.copy(self)
+        new.headers = self.headers  # The setter makes a copy.
+        if isinstance(self.ssl_options, dict):
+            new.ssl_options = dict(self.ssl_options)
+        return new
+
     @property
     def headers(self) -> httputil.HTTPHeaders:
-        # TODO: headers may actually be a plain dict until fairly late in
-        # the process (AsyncHTTPClient.fetch), but practically speaking,
-        # whenever the property is used they're already HTTPHeaders.
-        return self._headers  # type: ignore
+        return self._headers
 
     @headers.setter
     def headers(self, value: dict[str, str] | httputil.HTTPHeaders) -> None:
+        # Always copy, so that changes to the request's headers don't
+        # affect the caller's object (and vice versa).
         if value is None:
             self._headers = httputil.HTTPHeaders()
         else:
-            self._headers = value  # type: ignore
+            self._headers = httputil.HTTPHeaders(value)
 
     @property
     def body(self) -> bytes:
@@ -721,6 +794,12 @@ class HTTPClientError(Exception):
 
     def __str__(self) -> str:
         return "HTTP %d: %s" % (self.code, self.message)
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        # Subclasses (such as simple_httpclient.HTTPTimeoutError) have
+        # constructors that don't accept self.args, so the default
+        # implementation can't unpickle them.
+        return (_restore_exception, (type(self), self.args, self.__dict__))
 
     # There is a cyclic reference between self and self.response,
     # which breaks the default __repr__ implementation.

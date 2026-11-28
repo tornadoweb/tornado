@@ -17,8 +17,9 @@ from unittest import mock
 from tornado import gen
 from tornado.concurrent import Future
 from tornado.escape import native_str
-from tornado.ioloop import IOLoop, PeriodicCallback, TimeoutError
+from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.log import app_log
+from tornado.platform.asyncio import BaseAsyncIOLoop
 from tornado.test.util import AsyncTestCase, TestCase, ignore_deprecation, skipIfNonUnix
 from tornado.testing import (
     ExpectLog,
@@ -42,8 +43,8 @@ class TestIOLoop(AsyncTestCase):
             old_add_callback(callback, *args, **kwargs)
 
         loop.add_callback = types.MethodType(add_callback, loop)  # type: ignore
-        loop.add_callback(lambda: {})  # type: ignore
-        loop.add_callback(lambda: [])  # type: ignore
+        loop.add_callback(lambda: {})
+        loop.add_callback(lambda: [])
         loop.add_timeout(datetime.timedelta(milliseconds=50), loop.stop)
         loop.start()
         self.assertLess(self.calls, 10)
@@ -426,7 +427,8 @@ class TestIOLoop(AsyncTestCase):
     def test_explicit_asyncio_loop(self):
         asyncio_loop = asyncio.new_event_loop()
         loop = IOLoop(asyncio_loop=asyncio_loop, make_current=False)
-        assert loop.asyncio_loop is asyncio_loop  # type: ignore
+        assert isinstance(loop, BaseAsyncIOLoop)
+        assert loop.asyncio_loop is asyncio_loop
         with self.assertRaises(RuntimeError):
             # Can't register two IOLoops with the same asyncio_loop
             IOLoop(asyncio_loop=asyncio_loop, make_current=False)
@@ -710,6 +712,12 @@ class TestPeriodicCallbackMath(TestCase):
         pc = PeriodicCallback(lambda: None, datetime.timedelta(minutes=1, seconds=23))
         expected_callback_time = 83000
         self.assertEqual(pc.callback_time, expected_callback_time)
+
+    def test_timedelta_non_positive(self):
+        with self.assertRaises(ValueError):
+            PeriodicCallback(lambda: None, datetime.timedelta(0))
+        with self.assertRaises(ValueError):
+            PeriodicCallback(lambda: None, datetime.timedelta(seconds=-1))
 
 
 class TestPeriodicCallbackAsync(AsyncTestCase):

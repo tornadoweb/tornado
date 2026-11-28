@@ -8,7 +8,7 @@ import traceback
 import unittest
 import warnings
 
-from tornado import gen, ioloop
+from tornado import gen
 from tornado.httpserver import HTTPServer
 from tornado.locks import Event
 import tornado.testing
@@ -262,7 +262,7 @@ class GenTest(AsyncTestCase):
         try:
             test(self)
             self.fail("did not get expected exception")
-        except ioloop.TimeoutError:
+        except TimeoutError:
             # The stack trace should blame the add_timeout line, not just
             # unrelated IOLoop/testing internals.
             self.assertIn("gen.sleep(1)", traceback.format_exc())
@@ -296,7 +296,7 @@ class GenTest(AsyncTestCase):
 
         # Uses environment-variable timeout of 0.1, times out.
         with set_environ("ASYNC_TEST_TIMEOUT", "0.1"):
-            with self.assertRaises(ioloop.TimeoutError):
+            with self.assertRaises(TimeoutError):
                 test_short_timeout(self)
 
         self.finished = True
@@ -335,7 +335,7 @@ class GenTest(AsyncTestCase):
         try:
             test(self)
             self.fail("did not get expected exception")
-        except ioloop.TimeoutError:
+        except TimeoutError:
             self.finished = True
 
 

@@ -15,7 +15,6 @@ import unittest
 from datetime import timedelta
 
 from tornado import gen, locks
-from tornado.gen import TimeoutError
 from tornado.test.util import AsyncTestCase
 from tornado.testing import gen_test
 
@@ -99,7 +98,7 @@ class ConditionTest(AsyncTestCase):
         self.history.append("notify_all")
 
         # Callbacks execute in the order they were registered.
-        self.assertEqual(list(range(4)) + ["notify_all"], self.history)  # type: ignore
+        self.assertEqual(list(range(4)) + ["notify_all"], self.history)
 
     @gen_test
     def test_wait_timeout(self):
@@ -283,7 +282,7 @@ class SemaphoreTest(AsyncTestCase):
         acquire = sem.acquire(timedelta(seconds=0.01))
         self.io_loop.call_later(0.02, sem.release)  # Too late.
         yield gen.sleep(0.3)
-        with self.assertRaises(gen.TimeoutError):
+        with self.assertRaises(TimeoutError):
             yield acquire
 
         sem.acquire()
@@ -387,7 +386,7 @@ class SemaphoreContextManagerTest(AsyncTestCase):
     @gen_test
     def test_context_manager_timeout_error(self):
         sem = locks.Semaphore(value=0)
-        with self.assertRaises(gen.TimeoutError):
+        with self.assertRaises(TimeoutError):
             with (yield sem.acquire(timedelta(seconds=0.01))):
                 pass
 
@@ -502,7 +501,7 @@ class LockTests(AsyncTestCase):
     def test_acquire_timeout(self):
         lock = locks.Lock()
         lock.acquire()
-        with self.assertRaises(gen.TimeoutError):
+        with self.assertRaises(TimeoutError):
             yield lock.acquire(timeout=timedelta(seconds=0.01))
 
         # Still locked.
@@ -529,6 +528,59 @@ class LockTests(AsyncTestCase):
         with self.assertRaises(RuntimeError):
             with locks.Lock():
                 pass
+
+
+class AsyncContextManagerCancellationTest(AsyncTestCase):
+    @gen_test
+    async def test_cancel_after_handoff(self):
+        for cls in (locks.Semaphore, locks.BoundedSemaphore, locks.Lock):
+            with self.subTest(primitive=cls.__name__):
+                primitive = cls()
+                await primitive.acquire()
+
+                async def worker():
+                    async with primitive:
+                        self.fail("cancelled waiter entered the context")
+
+                task = asyncio.create_task(worker())
+                await asyncio.sleep(0)
+                successor = asyncio.ensure_future(primitive.acquire())
+                primitive.release()
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+                try:
+                    self.assertTrue(successor.done())
+                    await successor
+                    primitive.release()
+                finally:
+                    successor.cancel()
+
+    @gen_test
+    async def test_cancel_before_handoff(self):
+        for cls in (locks.Semaphore, locks.BoundedSemaphore, locks.Lock):
+            with self.subTest(primitive=cls.__name__):
+                primitive = cls()
+                await primitive.acquire()
+
+                async def worker():
+                    async with primitive:
+                        self.fail("cancelled waiter entered the context")
+
+                task = asyncio.create_task(worker())
+                await asyncio.sleep(0)
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+                successor = asyncio.ensure_future(primitive.acquire())
+                try:
+                    self.assertFalse(successor.done())
+                    primitive.release()
+                    self.assertTrue(successor.done())
+                    await successor
+                    primitive.release()
+                finally:
+                    successor.cancel()
 
 
 if __name__ == "__main__":

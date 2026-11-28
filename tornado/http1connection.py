@@ -23,7 +23,7 @@ import logging
 import re
 import types
 import zlib
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection
 from typing import Optional, Type, cast
 
 from tornado import gen, httputil, iostream
@@ -44,6 +44,22 @@ CR_OR_LF_RE = re.compile(b"\r|\n")
 # _read_message, so an unbounded number of them would exhaust the stack.
 # There is no legitimate use for more than a handful.
 _MAX_1XX_RESPONSES = 10
+
+# Reads that can be satisfied from data that has already arrived complete
+# without returning control to the IOLoop, so a peer that sends a body
+# faster than we can process it could otherwise monopolize the IOLoop for
+# the duration of the body. While reading a body, we yield to the IOLoop
+# after processing this many bytes. Each chunk of a chunked body also counts
+# as _CHUNK_YIELD_COST bytes, since the per-chunk overhead dominates when
+# the chunks are small.
+_YIELD_THRESHOLD = 256 * 1024
+_CHUNK_YIELD_COST = 1024
+
+
+def _is_done(future: Awaitable[object]) -> bool:
+    # IOStream's read methods are declared to return Awaitables, but they
+    # are actually Futures which may already be resolved.
+    return isinstance(future, Future) and future.done()
 
 
 class _QuietException(Exception):
@@ -89,18 +105,34 @@ class HTTP1ConnectionParameters:
         header_timeout: float | None = None,
         max_body_size: int | None = None,
         body_timeout: float | None = None,
-        decompress: bool = False,
+        decompress: bool | Collection[str] = False,
+        idle_connection_timeout: float | None = None,
     ) -> None:
         """
         :arg bool no_keep_alive: If true, always close the connection after
             one request.
         :arg int chunk_size: how much data to read into memory at once
         :arg int max_header_size:  maximum amount of data for HTTP headers
-        :arg float header_timeout: how long to wait for all headers (seconds)
+        :arg float header_timeout: how long to wait for all headers (seconds),
+            from the first byte of the message. Without
+            ``idle_connection_timeout``, this also includes the wait for the
+            first byte.
+        :arg float idle_connection_timeout: how long to wait for the first
+            byte of a message (seconds). `.HTTPServer` sets this, so that an
+            idle kept-alive connection can wait longer than a client may take
+            to send its headers. `.SimpleAsyncHTTPClient` doesn't, since it
+            doesn't reuse connections, so one timeout covers the whole wait
+            for a response's headers.
         :arg int max_body_size: maximum amount of data for body
         :arg float body_timeout: how long to wait while reading body (seconds)
-        :arg bool decompress: if true, decode incoming
-            ``Content-Encoding: gzip``
+        :arg decompress: if true, decode incoming
+            ``Content-Encoding: gzip``. May also be a collection of
+            ``Content-Encoding`` names to decode; ``gzip`` is currently the
+            only one supported, and other names are ignored.
+
+        .. versionchanged:: 6.7
+           Added ``idle_connection_timeout``. ``decompress`` may be a
+           collection of encoding names.
         """
         self.no_keep_alive = no_keep_alive
         self.chunk_size = chunk_size or 65536
@@ -109,6 +141,11 @@ class HTTP1ConnectionParameters:
         self.max_body_size = max_body_size
         self.body_timeout = body_timeout
         self.decompress = decompress
+        self.idle_connection_timeout = idle_connection_timeout
+        # Only gzip is implemented (by _GzipMessageDelegate).
+        self._decompress_encodings = httputil._decompress_encodings(
+            decompress, {"gzip"}, {"gzip"}
+        )
 
 
 class HTTP1Connection(httputil.HTTPConnection):
@@ -160,6 +197,9 @@ class HTTP1Connection(httputil.HTTPConnection):
         # (after the response has been written in the server side,
         # and after it has been read in the client)
         self._disconnect_on_finish = False
+        # True if write_headers replaced an invalid response with a 500.
+        # Any further body writes for the original response are dropped.
+        self._response_replaced = False
         self._clear_callbacks()
         # Save the start lines after we read or write them; they
         # affect later processing (e.g. 304 responses and HEAD methods
@@ -186,7 +226,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         Returns a `.Future` that resolves to a bool after the full response has
         been read. The result is true if the stream is still open.
         """
-        if self.params.decompress:
+        if "gzip" in self.params._decompress_encodings:
             delegate = _GzipMessageDelegate(
                 delegate, self.params.chunk_size, self._max_body_size
             )
@@ -207,6 +247,29 @@ class HTTP1Connection(httputil.HTTPConnection):
     ) -> bool:
         need_delegate_close = False
         try:
+            if self.params.idle_connection_timeout is not None:
+                # Wait for the first byte separately, so that the header
+                # timeout starts when the message does. The lookahead matches
+                # an empty string once any byte is buffered, so nothing is
+                # consumed. ([\s\S] matches any byte; "." would not match a
+                # newline, which may come first since blank lines before a
+                # request are allowed.)
+                first_byte = self.stream.read_until_regex(rb"(?=[\s\S])")
+                if _is_done(first_byte):
+                    # Data was already buffered (as for pipelined requests),
+                    # so skip the cost of setting up a timeout.
+                    await first_byte
+                else:
+                    try:
+                        await gen.with_timeout(
+                            self.stream.io_loop.time()
+                            + self.params.idle_connection_timeout,
+                            first_byte,
+                            quiet_exceptions=iostream.StreamClosedError,
+                        )
+                    except TimeoutError:
+                        self.close()
+                        return False
             header_future = self.stream.read_until_regex(
                 b"\r?\n\r?\n", max_bytes=self.params.max_header_size
             )
@@ -219,7 +282,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                         header_future,
                         quiet_exceptions=iostream.StreamClosedError,
                     )
-                except gen.TimeoutError:
+                except TimeoutError:
                     self.close()
                     return False
             start_line_str, headers = self._parse_headers(header_data)
@@ -299,7 +362,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                                 body_future,
                                 quiet_exceptions=iostream.StreamClosedError,
                             )
-                        except gen.TimeoutError:
+                        except TimeoutError:
                             gen_log.info("Timeout reading body from %s", self.context)
                             self.stream.close()
                             return False
@@ -328,6 +391,11 @@ class HTTP1Connection(httputil.HTTPConnection):
             gen_log.info("Malformed HTTP message from %s: %s", self.context, e)
             if not self.is_client:
                 await self.stream.write(b"HTTP/1.1 400 Bad Request\r\n\r\n")
+            elif not need_delegate_close:
+                # The error came before headers_received, so the delegate
+                # doesn't know about this message yet. Tell it the
+                # connection is closed so a client request doesn't hang.
+                need_delegate_close = True
             self.close()
             return False
         finally:
@@ -412,6 +480,33 @@ class HTTP1Connection(httputil.HTTPConnection):
         """
         self._max_body_size = max_body_size
 
+    def _validate_headers(
+        self,
+        start_line: httputil.RequestStartLine | httputil.ResponseStartLine,
+        headers: httputil.HTTPHeaders,
+    ) -> None:
+        if not self.is_client:
+            assert isinstance(start_line, httputil.ResponseStartLine)
+            if not isinstance(start_line[2], str) or not (
+                start_line[2] == ""
+                or httputil._ABNF.reason_phrase.fullmatch(start_line[2])
+            ):
+                raise ValueError(
+                    "Illegal characters in reason phrase: %r" % (start_line[2],)
+                )
+        # Header names and values are validated by HTTPHeaders, where the
+        # error points at the code that set them. This only protects what
+        # goes on the wire, for headers that got past HTTPHeaders some other
+        # way: no CR or LF (header injection), and nothing that can't be
+        # encoded as Latin-1 (which would fail in _write_headers, after
+        # the point where we can still send a 500 instead). The CR/LF check
+        # in _write_headers stays as a last line of defense that also
+        # covers the client's request line.
+        for n, v in headers.get_all():
+            line = native_str(n) + ": " + native_str(v)
+            if CR_OR_LF_RE.search(line.encode("latin1")):
+                raise ValueError("Illegal characters (CR or LF) in header: %r" % line)
+
     def write_headers(
         self,
         start_line: httputil.RequestStartLine | httputil.ResponseStartLine,
@@ -419,6 +514,58 @@ class HTTP1Connection(httputil.HTTPConnection):
         chunk: bytes | None = None,
     ) -> "Future[None]":
         """Implements `.HTTPConnection.write_headers`."""
+        if not self.is_client:
+            if self._response_replaced:
+                # A 500 has already been sent in place of an invalid response
+                # (possibly a 1xx). Anything the caller sends now belongs to
+                # the response that was replaced, and must not follow the 500
+                # onto the wire.
+                future = self._write_future = Future()
+                future.set_exception(iostream.StreamClosedError())
+                future.exception()
+                return future
+            try:
+                self._validate_headers(start_line, headers)
+            except Exception:
+                gen_log.error(
+                    "Exception in write_headers; sending 500 instead of %s",
+                    getattr(start_line, "code", None),
+                    exc_info=True,
+                )
+                self._response_replaced = True
+                if not self.stream.closed():
+                    self._disconnect_on_finish = True
+                    try:
+                        return self._write_headers(
+                            httputil.ResponseStartLine(
+                                "HTTP/1.1", 500, "Internal Server Error"
+                            ),
+                            httputil.HTTPHeaders(
+                                {
+                                    "Content-Length": "0",
+                                    "Connection": "close",
+                                }
+                            ),
+                            chunk=None,
+                        )
+                    except Exception:
+                        pass
+                self.close()
+                future = self._write_future = Future()
+                future.set_exception(iostream.StreamClosedError())
+                future.exception()
+                return future
+            return self._write_headers(start_line, headers, chunk)
+        else:
+            self._validate_headers(start_line, headers)
+            return self._write_headers(start_line, headers, chunk)
+
+    def _write_headers(
+        self,
+        start_line: httputil.RequestStartLine | httputil.ResponseStartLine,
+        headers: httputil.HTTPHeaders,
+        chunk: bytes | None = None,
+    ) -> "Future[None]":
         lines = []
         if self.is_client:
             assert isinstance(start_line, httputil.RequestStartLine)
@@ -436,7 +583,11 @@ class HTTP1Connection(httputil.HTTPConnection):
             assert self._request_start_line is not None
             assert self._request_headers is not None
             self._response_start_line = start_line
-            lines.append(utf8("HTTP/1.1 %d %s" % (start_line[1], start_line[2])))
+            # The reason phrase may contain obs-text (U+0080 to U+00FF), which,
+            # like header values, is sent as Latin-1.
+            lines.append(
+                ("HTTP/1.1 %d %s" % (start_line[1], start_line[2])).encode("latin1")
+            )
             self._chunking_output = (
                 # TODO: should this use
                 # self._request_start_line.version or
@@ -458,10 +609,12 @@ class HTTP1Connection(httputil.HTTPConnection):
                 and self._disconnect_on_finish
             ):
                 headers["Connection"] = "close"
-            # If a 1.0 client asked for keep-alive, add the header.
+            # If a 1.0 client asked for keep-alive, add the header (unless
+            # we already know the connection will be closed).
             if (
                 self._request_start_line.version == "HTTP/1.0"
                 and self._request_headers.get("Connection", "").lower() == "keep-alive"
+                and not self._disconnect_on_finish
             ):
                 headers["Connection"] = "Keep-Alive"
         if self._chunking_output:
@@ -478,9 +631,13 @@ class HTTP1Connection(httputil.HTTPConnection):
         # TODO: headers are supposed to be of type str, but we still have some
         # cases that let bytes slip through. Remove these native_str calls when those
         # are fixed.
-        header_lines = (
-            native_str(n) + ": " + native_str(v) for n, v in headers.get_all()
-        )
+        # Header lines were checked in _validate_headers. Leading and
+        # trailing whitespace is not part of the field value (RFC 9110
+        # section 5.5), so strip it here.
+        header_lines = [
+            native_str(n) + ": " + native_str(v).strip(httputil.HTTP_WHITESPACE)
+            for n, v in headers.get_all()
+        ]
         lines.extend(line.encode("latin1") for line in header_lines)
         for line in lines:
             if CR_OR_LF_RE.search(line):
@@ -523,7 +680,11 @@ class HTTP1Connection(httputil.HTTPConnection):
         pre-encoded header block.
         """
         future = None
-        if self.stream.closed():
+        if self.stream.closed() or self._response_replaced:
+            # If the response was replaced with a 500, the body belongs to a
+            # response that was never sent, and the connection will be closed
+            # when the 500 is finished. Report it the same way as a closed
+            # connection, so a streaming handler stops writing.
             future = self._write_future = Future()
             self._write_future.set_exception(iostream.StreamClosedError())
             self._write_future.exception()
@@ -632,7 +793,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                 # Proxies sometimes cause Content-Length headers to get
                 # duplicated.  If all the values are identical then we can
                 # use them but if they differ it's an error.
-                pieces = re.split(r",\s*", headers["Content-Length"])
+                pieces = re.split(r",[ \t]*", headers["Content-Length"])
                 if any(i != pieces[0] for i in pieces):
                     raise httputil.HTTPInputError(
                         "Multiple unequal Content-Lengths: %r"
@@ -674,53 +835,101 @@ class HTTP1Connection(httputil.HTTPConnection):
             return self._read_body_until_close(delegate)
         return None
 
+    async def _deliver_body(
+        self, delegate: httputil.HTTPMessageDelegate, data: bytes
+    ) -> None:
+        if not self._write_finished or self.is_client:
+            with _ExceptionLoggingContext(app_log):
+                ret = delegate.data_received(data)
+                if ret is not None:
+                    await ret
+
     async def _read_fixed_body(
         self, content_length: int, delegate: httputil.HTTPMessageDelegate
     ) -> None:
+        work = 0  # See _YIELD_THRESHOLD
         while content_length > 0:
             body = await self.stream.read_bytes(
                 min(self.params.chunk_size, content_length), partial=True
             )
             content_length -= len(body)
-            if not self._write_finished or self.is_client:
-                with _ExceptionLoggingContext(app_log):
-                    ret = delegate.data_received(body)
-                    if ret is not None:
-                        await ret
+            await self._deliver_body(delegate, body)
+            work += len(body)
+            if work >= _YIELD_THRESHOLD:
+                work = 0
+                await asyncio.sleep(0)
 
     async def _read_chunked_body(self, delegate: httputil.HTTPMessageDelegate) -> None:
         # TODO: "chunk extensions" http://tools.ietf.org/html/rfc2616#section-3.6.1
         total_size = 0
+        # Chunk boundaries are not meaningful (and may be changed by
+        # intermediaries), so the contents of consecutive small chunks are
+        # coalesced before being passed to the delegate. This bounds the
+        # number of data_received calls (and the overhead of delegates that
+        # buffer each piece they receive) regardless of how small the chunks
+        # are. Pending data is delivered whenever we would have to wait for
+        # the network, so this does not add latency for streaming delegates.
+        pending = bytearray()
+        work = 0  # See _YIELD_THRESHOLD
+
+        def read(future: Awaitable[bytes]) -> Awaitable[bytes]:
+            if pending and not _is_done(future):
+                return flush_and_read(future)
+            return future
+
+        async def flush_and_read(future: Awaitable[bytes]) -> bytes:
+            data = bytes(pending)
+            pending.clear()
+            await self._deliver_body(delegate, data)
+            return await future
+
         while True:
-            chunk_len_str = await self.stream.read_until(b"\r\n", max_bytes=64)
+            work += _CHUNK_YIELD_COST
+            if work >= _YIELD_THRESHOLD:
+                work = 0
+                await asyncio.sleep(0)
+            chunk_len_str = await read(self.stream.read_until(b"\r\n", max_bytes=64))
             try:
                 chunk_len = parse_hex_int(native_str(chunk_len_str[:-2]))
             except ValueError:
                 raise httputil.HTTPInputError("invalid chunk size")
             if chunk_len == 0:
-                crlf = await self.stream.read_bytes(2)
+                crlf = await read(self.stream.read_bytes(2))
                 if crlf != b"\r\n":
                     raise httputil.HTTPInputError(
                         "improperly terminated chunked request"
                     )
+                if pending:
+                    await self._deliver_body(delegate, bytes(pending))
                 return
             total_size += chunk_len
             if total_size > self._max_body_size:
                 raise httputil.HTTPInputError("chunked body too large")
             bytes_to_read = chunk_len
             while bytes_to_read:
-                chunk = await self.stream.read_bytes(
-                    min(bytes_to_read, self.params.chunk_size), partial=True
+                chunk = await read(
+                    self.stream.read_bytes(
+                        min(bytes_to_read, self.params.chunk_size), partial=True
+                    )
                 )
                 bytes_to_read -= len(chunk)
-                if not self._write_finished or self.is_client:
-                    with _ExceptionLoggingContext(app_log):
-                        ret = delegate.data_received(chunk)
-                        if ret is not None:
-                            await ret
+                if not pending and len(chunk) == self.params.chunk_size:
+                    # Full-sized reads are passed through without copying.
+                    await self._deliver_body(delegate, chunk)
+                else:
+                    pending += chunk
+                    if len(pending) >= self.params.chunk_size:
+                        data = bytes(pending[: self.params.chunk_size])
+                        del pending[: self.params.chunk_size]
+                        await self._deliver_body(delegate, data)
+                work += len(chunk)
+                if work >= _YIELD_THRESHOLD:
+                    work = 0
+                    await asyncio.sleep(0)
             # chunk ends with \r\n
-            crlf = await self.stream.read_bytes(2)
-            assert crlf == b"\r\n"
+            crlf = await read(self.stream.read_bytes(2))
+            if crlf != b"\r\n":
+                raise httputil.HTTPInputError("improperly terminated chunk")
 
     async def _read_body_until_close(
         self, delegate: httputil.HTTPMessageDelegate
@@ -730,6 +939,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         # is enforced before an over-large body has been buffered, and so
         # that the body is not limited by the stream's read buffer size.
         total_size = 0
+        work = 0  # See _YIELD_THRESHOLD
         while True:
             try:
                 body = await self.stream.read_bytes(
@@ -741,11 +951,11 @@ class HTTP1Connection(httputil.HTTPConnection):
             total_size += len(body)
             if total_size > self._max_body_size:
                 raise httputil.HTTPInputError("Body too long")
-            if not self._write_finished or self.is_client:
-                with _ExceptionLoggingContext(app_log):
-                    ret = delegate.data_received(body)
-                    if ret is not None:
-                        await ret
+            await self._deliver_body(delegate, body)
+            work += len(body)
+            if work >= _YIELD_THRESHOLD:
+                work = 0
+                await asyncio.sleep(0)
 
 
 class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
@@ -885,8 +1095,10 @@ class HTTP1ServerConnection:
                 except (
                     iostream.StreamClosedError,
                     iostream.UnsatisfiableReadError,
-                    asyncio.CancelledError,
                 ):
+                    return
+                except asyncio.CancelledError:
+                    conn.close()
                     return
                 except Exception:
                     gen_log.error("Uncaught exception", exc_info=True)

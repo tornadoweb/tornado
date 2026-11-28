@@ -15,9 +15,9 @@ default_python_minor=13
 # in some of our cog blocks).
 uvx --python "3.${default_python_minor}" --from cogapp cog \
     -D min_python_minor=11 \
-    -D max_python_minor=15 \
+    -D max_python_minor=16 \
     -D min_python_threaded_minor=14 \
-    -D max_python_threaded_minor=15 \
+    -D max_python_threaded_minor=16 \
     -D default_python_minor="${default_python_minor}" \
-    -D dev_python_minor=15 \
+    -D dev_python_minor=16 \
     -r $(git grep -l '\[\[\[cog')

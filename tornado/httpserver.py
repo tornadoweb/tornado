@@ -28,7 +28,7 @@ class except to start a server at the beginning of the process
 import socket
 import ssl
 import typing
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection
 from typing import Any
 
 from tornado import httputil, iostream, netutil
@@ -64,7 +64,23 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
     remote host IP address.  To select the next server in the chain, a list of
     trusted downstream hosts may be passed as the ``trusted_downstream``
     argument.  These hosts will be skipped when parsing the ``X-Forwarded-For``
-    header.
+    header.  IPv6 addresses in ``X-Real-Ip``, ``X-Forwarded-For`` and
+    ``trusted_downstream`` may be enclosed in square brackets.
+
+    ``idle_connection_timeout`` (default one hour) is how long a connection
+    may wait for the first byte of a request, either when it is new or
+    between requests on a kept-alive connection. Once the first byte has
+    arrived, the rest of the headers must arrive within ``header_timeout``
+    (default 60 seconds), so a client that sends its headers slowly can't
+    hold a connection for as long as an idle one. ``body_timeout`` limits the
+    time to read the body (by default it is unlimited).
+
+    If ``decompress_request`` is ``True``, request bodies sent with
+    ``Content-Encoding: gzip`` are decompressed before they reach the
+    application. It may also be a collection of ``Content-Encoding`` names
+    to decode; ``gzip`` is currently the only one supported, and other
+    names are ignored. Bodies in an encoding that is not decoded are left
+    as they were received.
 
     To make this server serve SSL traffic, send the ``ssl_options`` keyword
     argument with an `ssl.SSLContext` object. For compatibility with older
@@ -146,6 +162,16 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
 
     .. versionchanged:: 5.0
        The ``io_loop`` argument has been removed.
+
+    .. versionchanged:: 6.7
+       Added the ``header_timeout`` argument. Previously,
+       ``idle_connection_timeout`` was the time limit for the whole header
+       block, so a request's headers could take up to an hour by default.
+
+       IPv6 addresses in square brackets are now accepted when ``xheaders`` is
+       enabled and in ``trusted_downstream``.
+
+       ``decompress_request`` may be a collection of encoding names.
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -166,7 +192,7 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
         xheaders: bool = False,
         ssl_options: dict[str, Any] | ssl.SSLContext | None = None,
         protocol: str | None = None,
-        decompress_request: bool = False,
+        decompress_request: bool | Collection[str] = False,
         chunk_size: int | None = None,
         max_header_size: int | None = None,
         idle_connection_timeout: float | None = None,
@@ -174,6 +200,7 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
         max_body_size: int | None = None,
         max_buffer_size: int | None = None,
         trusted_downstream: list[str] | None = None,
+        header_timeout: float | None = None,
     ) -> None:
         # This method's signature is not extracted with autodoc
         # because we want its arguments to appear on the class
@@ -186,7 +213,8 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
             decompress=decompress_request,
             chunk_size=chunk_size,
             max_header_size=max_header_size,
-            header_timeout=idle_connection_timeout or 3600,
+            idle_connection_timeout=idle_connection_timeout or 3600,
+            header_timeout=header_timeout or 60,
             max_body_size=max_body_size,
             body_timeout=body_timeout,
             no_keep_alive=no_keep_alive,
@@ -227,7 +255,9 @@ class HTTPServer(TCPServer, Configurable, httputil.HTTPServerConnectionDelegate)
             conn = next(iter(self._connections))
             await conn.close()
 
-    def handle_stream(self, stream: iostream.IOStream, address: tuple) -> None:
+    def handle_stream(
+        self, stream: iostream.IOStream, address: tuple[Any, ...]
+    ) -> None:
         context = _HTTPRequestContext(
             stream, address, self.protocol, self.trusted_downstream
         )
@@ -262,7 +292,7 @@ class _CallableAdapter(httputil.HTTPMessageDelegate):
         self.request_callback = request_callback
         self.request: httputil.HTTPServerRequest | None = None
         self.delegate = None
-        self._chunks: list[bytes] = []
+        self._chunks = bytearray()
 
     def headers_received(
         self,
@@ -277,12 +307,12 @@ class _CallableAdapter(httputil.HTTPMessageDelegate):
         return None
 
     def data_received(self, chunk: bytes) -> Awaitable[None] | None:
-        self._chunks.append(chunk)
+        self._chunks += chunk
         return None
 
     def finish(self) -> None:
         assert self.request is not None
-        self.request.body = b"".join(self._chunks)
+        self.request.body = bytes(self._chunks)
         self.request._parse_body()
         self.request_callback(self.request)
 
@@ -290,11 +320,29 @@ class _CallableAdapter(httputil.HTTPMessageDelegate):
         del self._chunks
 
 
+def _strip_ipv6_brackets(ip: str) -> str:
+    """Removes the square brackets from an address like ``[2001:db8::1]``.
+
+    Some proxies put IPv6 addresses in brackets in the ``X-Forwarded-For``
+    and ``X-Real-Ip`` headers. Anything else is returned unchanged.
+    """
+    inner = ip[1:-1]
+    if (
+        ip.startswith("[")
+        and ip.endswith("]")
+        and ":" in inner
+        and "[" not in inner
+        and "]" not in inner
+    ):
+        return inner
+    return ip
+
+
 class _HTTPRequestContext:
     def __init__(
         self,
         stream: iostream.IOStream,
-        address: tuple,
+        address: tuple[Any, ...],
         protocol: str | None,
         trusted_downstream: list[str] | None = None,
     ) -> None:
@@ -311,7 +359,7 @@ class _HTTPRequestContext:
             self.address_family in (socket.AF_INET, socket.AF_INET6)
             and address is not None
         ):
-            self.remote_ip = address[0]
+            self.remote_ip: str = address[0]
         else:
             # Unix (or other) socket; fake the remote address.
             self.remote_ip = "0.0.0.0"
@@ -323,7 +371,9 @@ class _HTTPRequestContext:
             self.protocol = "http"
         self._orig_remote_ip = self.remote_ip
         self._orig_protocol = self.protocol
-        self.trusted_downstream = set(trusted_downstream or [])
+        self.trusted_downstream = {
+            _strip_ipv6_brackets(host) for host in trusted_downstream or []
+        }
 
     def __str__(self) -> str:
         if self.address_family in (socket.AF_INET, socket.AF_INET6):
@@ -341,10 +391,14 @@ class _HTTPRequestContext:
         # Squid uses X-Forwarded-For, others use X-Real-Ip
         ip = headers.get("X-Forwarded-For", self.remote_ip)
         # Skip trusted downstream hosts in X-Forwarded-For list
-        for ip in (cand.strip() for cand in reversed(ip.split(","))):
+        for ip in (
+            _strip_ipv6_brackets(cand.strip()) for cand in reversed(ip.split(","))
+        ):
             if ip not in self.trusted_downstream:
                 break
-        ip = headers.get("X-Real-Ip", ip)
+        real_ip = headers.get("X-Real-Ip")
+        if real_ip is not None:
+            ip = _strip_ipv6_brackets(real_ip)
         if netutil.is_valid_ip(ip):
             self.remote_ip = ip
         # AWS uses X-Forwarded-Proto

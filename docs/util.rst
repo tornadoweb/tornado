@@ -19,3 +19,8 @@
 
         .. versionchanged:: 6.2
            ``tornado.util.TimeoutError`` is an alias to :py:class:`asyncio.TimeoutError`
+
+        .. deprecated:: 6.6
+           ``tornado.util.TimeoutError``, ``tornado.gen.TimeoutError``, and
+           ``tornado.ioloop.TimeoutError`` are aliases for the builtin
+           :py:class:`TimeoutError`, which should be used instead.

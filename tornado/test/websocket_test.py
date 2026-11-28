@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import datetime
 import functools
+import gc
 import socket
 import traceback
 import typing
@@ -10,23 +11,30 @@ import unittest
 from tornado import gen
 from tornado.concurrent import Future
 from tornado.httpclient import HTTPError, HTTPRequest
+from tornado.httputil import HTTPHeaders
+from tornado.iostream import IOStream
 from tornado.locks import Event
 from tornado.log import app_log, gen_log
 from tornado.netutil import Resolver
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
+from tornado.tcpserver import TCPServer
 from tornado.template import DictLoader
 from tornado.test.util import (
     AsyncHTTPTestCase,
+    AsyncTestCase,
     TestCase,
     abstract_base_test,
+    assert_memory_budget,
     ignore_deprecation,
+    refusing_port,
+    skipNotCPython,
 )
 from tornado.testing import ExpectLog, bind_unused_port, gen_test
 from tornado.web import Application, RequestHandler
 
 try:
     import tornado.websocket  # noqa: F401
-    from tornado.util import _websocket_mask_python
+    from tornado.util import _websocket_mask_int, _websocket_mask_loop
 except ImportError:
     # The unittest module presents misleading errors on ImportError
     # (it acts as if websocket_test could not be found, hiding the underlying
@@ -468,8 +476,8 @@ class WebSocketTest(WebSocketBaseTestCase):
 
     @gen_test
     def test_websocket_network_fail(self):
-        sock, port = bind_unused_port()
-        sock.close()
+        cleanup_func, port = refusing_port()
+        self.addCleanup(cleanup_func)
         with self.assertRaises(IOError):
             with ExpectLog(gen_log, ".*", required=False):
                 yield websocket_connect(
@@ -592,6 +600,21 @@ class WebSocketTest(WebSocketBaseTestCase):
             ws.write_message("hello")
             response = yield ws.read_message()
             self.assertEqual(response, "hello")
+
+    @gen_test
+    def test_connect_does_not_modify_request(self):
+        # websocket_connect adds its own headers to a copy of the request,
+        # so the same request can be used to connect again.
+        url = "ws://127.0.0.1:%d/nodelay" % self.get_http_port()
+        headers = {"X-Test": "1"}
+        request = HTTPRequest(url, headers=headers)
+        for i in range(2):
+            with contextlib.closing((yield websocket_connect(request))) as ws:
+                response = yield ws.read_message()
+                self.assertEqual(response, "hello")
+            self.assertEqual(request.url, url)
+            self.assertEqual(dict(request.headers), {"X-Test": "1"})
+            self.assertEqual(headers, {"X-Test": "1"})
 
     @gen_test
     def test_check_origin_valid_with_path(self):
@@ -731,6 +754,162 @@ class WebSocketNativeCoroutineTest(WebSocketBaseTestCase):
         self.assertEqual(res, "hello2")
 
 
+class PermissiveOriginHandler(EchoHandler):
+    def check_origin(self, origin):
+        return True
+
+
+class TokenOriginHandler(EchoHandler):
+    def prepare(self):
+        self.token_authenticated = self.get_argument("token", None) == "secret"
+
+    def check_origin(self, origin):
+        return self.token_authenticated
+
+
+class TrustedOriginOverrideHandler(EchoHandler):
+    def check_trusted_origin(self, origin):
+        return origin.endswith(".example.com") and "evil" not in origin
+
+
+class WebSocketOriginTest(WebSocketBaseTestCase):
+    # Origin checks for websockets are always enabled, independent of the
+    # cross_origin_protection setting. (Basic Origin/Host comparisons are
+    # covered in WebSocketTest).
+    def get_app(self):
+        return Application(
+            [
+                ("/echo", EchoHandler),
+                ("/permissive", PermissiveOriginHandler),
+                ("/token", TokenOriginHandler),
+                ("/trusted_override", TrustedOriginOverrideHandler),
+            ],
+            trusted_origins=["http://trusted.example.com"],
+            # xsrf_cookies must not interfere with websockets, which are GET
+            # requests and cannot carry an XSRF token.
+            xsrf_cookies=True,
+        )
+
+    def get_http_client(self):
+        # Some tests here send handshakes with self.fetch, and the websocket
+        # handshake requires HTTP/1; force the use of SimpleAsyncHTTPClient.
+        return SimpleAsyncHTTPClient()
+
+    @gen.coroutine
+    def connect_with_headers(self, path, headers):
+        url = "ws://127.0.0.1:%d%s" % (self.get_http_port(), path)
+        ws = yield websocket_connect(HTTPRequest(url, headers=headers))
+        self.conns_to_close.append(ws)
+        yield ws.write_message("hello")
+        response = yield ws.read_message()
+        self.assertEqual(response, "hello")
+
+    @gen.coroutine
+    def assert_rejected(self, path, headers):
+        url = "ws://127.0.0.1:%d%s" % (self.get_http_port(), path)
+        with self.assertRaises(HTTPError) as cm:
+            yield websocket_connect(HTTPRequest(url, headers=headers))
+        self.assertEqual(cm.exception.code, 403)
+
+    @gen_test
+    def test_same_origin_with_xsrf_cookies(self):
+        yield self.connect_with_headers(
+            "/echo", {"Origin": "http://127.0.0.1:%d" % self.get_http_port()}
+        )
+
+    @gen_test
+    def test_no_origin(self):
+        # Non-browser clients are allowed.
+        yield self.connect_with_headers("/echo", {})
+
+    @gen_test
+    def test_trusted_origin(self):
+        yield self.connect_with_headers(
+            "/echo", {"Origin": "http://trusted.example.com"}
+        )
+
+    @gen_test
+    def test_trusted_origin_cross_site(self):
+        yield self.connect_with_headers(
+            "/echo",
+            {"Origin": "http://trusted.example.com", "Sec-Fetch-Site": "cross-site"},
+        )
+
+    @gen_test
+    def test_sec_fetch_site_same_origin(self):
+        # Sec-Fetch-Site takes precedence over the Origin/Host comparison
+        # (which may fail if a proxy rewrites the Host header).
+        yield self.connect_with_headers(
+            "/echo",
+            {"Origin": "http://proxied.example.com", "Sec-Fetch-Site": "same-origin"},
+        )
+
+    @gen_test
+    def test_sec_fetch_site_cross_site(self):
+        yield self.assert_rejected(
+            "/echo",
+            {"Origin": "http://evil.example.com", "Sec-Fetch-Site": "cross-site"},
+        )
+
+    @gen_test
+    def test_sec_fetch_site_same_site(self):
+        yield self.assert_rejected(
+            "/echo",
+            {"Origin": "http://sub.example.com", "Sec-Fetch-Site": "same-site"},
+        )
+
+    @gen_test
+    def test_check_origin_override(self):
+        yield self.connect_with_headers(
+            "/permissive",
+            {"Origin": "http://evil.example.com", "Sec-Fetch-Site": "cross-site"},
+        )
+
+    def test_mixed_case_upgrade_header(self):
+        # The Upgrade header is case-insensitive; a mixed-case value must not
+        # bypass the origin check.
+        response = self.fetch(
+            "/echo",
+            headers={
+                "Upgrade": "WebSocket",
+                "Connection": "Upgrade",
+                "Origin": "http://evil.example.com",
+                "Sec-WebSocket-Version": "13",
+                "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+            },
+        )
+        self.assertEqual(response.code, 403)
+
+    @gen_test
+    def test_check_origin_after_prepare(self):
+        # check_origin may depend on state set in prepare (e.g. by
+        # authentication). This handler allows any origin if a token is
+        # present.
+        yield self.connect_with_headers(
+            "/token?token=secret",
+            {"Origin": "http://evil.example.com", "Sec-Fetch-Site": "cross-site"},
+        )
+        yield self.connect_with_headers(
+            "/token?token=secret", {"Origin": "http://evil.example.com"}
+        )
+        yield self.assert_rejected(
+            "/token",
+            {"Origin": "http://evil.example.com", "Sec-Fetch-Site": "cross-site"},
+        )
+
+    @gen_test
+    def test_check_trusted_origin_override(self):
+        # The default check_origin calls check_trusted_origin.
+        yield self.connect_with_headers(
+            "/trusted_override",
+            {"Origin": "http://sub.example.com", "Sec-Fetch-Site": "same-site"},
+        )
+        yield self.assert_rejected(
+            "/trusted_override",
+            {"Origin": "http://evil.example.com", "Sec-Fetch-Site": "cross-site"},
+        )
+
+
 @abstract_base_test
 class CompressionTestMixin(WebSocketBaseTestCase):
     MESSAGE = "Hello world. Testing 123 123"
@@ -799,6 +978,65 @@ class CompressionTestMixin(WebSocketBaseTestCase):
         self.assertIsNone(response)
 
 
+@skipNotCPython
+class CompressedMessageMemoryTest(WebSocketBaseTestCase):
+    MAX_MESSAGE_SIZE = 1024 * 1024
+
+    def get_app(self):
+        return Application(
+            [("/", EchoHandler, dict(compression_options={}))],
+            websocket_max_message_size=self.MAX_MESSAGE_SIZE,
+        )
+
+    @gen_test
+    def test_compression_bomb(self):
+        # A small compressed message that decompresses to far more than
+        # max_message_size must be rejected without decompressing it all
+        # into memory. (Peak memory is about twice max_message_size as of
+        # 2026-10.)
+        ws = yield self.ws_connect("/", compression_options={})
+        message = b"\0" * (16 * self.MAX_MESSAGE_SIZE)
+        with assert_memory_budget(
+            self.MAX_MESSAGE_SIZE,
+            max_ratio=3,
+            msg="Decompressing a message is not bounded by max_message_size",
+        ):
+            ws.write_message(message, binary=True)
+            response = yield ws.read_message()
+        self.assertIsNone(response)
+        self.assertEqual(ws.close_code, 1009)
+
+
+class InvalidCompressedDataTest(WebSocketBaseTestCase):
+    def get_app(self):
+        return Application([("/", EchoHandler, dict(compression_options={}))])
+
+    @gen_test
+    def test_invalid_compressed_data(self):
+        # A compressed message that isn't valid deflate data closes the
+        # connection (and is not logged as an uncaught exception).
+        ws = yield self.ws_connect("/", compression_options={})
+        ws.protocol._write_frame(True, 0x1, b"\xff\xff\xff", flags=ws.protocol.RSV1)
+        response = yield ws.read_message()
+        self.assertIsNone(response)
+        self.assertEqual(ws.close_code, 1007)
+
+    @gen_test
+    def test_control_frame_between_compressed_fragments(self):
+        # Control frames may be interleaved with the fragments of a
+        # message. They are never compressed, so they must not reset the
+        # compression flag taken from the message's first frame.
+        ws = yield self.ws_connect("/", compression_options={})
+        message = "Hello world. Testing 123 123"
+        assert ws.protocol._compressor is not None
+        data = ws.protocol._compressor.compress(message.encode())
+        ws.protocol._write_frame(False, 0x1, data[:5], flags=ws.protocol.RSV1)
+        ws.protocol._write_frame(True, 0x9, b"ping")
+        ws.protocol._write_frame(True, 0x0, data[5:])
+        response = yield ws.read_message()
+        self.assertEqual(response, message)
+
+
 @abstract_base_test
 class UncompressedTestMixin(CompressionTestMixin):
     """Specialization of CompressionTestMixin when we expect no compression."""
@@ -838,6 +1076,143 @@ class DefaultCompressionTest(CompressionTestMixin):
         self.assertEqual(bytes_out, bytes_in + 12)
 
 
+class RawHandshakeMixin(WebSocketBaseTestCase):
+    async def raw_handshake(
+        self, extensions: str, path: str = "/echo"
+    ) -> tuple[str, HTTPHeaders]:
+        stream = IOStream(socket.socket())
+        self.conns_to_close.append(stream)
+        await stream.connect(("127.0.0.1", self.get_http_port()))
+        stream.write(
+            b"GET " + path.encode() + b" HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+            b"Upgrade: websocket\r\nConnection: Upgrade\r\n"
+            b"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+            b"Sec-WebSocket-Version: 13\r\n"
+            b"Sec-WebSocket-Extensions: " + extensions.encode() + b"\r\n\r\n"
+        )
+        data = await stream.read_until(b"\r\n\r\n")
+        start_line, _, headers = data.decode().partition("\r\n")
+        return start_line, HTTPHeaders.parse(headers)
+
+    async def handshake(self, extensions: str) -> HTTPHeaders:
+        start_line, headers = await self.raw_handshake(extensions)
+        self.assertEqual(start_line, "HTTP/1.1 101 Switching Protocols")
+        return headers
+
+
+class InvalidCompressionOfferTest(RawHandshakeMixin):
+    def get_app(self):
+        return Application([("/echo", EchoHandler, dict(compression_options={}))])
+
+    @gen_test
+    async def test_invalid_offers(self):
+        # The server declines offers it can't accept, as RFC 7692 requires,
+        # instead of failing the handshake.
+        for params in [
+            "server_max_window_bits=abc",
+            "server_max_window_bits=16",
+            "server_max_window_bits=8",  # newer zlibs can't compress with 8
+            "client_max_window_bits=7",
+            "server_max_window_bits=" + "1" * 5000,
+            "foo=1",
+            "server_max_window_bits=+15",
+            "server_max_window_bits=1_5",
+            "server_max_window_bits*=utf-8''15%0A",
+            "server_max_window_bits*=utf-8''15%0D%0AX-Injected:%20y",
+            "server_no_context_takeover=1",
+            "client_no_context_takeover*=utf-8''%0D%0AX-Injected:%20y",
+        ]:
+            with self.subTest(params[:40]):
+                headers = await self.handshake("permessage-deflate; " + params)
+                self.assertNotIn("Sec-WebSocket-Extensions", headers)
+
+    @gen_test
+    async def test_malformed_extensions_header(self):
+        # Headers that _parse_header rejects with ValueError used to become a
+        # 500 response and an error log. Now all extensions are declined, so
+        # the handshake succeeds without them. The mixed RFC 2231
+        # continuations only fail before Python 3.13.5, which accepts them
+        # (and then declines the unknown parameter).
+        for extensions in [
+            "permessage-deflate; a*=1; a*1=2",
+            "x; a*=1; a*1=2",
+            "permessage-deflate; a*=idna''%ff",
+            "x; a*=idna''%ff",
+            "permessage-deflate, x; a*=idna''%ff",
+        ]:
+            with self.subTest(extensions):
+                headers = await self.handshake(extensions)
+                self.assertNotIn("Sec-WebSocket-Extensions", headers)
+
+    @gen_test
+    async def test_second_offer_accepted(self):
+        headers = await self.handshake(
+            "permessage-deflate; server_max_window_bits=abc, permessage-deflate"
+        )
+        self.assertEqual(headers["Sec-WebSocket-Extensions"], "permessage-deflate")
+
+    @gen_test
+    async def test_no_context_takeover_accepted(self):
+        # Valueless parameters are accepted and echoed back.
+        headers = await self.handshake(
+            "permessage-deflate; server_no_context_takeover; client_no_context_takeover"
+        )
+        self.assertEqual(
+            headers["Sec-WebSocket-Extensions"],
+            "permessage-deflate; client_no_context_takeover; server_no_context_takeover",
+        )
+
+
+class HandshakeValueErrorTest(RawHandshakeMixin):
+    def get_app(self):
+        class Handler(EchoHandler):
+            def set_header(self, name, value):
+                if name == "Sec-WebSocket-Extensions":
+                    raise ValueError("simulated invalid header")
+                super().set_header(name, value)
+
+        return Application([("/echo", Handler, dict(compression_options={}))])
+
+    @gen_test
+    async def test_value_error_before_upgrade(self):
+        # A ValueError raised before the connection is upgraded used to
+        # crash in _abort() (there is no stream yet), producing a 500 and
+        # an error log. Now it's a 400.
+        start_line, headers = await self.raw_handshake("permessage-deflate")
+        self.assertEqual(start_line, "HTTP/1.1 400 Bad Request")
+        self.assertNotIn("Upgrade", headers)
+        self.assertNotIn("Sec-WebSocket-Accept", headers)
+
+
+class ClientNoContextTakeoverTest(WebSocketBaseTestCase):
+    MESSAGE = "Hello world. Testing 123 123"
+
+    def get_app(self):
+        class Handler(EchoHandler):
+            def set_header(self, name, value):
+                # Our client doesn't offer client_no_context_takeover, but
+                # a server may require it anyway.
+                if name == "Sec-WebSocket-Extensions":
+                    value += "; client_no_context_takeover"
+                super().set_header(name, value)
+
+        return Application([("/", Handler, dict(compression_options={}))])
+
+    @gen_test
+    def test_client_no_context_takeover(self):
+        ws = yield self.ws_connect("/", compression_options={})
+        self.assertIsNotNone(ws.protocol._compressor)
+        sizes = []
+        for i in range(3):
+            before = ws.protocol._wire_bytes_out
+            ws.write_message(self.MESSAGE)
+            response = yield ws.read_message()
+            self.assertEqual(response, self.MESSAGE)
+            sizes.append(ws.protocol._wire_bytes_out - before)
+        # Without context takeover, repeated messages don't get smaller.
+        self.assertEqual(sizes, [sizes[0]] * 3)
+
+
 @abstract_base_test
 class MaskFunctionMixin(TestCase):
     # Subclasses should define self.mask(mask, data)
@@ -861,6 +1236,15 @@ class MaskFunctionMixin(TestCase):
             b"\xff\xfa\xff\xff\xfb\xfe",
         )
 
+    def test_lengths(self: typing.Any):
+        # Cover every alignment of the tail as well as longer inputs.
+        mask = b"\x9b\x31\xe7\x04"
+        for n in list(range(40)) + [255, 256, 1000, 65537]:
+            data = bytes((i * 7 + 3) & 0xFF for i in range(n))
+            expected = bytes(b ^ mask[i % 4] for i, b in enumerate(data))
+            with self.subTest(n=n):
+                self.assertEqual(self.mask(mask, data), expected)
+
     def test_length_validation(self: typing.Any):
         # Test all lengths of mask that are not 4 bytes.
         for mask in (b"", b"a", b"ab", b"abc", b"abcde", b"abcdef"):
@@ -869,9 +1253,14 @@ class MaskFunctionMixin(TestCase):
                     self.mask(mask, b"data asdf")
 
 
-class PythonMaskFunctionTest(MaskFunctionMixin):
+class PythonIntMaskFunctionTest(MaskFunctionMixin):
     def mask(self, mask, data):
-        return _websocket_mask_python(mask, data)
+        return _websocket_mask_int(mask, data)
+
+
+class PythonLoopMaskFunctionTest(MaskFunctionMixin):
+    def mask(self, mask, data):
+        return _websocket_mask_loop(mask, data)
 
 
 @unittest.skipIf(speedups is None, "tornado.speedups module not present")
@@ -997,6 +1386,142 @@ class ServerPingTimeoutTest(WebSocketBaseTestCase):
         self.assertEqual(ws.protocol.close_code, 1000)
 
 
+class UnawaitedWriteTest(WebSocketBaseTestCase):
+    # Awaiting the Future returned by write_message is optional, so a write
+    # that fails because the connection closed before it was sent must not
+    # be logged as an unretrieved exception if nobody awaits it.
+    def get_app(self):
+        test = self
+        self.handler_future: Future[WebSocketHandler] = Future()
+
+        class Handler(TestWebSocketHandler):
+            def open(self):
+                test.handler_future.set_result(self)
+
+        return Application([("/", Handler)])
+
+    def write_then_close(self, handler):
+        # Larger than the socket buffers, so part of it is still unsent
+        # (the client never reads) when the connection closes.
+        handler.write_message(b"x" * (16 << 20), binary=True)
+        handler.ws_connection.stream.close()
+
+    @gen_test
+    def test_unawaited_write_on_closed_connection(self):
+        errors = []
+        asyncio.get_running_loop().set_exception_handler(
+            lambda loop, context: errors.append(context)
+        )
+        ws = yield self.ws_connect("/")
+        handler = yield self.handler_future
+        self.write_then_close(handler)
+        yield ws.read_message()
+        for i in range(3):
+            yield gen.moment
+        gc.collect()
+        self.assertEqual(errors, [])
+
+    @gen_test
+    def test_awaited_write_on_closed_connection(self):
+        # Awaiting the Future still raises WebSocketClosedError.
+        ws = yield self.ws_connect("/")
+        handler = yield self.handler_future
+        fut = handler.write_message(b"x" * (16 << 20), binary=True)
+        handler.ws_connection.stream.close()
+        with self.assertRaises(WebSocketClosedError):
+            yield fut
+        yield ws.read_message()
+
+
+class FloodTest(WebSocketBaseTestCase):
+    def get_app(self):
+        test = self
+        self.handler_future: Future[WebSocketHandler] = Future()
+        self.pings: list[bytes] = []
+        self.num_messages = 0
+
+        class Handler(TestWebSocketHandler):
+            def open(self):
+                test.handler_future.set_result(self)
+
+            def on_message(self, message):
+                test.num_messages += 1
+
+            def on_ping(self, data):
+                test.pings.append(data)
+
+        return Application([("/", Handler)])
+
+    @gen_test
+    def test_many_small_messages_yield(self):
+        # Reading many small frames that have all arrived at once yields
+        # to the IOLoop periodically instead of blocking it until they have
+        # all been processed.
+        num_messages = 5000
+        # Masked binary frames with a one-byte payload and an all-zero mask.
+        frames = b"\x82\x81\x00\x00\x00\x00x" * num_messages
+        stream = IOStream(socket.socket())
+        self.conns_to_close.append(stream)
+        yield stream.connect(("127.0.0.1", self.get_http_port()))
+        stream.write(
+            b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\n"
+            b"Connection: Upgrade\r\nSec-WebSocket-Version: 13\r\n"
+            b"Sec-WebSocket-Key: MDEyMzQ1Njc4OWFiY2RlZg==\r\n\r\n" + frames
+        )
+        yield self.handler_future
+
+        ticks = [0]
+
+        def tick():
+            if self.num_messages < num_messages:
+                ticks[0] += 1
+                self.io_loop.add_callback(tick)
+
+        tick()
+        while self.num_messages < num_messages:
+            yield gen.sleep(0.01)
+        self.assertGreater(ticks[0], 10)
+
+    @gen_test
+    def test_pong_most_recent_ping(self):
+        # While a pong is waiting to be sent, we only respond to the most
+        # recent of any further pings.
+        ws = yield self.ws_connect("/")
+        handler = yield self.handler_future
+        protocol = handler.ws_connection
+        assert protocol is not None
+        written: list[tuple[int, bytes]] = []
+        write_futures: list[Future[None]] = []
+
+        def write_frame(fin, opcode, data, flags=0):
+            written.append((opcode, data))
+            write_futures.append(Future())
+            return write_futures[-1]
+
+        protocol._write_frame = write_frame
+
+        for data in [b"1", b"2", b"3"]:
+            ws.ping(data)
+        while len(self.pings) < 3:
+            yield gen.sleep(0.01)
+        self.assertEqual(self.pings, [b"1", b"2", b"3"])
+        # Only the first pong has been written; the second is skipped and the
+        # third is sent once the first has been.
+        self.assertEqual(written, [(0xA, b"1")])
+        write_futures[0].set_result(None)
+        yield gen.moment
+        self.assertEqual(written, [(0xA, b"1"), (0xA, b"3")])
+        write_futures[1].set_result(None)
+        yield gen.moment
+        self.assertEqual(written, [(0xA, b"1"), (0xA, b"3")])
+
+        # Once nothing is outstanding, pings are answered immediately.
+        ws.ping(b"4")
+        while len(self.pings) < 4:
+            yield gen.sleep(0.01)
+        self.assertEqual(written[-1], (0xA, b"4"))
+
+
 class PingCalculationTest(TestCase):
     def test_ping_sleep_time(self):
         from tornado.websocket import WebSocketProtocol13
@@ -1059,3 +1584,109 @@ class MaxMessageSizeTest(WebSocketBaseTestCase):
         self.assertEqual(ws.close_reason, "message too big")
         # TODO: Needs tests of messages split over multiple
         # continuation frames.
+
+
+class FakeHandshakeServer(TCPServer):
+    """Answers a websocket handshake request with a fixed 101 response."""
+
+    def __init__(
+        self,
+        connection: bytes = b"Upgrade",
+        upgrade: bytes = b"websocket",
+        accept: bytes | None = None,
+        extra: bytes = b"",
+    ) -> None:
+        super().__init__()
+        self.connection = connection
+        self.upgrade = upgrade
+        self.accept = accept
+        self.extra = extra
+        # Set when the handler for the client connection has finished.
+        self.handler_future: Future[None] = Future()
+
+    async def handle_stream(self, stream: IOStream, address: typing.Any) -> None:
+        try:
+            request = await stream.read_until(b"\r\n\r\n")
+            key = b""
+            for line in request.split(b"\r\n"):
+                name, _, value = line.partition(b":")
+                if name.strip().lower() == b"sec-websocket-key":
+                    key = value.strip()
+            accept = self.accept
+            if accept is None:
+                from tornado.websocket import WebSocketProtocol13
+
+                accept = WebSocketProtocol13.compute_accept_value(key).encode()
+            stream.write(
+                b"HTTP/1.1 101 Switching Protocols\r\n"
+                b"Upgrade: " + self.upgrade + b"\r\n"
+                b"Connection: " + self.connection + b"\r\n"
+                b"Sec-WebSocket-Accept: " + accept + b"\r\n" + self.extra + b"\r\n"
+            )
+            await stream.read_until_close()
+        finally:
+            self.handler_future.set_result(None)
+
+
+class WebSocketClientHandshakeTest(AsyncTestCase):
+    def setUp(self):
+        super().setUp()
+        self.servers = []
+
+    def tearDown(self):
+        for server in self.servers:
+            server.stop()
+        super().tearDown()
+
+    def start_fake_server(
+        self, **kwargs: typing.Any
+    ) -> tuple[FakeHandshakeServer, int]:
+        server = FakeHandshakeServer(**kwargs)
+        sock, port = bind_unused_port()
+        server.add_socket(sock)
+        self.servers.append(server)
+        return server, port
+
+    @gen_test
+    def test_connection_header_token_list(self):
+        # RFC 6455 section 4.1: Connection is a comma-separated token list,
+        # so common values like "keep-alive, Upgrade" must be accepted.
+        server, port = self.start_fake_server(connection=b"keep-alive, Upgrade")
+        ws = yield websocket_connect("ws://127.0.0.1:%d/" % port)
+        self.assertEqual(ws.headers["Connection"], "keep-alive, Upgrade")
+        ws.close()
+        ws.stream.close()
+        yield server.handler_future
+
+    @gen_test
+    def test_upgrade_header_case_insensitive(self):
+        server, port = self.start_fake_server(upgrade=b"WebSocket")
+        ws = yield websocket_connect("ws://127.0.0.1:%d/" % port)
+        ws.close()
+        ws.stream.close()
+        yield server.handler_future
+
+    @gen_test
+    def test_connection_header_without_upgrade_token(self):
+        server, port = self.start_fake_server(connection=b"keep-alive")
+        with self.assertRaises(WebSocketError) as cm:
+            yield websocket_connect("ws://127.0.0.1:%d/" % port)
+        self.assertIn("Connection", str(cm.exception))
+        yield server.handler_future
+
+    @gen_test
+    def test_invalid_accept_header(self):
+        server, port = self.start_fake_server(accept=b"invalid")
+        with self.assertRaises(WebSocketError) as cm:
+            yield websocket_connect("ws://127.0.0.1:%d/" % port)
+        self.assertIn("Sec-WebSocket-Accept", str(cm.exception))
+        yield server.handler_future
+
+    @gen_test
+    def test_unsupported_extension(self):
+        server, port = self.start_fake_server(
+            extra=b"Sec-WebSocket-Extensions: x-unknown\r\n"
+        )
+        with self.assertRaises(WebSocketError):
+            yield websocket_connect("ws://127.0.0.1:%d/" % port)
+        yield server.handler_future

@@ -19,6 +19,7 @@ import weakref
 
 from tornado import gen
 from tornado.escape import utf8
+from tornado.httpclient import HTTPError
 from tornado.log import app_log
 from tornado.netutil import ssl_options_to_context
 from tornado.test import httpclient_test
@@ -26,6 +27,7 @@ from tornado.test.util import (
     AsyncHTTPSTestCase,
     AsyncHTTPTestCase,
     AsyncTestCase,
+    curl_uses_schannel,
     skipNotCPython,
 )
 from tornado.testing import ExpectLog
@@ -52,9 +54,6 @@ def create_client(**kwargs):
 
 @unittest.skipIf(pycurl is None, "pycurl module not present")
 class CurlHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
-    # libcurl decodes the Content-Encoding named by the response whether or
-    # not we listed it in Accept-Encoding, so brotli is reachable whenever
-    # libcurl was built with it (which is common).
     decompresses_brotli = pycurl is not None and "brotli" in pycurl.version
 
     def get_http_client(self):
@@ -62,6 +61,17 @@ class CurlHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
         # make sure AsyncHTTPClient magic doesn't give us the wrong class
         self.assertTrue(isinstance(client, CurlAsyncHTTPClient))
         return client
+
+    def test_unexpected_encoding_refused(self):
+        # libcurl would decode this gzip response even though only deflate
+        # was requested, so it must be refused instead.
+        with self.assertRaises(HTTPError) as cm:
+            self.fetch(
+                "/gzip_bomb?size=1024",
+                decompress_response={"deflate"},
+                raise_error=True,
+            )
+        self.assertIn("Content-Encoding 'gzip'", str(cm.exception))
 
     def test_streaming_pause_and_resume(self):
         # With a small buffer the transfer is paused and resumed many times
@@ -139,9 +149,10 @@ class CurlHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
 
 
 class DigestAuthHandler(RequestHandler):
-    def initialize(self, username, password):
+    def initialize(self, username, password, charset=None):
         self.username = username
         self.password = password
+        self.charset = charset
 
     def get(self):
         realm = "test"
@@ -173,10 +184,10 @@ class DigestAuthHandler(RequestHandler):
                 self.write("fail")
         else:
             self.set_status(401)
-            self.set_header(
-                "WWW-Authenticate",
-                f'Digest realm="{realm}", nonce="{nonce}", opaque="{opaque}"',
-            )
+            challenge = f'Digest realm="{realm}", nonce="{nonce}", opaque="{opaque}"'
+            if self.charset is not None:
+                challenge += f', charset="{self.charset}"'
+            self.set_header("WWW-Authenticate", challenge)
 
 
 class CustomReasonHandler(RequestHandler):
@@ -189,8 +200,15 @@ class CustomFailReasonHandler(RequestHandler):
         self.set_status(400, "Custom reason")
 
 
+class NonUtf8HeaderHandler(RequestHandler):
+    def get(self):
+        self.set_header("X-Test", "caf\u00e9")
+
+
 @unittest.skipIf(pycurl is None, "pycurl module not present")
 class CurlHTTPClientTestCase(AsyncHTTPTestCase):
+    http_client: "CurlAsyncHTTPClient"
+
     def setUp(self):
         super().setUp()
         self.http_client = create_client()
@@ -202,10 +220,16 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
                 (
                     "/digest_non_ascii",
                     DigestAuthHandler,
-                    {"username": "foo", "password": "barユ£"},
+                    # Without charset="UTF-8" (RFC 7616 section 3.3), the
+                    # encoding of non-ascii credentials is unspecified. Libcurl
+                    # uses UTF-8 by default, but on windows it delegates digest
+                    # auth to SSPI, which uses ISO-8859-1 and fails if the
+                    # password cannot be encoded that way.
+                    {"username": "foo", "password": "barユ£", "charset": "UTF-8"},
                 ),
                 ("/custom_reason", CustomReasonHandler),
                 ("/custom_fail_reason", CustomFailReasonHandler),
+                ("/non_utf8_header", NonUtf8HeaderHandler),
             ]
         )
 
@@ -218,6 +242,49 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
     def test_custom_reason(self):
         response = self.fetch("/custom_reason")
         self.assertEqual(response.reason, "Custom reason")
+
+    def test_debug_non_utf8(self):
+        for debug_type, prefix in ((0, ""), (1, "< "), (2, "> ")):
+            with self.subTest(debug_type=debug_type):
+                with self.assertLogs("tornado.curl_httpclient", "DEBUG") as logs:
+                    self.http_client._curl_debug(debug_type, b"caf\xe9\r\n\x00\xff")
+                self.assertEqual(
+                    [record.getMessage() for record in logs.records],
+                    [prefix + "b'caf\\xe9\\r\\n\\x00\\xff'"],
+                )
+
+    def test_debug_utf8(self):
+        for debug_type, expected in (
+            (0, ["caf\u00e9\r\nsecond"]),
+            (1, ["< caf\u00e9", "< second"]),
+            (2, ["> caf\u00e9", "> second"]),
+        ):
+            with self.subTest(debug_type=debug_type):
+                with self.assertLogs("tornado.curl_httpclient", "DEBUG") as logs:
+                    self.http_client._curl_debug(
+                        debug_type, utf8("caf\u00e9\r\nsecond\r\n")
+                    )
+                self.assertEqual(
+                    [record.getMessage() for record in logs.records], expected
+                )
+
+    def test_debug_binary_data(self):
+        with self.assertLogs("tornado.curl_httpclient", "DEBUG") as logs:
+            for debug_type in (3, 4, 5, 6):
+                self.http_client._curl_debug(debug_type, b"\x00\xff")
+        self.assertEqual(
+            [record.getMessage() for record in logs.records], ["> b'\\x00\\xff'"]
+        )
+
+    def test_debug_non_utf8_response_header(self):
+        with self.assertLogs("tornado.curl_httpclient", "DEBUG") as logs:
+            response = self.fetch("/non_utf8_header")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.headers["X-Test"], "caf\u00e9")
+        self.assertIn(
+            "< b'X-Test: caf\\xe9\\r\\n'",
+            [record.getMessage() for record in logs.records],
+        )
 
     def test_fail_custom_reason(self):
         response = self.fetch("/custom_fail_reason")
@@ -333,6 +400,9 @@ class ClientCertEchoHandler(RequestHandler):
 
 
 @unittest.skipIf(pycurl is None, "pycurl module not present")
+@unittest.skipIf(
+    curl_uses_schannel(), "schannel cannot load PEM client certificates from files"
+)
 class CurlHTTPClientReuseCertsTestCase(AsyncHTTPSTestCase):
     def setUp(self):
         self.enterContext(_ignore_proxy_env_vars())

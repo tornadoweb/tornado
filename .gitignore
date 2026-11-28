@@ -15,3 +15,8 @@ MANIFEST
 # Used in demo apps
 secrets.cfg
 .mypy_cache/
+.hypothesis/
+
+# Fuzzer working directories (see maint/fuzz/README.md)
+/maint/fuzz/corpus/
+/maint/fuzz/artifacts/

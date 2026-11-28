@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import asyncio
 import collections
 import datetime
 import types
@@ -35,7 +36,7 @@ class _TimeoutGarbageCollector:
     """
 
     def __init__(self) -> None:
-        self._waiters: collections.deque[Future] = collections.deque()
+        self._waiters: collections.deque[Future[Any]] = collections.deque()
         self._timeouts = 0
 
     def _garbage_collect(self) -> None:
@@ -233,7 +234,7 @@ class Event:
     ) -> Awaitable[None]:
         """Block until the internal flag is true.
 
-        Returns an awaitable, which raises `tornado.util.TimeoutError` after a
+        Returns an awaitable, which raises `TimeoutError` after a
         timeout.
 
         .. versionchanged:: 6.6
@@ -421,7 +422,7 @@ class Semaphore(_TimeoutGarbageCollector):
         """Decrement the counter. Returns an awaitable.
 
         Block if the counter is zero and wait for a `.release`. The awaitable
-        raises `.TimeoutError` after the deadline.
+        raises `TimeoutError` after the deadline.
 
         .. versionchanged:: 6.6
            A ``timeout`` argument of zero will either return or raise immediately.
@@ -437,7 +438,7 @@ class Semaphore(_TimeoutGarbageCollector):
 
                 def on_timeout() -> None:
                     if not waiter.done():
-                        waiter.set_exception(gen.TimeoutError())
+                        waiter.set_exception(TimeoutError())
                     self._garbage_collect()
 
                 io_loop = ioloop.IOLoop.current()
@@ -459,7 +460,15 @@ class Semaphore(_TimeoutGarbageCollector):
         self.__enter__()
 
     async def __aenter__(self) -> None:
-        await self.acquire()
+        waiter = asyncio.ensure_future(self.acquire())
+        try:
+            await waiter
+        except asyncio.CancelledError:
+            # A release may have handed us the permit before cancellation
+            # prevented entry into the context (and thus __aexit__).
+            if not waiter.cancelled():
+                self.release()
+            raise
 
     async def __aexit__(
         self,
@@ -538,7 +547,7 @@ class Lock:
     ) -> Awaitable[_ReleasingContextManager]:
         """Attempt to lock. Returns an awaitable.
 
-        Returns an awaitable, which raises `tornado.util.TimeoutError` after a
+        Returns an awaitable, which raises `TimeoutError` after a
         timeout.
 
         .. versionchanged:: 6.6
@@ -571,7 +580,15 @@ class Lock:
         self.__enter__()
 
     async def __aenter__(self) -> None:
-        await self.acquire()
+        waiter = asyncio.ensure_future(self.acquire())
+        try:
+            await waiter
+        except asyncio.CancelledError:
+            # A release may have handed us the permit before cancellation
+            # prevented entry into the context (and thus __aexit__).
+            if not waiter.cancelled():
+                self.release()
+            raise
 
     async def __aexit__(
         self,

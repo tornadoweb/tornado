@@ -87,6 +87,7 @@ setuptools.setup(
         "tornado": ["py.typed"],
         "tornado.test": [
             "README",
+            "api.txt",
             "csv_translations/fr_FR.csv",
             "gettext_translations/fr_FR/LC_MESSAGES/tornado_test.mo",
             "gettext_translations/fr_FR/LC_MESSAGES/tornado_test.po",
@@ -127,6 +128,7 @@ setuptools.setup(
         "Programming Language :: Python :: 3.13",
         "Programming Language :: Python :: 3.14",
         "Programming Language :: Python :: 3.15",
+        "Programming Language :: Python :: 3.16",
         # [[[end]]]
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python :: Implementation :: PyPy",

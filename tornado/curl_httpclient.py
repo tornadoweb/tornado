@@ -43,6 +43,20 @@ curl_log = logging.getLogger("tornado.curl_httpclient")
 
 CR_OR_LF_RE = re.compile(b"\r|\n")
 
+# The content-codings libcurl can decode, keyed by the name of the library
+# that implements each one as it appears in pycurl.version.
+_CURL_ENCODING_LIBRARIES = {
+    "gzip": "zlib",
+    "deflate": "zlib",
+    "br": "brotli",
+    "zstd": "zstd",
+}
+_CURL_SUPPORTED_ENCODINGS = frozenset(
+    encoding
+    for encoding, library in _CURL_ENCODING_LIBRARIES.items()
+    if re.search(r"(^|\s)%s/" % library, pycurl.version)
+)
+
 
 class _CurlStreamingBuffer:
     """Delivers response body chunks from libcurl to a ``streaming_callback``.
@@ -331,11 +345,12 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                     "buffer": BytesIO(),
                     "streaming_buffer": None,
                     "body_too_large": False,
+                    "unexpected_encoding": None,
                     "request": request,
                     "callback": callback,
                     "queue_start_time": queue_start_time,
                     "curl_start_time": time.time(),
-                    "curl_start_ioloop_time": self.io_loop.current().time(),  # type: ignore
+                    "curl_start_ioloop_time": self.io_loop.current().time(),
                 }
                 try:
                     self._curl_setup_request(
@@ -387,6 +402,11 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             if body_too_large:
                 curl_message = "body exceeded max_body_size of %d bytes" % (
                     self.max_body_size,
+                )
+            elif info["unexpected_encoding"] is not None:
+                curl_message = (
+                    "Content-Encoding %r not enabled by decompress_response"
+                    % (info["unexpected_encoding"],)
                 )
             error: CurlError | None = CurlError(curl_error, curl_message)
             assert error is not None
@@ -447,13 +467,12 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if curl_log.isEnabledFor(logging.DEBUG):
             curl.setopt(pycurl.VERBOSE, 1)
             curl.setopt(pycurl.DEBUGFUNCTION, self._curl_debug)
-        if hasattr(
-            pycurl, "PROTOCOLS"
-        ):  # PROTOCOLS first appeared in pycurl 7.19.5 (2014-07-12)
-            curl.setopt(pycurl.PROTOCOLS, pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS)
-            curl.setopt(pycurl.REDIR_PROTOCOLS, pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS)
+        curl.setopt(pycurl.PROTOCOLS, pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS)
+        curl.setopt(pycurl.REDIR_PROTOCOLS, pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS)
 
-        curl.setopt(pycurl.URL, native_str(request.url))
+        # libcurl only accepts ASCII URLs (and only converts IDN hostnames when
+        # it is built with IDN support), so do the conversion ourselves.
+        curl.setopt(pycurl.URL, httputil._url_to_ascii(native_str(request.url)))
 
         # libcurl's magic "Expect: 100-continue" behavior causes delays
         # with servers that don't support it (which include, among others,
@@ -462,8 +481,11 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         # (https://sourceforge.net/tracker/?func=detail&atid=100976&aid=3039744&group_id=976),
         # which increases the delays.  It's more trouble than it's worth,
         # so just turn off the feature (yes, setting Expect: to an empty
-        # value is the official way to disable this)
-        if "Expect" not in request.headers:
+        # value is the official way to disable this) unless the caller asked
+        # for it.
+        if request.expect_100_continue:
+            request.headers["Expect"] = "100-continue"
+        elif "Expect" not in request.headers:
             request.headers["Expect"] = ""
 
         # libcurl adds Pragma: no-cache by default; disable that too
@@ -480,10 +502,19 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 raise ValueError("Illegal characters in header (CR or LF): %r" % line)
         curl.setopt(pycurl.HTTPHEADER, encoded_headers)
 
+        decompress_encodings = httputil._decompress_encodings(
+            request.decompress_response,
+            {"gzip", "deflate"},
+            _CURL_SUPPORTED_ENCODINGS,
+        )
         curl.setopt(
             pycurl.HEADERFUNCTION,
             functools.partial(
-                self._curl_header_callback, headers, request.header_callback
+                self._curl_header_callback,
+                headers,
+                request.header_callback,
+                decompress_encodings,
+                curl.info,  # type: ignore
             ),
         )
         write_function: Callable[[bytes], int]
@@ -531,9 +562,10 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             curl.setopt(pycurl.USERAGENT, "Mozilla/5.0 (compatible; pycurl)")
         if request.network_interface:
             curl.setopt(pycurl.INTERFACE, request.network_interface)
-        if request.decompress_response:
-            curl.setopt(pycurl.ENCODING, "gzip,deflate")
+        if decompress_encodings:
+            curl.setopt(pycurl.ENCODING, ",".join(sorted(decompress_encodings)))
         else:
+            # With no ENCODING, libcurl ignores Content-Encoding entirely.
             curl.setopt(pycurl.ENCODING, None)
         if request.proxy_host and request.proxy_port:
             curl.setopt(pycurl.PROXY, request.proxy_host)
@@ -688,8 +720,10 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         self,
         headers: httputil.HTTPHeaders,
         header_callback: Callable[[str], None] | None,
+        decompress_encodings: frozenset[str],
+        info: dict[str, Any],
         header_line_bytes: bytes,
-    ) -> None:
+    ) -> int | None:
         header_line = native_str(header_line_bytes.decode("latin1"))
         if header_callback is not None:
             self.io_loop.add_callback(header_callback, header_line)
@@ -704,20 +738,37 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 )
                 header_line = "X-Http-Reason: %s" % reason
             except httputil.HTTPInputError:
-                return
+                return None
         if not header_line:
-            return
+            return None
         headers.parse_line(header_line)
+        if decompress_encodings and "Content-Encoding" in headers:
+            # Once decoding is enabled at all, libcurl decodes whichever
+            # encoding the response names, whether or not we asked for it.
+            # Refuse the response before any of its body reaches a decoder
+            # we did not choose to expose.
+            for encoding in headers["Content-Encoding"].split(","):
+                encoding = encoding.strip().lower()
+                if encoding not in decompress_encodings | {"", "identity"}:
+                    info["unexpected_encoding"] = encoding
+                    # Returning anything but the length of the line (or
+                    # None) makes libcurl fail the transfer.
+                    return 0
+        return None
 
-    def _curl_debug(self, debug_type: int, debug_msg: str) -> None:
+    def _curl_debug(self, debug_type: int, debug_msg: bytes) -> None:
         debug_types = ("I", "<", ">", "<", ">")
-        if debug_type == 0:
-            debug_msg = native_str(debug_msg)
-            curl_log.debug("%s", debug_msg.strip())
-        elif debug_type in (1, 2):
-            debug_msg = native_str(debug_msg)
-            for line in debug_msg.splitlines():
-                curl_log.debug("%s %s", debug_types[debug_type], line)
+        if debug_type in (0, 1, 2):
+            try:
+                message = native_str(debug_msg)
+            except UnicodeDecodeError:
+                # libcurl's debug messages are not necessarily UTF-8.
+                message = repr(debug_msg)
+            if debug_type == 0:
+                curl_log.debug("%s", message.strip())
+            else:
+                for line in message.splitlines():
+                    curl_log.debug("%s %s", debug_types[debug_type], line)
         elif debug_type == 4:
             curl_log.debug("%s %r", debug_types[debug_type], debug_msg)
 
