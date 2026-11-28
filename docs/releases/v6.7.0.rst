@@ -257,6 +257,16 @@ Type annotation changes
 
 - When a task waiting to enter ``async with`` on a `.Semaphore` or `.Lock` is cancelled after
   the lock has been handed to it, the lock is now released instead of being held forever.
+- The same now holds for a bare ``await semaphore.acquire()`` or ``await lock.acquire()``:
+  a task cancelled after the lock was handed over releases it instead of leaking it.
+
+`tornado.queues`
+~~~~~~~~~~~~~~~~
+
+- Cancelling a task that is waiting in ``await queue.get()`` after an item has been handed
+  to it now puts the item back in the queue, or passes it to the next waiting getter,
+  instead of losing it. Previously the item stayed counted as unfinished, so
+  ``queue.join()`` never completed (#2826).
 
 `tornado.platform.asyncio`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

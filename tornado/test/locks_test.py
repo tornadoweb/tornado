@@ -583,5 +583,32 @@ class AsyncContextManagerCancellationTest(AsyncTestCase):
                     successor.cancel()
 
 
+class AcquireCancellationTest(AsyncTestCase):
+    """A bare ``await acquire()`` must not lose a permit it was handed."""
+
+    @gen_test
+    async def test_cancel_after_handoff_keeps_permit(self):
+        for cls in (locks.Semaphore, locks.BoundedSemaphore, locks.Lock):
+            with self.subTest(primitive=cls.__name__):
+                primitive = cls()
+                await primitive.acquire()
+
+                async def worker():
+                    return await primitive.acquire()
+
+                task = asyncio.create_task(worker())
+                await asyncio.sleep(0)  # the waiter is registered
+                primitive.release()  # the permit is handed to the waiter
+                task.cancel()  # before it can return the permit
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+                # The permit was not lost, and it was released exactly once: a
+                # BoundedSemaphore raises ValueError on a double release.
+                successor = asyncio.ensure_future(primitive.acquire())
+                self.assertTrue(successor.done())
+                await successor
+                primitive.release()
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -27,10 +27,11 @@ to those provided in the standard library's `asyncio package
 
 from __future__ import annotations
 
+import asyncio
 import collections
 import datetime
 import heapq
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Generator
 from typing import Any, Generic, TypeVar
 
 from tornado import ioloop
@@ -66,6 +67,28 @@ def _set_timeout(
         io_loop = ioloop.IOLoop.current()
         timeout_handle = io_loop.add_timeout(timeout, on_timeout)
         future.add_done_callback(lambda _: io_loop.remove_timeout(timeout_handle))
+
+
+class _QueueGetter(Future[_T]):
+    """A pending `.Queue.get()` that puts its item back if it is cancelled.
+
+    `Queue.put_nowait` hands an item to a waiting getter by setting the getter's
+    result, but the task awaiting it can be cancelled before it returns. The
+    item has already been taken out of the queue and counted as unfinished, so
+    without this it is lost and `Queue.join` never completes.
+    """
+
+    def __init__(self, queue: "Queue[_T]") -> None:
+        super().__init__()
+        self.queue = queue
+
+    def __await__(self) -> Generator[Any, None, _T]:
+        try:
+            return (yield from super().__await__())
+        except asyncio.CancelledError:
+            if self.done() and not self.cancelled() and self.exception() is None:
+                self.queue._put_back(self.result())
+            raise
 
 
 class _QueueIterator(Generic[_T]):
@@ -249,8 +272,12 @@ class Queue(Generic[_T]):
         .. versionchanged:: 6.6
            A ``timeout`` argument of zero will either return or raise immediately.
            Previously, zero was treated equivalent to ``None`` (wait forever).
+
+        .. versionchanged:: 6.7
+           Cancelling the await returns the item to the queue, or to the next
+           waiting getter, instead of losing it.
         """
-        future: Future[_T] = Future()
+        future: Future[_T] = _QueueGetter(self)
         try:
             future.set_result(self.get_nowait())
         except QueueEmpty:
@@ -327,6 +354,23 @@ class Queue(Generic[_T]):
     def __put_internal(self, item: _T) -> None:
         self._unfinished_tasks += 1
         self._finished.clear()
+        self._put(item)
+
+    def _put_back(self, item: _T) -> None:
+        """Return an item whose getter was cancelled before it could return it.
+
+        The item is offered to the next waiting getter, or put back in the queue.
+        It was counted as unfinished when it was first put and is still
+        unfinished, so the count (and `join`) is left alone.
+        """
+        self._consume_expired()
+        while self._getters:
+            getter = self._getters.popleft()
+            if getter.done():
+                continue
+            future_set_result_unless_cancelled(getter, item)
+            if not getter.cancelled():
+                return
         self._put(item)
 
     def _consume_expired(self) -> None:
