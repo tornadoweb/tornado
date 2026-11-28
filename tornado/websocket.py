@@ -231,6 +231,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
     ) -> None:
         super().__init__(application, request, **kwargs)
         self.ws_connection: WebSocketProtocol | None = None
+        self._closing_ws_connection: WebSocketProtocol | None = None
         self.close_code: int | None = None
         self.close_reason: str | None = None
         self._on_close_called = False
@@ -278,7 +279,10 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         self.ws_connection = self.get_websocket_protocol()
         if self.ws_connection:
-            await self.ws_connection.accept_connection(self)
+            try:
+                await self.ws_connection.accept_connection(self)
+            finally:
+                self._closing_ws_connection = None
         else:
             self.set_status(426, "Upgrade Required")
             self.set_header("Sec-WebSocket-Version", "13")
@@ -493,6 +497,19 @@ class WebSocketHandler(tornado.web.RequestHandler):
         .. versionchanged:: 4.0
 
            Added ``close_code`` and ``close_reason`` attributes.
+
+        .. versionchanged:: 6.7
+
+           If the client closes the connection while a coroutine returned by
+           `open` or `on_message` is still running, ``on_close`` is called
+           without waiting for that coroutine to finish (the coroutine is not
+           cancelled). Previously ``on_close`` was delayed until it returned.
+           In particular, ``on_close`` may now run before an asynchronous
+           `open` has finished (or even if it later fails), so code in
+           ``open`` that runs after an ``await`` should not assume that the
+           connection is still open. A close that arrives behind messages
+           that have not been delivered yet is still not seen until those
+           messages have been handled.
         """
         pass
 
@@ -513,6 +530,9 @@ class WebSocketHandler(tornado.web.RequestHandler):
            Added the ``code`` and ``reason`` arguments.
         """
         if self.ws_connection:
+            # Keep the protocol available to close notification so it can
+            # defer cleanup if a handler callback is still running.
+            self._closing_ws_connection = self.ws_connection
             self.ws_connection.close(code, reason)
             self.ws_connection = None
 
@@ -598,13 +618,28 @@ class WebSocketHandler(tornado.web.RequestHandler):
         self.ws_connection.set_nodelay(value)
 
     def on_connection_close(self) -> None:
+        connection = self.ws_connection or self._closing_ws_connection
+        self._closing_ws_connection = None
         if self.ws_connection:
             self.ws_connection.on_connection_close()
+        pending = connection._pending_callback if connection is not None else None
+        if pending is None or pending.done():
+            pending = None
             self.ws_connection = None
         if not self._on_close_called:
             self._on_close_called = True
+            if pending is not None:
+                # open() or on_message() is still running. Keep the handler
+                # usable (as it was before on_close() could be called this
+                # early) until it returns.
+                pending.add_done_callback(lambda f: self._release_connection())
             self.on_close()
-            self._break_cycles()
+            if pending is None:
+                self._break_cycles()
+
+    def _release_connection(self) -> None:
+        self.ws_connection = None
+        self._break_cycles()
 
     def on_ws_connection_close(
         self, close_code: int | None = None, close_reason: str | None = None
@@ -661,6 +696,9 @@ class WebSocketProtocol(abc.ABC):
         self.stream: IOStream | None = None
         self.client_terminated = False
         self.server_terminated = False
+        # The Future of an open(), on_message() or on_pong() call that may
+        # not have finished. See WebSocketProtocol13._receive_frame.
+        self._pending_callback: Future[None] | None = None
 
     def _run_callback(
         self, callback: Callable[..., Any], *args: Any, **kwargs: Any
@@ -897,6 +935,8 @@ class WebSocketProtocol13(WebSocketProtocol):
         self.close_code: int | None = None
         self.close_reason: str | None = None
         self._ping_coroutine: asyncio.Task[Any] | None = None
+        # Set if open() failed; on_close() is not called in that case.
+        self._open_failed = False
 
     # Use a property for this to satisfy the abc.
     @property
@@ -1018,14 +1058,28 @@ class WebSocketProtocol13(WebSocketProtocol):
         self.start_pinging()
         try:
             open_result = handler.open(*handler.open_args, **handler.open_kwargs)
-            if open_result is not None:
-                await open_result
         except Exception:
             handler.log_exception(*sys.exc_info())
             self._abort()
             return
+        if open_result is not None:
+            # Start reading while open() runs so that we notice if the
+            # client goes away. Messages are not delivered until open()
+            # has finished (see _receive_frame).
+            self._pending_callback = gen.convert_yielded(self._finish_open(open_result))
 
         await self._receive_frame_loop()
+
+    async def _finish_open(self, open_result: Awaitable[None]) -> None:
+        try:
+            await open_result
+        except asyncio.CancelledError:
+            self._open_failed = True
+            self._abort()
+        except Exception:
+            self._open_failed = True
+            self.handler.log_exception(*sys.exc_info())
+            self._abort()
 
     def _parse_extensions_header(
         self, headers: httputil.HTTPHeaders
@@ -1214,9 +1268,14 @@ class WebSocketProtocol13(WebSocketProtocol):
                     work = 0
                     await asyncio.sleep(0)
         except StreamClosedError:
+            if self._pending_callback is not None:
+                # As for a close frame, let a callback that has not started
+                # yet start before on_close() (see _receive_frame).
+                await asyncio.sleep(0)
             self._abort()
         finally:
-            self.handler.on_ws_connection_close(self.close_code, self.close_reason)
+            if not self._open_failed:
+                self.handler.on_ws_connection_close(self.close_code, self.close_reason)
 
     async def _read_bytes(self, n: int) -> bytes:
         data = await self.stream.read_bytes(n)
@@ -1231,6 +1290,21 @@ class WebSocketProtocol13(WebSocketProtocol):
         reserved_bits = header & self.RSV_MASK
         opcode = header & self.OPCODE_MASK
         opcode_is_control = opcode & 0x8
+        if self._pending_callback is not None:
+            # For flow control, we don't read any further until the
+            # previous callback has finished. We read the header of the
+            # next frame anyway so that a close frame (or the connection
+            # closing) is seen while a slow callback is still running.
+            if opcode == 0x8:
+                # A coroutine callback has not started running yet if the
+                # close frame was already buffered. Let it start so that
+                # on_close() is not called before it.
+                await asyncio.sleep(0)
+            else:
+                await self._pending_callback
+                self._pending_callback = None
+                if self.client_terminated:
+                    return
         # Control frames are never compressed, but can also be interleaved with a series
         # of fragmented data frames. Don't let them affect _frame_compressed
         if self._decompressor is not None and opcode != 0 and not opcode_is_control:
@@ -1306,7 +1380,8 @@ class WebSocketProtocol13(WebSocketProtocol):
         if is_final_frame:
             handled_future = self._handle_message(opcode, data)
             if handled_future is not None:
-                await handled_future
+                # The next frame waits for this callback to finish.
+                self._pending_callback = handled_future
 
     def _handle_message(self, opcode: int, data: bytes) -> "Optional[Future[None]]":
         """Execute on_message, returning its Future if it is a coroutine."""
