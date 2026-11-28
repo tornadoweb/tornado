@@ -187,22 +187,59 @@ class WSGIContainer:
             headers: list[tuple[str, str]] = data["headers"]
             header_set = {k.lower() for (k, v) in headers}
             body = escape.utf8(body)
-            if status_code != 304:
+            # HEAD and 304 discard a body because they describe a GET or a
+            # cached 200. A body, a non-zero Content-Length, or a
+            # Transfer-Encoding on 1xx or 204 is an application error, so it is
+            # not silently dropped.
+            if status_code == 204 or 100 <= status_code < 200:
+                if body:
+                    raise ValueError(
+                        "WSGI application returned a body for a %d response"
+                        % status_code
+                    )
+                if any(
+                    k.lower() == "content-length" and v.strip() != "0"
+                    for (k, v) in headers
+                ):
+                    raise ValueError(
+                        "WSGI application returned a non-zero Content-Length "
+                        "for a %d response" % status_code
+                    )
+                if any(
+                    k.lower() == "transfer-encoding" and v.strip() for (k, v) in headers
+                ):
+                    raise ValueError(
+                        "WSGI application returned a Transfer-Encoding for a "
+                        "%d response" % status_code
+                    )
+            # 1xx, 204, and 304 responses have no body (RFC 9110 section 6.4.1).
+            no_content = status_code in (204, 304) or 100 <= status_code < 200
+            if not no_content:
                 if "content-length" not in header_set:
                     headers.append(("Content-Length", str(len(body))))
                 if "content-type" not in header_set:
                     headers.append(("Content-Type", "text/html; charset=UTF-8"))
             if "server" not in header_set:
                 headers.append(("Server", "TornadoServer/%s" % tornado.version))
+            if status_code == 204 or 100 <= status_code < 200:
+                # 1xx and 204 responses must not include Content-Length or
+                # Transfer-Encoding. A 304 may include a Content-Length
+                # describing the selected representation (RFC 9110 section 8.6).
+                headers = [
+                    (k, v)
+                    for (k, v) in headers
+                    if k.lower() not in ("content-length", "transfer-encoding")
+                ]
 
             start_line = httputil.ResponseStartLine("HTTP/1.1", status_code, reason)
             header_obj = httputil.HTTPHeaders()
             for key, value in headers:
                 header_obj.add(key, value)
-            if request.method == "HEAD":
-                # Like RequestHandler, send only the headers for HEAD requests.
-                # Many WSGI applications return the full body and leave it to
-                # the server to discard it.
+            if request.method == "HEAD" or no_content:
+                # Like RequestHandler, send only the headers for HEAD requests
+                # and for responses that cannot have a body. Many WSGI
+                # applications return the full body and leave it to the server
+                # to discard it.
                 body = b""
             assert request.connection is not None
             response_written = True
