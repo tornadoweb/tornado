@@ -16,7 +16,7 @@ import asyncio
 import collections
 import datetime
 import types
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Generator
 from typing import Any, Optional, Type
 
 from tornado import gen, ioloop
@@ -284,6 +284,27 @@ class _ReleasingContextManager:
         self._obj.release()
 
 
+class _AcquiredPermit(Future["_ReleasingContextManager"]):
+    """A pending `.Semaphore.acquire()` that releases if its waiter is cancelled.
+
+    A release can hand the permit to a waiter whose task is then cancelled
+    before it returns, and the permit (or the lock, for a semaphore of one)
+    would be lost.
+    """
+
+    def __init__(self, semaphore: "Semaphore") -> None:
+        super().__init__()
+        self.semaphore = semaphore
+
+    def __await__(self) -> Generator[Any, None, "_ReleasingContextManager"]:
+        try:
+            return (yield from super().__await__())
+        except asyncio.CancelledError:
+            if self.done() and not self.cancelled() and self.exception() is None:
+                self.semaphore.release()
+            raise
+
+
 class Semaphore(_TimeoutGarbageCollector):
     """A lock that can be acquired a fixed number of times before blocking.
 
@@ -427,8 +448,11 @@ class Semaphore(_TimeoutGarbageCollector):
         .. versionchanged:: 6.6
            A ``timeout`` argument of zero will either return or raise immediately.
            Previously, zero was treated equivalent to ``None`` (wait forever).
+
+        .. versionchanged:: 6.7
+           Cancelling the await releases the permit instead of losing it.
         """
-        waiter: Future[_ReleasingContextManager] = Future()
+        waiter: Future[_ReleasingContextManager] = _AcquiredPermit(self)
         if self._value > 0:
             self._value -= 1
             waiter.set_result(_ReleasingContextManager(self))
@@ -460,15 +484,9 @@ class Semaphore(_TimeoutGarbageCollector):
         self.__enter__()
 
     async def __aenter__(self) -> None:
-        waiter = asyncio.ensure_future(self.acquire())
-        try:
-            await waiter
-        except asyncio.CancelledError:
-            # A release may have handed us the permit before cancellation
-            # prevented entry into the context (and thus __aexit__).
-            if not waiter.cancelled():
-                self.release()
-            raise
+        # ``acquire`` releases the permit itself if this task is cancelled after
+        # a release handed it over, so no cleanup is needed here.
+        await self.acquire()
 
     async def __aexit__(
         self,
@@ -553,6 +571,9 @@ class Lock:
         .. versionchanged:: 6.6
            A ``timeout`` argument of zero will either return or raise immediately.
            Previously, zero was treated equivalent to ``None`` (wait forever).
+
+        .. versionchanged:: 6.7
+           Cancelling the await releases the lock instead of losing it.
         """
         return self._block.acquire(timeout)
 
@@ -580,15 +601,9 @@ class Lock:
         self.__enter__()
 
     async def __aenter__(self) -> None:
-        waiter = asyncio.ensure_future(self.acquire())
-        try:
-            await waiter
-        except asyncio.CancelledError:
-            # A release may have handed us the permit before cancellation
-            # prevented entry into the context (and thus __aexit__).
-            if not waiter.cancelled():
-                self.release()
-            raise
+        # ``acquire`` releases the permit itself if this task is cancelled after
+        # a release handed it over, so no cleanup is needed here.
+        await self.acquire()
 
     async def __aexit__(
         self,
