@@ -216,6 +216,9 @@ Type annotation changes
 `tornado.httputil`
 ~~~~~~~~~~~~~~~~~~
 
+- Byte positions in a ``Range`` header must be decimal digits. ``bytes=8_1-9_0`` was accepted
+  as bytes 81-90, and ``bytes=+10-20`` as bytes 10-20. An invalid bound is now ignored, the
+  same as any other invalid ``Range``.
 - `.HTTPHeaders` validates names and values in more places, and raises `ValueError` instead
   of `.HTTPInputError`; see "Backwards-incompatible changes" above.
 - Media types and parameter names in form ``Content-Type`` headers are now matched
