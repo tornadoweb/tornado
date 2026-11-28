@@ -167,6 +167,64 @@ class QueueGetTest(AsyncTestCase):
             self.assertRaises(TimeoutError, getter.result)
 
     @gen_test
+    async def test_cancelled_get_keeps_item(self):
+        # A put can hand the item to a getter whose task is cancelled before it
+        # returns the item; the item must stay in the queue (tornado#2826).
+        for cls in (queues.Queue, queues.LifoQueue, queues.PriorityQueue):
+            with self.subTest(queue=cls.__name__):
+                q = cls()
+
+                async def consume():
+                    return await q.get()
+
+                consumer = asyncio.ensure_future(consume())
+                await asyncio.sleep(0)  # the getter is waiting
+                q.put_nowait(0)
+                consumer.cancel()  # before the consumer can return the item
+                with self.assertRaises(asyncio.CancelledError):
+                    await consumer
+                self.assertEqual(1, q.qsize())
+                self.assertEqual(0, q.get_nowait())
+                q.task_done()
+
+    @gen_test
+    async def test_cancelled_get_keeps_the_unfinished_task(self):
+        q: queues.Queue[int] = queues.Queue()
+
+        async def consume():
+            return await q.get()
+
+        consumer = asyncio.ensure_future(consume())
+        await asyncio.sleep(0)
+        q.put_nowait(0)
+        consumer.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await consumer
+        # The item is back in the queue and still unfinished, so it is counted
+        # once, and join() does not wait for a task_done() nobody can call.
+        self.assertEqual(1, q.qsize())
+        self.assertEqual(1, q._unfinished_tasks)
+        q.task_done()
+        await q.join()
+
+    @gen_test
+    async def test_cancelled_get_hands_the_item_to_the_next_getter(self):
+        q: queues.Queue[int] = queues.Queue()
+
+        async def consume():
+            return await q.get()
+
+        first = asyncio.ensure_future(consume())
+        second = asyncio.ensure_future(consume())
+        await asyncio.sleep(0)
+        self.assertEqual(2, len(q._getters))
+        q.put_nowait(0)  # offered to the first getter
+        first.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await first
+        self.assertEqual(0, await second)
+
+    @gen_test
     def test_async_for(self):
         q: queues.Queue[int] = queues.Queue()
         for i in range(5):
