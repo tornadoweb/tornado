@@ -1439,13 +1439,36 @@ def doctests() -> unittest.TestSuite:
 _netloc_re = re.compile(r"^(.+):([0-9]+)$")
 
 
+def _encode_idna(host: str) -> str:
+    """Encode a non-ASCII hostname with UTS46, the rules browsers use.
+
+    The `idna` package is an optional dependency. Without it a non-ASCII
+    hostname cannot be converted safely, because the stdlib codec implements
+    IDNA2003, which maps some names to a different ASCII host. The request is
+    rejected instead of using that codec.
+    """
+    try:
+        import idna
+    except ImportError:
+        raise ValueError(
+            "Cannot convert non-ASCII hostname %r without the idna package" % host
+        )
+    try:
+        return idna.encode(host, uts46=True, transitional=False).decode("ascii")
+    except idna.IDNAError as e:
+        raise ValueError("Invalid hostname %r: %s" % (host, e)) from e
+
+
 def _url_to_ascii(url: str) -> str:
     """Converts ``url`` to an ASCII URL that can be sent in a request.
 
-    A non-ASCII hostname is converted with IDNA (``café.example`` becomes
-    ``xn--caf-dma.example``) and all other non-ASCII characters are
-    percent-encoded as UTF-8, as browsers do. Other characters, including
-    existing percent-escapes, are left alone, so ASCII URLs are unchanged.
+    A non-ASCII hostname is converted with UTS46 (``café.example`` becomes
+    ``xn--caf-dma.example``) through the optional `idna` package, and all other
+    non-ASCII characters are percent-encoded as UTF-8, as browsers do. When
+    `idna` is not installed, a non-ASCII hostname raises `ValueError` instead
+    of falling back to the stdlib codec, which implements IDNA2003. Other
+    characters, including existing percent-escapes, are left alone, so ASCII
+    URLs are unchanged.
 
     Raises `ValueError` if the hostname cannot be converted.
     """
@@ -1459,10 +1482,7 @@ def _url_to_ascii(url: str) -> str:
         if match:
             host, port = match.groups()
         if not host.isascii():
-            try:
-                host = host.encode("idna").decode("ascii")
-            except UnicodeError as e:
-                raise ValueError("Invalid hostname %r: %s" % (host, e)) from e
+            host = _encode_idna(host)
         # Replace the netloc in place rather than reassembling the URL with
         # urlunsplit, which would drop an empty query or fragment.
         start = url.find("//" + netloc)

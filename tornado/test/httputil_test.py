@@ -4,6 +4,8 @@ import logging
 import pickle
 import sys
 import time
+import unittest
+import unittest.mock as mock
 import urllib.parse
 
 from tornado.escape import native_str, utf8
@@ -35,6 +37,11 @@ from tornado.test.util import (
     ignore_deprecation,
     skipNotCPython,
 )
+
+try:
+    import idna
+except ImportError:
+    idna = None  # type: ignore[assignment]
 
 
 def form_data_args() -> tuple[dict[str, list[bytes]], dict[str, list[HTTPFile]]]:
@@ -1025,6 +1032,7 @@ class SplitHostAndPortTest(TestCase):
 
 
 class URLToASCIITest(TestCase):
+    @unittest.skipIf(idna is None, "idna module not present")
     def test_url_to_ascii(self):
         for url, expected in [
             # ASCII URLs are unchanged, even if they are unusual.
@@ -1044,6 +1052,44 @@ class URLToASCIITest(TestCase):
                 "http://\uff4c\uff4f\uff43\uff41\uff4c\uff48\uff4f\uff53\uff54/",
                 "http://localhost/",
             ),
+            # Names UTS46 converts without changing which host is named.
+            ("http://\u4f8b\u3048\u3002jp/", "http://xn--r8jz45g.jp/"),
+            # UTS46 (the browser mapping) keeps these distinct; IDNA2003 did
+            # not (stra\u00dfe.de became strasse.de there).
+            ("http://stra\u00dfe.de/", "http://xn--strae-oqa.de/"),
+            (
+                "http://\u03b1\u03b8\u03b7\u03bd\u03b1\u03c2.gr/",
+                "http://xn--mxaard0a5a.gr/",
+            ),
+            (
+                "http://xn--caf-dma.b\u00fccher.de/",
+                "http://xn--caf-dma.xn--bcher-kva.de/",
+            ),
+            (
+                "http://example.\u0391\u0398\u0397\u039d\u0391\u03a3/",
+                "http://example.xn--mxaard0a1b/",
+            ),
+            # A UTS46-only A-label mixed with a Unicode label.
+            (
+                "http://xn--strae-oqa.b\u00fccher.de/",
+                "http://xn--strae-oqa.xn--bcher-kva.de/",
+            ),
+            # A soft hyphen inside the ACE prefix is ignored, not a rewrite.
+            (
+                "http://x\u00adn--caf-dma.b\u00fccher.de/",
+                "http://xn--caf-dma.xn--bcher-kva.de/",
+            ),
+            ("http://a\u0345b.example/", "http://xn--ab-09b.example/"),
+            ("http://a\u03f2b.example/", "http://xn--ab-vbc.example/"),
+            # Greek Extended ypogegrammeni and mathematical final sigmas.
+            ("http://a\u1f80b.example/", "http://xn--ab-09b540z.example/"),
+            ("http://a\u1fb3b.example/", "http://xn--ab-c9b6a.example/"),
+            (
+                "http://a\U0001d6d3b.example/",
+                "http://xn--ab-vbc.example/",
+            ),
+            ("http://caf\u00e9.example./", "http://xn--caf-dma.example./"),
+            ("http://cafe\u0301.example/", "http://xn--caf-dma.example/"),
         ]:
             with self.subTest(url=url):
                 self.assertEqual(_url_to_ascii(url), expected)
@@ -1053,6 +1099,27 @@ class URLToASCIITest(TestCase):
             with self.subTest(url=url):
                 with self.assertRaises(ValueError):
                     _url_to_ascii(url)
+
+    @unittest.skipIf(idna is None, "idna module not present")
+    def test_uts46_rejects_joiners(self):
+        # UTS46 keeps ZWJ/ZWNJ, which are not allowed in these positions, so
+        # the hostname is rejected instead of being silently rewritten.
+        for url in ["http://a\u200db.com/", "http://a\u200cb.com/"]:
+            with self.subTest(url=url):
+                with self.assertRaises(ValueError):
+                    _url_to_ascii(url)
+
+    def test_non_ascii_hostname_requires_idna(self):
+        # Without the optional idna package, a non-ASCII host is rejected
+        # rather than converted with the stdlib's IDNA2003 codec.
+        with mock.patch.dict(sys.modules, {"idna": None}):
+            with self.assertRaises(ValueError):
+                _url_to_ascii("http://caf\u00e9.example/")
+            # URLs whose host is ASCII do not need the package.
+            self.assertEqual(
+                _url_to_ascii("http://example.com/\u00e9"),
+                "http://example.com/%C3%A9",
+            )
 
 
 class ParseCookieTest(TestCase):

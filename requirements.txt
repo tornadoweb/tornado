@@ -44,7 +44,7 @@ flake8==7.3.0
 hypothesis==6.169.2
     # via -r requirements.in
 idna==3.19
-    # via requests
+    # via -r requirements.in, requests
 imagesize==2.0.1
     # via sphinx
 jinja2==3.1.6
